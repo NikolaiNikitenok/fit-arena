@@ -100,6 +100,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [selected, setSelected] = useState<LevelDef | null>(null);
   const [shop, setShop] = useState<ShopTab | null>(null);
   const [settings, setSettings] = useState(false);
+  const [replayOnb, setReplayOnb] = useState(false);
   const [achOpen, setAchOpen] = useState(false);
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -177,9 +178,12 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
   const sheets = (
     <>
-      {newcomer && (
+      {(newcomer || replayOnb) && (
         <Onboarding
+          replay={replayOnb}
           onDone={(start) => {
+            // Повтор из настроек только показывает знакомство: испытание уже пройдено.
+            if (replayOnb) return setReplayOnb(false);
             setProgress(finishOnboarding(latest.current));
             if (start) setPlaying(LEVELS[0]);
           }}
@@ -204,7 +208,15 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
       )}
       {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
       {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
-      {settings && <SettingsSheet progress={progress} onReset={() => setProgress(resetProgress())} onClose={() => setSettings(false)} />}
+      {settings && <SettingsSheet
+          progress={progress}
+          onReset={() => setProgress(resetProgress())}
+          onIntro={() => {
+            setSettings(false);
+            setReplayOnb(true);
+          }}
+          onClose={() => setSettings(false)}
+        />}
       {levelUp && <div className="toast global">{levelUp}</div>}
       {toast && tab === 'hero' && <div className="toast global">{toast}</div>}
     </>

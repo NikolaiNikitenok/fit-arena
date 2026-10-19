@@ -53,6 +53,9 @@ interface Update {
 export const botApi = (token: string) => (method: string, body: unknown) =>
   fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; result?: unknown; description?: string; error_code?: number }>);
 
+// Состояние бота для /api/health: видно без доступа к логам сервера (без токена).
+export const botStatus: { polling: boolean; lastOkAt: number | null; lastError: string | null; handled: number } = { polling: false, lastOkAt: null, lastError: null, handled: 0 };
+
 /** Долгий опрос Telegram. Вебхук снимаем: этому боту нужен только /start. */
 export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2]): void {
   const api = botApi(token);
@@ -66,7 +69,10 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
     for (;;) {
       try {
         const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message'] });
-        if (!r.ok) throw new Error(r.description);
+        if (!r.ok) throw new Error(`${r.error_code ?? ''} ${r.description ?? ''}`.trim());
+        botStatus.polling = true;
+        botStatus.lastOkAt = Date.now();
+        botStatus.lastError = null;
         for (const u of (r.result as Update[]) ?? []) {
           offset = u.update_id + 1;
           const msg = u.message;
@@ -76,10 +82,13 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
           const sent = reply.photo ? await api('sendPhoto', { chat_id: msg.chat.id, photo: reply.photo, caption: reply.text, reply_markup }) : null;
           // Картинка не загрузилась (например, сайт недоступен Telegram) — шлём просто текст.
+          botStatus.handled++;
           if (!sent?.ok) await api('sendMessage', { chat_id: msg.chat.id, text: reply.text, reply_markup });
         }
       } catch (e) {
-        console.error('bot:', e instanceof Error ? e.message : e);
+        botStatus.polling = false;
+        botStatus.lastError = (e instanceof Error ? e.message : String(e)).replace(token, '***').slice(0, 200);
+        console.error('bot:', botStatus.lastError);
         await new Promise((res) => setTimeout(res, 5000));
       }
     }

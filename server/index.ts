@@ -1,7 +1,7 @@
 // Сервер матчей Fit Arena: комнаты на двоих и бой по WebSocket.
 //   PORT — порт (по умолчанию 8787)
 //   BOT_TOKEN — токен бота: проверяем подпись Telegram и узнаём имя бота для ссылок
-//   BOT_TOKEN_FILE — файл с токеном, если его нет в окружении (по умолчанию .bot-token рядом с сервером;
+//   BOT_TOKEN_FILE — файл с токеном, он главнее BOT_TOKEN (по умолчанию .bot-token рядом с сервером;
 //     его кладёт автодеплой из секрета репозитория BOT_TOKEN)
 //   APP_URL — адрес мини-приложения для кнопок бота (по умолчанию https://arena.nikitenok.ru)
 //   BOT_USERNAME — имя бота для ссылок-приглашений, если Telegram недоступен с сервера
@@ -17,7 +17,7 @@ import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, runBot } from './bot';
+import { botApi, botStatus, runBot } from './bot';
 import { dueReminders, SaveStore } from './saves';
 import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
@@ -31,7 +31,11 @@ const readToken = (file: string) => {
     return '';
   }
 };
-const BOT_TOKEN = process.env.BOT_TOKEN || readToken(process.env.BOT_TOKEN_FILE ?? join(__dirname, '.bot-token'));
+const TOKEN_FILE = process.env.BOT_TOKEN_FILE ?? join(__dirname, '.bot-token');
+// Файл из автодеплоя свежее, чем строка в /etc/arena-server.env, поэтому он главнее.
+const FILE_TOKEN = readToken(TOKEN_FILE);
+const TOKEN_SOURCE = FILE_TOKEN ? 'file' : process.env.BOT_TOKEN ? 'env' : 'none';
+const BOT_TOKEN = FILE_TOKEN || process.env.BOT_TOKEN || '';
 const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
@@ -178,7 +182,7 @@ const http = createServer((req, res) => {
   }
   if (req.url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, bot: { token: TOKEN_SOURCE, username: botUsername, ...botStatus } }));
     return;
   }
   res.writeHead(404).end();

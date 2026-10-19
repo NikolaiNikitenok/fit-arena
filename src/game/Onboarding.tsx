@@ -7,7 +7,7 @@ import { NPCS } from './npcs';
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
 
 /** Знакомство при первом запуске: Мастер Гром рассказывает, как всё устроено, и ведёт на первое испытание. */
-export function Onboarding({ onDone }: { onDone: (start: boolean) => void }) {
+export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => void; replay?: boolean }) {
   const [step, setStep] = useState(0);
   const steps = [
     {
@@ -60,10 +60,10 @@ export function Onboarding({ onDone }: { onDone: (start: boolean) => void }) {
         {s.text && <div className="onb-text">{s.text}</div>}
         {s.extra}
         <button className="primary" onClick={() => (last ? onDone(true) : setStep(step + 1))}>
-          {last ? 'Начать испытание' : 'Дальше'}
+          {last ? (replay ? 'Понятно' : 'Начать испытание') : 'Дальше'}
         </button>
         <button className="link" onClick={() => onDone(false)}>
-          {last ? 'Сначала осмотрюсь' : 'Пропустить'}
+          {last ? (replay ? 'Закрыть' : 'Сначала осмотрюсь') : 'Пропустить'}
         </button>
       </div>
     </div>

@@ -14,7 +14,7 @@ const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
 ];
 
 /** Настройки: звуки, музыка, вибрация, подсказки, батарея, сброс прогресса. */
-export function SettingsSheet({ progress, onReset, onClose }: { progress: Progress; onReset: () => void; onClose: () => void }) {
+export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progress: Progress; onReset: () => void; onIntro: () => void; onClose: () => void }) {
   const s = useSettings();
   const [confirm, setConfirm] = useState(false);
   return (
@@ -31,6 +31,9 @@ export function SettingsSheet({ progress, onReset, onClose }: { progress: Progre
           </label>
         ))}
         <RemindRow />
+        <button className="secondary" onClick={onIntro}>
+          Посмотреть знакомство заново
+        </button>
         <div className="settings-note">
           <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.
         </div>
