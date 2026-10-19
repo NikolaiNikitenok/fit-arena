@@ -44,6 +44,16 @@ export interface Progress {
   dailyDone?: string;
   // Когда прогресс менялся: при синхронизации побеждает более свежий.
   savedAt?: number;
+  // Сколько заданий дня выполнено за всё время.
+  dailyCount?: number;
+  // Достижения: показанные «новое!», забранные награды и титул под именем.
+  achSeen?: string[];
+  achClaimed?: string[];
+  title?: string;
+  // Журнал по дням: повторы по упражнениям (r) и лучший подход (b) — для календаря и графика.
+  log?: Record<string, { r: Partial<Record<Exercise, number>>; b: Partial<Record<Exercise, number>> }>;
+  // Знакомство с игрой пройдено.
+  onboarded?: boolean;
 }
 
 export interface Record_ {
@@ -294,6 +304,12 @@ export function recordActivity(p: Progress, exercise: Exercise | null, reps: num
   if (exercise) {
     const ex = p.dayEx?.date === date ? p.dayEx.reps : {};
     next.dayEx = { date, reps: { ...ex, [exercise]: (ex[exercise] ?? 0) + reps } };
+    const day = p.log?.[date] ?? { r: {}, b: {} };
+    const log = { ...p.log, [date]: { r: { ...day.r, [exercise]: (day.r[exercise] ?? 0) + reps }, b: { ...day.b, [exercise]: Math.max(day.b[exercise] ?? 0, reps) } } };
+    // Журнал за год с небольшим: дальше календарь не листается.
+    const keys = Object.keys(log).sort();
+    for (const k of keys.slice(0, Math.max(0, keys.length - 400))) delete log[k];
+    next.log = log;
     if (!p.first[exercise]) next.first = { ...p.first, [exercise]: { reps, date } };
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
@@ -414,5 +430,16 @@ export function dailyProgress(p: Progress, task: DailyTask): number {
 
 export function claimDaily(p: Progress, task: DailyTask): Progress | null {
   if (p.dailyDone === task.date || dailyProgress(p, task) < task.target) return null;
-  return save({ ...p, coins: p.coins + task.coins, potions: task.potion ? addPotion(p.potions, task.potion, 1) : p.potions, dailyDone: task.date });
+  return save({ ...p, coins: p.coins + task.coins, potions: task.potion ? addPotion(p.potions, task.potion, 1) : p.potions, dailyDone: task.date, dailyCount: (p.dailyCount ?? 0) + 1 });
 }
+
+export const markAchSeen = (p: Progress, ids: string[]): Progress => save({ ...p, achSeen: [...new Set([...(p.achSeen ?? []), ...ids])] });
+
+/** Забрать награду достижения; первый полученный титул сразу надевается. */
+export function claimAchievement(p: Progress, id: string, coins: number): Progress | null {
+  if (p.achClaimed?.includes(id)) return null;
+  return save({ ...p, coins: p.coins + coins, achClaimed: [...(p.achClaimed ?? []), id], title: p.title ?? id });
+}
+
+export const setTitle = (p: Progress, id: string | undefined): Progress => save({ ...p, title: id });
+export const finishOnboarding = (p: Progress): Progress => save({ ...p, onboarded: true });

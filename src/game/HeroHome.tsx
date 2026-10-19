@@ -8,6 +8,8 @@ import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, PO
 import { BASE_DAMAGE, heroHands, heroPower } from './power';
 import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
+import { AchBadge } from './Achievements';
+import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
@@ -74,6 +76,7 @@ interface Props {
   dailyDone: number;
   onDaily: () => void;
   onClaimDaily: () => void;
+  onAchievements: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -90,7 +93,10 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements }: Props) {
+  const badge = heroBadge(progress);
+  const achGot = ACHIEVEMENTS.filter((a) => achDone(a, progress, Date.now()));
+  const achReady = achGot.filter((a) => !progress.achClaimed?.includes(a.id)).length;
   const item = itemById(progress.equipped);
   const xp = heroXp(progress);
   const lvl = heroLevel(xp);
@@ -127,6 +133,11 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           <div className="hero-level">{lvl.level}</div>
           <div className="hero-meta">
             <div className="hero-title">{heroTitle(lvl.level)}</div>
+            {badge && (
+              <button className="hero-badge" onClick={onAchievements}>
+                <AchBadge ach={badge} done size={18} /> {badge.title}
+              </button>
+            )}
             <div className="hero-skin" style={{ color: RARITY_COLORS[item.rarity] }}>
               {item.name}
             </div>
@@ -182,6 +193,23 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           <span className="slot-name">{offhand?.name ?? 'пусто'}</span>
         </button>
       </div>
+
+      <button className="ach-entry" onClick={onAchievements}>
+        <span className="ach-entry-badges">
+          {achGot.slice(-3).map((a) => (
+            <AchBadge key={a.id} ach={a} done size={30} />
+          ))}
+          {!achGot.length && <AchBadge ach={ACHIEVEMENTS[0]} done={false} size={30} />}
+        </span>
+        <span className="ach-entry-text">
+          Достижения
+          <small>
+            {achGot.length} из {ACHIEVEMENTS.length}
+          </small>
+        </span>
+        {achReady > 0 && <span className="ach-entry-new">+{achReady}</span>}
+        <span className="chev">›</span>
+      </button>
 
       <DailyCard task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
 

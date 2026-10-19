@@ -11,6 +11,10 @@ import { MissionPlay, Stars } from './MissionPlay';
 import { NPCS } from './npcs';
 import { dailyTask } from './daily';
 import { startCloud } from '../cloud';
+import { Calendar, RepsChart } from './Stats';
+import { AchievementsSheet } from './Achievements';
+import { newAchievements } from './achievements';
+import { Onboarding } from './Onboarding';
 import {
   buy,
   buyGear,
@@ -20,6 +24,10 @@ import {
   usePotion,
   claimChest,
   claimDaily,
+  claimAchievement,
+  markAchSeen,
+  setTitle,
+  finishOnboarding,
   dailyProgress,
   claimHeroLevels,
   currentLevel,
@@ -90,6 +98,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [selected, setSelected] = useState<LevelDef | null>(null);
   const [shop, setShop] = useState<ShopTab | null>(null);
   const [settings, setSettings] = useState(false);
+  const [achOpen, setAchOpen] = useState(false);
+  const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const levels = levelsOf(world);
   const startIndex = () => Math.max(0, levels.findIndex((l) => l.id === current));
@@ -113,6 +123,16 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     setLevelUp(`Новый уровень героя: ${r.levels[r.levels.length - 1]}! +${r.coins} монет`);
     setTimeout(() => setLevelUp(null), 3500);
   }, [playing, progress.days]);
+
+  // Новое достижение: короткое сообщение после миссии, награда ждёт в «Достижениях».
+  useEffect(() => {
+    if (playing) return;
+    const fresh = newAchievements(latest.current, Date.now());
+    if (!fresh.length) return;
+    setProgress(markAchSeen(latest.current, fresh.map((a) => a.id)));
+    setAchToast(fresh.length > 1 ? `Новые достижения: ${fresh.map((a) => a.title).join(', ')}` : `Новое достижение: ${fresh[0].title}! Забери награду`);
+    setTimeout(() => setAchToast(null), 4000);
+  }, [playing, progress.days, progress.dailyCount, progress.raidClaimed?.length]);
 
   const switchWorld = (w: number) => {
     setWorld(w);
@@ -150,8 +170,34 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
       />
     );
 
+  const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
   const sheets = (
     <>
+      {newcomer && (
+        <Onboarding
+          onDone={(start) => {
+            setProgress(finishOnboarding(latest.current));
+            if (start) setPlaying(LEVELS[0]);
+          }}
+        />
+      )}
+      {achOpen && (
+        <AchievementsSheet
+          progress={progress}
+          now={now}
+          onClaim={(a) => {
+            const next = claimAchievement(latest.current, a.id, a.coins);
+            if (next) setProgress(next);
+          }}
+          onTitle={(id) => setProgress(setTitle(latest.current, id))}
+          onClose={() => setAchOpen(false)}
+        />
+      )}
+      {achToast && (
+        <button className="toast global ach-toast" onClick={() => setAchOpen(true)}>
+          {achToast}
+        </button>
+      )}
       {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
       {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
       {settings && <SettingsSheet progress={progress} onReset={() => setProgress(resetProgress())} onClose={() => setSettings(false)} />}
@@ -201,6 +247,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
             showToast(id === 'vigor' ? '+1 жизнь!' : id === 'might' ? 'Эликсир выпит: +30% урона в следующем бою.' : 'Ещё одна замена упражнения на сегодня.');
           }}
           onSettings={() => setSettings(true)}
+          onAchievements={() => setAchOpen(true)}
         />
         {sheets}
       </>
@@ -444,6 +491,7 @@ const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 /** «Твоя сила»: рост по упражнениям, серия и повторы за две недели. */
 function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: number; onClose: () => void }) {
   const series = streak(progress.days, now);
+  const [view, setView] = useState<'week' | 'month' | 'chart'>('week');
   const last = Array.from({ length: 14 }, (_, i) => {
     const t = now - (13 - i) * 86400000;
     return { day: WEEKDAY[new Date(t).getDay()], reps: progress.days[dayKey(t)] ?? 0 };
@@ -480,16 +528,33 @@ function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: nu
           );
         })}
         <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
-        <div className="week-bars">
-          {last.map((d, i) => (
-            <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
-          ))}
+        <div className="tabs">
+          <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>
+            2 недели
+          </button>
+          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>
+            Календарь
+          </button>
+          <button className={view === 'chart' ? 'active' : ''} onClick={() => setView('chart')}>
+            График
+          </button>
         </div>
-        <div className="week-days">
-          {last.map((d, i) => (
-            <span key={i}>{d.day}</span>
-          ))}
-        </div>
+        {view === 'week' && (
+          <>
+            <div className="week-bars">
+              {last.map((d, i) => (
+                <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
+              ))}
+            </div>
+            <div className="week-days">
+              {last.map((d, i) => (
+                <span key={i}>{d.day}</span>
+              ))}
+            </div>
+          </>
+        )}
+        {view === 'month' && <Calendar progress={progress} now={now} />}
+        {view === 'chart' && <RepsChart progress={progress} now={now} />}
         <button className="link" onClick={onClose}>
           Закрыть
         </button>
