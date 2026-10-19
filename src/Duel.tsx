@@ -136,7 +136,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
     if (!room) return;
     const how = await share(
       inviteLink(room.code, me?.bot ?? { username: null, running: false }),
-      `Вызываю тебя на бой в Fit Arena: ${EXERCISE_LABELS[room.exercise].toLowerCase()}, кто больше за минуту!`,
+      `Вызываю тебя на бой в NikitenokArena: ${EXERCISE_LABELS[room.exercise].toLowerCase()}, кто больше за минуту!`,
     ).catch(() => null);
     setShared(how === 'copied' ? 'Ссылка скопирована' : null);
   };

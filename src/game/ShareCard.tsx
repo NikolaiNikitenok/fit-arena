@@ -401,7 +401,7 @@ export async function drawCard(data: CardData, scene: HTMLCanvasElement | null):
 
   // Логотип игры.
   g.font = `900 40px ${FONT}`;
-  const brand = 'АТЛЕТИЯ';
+  const brand = 'NIKITENOK ARENA';
   g.letterSpacing = '10px';
   const bw = g.measureText(brand).width + 90;
   roundRect(g, cx - bw / 2, 52, bw, 70, 35);
@@ -508,7 +508,7 @@ export async function makeShareCard(data: CardData): Promise<Blob> {
 
 /* ---------- Отправка ---------- */
 
-export const shareText = (boss: string) => `Я победил босса «${boss}» в Атлетии! ${INVITE}`;
+export const shareText = (boss: string) => `Я победил босса «${boss}» в NikitenokArena! ${INVITE}`;
 
 /** Поделиться картинкой: системное меню с файлом, загрузка через Telegram (нужна https-ссылка) или скачивание. */
 export async function shareImage(blob: Blob, text: string, url?: string): Promise<'shared' | 'saved' | 'cancelled'> {
@@ -516,7 +516,7 @@ export async function shareImage(blob: Blob, text: string, url?: string): Promis
   const file = new File([blob], name, { type: 'image/png' });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], text, title: 'Атлетия' });
+      await navigator.share({ files: [file], text, title: 'NikitenokArena' });
       return 'shared';
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';

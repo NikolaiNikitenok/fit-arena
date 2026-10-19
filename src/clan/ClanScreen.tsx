@@ -138,7 +138,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           <Banner size={28} />
           <div>
             <div className="claim-title">Кланы живут в Telegram</div>
-            <div className="muted">Открой Атлетию в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.</div>
+            <div className="muted">Открой NikitenokArena в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.</div>
           </div>
         </div>
         <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot.username}`}>
@@ -217,7 +217,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         <button
           className="secondary"
           onClick={async () => {
-            const how = await share(clanInviteLink(clan.code, api.bot), `Вступай в клан «${clan.name}» в Атлетии: вместе бьём рейд-босса по выходным!`).catch(() => null);
+            const how = await share(clanInviteLink(clan.code, api.bot), `Вступай в клан «${clan.name}» в NikitenokArena: вместе бьём рейд-босса по выходным!`).catch(() => null);
             if (how === 'copied') show('Ссылка скопирована');
           }}
         >
