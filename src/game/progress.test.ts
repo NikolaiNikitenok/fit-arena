@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { claimChest, dayKey, equipGear, LIFE_MS, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, spendLife, spendMight, spendSwaps, streak, swapsLeft, usePotion } from './progress';
+import { claimChest, dailyProgress, dayKey, equipGear, LIFE_MS, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, recordOutsideReps, spendLife, spendMight, spendSwaps, streak, swapsLeft, usePotion } from './progress';
 
 const DAY = 86400000;
 const NOW = new Date(2026, 9, 19, 12).getTime();
@@ -97,5 +97,15 @@ describe('инвентарь', () => {
     p = equipGear(p, 'round-shield');
     expect(p.offhand).toBe('round-shield');
     expect(equipGear(p, 'round-shield').offhand).toBeUndefined();
+  });
+});
+
+describe('повторы вне карты', () => {
+  it('дуэль идёт в серию, задание дня и клан', () => {
+    const p = recordOutsideReps('pushup', 25, NOW);
+    expect(streak(p.days, NOW).today).toBe(true);
+    expect(dailyProgress(p, { date: dayKey(NOW), exercise: 'pushup', target: 40 } as Parameters<typeof dailyProgress>[1])).toBe(25);
+    expect(p.clanPending).toBe(25);
+    expect(loadProgress().days[dayKey(NOW)]).toBe(25);
   });
 });

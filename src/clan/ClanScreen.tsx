@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
 import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
-import { claimClanGift, claimRaid, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
+import { claimClanGift, claimRaid, recordActivity, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
 import { Banner, Coin, Flask, Lock, Send, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { clanInviteCode, clanInviteLink, share } from '../telegram';
@@ -89,6 +89,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         exercise={exercise}
         progress={progress}
         bonus={clanPerks(clanLevel(clan.xp).level).raidDamage}
+        onReps={(reps) => setProgress(recordActivity(progress, exercise, reps, Date.now()))}
         onHit={(damage) => send({ type: 'raidHit', attackId: api.attack!.attackId, damage })}
         onDone={() => {
           send({ type: 'raidEnd', attackId: api.attack!.attackId });

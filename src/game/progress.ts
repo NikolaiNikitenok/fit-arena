@@ -297,6 +297,12 @@ export const dayKey = (t: number): string => {
 };
 
 /** Сделанный подход (победа или нет): день тренировки, повторы, рекорды. */
+/** Повторы вне карты (дуэль): в серию, задание дня и опыт клана. */
+export const recordOutsideReps = (exercise: Exercise, reps: number, now: number): Progress => {
+  const p = loadProgress();
+  return reps > 0 ? recordActivity({ ...p, clanPending: (p.clanPending ?? 0) + reps }, exercise, reps, now) : p;
+};
+
 export function recordActivity(p: Progress, exercise: Exercise | null, reps: number, now: number): Progress {
   if (reps <= 0) return p;
   const date = dayKey(now);

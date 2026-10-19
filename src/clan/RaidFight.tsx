@@ -49,10 +49,12 @@ interface Props {
   bonus: number;
   onHit: (damage: number) => void;
   onDone: (dealt: number) => void;
+  // Атака закончилась: повторы идут в серию и задание дня.
+  onReps: (reps: number) => void;
 }
 
 /** Атака на босса: минута повторов, каждый повтор — удар по общему здоровью. */
-export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDone }: Props) {
+export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDone, onReps }: Props) {
   const camera = useRepCamera();
   const hero = heroPower(progress, progress.might);
   const power = { ...hero, damage: Math.min(RAID_MAX_DAMAGE, Math.round(hero.damage * (1 + bonus))) };
@@ -110,6 +112,11 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
     return () => camera.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (phase === 'done' && repsRef.current > 0) onReps(repsRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   const boss = raidBoss(raid.key);
   const dealt = reps * power.damage;

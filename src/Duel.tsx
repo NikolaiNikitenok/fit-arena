@@ -9,6 +9,7 @@ import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram
 import { useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
 import { useDuelSounds } from './gameSounds';
+import { recordOutsideReps } from './game/progress';
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
 
@@ -42,6 +43,9 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const [waiting, setWaiting] = useState(false);
   const [top, setTop] = useState<TopEntry[] | null>(null);
 
+  // Свои повторы в бою: после боя засчитываем их в серию, задание дня и клан.
+  const fight = useRef<{ exercise: Exercise; hits: number } | null>(null);
+
   const send = (msg: ClientMessage) => ws.current?.readyState === WebSocket.OPEN && ws.current.send(JSON.stringify(msg));
 
   useEffect(() => {
@@ -67,6 +71,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
         }
         case 'room':
           setRoom({ code: msg.code, exercise: msg.exercise, players: msg.players });
+          fight.current = { exercise: msg.exercise, hits: fight.current?.hits ?? 0 };
           setPhase((p) => (p === 'countdown' || p === 'fight' || p === 'over' ? p : 'room'));
           break;
         case 'profile':
@@ -88,10 +93,13 @@ export function Duel({ exercise }: { exercise: Exercise }) {
           break;
         case 'state':
           setState({ me: msg.me, opponent: msg.opponent });
+          if (fight.current) fight.current.hits = msg.me.hits;
           setEndsAt(Date.now() + msg.leftMs);
           setPhase('fight');
           break;
         case 'end':
+          if (fight.current?.hits) recordOutsideReps(fight.current.exercise, fight.current.hits, Date.now());
+          if (fight.current) fight.current.hits = 0;
           setResult(msg);
           setPhase('over');
           camera.stop();
