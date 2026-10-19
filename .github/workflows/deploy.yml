@@ -1,0 +1,30 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Upload to server
+        # Пока секреты не добавлены, сборка проверяется, но никуда не выкладывается.
+        if: env.DEPLOY_KEY != ''
+        run: |
+          install -m 600 /dev/null ~/.ssh_key
+          echo "$DEPLOY_KEY" > ~/.ssh_key
+          rsync -az --delete -e "ssh -i ~/.ssh_key -o StrictHostKeyChecking=accept-new" dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/arena/"
