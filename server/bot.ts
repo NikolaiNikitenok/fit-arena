@@ -153,7 +153,7 @@ export const botApi = (token: string) => (method: string, body: unknown, timeout
 
 // Состояние бота для /api/health: видно без доступа к логам сервера (без токена).
 export const botStatus: { proxy: string | null; polling: boolean; webhook: boolean; webhookAt: number | null; lastOkAt: number | null; lastError: string | null; handled: number } = {
-  proxy: null,
+  proxy: TG_PROXY ? new URL(TG_PROXY).host : null,
   polling: false,
   webhook: false,
   webhookAt: null,
