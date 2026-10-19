@@ -342,6 +342,11 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
       player = tgUser
         ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name), send, joinedRoom: attach }
         : { id: `guest:${/^[\w-]{8,40}$/.test(msg.guestId ?? '') ? msg.guestId : randomUUID()}`, name: cleanName(msg.name), send, joinedRoom: attach };
+      // Раньше на этом телефоне играли гостем: клан и кубки переходят в аккаунт Telegram.
+      if (tgUser && /^[\w-]{8,40}$/.test(msg.guestId ?? '')) {
+        store.adopt(player.id, `guest:${msg.guestId}`);
+        clans.adopt(player.id, `guest:${msg.guestId}`);
+      }
       send({ type: 'welcome', id: player.id, name: player.name, botUsername, botRunning: !!BOT_TOKEN, telegram: !!tgUser });
       if (msg.channel === 'clan') {
         // Когда сервер знает токен бота, в кланах только настоящие игроки Telegram: гости из браузера каждый раз новые.

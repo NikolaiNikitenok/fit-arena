@@ -293,6 +293,46 @@ export class ClanStore {
   }
 
   /** Обновить имя и уровень героя участника (приходят при каждом входе). */
+  /**
+   * Игрок вошёл через Telegram, а раньше играл гостем на этом телефоне: переносим гостя в аккаунт.
+   * Если оба уже в одном клане (вступил заново), склеиваем в одного участника.
+   */
+  adopt(id: string, guestId: string): boolean {
+    const c = this.clanOf(guestId);
+    if (!c || guestId === id) return false;
+    const mine = this.clanOf(id);
+    if (mine && mine !== c) return false;
+    const g = this.member(c, guestId)!;
+    const t = this.member(c, id);
+    const RANK: Record<ClanRole, number> = { leader: 2, officer: 1, member: 0 };
+    if (t) {
+      t.xp = (t.xp ?? 0) + (g.xp ?? 0);
+      if (RANK[g.role] > RANK[t.role]) t.role = g.role;
+      t.joinedAt = Math.min(t.joinedAt, g.joinedAt);
+      c.members = c.members.filter((m) => m !== g);
+    } else g.id = id;
+    this.byPlayer.delete(guestId);
+    this.byPlayer.set(id, c.id);
+    // Урон в рейде, атаки и сообщения чата тоже переходят к аккаунту.
+    if (c.raid) {
+      const r = c.raid;
+      if (r.damage[guestId]) r.damage[id] = (r.damage[id] ?? 0) + r.damage[guestId];
+      delete r.damage[guestId];
+      if (r.attacks[guestId]) {
+        const mineA = (r.attacks[id] ??= {});
+        for (const [day, n] of Object.entries(r.attacks[guestId])) mineA[day] = Math.max(mineA[day] ?? 0, n);
+        delete r.attacks[guestId];
+      }
+    }
+    if (c.repsDay?.reps[guestId]) {
+      c.repsDay.reps[id] = (c.repsDay.reps[id] ?? 0) + c.repsDay.reps[guestId];
+      delete c.repsDay.reps[guestId];
+    }
+    for (const m of c.chat) if (m.from === guestId) m.from = id;
+    this.save();
+    return true;
+  }
+
   touch(who: Who): void {
     const c = this.clanOf(who.id);
     const m = c && this.member(c, who.id);

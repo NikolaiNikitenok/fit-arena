@@ -82,3 +82,19 @@ describe('кланы', () => {
     expect(clanLevel(1e9)).toMatchObject({ level: 30, need: 0 });
   });
 });
+
+describe('гость становится аккаунтом Telegram', () => {
+  it('переносит участника и склеивает дубль', () => {
+    const s = new ClanStore(null);
+    const now = Date.now();
+    const leader = { id: 'guest:abcdefgh', name: 'Ник', level: 5 };
+    const c = s.create(leader, { name: 'Железные', tag: 'ЖЕЛ', description: '', open: true, minLevel: 1, flag: '', country: '', city: '' }, now) as Clan;
+    s.join({ id: 'tg:1', name: 'Ник', level: 5 }, { code: c.code }, now + 1);
+    expect(c.members).toHaveLength(2);
+    expect(s.adopt('tg:1', 'guest:abcdefgh')).toBe(true);
+    expect(c.members).toHaveLength(1);
+    expect(c.members[0]).toMatchObject({ id: 'tg:1', role: 'leader' });
+    expect(s.clanOf('guest:abcdefgh')).toBeUndefined();
+    expect(s.clanOf('tg:1')).toBe(c);
+  });
+});
