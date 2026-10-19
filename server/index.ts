@@ -20,6 +20,7 @@ import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
 import { botApi, botStatus, runBot, type Update, webhookReply, webhookSecret } from './bot';
 import { dueReminders, SaveStore } from './saves';
+import { raidNotices, type RaidNotice } from './raidNotices';
 import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
@@ -156,7 +157,7 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
-/** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind. */
+/** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind, /api/raid-notify. */
 async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => {
     res.writeHead(code, { 'Content-Type': 'application/json' });
@@ -169,13 +170,14 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   if (path === '/api/progress/load') {
     if (who.guest) saves.adopt(who.id, who.guest);
     const s = saves.get(who.id);
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id) });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id), raidNotify: !s?.raidOff });
   }
   if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
   if (path === '/api/remind') {
     const r = body!.remind as { hour: number; tz: number } | null;
     return reply(200, { remind: saves.setRemind(who.id, r && { hour: Number(r.hour), tz: Number(r.tz) }).remind ?? null });
   }
+  if (path === '/api/raid-notify') return reply(200, { raidNotify: !saves.setRaidNotify(who.id, body!.on !== false).raidOff });
   reply(404, { error: 'not found' });
 }
 
@@ -193,6 +195,8 @@ const http = createServer((req, res) => {
       .then((update) => {
         botStatus.webhook = true;
         botStatus.webhookAt = Date.now();
+        const chat = (update as unknown as Update).message?.chat;
+        if (chat?.type === 'private') saves.setBlocked(`tg:${chat.id}`, false);
         const answer = webhookReply(update as unknown as Update, APP_URL, clanInfo);
         if (answer) botStatus.handled++;
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
@@ -200,7 +204,7 @@ const http = createServer((req, res) => {
       .catch(() => res.writeHead(400).end());
     return;
   }
-  if (path.startsWith('/api/progress/') || path === '/api/remind') {
+  if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
@@ -503,13 +507,48 @@ if (BOT_TOKEN)
       api('sendMessage', { chat_id: Number(save.id.slice(3)), text, reply_markup: { inline_keyboard: [[{ text: 'Тренироваться', web_app: { url: `${APP_URL}/` } }]] } })
         .then((r) => {
           // Игрок остановил бота: больше не пишем.
-          if (r.error_code === 403) saves.setRemind(save.id, null);
+          if (r.error_code === 403) {
+            saves.setRemind(save.id, null);
+            saves.setBlocked(save.id, true);
+          }
         })
         .catch(() => null);
     }
   }, 5 * 60_000);
+// Рейд клана: раз в минуту смотрим, кому пора написать (начало, напоминание, итог).
+// Разосланное клан отмечает сразу, до отправки: после перезапуска повторов не будет.
+// Шлём по одному, не больше 20 сообщений в секунду (у Telegram предел около 30).
+let raidSending = false;
+async function sendRaidNotices(list: RaidNotice[]): Promise<void> {
+  const api = botApi(BOT_TOKEN);
+  for (const n of list) {
+    if (saves.raidMuted(n.playerId)) continue;
+    const body = { chat_id: n.chatId, text: n.text, reply_markup: { inline_keyboard: [[{ text: n.button, web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=clan` } }]] } };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const started = Date.now();
+      const r = await api('sendMessage', body, 15_000).catch(() => null);
+      if (r?.error_code === 403) saves.setBlocked(n.playerId, true);
+      // Telegram просит подождать (429): ждём столько, сколько сказал, и пробуем ещё раз.
+      const retry = r?.error_code === 429 ? (r.parameters?.retry_after ?? 1) : 0;
+      await new Promise((res) => setTimeout(res, retry ? retry * 1000 : Math.max(0, 50 - (Date.now() - started))));
+      if (!retry) break;
+    }
+  }
+}
 if (BOT_TOKEN)
-  runBot(BOT_TOKEN, APP_URL, clanInfo);
+  setInterval(() => {
+    if (raidSending) return;
+    const list = raidNotices(clans.all(), Date.now(), (id) => saves.raidMuted(id));
+    if (!list.length) return;
+    for (const k of new Set(list.map((n) => `${n.clanId}|${n.key}|${n.kind}`))) {
+      const [clan, key, kind] = k.split('|');
+      clans.markNotice(clan, key, kind);
+    }
+    raidSending = true;
+    sendRaidNotices(list).finally(() => (raidSending = false));
+  }, 60_000);
+if (BOT_TOKEN)
+  runBot(BOT_TOKEN, APP_URL, clanInfo, (chatId) => saves.setBlocked(`tg:${chatId}`, false));
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)

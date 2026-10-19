@@ -17,7 +17,8 @@ export interface Remind {
 }
 
 // pro — Pro Pass: решает только сервер по id в Telegram.
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean };
+// raidNotify — бот пишет о рейде клана (по умолчанию да).
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; raidNotify: boolean };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -45,8 +46,8 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
   });
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && push(true));
   try {
-    const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean; pro?: boolean };
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro };
+    const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean; pro?: boolean; raidNotify?: boolean };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, raidNotify: r.raidNotify !== false };
     listeners.forEach((fn) => fn(cloud!));
     const local = loadProgress();
     // Новый телефон: своего прогресса нет, берём серверный, даже если игра уже успела что-то сохранить.
@@ -78,4 +79,11 @@ export async function setRemind(hour: number | null): Promise<Remind | null> {
   const r = (await post('/api/remind', { remind: hour == null ? null : { hour, tz: -new Date().getTimezoneOffset() } })) as { remind: Remind | null };
   if (cloud) cloud.remind = r.remind;
   return r.remind;
+}
+
+/** Уведомления бота о рейде клана: начало, напоминание, итог. */
+export async function setRaidNotify(on: boolean): Promise<boolean> {
+  const r = (await post('/api/raid-notify', { on })) as { raidNotify: boolean };
+  if (cloud) cloud.raidNotify = r.raidNotify;
+  return r.raidNotify;
 }

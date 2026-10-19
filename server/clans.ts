@@ -16,7 +16,7 @@ interface Member {
   xp?: number;
 }
 
-interface Raid {
+export interface Raid {
   key: string;
   level: number;
   hpMax: number;
@@ -50,6 +50,8 @@ export interface Clan {
   raidLevel: number;
   raidWins: number;
   createdAt: number;
+  // Какие сообщения бота о рейде уже ушли: по ключу рейда, чтобы после перезапуска не повторять.
+  notices?: Record<string, string[]>;
 }
 
 export interface Who {
@@ -109,6 +111,20 @@ export class ClanStore {
 
   get(id: string): Clan | undefined {
     return this.clans.get(id);
+  }
+
+  all(): Clan[] {
+    return [...this.clans.values()];
+  }
+
+  /** Отметить, что сообщение бота о рейде ушло. Храним только два последних рейда. */
+  markNotice(clanId: string, key: string, kind: string): void {
+    const c = this.clans.get(clanId);
+    if (!c) return;
+    const n = (c.notices ??= {});
+    if (!(n[key] ??= []).includes(kind)) n[key].push(kind);
+    for (const k of Object.keys(n).sort().slice(0, -2)) delete n[k];
+    this.save();
   }
 
   private member(c: Clan, id: string) {

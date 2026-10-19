@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { cloudState, onCloud, setRemind } from './cloud';
+import { cloudState, onCloud, setRaidNotify, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
 import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
@@ -32,6 +32,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
           </label>
         ))}
         <RemindRow />
+        <RaidNotifyRow />
         <button className="secondary" onClick={onIntro}>
           Посмотреть знакомство заново
         </button>
@@ -93,6 +94,38 @@ function TelegramIdRow() {
         {copied ? 'Скопировано' : 'Копировать'}
       </button>
     </div>
+  );
+}
+
+/** Сообщения бота о рейде клана: босс проснулся, осталось несколько часов, итог. */
+function RaidNotifyRow() {
+  const [cloud, setCloud] = useState(cloudState);
+  const [on, setOn] = useState(cloud?.raidNotify ?? true);
+  useEffect(
+    () =>
+      onCloud((c) => {
+        setCloud(c);
+        setOn(c.raidNotify);
+      }),
+    [],
+  );
+  const [busy, setBusy] = useState(false);
+  const change = (v: boolean) => {
+    setOn(v);
+    setBusy(true);
+    setRaidNotify(v)
+      .then(setOn)
+      .catch(() => setOn(cloud?.raidNotify ?? true))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <label className="toggle-row">
+      <div>
+        <div className="toggle-title">Уведомления о рейде</div>
+        <div className="muted">Бот напишет в субботу, когда босс клана проснётся, напомнит в воскресенье вечером о несделанных атаках и пришлёт итог рейда.</div>
+      </div>
+      <input type="checkbox" className="switch" checked={on} disabled={busy || !cloud?.bot || !cloud.telegram} onChange={(e) => change(e.target.checked)} />
+    </label>
   );
 }
 

@@ -57,7 +57,7 @@ export interface Update {
   message?: { chat: { id: number; type: string }; text?: string };
 }
 
-type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number };
+type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number } };
 
 // Адрес Bot API: если с сервера Telegram недоступен напрямую, можно указать свой прокси-адрес.
 const TG_API = (process.env.TG_API_BASE ?? 'https://api.telegram.org').replace(/\/$/, '');
@@ -211,8 +211,8 @@ async function sendWelcomePhoto(token: string, chat_id: number, url: string, cap
   }
 }
 
-/** Долгий опрос Telegram. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
-export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2]): void {
+/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
+export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void): void {
   const api = botApi(token);
   let offset = 0;
   const loop = async () => {
@@ -236,6 +236,8 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           offset = u.update_id + 1;
           const msg = u.message;
           if (!msg?.text || msg.chat.type !== 'private') continue;
+          // Игрок написал боту: значит, снова можно ему писать.
+          onChat?.(msg.chat.id);
           const reply = startReply(msg.text, appUrl, clanByCode);
           if (!reply) continue;
           const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };

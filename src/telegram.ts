@@ -82,6 +82,9 @@ export function clanInviteCode(): string | null {
   return new URLSearchParams(location.search).get('clan');
 }
 
+/** Вкладка из адреса: кнопки бота о рейде открывают клан (?tab=clan). */
+export const startTab = (): string | null => new URLSearchParams(location.search).get('tab');
+
 // Имя бота известно и без токена на сервере: ссылки-приглашения всегда ведут в Telegram.
 export const BOT_USERNAME = 'ArenaNikitenokBot';
 

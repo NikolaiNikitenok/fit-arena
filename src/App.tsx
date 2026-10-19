@@ -3,7 +3,7 @@ import { Adventure, AdventureTab } from './game/Adventure';
 import { Duel } from './Duel';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { Banner, MapIcon, Shield, Swords } from './icons';
-import { clanInviteCode, inviteCode } from './telegram';
+import { clanInviteCode, inviteCode, startTab } from './telegram';
 
 type Tab = AdventureTab | 'duel';
 
@@ -15,7 +15,7 @@ const NAV: { tab: Tab; Icon: typeof Shield; label: string }[] = [
 ];
 
 export function App() {
-  const [tab, setTab] = useState<Tab>(inviteCode() ? 'duel' : clanInviteCode() ? 'clan' : 'hero');
+  const [tab, setTab] = useState<Tab>(inviteCode() ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : 'hero');
   const [exercise, setExercise] = useState<Exercise>('pushup');
   const [playing, setPlaying] = useState(false);
   const full = tab === 'map' && !playing;

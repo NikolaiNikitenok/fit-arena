@@ -16,6 +16,10 @@ export interface Save {
   remind?: Remind | null;
   // Местная дата, когда уже напомнили: не чаще раза в день.
   remindedOn?: string;
+  // Уведомления о рейде клана выключены в настройках.
+  raidOff?: boolean;
+  // Игрок остановил бота (Telegram ответил 403): не пишем, пока он снова не напишет боту.
+  blocked?: boolean;
 }
 
 export const SAVE_MAX_BYTES = 200_000;
@@ -75,6 +79,28 @@ export class SaveStore {
     return s;
   }
 
+  setRaidNotify(id: string, on: boolean): Save {
+    const s = this.touch(id);
+    if (on) delete s.raidOff;
+    else s.raidOff = true;
+    this.save();
+    return s;
+  }
+
+  setBlocked(id: string, blocked: boolean): void {
+    const s = blocked ? this.touch(id) : this.saves.get(id);
+    if (!s || !!s.blocked === blocked) return;
+    if (blocked) s.blocked = true;
+    else delete s.blocked;
+    this.save();
+  }
+
+  /** Можно ли писать о рейде: не выключил в настройках и не остановил бота. */
+  raidMuted(id: string): boolean {
+    const s = this.saves.get(id);
+    return !!(s?.raidOff || s?.blocked);
+  }
+
   markReminded(id: string, date: string): void {
     this.touch(id).remindedOn = date;
     this.save();
@@ -105,7 +131,7 @@ export function localTime(now: number, tz: number): { date: string; hour: number
 export function dueReminders(saves: Save[], now: number): { save: Save; date: string }[] {
   const out: { save: Save; date: string }[] = [];
   for (const s of saves) {
-    if (!s.remind || !s.id.startsWith('tg:')) continue;
+    if (!s.remind || s.blocked || !s.id.startsWith('tg:')) continue;
     const { date, hour } = localTime(now, s.remind.tz);
     if (hour !== s.remind.hour || s.remindedOn === date) continue;
     const days = (s.progress?.days ?? {}) as Record<string, number>;
