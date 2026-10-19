@@ -21,6 +21,7 @@ interface Seat {
   ready: boolean;
   lastRepAt: number;
   lastCombo: boolean;
+  reps: number;
 }
 
 /** Итог рейтингового боя: a и b — id игроков. */
@@ -28,6 +29,9 @@ export interface MatchEnd {
   a: string;
   b: string;
   outcome: 'a' | 'b' | 'draw';
+  exercise: Exercise;
+  /** Засчитанные повторы каждого за бой. */
+  reps: { a: number; b: number };
 }
 
 type Phase = 'lobby' | 'countdown' | 'fight' | 'over';
@@ -65,7 +69,7 @@ export class Room {
     if (this.has(player.id)) return null;
     if (this.seats.length >= 2) return 'В этом бою уже два бойца';
     const side: Side = this.seats.some((s) => s.side === 'player') ? 'bot' : 'player';
-    this.seats.push({ player, side, ready: false, lastRepAt: -Infinity, lastCombo: false });
+    this.seats.push({ player, side, ready: false, lastRepAt: -Infinity, lastCombo: false, reps: 0 });
     this.broadcastRoom();
     return null;
   }
@@ -79,7 +83,8 @@ export class Room {
       this.phase = 'over';
       // Ушёл из боя — проиграл.
       const other = this.seats[0];
-      if (other) this.onEnd?.({ a: other.player.id, b: seat.player.id, outcome: 'a' });
+      if (other)
+        this.onEnd?.({ a: other.player.id, b: seat.player.id, outcome: 'a', exercise: this.exercise, reps: { a: other.reps, b: seat.reps } });
       for (const s of this.seats) s.player.send({ type: 'end', result: 'win', reason: 'left' });
     }
     if (this.phase === 'over') this.phase = 'lobby';
@@ -101,6 +106,7 @@ export class Room {
     const t = this.now();
     if (t - seat.lastRepAt < MIN_REP_INTERVAL_MS) return;
     seat.lastRepAt = t;
+    seat.reps += 1;
     const result = strike(this.battle, seat.side, t);
     this.battle = result.battle;
     seat.lastCombo = result.strike.combo;
@@ -118,6 +124,7 @@ export class Room {
     for (const s of this.seats) {
       s.lastRepAt = -Infinity;
       s.lastCombo = false;
+      s.reps = 0;
       s.player.send({ type: 'countdown', startsInMs: COUNTDOWN_MS, durationMs: ROUND_MS });
     }
     this.timers.push(
@@ -137,7 +144,13 @@ export class Room {
     const w = winner(this.battle, true);
     if (this.seats.length === 2) {
       const [a, b] = this.seats;
-      this.onEnd?.({ a: a.player.id, b: b.player.id, outcome: w === 'draw' ? 'draw' : w === a.side ? 'a' : 'b' });
+      this.onEnd?.({
+        a: a.player.id,
+        b: b.player.id,
+        outcome: w === 'draw' ? 'draw' : w === a.side ? 'a' : 'b',
+        exercise: this.exercise,
+        reps: { a: a.reps, b: b.reps },
+      });
     }
     for (const s of this.seats) {
       s.ready = false;

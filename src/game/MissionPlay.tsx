@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { useRepCamera } from '../useRepCamera';
+import { reportAdventure } from '../family';
 import { itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
@@ -54,11 +55,14 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
   const [error, setError] = useState<string | null>(null);
   const exercise = useRef<Exercise>(level.exercises[0]);
   const [countdown, setCountdown] = useState(0);
+  // Засчитанные повторы по упражнениям — для семейного сайта.
+  const repsBy = useRef<Partial<Record<Exercise, number>>>({});
 
   const finish = (m: Mission, now: number) => {
     camera.stop();
     const v = m.view(now);
     setView(v);
+    reportAdventure(repsBy.current);
     if (v.outcome === 'won') {
       const stars = m.stars(now);
       setResult({ stars, reward: onWin(stars, v.record) });
@@ -72,6 +76,7 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
     const m = make();
     mission.current = m;
     exercise.current = level.exercises[0];
+    repsBy.current = {};
     setView(m.view(0));
     let lastPaint = 0;
     let firstFrame = 0;
@@ -81,7 +86,9 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
         level.exercises[0],
         () => {
           const now = performance.now();
+          const before = m.view(now).reps;
           m.rep(now);
+          if (m.view(now).reps > before) repsBy.current[exercise.current] = (repsBy.current[exercise.current] ?? 0) + 1;
           lastPaint = 0;
         },
         () => {
