@@ -1,12 +1,15 @@
 // Сервер матчей Fit Arena: комнаты на двоих и бой по WebSocket.
 //   PORT — порт (по умолчанию 8787)
 //   BOT_TOKEN — токен бота: проверяем подпись Telegram и узнаём имя бота для ссылок
+//   BOT_TOKEN_FILE — файл с токеном, если его нет в окружении (по умолчанию .bot-token рядом с сервером;
+//     его кладёт автодеплой из секрета репозитория BOT_TOKEN)
 //   APP_URL — адрес мини-приложения для кнопок бота (по умолчанию https://arena.nikitenok.ru)
 //   BOT_USERNAME — имя бота для ссылок-приглашений, если Telegram недоступен с сервера
 //   ALLOW_GUESTS=1 — пускать без подписи Telegram (для разработки в браузере)
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
@@ -21,7 +24,14 @@ import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
+const readToken = (file: string) => {
+  try {
+    return readFileSync(file, 'utf8').trim();
+  } catch {
+    return '';
+  }
+};
+const BOT_TOKEN = process.env.BOT_TOKEN || readToken(process.env.BOT_TOKEN_FILE ?? join(__dirname, '.bot-token'));
 const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
