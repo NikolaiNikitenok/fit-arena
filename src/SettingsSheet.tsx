@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { cloudState, setRemind } from './cloud';
+import { useEffect, useState } from 'react';
+import { cloudState, onCloud, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
 import { setSetting, Settings, useSettings } from './settings';
 
@@ -68,8 +68,16 @@ export function SettingsSheet({ progress, onReset, onClose }: { progress: Progre
 
 /** Напоминание от бота, если к этому часу ещё не было тренировки. */
 function RemindRow() {
-  const cloud = cloudState();
+  const [cloud, setCloud] = useState(cloudState);
   const [hour, setHour] = useState<number | null>(cloud?.remind?.hour ?? null);
+  useEffect(
+    () =>
+      onCloud((c) => {
+        setCloud(c);
+        setHour(c.remind?.hour ?? null);
+      }),
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const change = (h: number | null) => {
     setHour(h);
@@ -85,10 +93,12 @@ function RemindRow() {
         <div className="toggle-title">Напоминание в Telegram</div>
         <div className="muted">
           {!cloud
-            ? 'Нет связи с сервером, попробуй позже.'
-            : !cloud.telegram
-              ? 'Работает, когда приложение открыто из Telegram.'
-              : `Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.${cloud.bot ? '' : ' Бот подключается, напоминания начнут приходить чуть позже.'}`}
+            ? 'Подключаюсь к серверу…'
+            : !cloud.bot
+              ? 'Скоро: бот ещё не подключён к серверу, после этого напоминания заработают.'
+              : !cloud.telegram
+                ? 'Работает, когда приложение открыто из Telegram.'
+                : 'Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.'}
         </div>
         {hour != null && (
           <select className="remind-hour" value={hour} disabled={busy} onChange={(e) => change(Number(e.target.value))}>
@@ -100,7 +110,7 @@ function RemindRow() {
           </select>
         )}
       </div>
-      <input type="checkbox" className="switch" checked={hour != null} disabled={busy || !cloud || !cloud.telegram} onChange={(e) => change(e.target.checked ? 19 : null)} />
+      <input type="checkbox" className="switch" checked={hour != null} disabled={busy || !cloud?.bot || !cloud.telegram} onChange={(e) => change(e.target.checked ? 19 : null)} />
     </div>
   );
 }

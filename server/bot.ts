@@ -6,11 +6,27 @@ export interface StartReply {
   text: string;
   button: string;
   url: string;
+  // Картинка над текстом: приветствие показывает игру.
+  photo?: string;
 }
+
+export const WELCOME_TEXT = `Привет! Это Атлетия, игра, в которой тренировка становится приключением.
+
+📷 Камера телефона сама считает отжимания, приседания и пресс. Видео никуда не уходит.
+⚔️ Каждый повтор бьёт врага: 300 уровней в трёх мирах, боссы и коварный Князь Диван.
+🥊 Дуэли с живыми соперниками, лиги и сезоны.
+🛡 Клан с друзьями и рейд-босс по выходным.
+🔥 Серия дней, задания от жителей и напоминания, чтобы не бросить.
+
+Нажми «Играть», и Мастер Гром проведёт тебя через первое испытание. Поставь телефон сбоку, чтобы камера видела тебя целиком.`;
+
+// «Что умеет этот бот?» до нажатия «Старт» и короткое описание в профиле бота.
+export const BOT_DESCRIPTION = 'Атлетия: отжимания, приседания и пресс под камеру телефона. Каждый повтор бьёт врага: приключение на 300 уровней, дуэли, кланы и рейд-боссы. Нажми «Старт», чтобы начать.';
+export const BOT_SHORT_DESCRIPTION = 'Тренировка-приключение: камера считает повторы, а каждый повтор бьёт врага.';
 
 /** Ответ на «/start [параметр]»: clan-КОД — клан, иначе код дуэли или просто вход. */
 export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined): StartReply | null {
-  const m = /^\/start(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
+  const m = /^\/(?:start|help)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
   if (!m) return null;
   const param = (m[1] ?? '').replace(/[^\w-]/g, '').slice(0, 40);
   const base = appUrl.replace(/\/$/, '');
@@ -26,11 +42,7 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
     return { text: 'Это приглашение устарело или клан распущен. Открой Атлетию и найди клан по названию.', button: 'Открыть Атлетию', url: `${base}/` };
   }
   if (/^[A-Z0-9]{4,8}$/i.test(param)) return { text: 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.', button: 'Принять вызов', url: `${base}/?room=${param.toUpperCase()}` };
-  return {
-    text: 'Добро пожаловать в Атлетию! Отжимания, приседания и пресс под камеру: проходи приключения, бейся в дуэлях и вместе с кланом побеждай рейд-боссов.',
-    button: 'Играть',
-    url: `${base}/`,
-  };
+  return { text: WELCOME_TEXT, button: 'Играть', url: `${base}/`, photo: `${base}/bot/welcome.jpg` };
 }
 
 interface Update {
@@ -47,6 +59,9 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
   let offset = 0;
   const loop = async () => {
     await api('deleteWebhook', {}).catch(() => null);
+    await api('setMyDescription', { description: BOT_DESCRIPTION }).catch(() => null);
+    await api('setMyShortDescription', { short_description: BOT_SHORT_DESCRIPTION }).catch(() => null);
+    await api('setMyCommands', { commands: [{ command: 'start', description: 'Начать игру' }] }).catch(() => null);
     await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Играть', web_app: { url: `${appUrl.replace(/\/$/, '')}/` } } }).catch(() => null);
     for (;;) {
       try {
@@ -58,7 +73,10 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           if (!msg?.text || msg.chat.type !== 'private') continue;
           const reply = startReply(msg.text, appUrl, clanByCode);
           if (!reply) continue;
-          await api('sendMessage', { chat_id: msg.chat.id, text: reply.text, reply_markup: { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] } });
+          const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
+          const sent = reply.photo ? await api('sendPhoto', { chat_id: msg.chat.id, photo: reply.photo, caption: reply.text, reply_markup }) : null;
+          // Картинка не загрузилась (например, сайт недоступен Telegram) — шлём просто текст.
+          if (!sent?.ok) await api('sendMessage', { chat_id: msg.chat.id, text: reply.text, reply_markup });
         }
       } catch (e) {
         console.error('bot:', e instanceof Error ? e.message : e);

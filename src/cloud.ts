@@ -15,7 +15,15 @@ export interface Remind {
   tz: number;
 }
 
-let cloud: { remind: Remind | null; bot: boolean; telegram: boolean } | null = null;
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean };
+let cloud: CloudState | null = null;
+const listeners = new Set<(c: CloudState) => void>();
+
+/** Подписка на ответ сервера: настройки могут открыть раньше, чем он придёт. */
+export function onCloud(fn: (c: CloudState) => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 let pending: Progress | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -37,6 +45,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
   try {
     const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean };
     cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram };
+    listeners.forEach((fn) => fn(cloud!));
     const local = loadProgress();
     // Новый телефон: своего прогресса нет, берём серверный, даже если игра уже успела что-то сохранить.
     const empty = !Object.keys(local.stars).length && !Object.keys(local.days).length;

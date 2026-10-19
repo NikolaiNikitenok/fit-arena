@@ -156,3 +156,21 @@ describe('RepCounter', () => {
     expect(new RepCounter('squat').update(undefined, 0).hint).toBe('Встань в кадр целиком');
   });
 });
+
+describe('пресс без строгой амплитуды', () => {
+  it('засчитывает подъём корпуса до 80°', () => {
+    expect(run(new RepCounter('situp'), situp, [150, 78, 150, 78, 150])).toBe(2);
+  });
+  it('прощает кадр, где модель потеряла стопу', () => {
+    const c = new RepCounter('situp');
+    let t = 0;
+    for (const theta of [150, 60, 60, 150, 60, 150]) {
+      for (let i = 0; i < 4; i++) {
+        const lm = situp(theta);
+        if (theta === 60 && i === 1) for (const k of [27, 28]) lm[k] = { ...lm[k], visibility: 0.1 };
+        c.update(lm, (t += 50));
+      }
+    }
+    expect(c.current.reps).toBe(2);
+  });
+});

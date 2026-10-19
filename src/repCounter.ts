@@ -77,12 +77,15 @@ export const RULES: Record<Exercise, Rule> = {
   },
   situp: {
     joint: [SHOULDER, HIP, KNEE],
-    down: 70,
+    // Сидя угол в тазу заметно меньше прямого; 70° засчитывал только почти полное касание коленей.
+    down: 85,
     up: 110,
+    // Лёжа сбоку плечо и колено модель видит хуже, чем стоя.
+    minVisibility: 0.35,
     posture: [
-      // Таз и стопы на полу на одной высоте.
-      { ok: (lm, s) => seen(lm[ANKLE[s]]), hint: 'Камера должна видеть тебя целиком, до стоп' },
-      { ok: (lm, s) => tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45, hint: 'Ляг на пол, стопы на полу' },
+      { ok: (lm, s) => legsSeen(lm, s), hint: 'Камера должна видеть тебя целиком, до колен' },
+      // Таз и стопы на полу на одной высоте; если стопы не видно, бедро не стоит вертикально, как стоя.
+      { ok: (lm, s) => (seen(lm[ANKLE[s]]) ? tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45 : tilt(lm[HIP[s]], lm[KNEE[s]]) < 70), hint: 'Ляг на пол, стопы на полу' },
     ],
   },
 };
@@ -136,6 +139,8 @@ const MIN_VISIBILITY = 0.5;
 // Быстрее этого человек повтор честно не сделает — защита от тряски камеры и читов.
 const MIN_REP_MS = 400;
 const SMOOTHING = 0.5;
+// Сколько кадров подряд поза может «мигать»: модель иногда на кадр теряет стопу или таз.
+const POSTURE_GRACE = 3;
 
 export class RepCounter {
   private state: RepState = { reps: 0, phase: 'up', angle: null, hint: null };
@@ -143,6 +148,7 @@ export class RepCounter {
   private lastRepAt = -Infinity;
   private formOk = true;
   private failHint: string | null = null;
+  private failStreak = 0;
   // Поворот кадра, при котором поза в прошлый раз совпала.
   private rotation = 0;
 
@@ -158,6 +164,7 @@ export class RepCounter {
     this.lastRepAt = -Infinity;
     this.formOk = true;
     this.failHint = null;
+    this.failStreak = 0;
   }
 
   /**
@@ -196,18 +203,20 @@ export class RepCounter {
     let { reps, phase } = this.state;
     const failed = rule.posture.find((check) => !check.ok(lm, side));
     let hint: string | null = failed?.hint ?? null;
+    this.failStreak = failed ? this.failStreak + 1 : 0;
+    const postureBad = this.failStreak >= POSTURE_GRACE;
 
-    if (phase === 'up' && value < rule.down && !failed) {
+    if (phase === 'up' && value < rule.down && !postureBad) {
       phase = 'down';
       this.formOk = true;
     }
-    if (phase === 'down' && failed) {
+    if (phase === 'down' && postureBad && failed) {
       this.formOk = false;
       this.failHint = failed.hint;
     }
     if (phase === 'down' && value > rule.up) {
       phase = 'up';
-      if (this.formOk && !failed && timestampMs - this.lastRepAt >= MIN_REP_MS) {
+      if (this.formOk && !postureBad && timestampMs - this.lastRepAt >= MIN_REP_MS) {
         reps += 1;
         this.lastRepAt = timestampMs;
       } else if (!this.formOk) {
