@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import type { RaidView } from '../../shared/clan';
 import { RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_PREP_S, raidBoss } from '../../shared/raid';
 import { itemById } from '../game/items';
+import { raidCard, ShareVictory } from '../game/ShareCard';
 import { heroHands, heroPower } from '../game/power';
 import { Progress } from '../game/progress';
 import { Heart, Swords } from '../icons';
@@ -174,9 +175,12 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
         </button>
       ) : (
         (phase === 'done' || phase === 'error') && (
-          <button className="primary" onClick={() => onDone(dealt)}>
-            Вернуться в клан
-          </button>
+          <>
+            {phase === 'done' && raid.hp <= 0 && reps > 0 && <ShareVictory card={() => raidCard(raid.key, progress, reps, dealt)} />}
+            <button className="primary" onClick={() => onDone(dealt)}>
+              Вернуться в клан
+            </button>
+          </>
         )
       )}
     </>

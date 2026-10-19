@@ -14,6 +14,9 @@ interface TelegramWebApp {
   safeAreaInset?: { top: number; bottom: number };
   contentSafeAreaInset?: { top: number; bottom: number };
   onEvent?(event: string, cb: () => void): void;
+  // Bot API 8.0: скачать файл по https-ссылке; Bot API 7.8: история с картинкой по https-ссылке.
+  downloadFile?(params: { url: string; file_name: string }, cb?: (accepted: boolean) => void): void;
+  shareToStory?(mediaUrl: string, params?: { text?: string; widget_link?: { url: string; name?: string } }): void;
 }
 
 declare global {

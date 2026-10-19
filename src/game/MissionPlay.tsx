@@ -11,6 +11,7 @@ import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
 import { heroHands, heroPower } from './power';
 import { MissionScene3D } from './MissionScene3D';
+import { bossCard, ShareVictory } from './ShareCard';
 import { Dialog, Remark } from './Dialog';
 import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
@@ -323,6 +324,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           Остановиться
         </button>
       )}
+      {status === 'won' && result && !epilogue && level.type === 'boss' && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
       {status === 'won' && onNext && (
         <button className="primary" onClick={onNext}>
           Дальше
