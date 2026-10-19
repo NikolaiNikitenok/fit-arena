@@ -83,3 +83,15 @@ export const Flask = ({ size = 40, color = '#ff6b81', scroll = false }: { size?:
       <circle cx="16" cy="27" r="1.4" fill="rgba(255,255,255,.7)" />
     </svg>
   );
+
+export const Banner = ({ size = 22, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M5 21V4" />
+      <path d="M5 4h12l-2.5 4L17 12H5" />
+    </>,
+  );
+
+export const Send = ({ size = 18, className }: P) => svg(size, className, <path d="M4 12l16-8-6 16-3-7-7-1z" />);

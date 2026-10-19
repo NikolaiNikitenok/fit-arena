@@ -46,9 +46,38 @@ export function hapticRep(): void {
   tg?.HapticFeedback?.impactOccurred('medium');
 }
 
+const startParam = (): string | null => tg?.initDataUnsafe.start_param ?? null;
+
 /** Код боя из ссылки-приглашения: t.me/<бот>?startapp=КОД или ?room=КОД в браузере. */
 export function inviteCode(): string | null {
-  return tg?.initDataUnsafe.start_param ?? new URLSearchParams(location.search).get('room');
+  const p = startParam();
+  if (p?.startsWith('clan-')) return null;
+  return p ?? new URLSearchParams(location.search).get('room');
+}
+
+/** Приглашение в клан: t.me/<бот>?startapp=clan-КОД или ?clan=КОД в браузере. */
+export function clanInviteCode(): string | null {
+  const p = startParam();
+  if (p?.startsWith('clan-')) return p.slice(5);
+  return new URLSearchParams(location.search).get('clan');
+}
+
+export function clanInviteLink(code: string, botUsername: string | null): string {
+  return botUsername ? `https://t.me/${botUsername}?startapp=clan-${code}` : `${location.origin}/?clan=${code}`;
+}
+
+// Гостям без Telegram выдаём постоянный id, чтобы кубки и клан не терялись между заходами.
+export function guestId(): string {
+  try {
+    let id = localStorage.getItem('fit-arena-guest');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('fit-arena-guest', id);
+    }
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
 }
 
 export function inviteLink(code: string, botUsername: string | null): string {

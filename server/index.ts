@@ -5,11 +5,13 @@
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
+import { dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
 import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
+import { type Clan, ClanStore, type Who } from './clans';
 import { verifyInitData } from './telegramAuth';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -17,6 +19,32 @@ const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
+const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
+// Соединения экрана клана: у игрока может быть открыто несколько.
+const clanSockets = new Map<string, Set<(msg: ServerMessage) => void>>();
+const isOnline = (id: string) => (clanSockets.get(id)?.size ?? 0) > 0 || online.has(id);
+
+/** Каждому участнику — его вид клана (роль, «я»). */
+function sendClan(clan: Clan): void {
+  const now = Date.now();
+  for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send({ type: 'clan', clan: clans.view(clan, m.id, isOnline, now) });
+}
+function toClan(clan: Clan, msg: ServerMessage): void {
+  for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send(msg);
+}
+// Здоровье босса рассылаем не чаще трёх раз в секунду, даже если бьют все сразу.
+const raidPending = new Map<string, ReturnType<typeof setTimeout>>();
+function sendRaid(clan: Clan): void {
+  if (raidPending.has(clan.id)) return;
+  raidPending.set(
+    clan.id,
+    setTimeout(() => {
+      raidPending.delete(clan.id);
+      const now = Date.now();
+      for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send({ type: 'raid', raid: clans.raidView(clan, m.id, now) });
+    }, 300),
+  );
+}
 const rooms = new Map<string, Room>();
 // Последнее соединение каждого игрока: туда шлём новые кубки после боя.
 const online = new Map<string, Player>();
@@ -83,10 +111,106 @@ const http = createServer((req, res) => {
   res.writeHead(404).end();
 });
 
+/** Сообщения экрана клана. Ошибки возвращаются строкой и показываются игроку. */
+function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) => void): void {
+  const now = Date.now();
+  const fail = (r: unknown): r is string => {
+    if (typeof r !== 'string') return false;
+    send({ type: 'clanError', message: r });
+    return true;
+  };
+  const mine = () => clans.clanOf(who.id);
+  switch (msg.type) {
+    case 'clanMine': {
+      const c = mine();
+      send({ type: 'clan', clan: c ? clans.view(c, who.id, isOnline, now) : null });
+      if (c) send({ type: 'chat', messages: c.chat });
+      break;
+    }
+    case 'clanSearch':
+      send({ type: 'clanList', clans: clans.search(String(msg.q ?? '')) });
+      break;
+    case 'clanCreate': {
+      const r = clans.create(who, msg.clan, now);
+      if (fail(r)) return;
+      sendClan(r);
+      send({ type: 'chat', messages: r.chat });
+      break;
+    }
+    case 'clanJoin': {
+      const r = clans.join(who, { id: msg.id, code: msg.code }, now);
+      if (fail(r)) return;
+      sendClan(r);
+      toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
+      send({ type: 'chat', messages: r.chat });
+      break;
+    }
+    case 'clanLeave': {
+      const r = clans.leave(who.id, now);
+      send({ type: 'clan', clan: null });
+      if (r) {
+        sendClan(r);
+        toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
+      }
+      break;
+    }
+    case 'clanUpdate': {
+      const r = clans.update(who.id, msg.clan);
+      if (!fail(r)) sendClan(r);
+      break;
+    }
+    case 'clanRole': {
+      if (!['leader', 'officer', 'member'].includes(msg.role)) return;
+      const r = clans.setRole(who.id, String(msg.id), msg.role, now);
+      if (fail(r)) return;
+      sendClan(r);
+      toClan(r, { type: 'chat', messages: r.chat });
+      break;
+    }
+    case 'clanKick': {
+      const target = String(msg.id);
+      const r = clans.kick(who.id, target, now);
+      if (fail(r)) return;
+      for (const s of clanSockets.get(target) ?? []) s({ type: 'clan', clan: null });
+      sendClan(r);
+      toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
+      break;
+    }
+    case 'chatSend': {
+      const r = clans.chat(who.id, String(msg.text ?? ''), now);
+      if (fail(r)) return;
+      toClan(mine()!, { type: 'chatMsg', message: r });
+      break;
+    }
+    case 'raidStart': {
+      const r = clans.raidStart(who.id, now);
+      if (fail(r)) return;
+      send({ type: 'raidAttack', ...r });
+      sendRaid(mine()!);
+      break;
+    }
+    case 'raidHit': {
+      const r = clans.raidHit(who.id, String(msg.attackId), Number(msg.damage), now);
+      if (typeof r === 'string') return;
+      sendRaid(r.clan);
+      if (r.killed) {
+        toClan(r.clan, { type: 'chatMsg', message: r.clan.chat[r.clan.chat.length - 1] });
+        sendClan(r.clan);
+      }
+      break;
+    }
+    case 'raidEnd':
+      clans.raidEnd(String(msg.attackId));
+      break;
+  }
+}
+
 const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 16 * 1024 });
 
 wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   let player: Player | null = null;
+  let clanChannel = false;
+  let who: Who | null = null;
   let room: Room | null = null;
   const attach = (r: Room) => {
     room = r;
@@ -126,12 +250,24 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
       player = tgUser
         ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name), send, joinedRoom: attach }
         : { id: `guest:${/^[\w-]{8,40}$/.test(msg.guestId ?? '') ? msg.guestId : randomUUID()}`, name: cleanName(msg.name), send, joinedRoom: attach };
-      online.set(player.id, player);
       send({ type: 'welcome', id: player.id, name: player.name, botUsername });
+      if (msg.channel === 'clan') {
+        clanChannel = true;
+        who = { id: player.id, name: player.name, level: Math.max(1, Math.min(999, Math.round(Number(msg.level) || 1))) };
+        if (!clanSockets.has(player.id)) clanSockets.set(player.id, new Set());
+        clanSockets.get(player.id)!.add(send);
+        clans.touch(who);
+        const mine = clans.clanOf(player.id);
+        send({ type: 'clan', clan: mine ? clans.view(mine, player.id, isOnline, Date.now()) : null });
+        if (mine) send({ type: 'chat', messages: mine.chat });
+        return;
+      }
+      online.set(player.id, player);
       send({ type: 'profile', profile: profileView(store.get(player.id, player.name)) });
       return;
     }
     if (!player) return;
+    if (clanChannel && who) return onClanMessage(msg, who, send);
 
     switch (msg.type) {
       case 'create': {
@@ -201,6 +337,11 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   ws.on('close', () => {
     leaveRoom();
     if (!player) return;
+    if (clanChannel) {
+      clanSockets.get(player.id)?.delete(send);
+      if (!clanSockets.get(player.id)?.size) clanSockets.delete(player.id);
+      return;
+    }
     for (const [ex, p] of queue) if (p === player) queue.delete(ex);
     if (online.get(player.id) === player) online.delete(player.id);
   });
@@ -221,5 +362,6 @@ loadBotUsername();
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
   process.on(signal, () => {
     store.flush();
+    clans.flush();
     process.exit(0);
   });

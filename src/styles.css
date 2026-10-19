@@ -309,3 +309,84 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .danger-link { color: var(--rose); }
 .danger-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
 .danger-row span { flex: 1; min-width: 150px; }
+
+/* Кланы */
+.emblem { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 30%; color: #1a1020; font-weight: 900; letter-spacing: .3px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+.empty-card { display: flex; flex-direction: column; gap: 10px; align-items: center; padding: 30px 16px; border-radius: var(--r-lg); background: var(--surface); }
+.clan-card, .clan-item, .clan-intro { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: var(--r-lg); background: var(--surface); }
+.clan-intro { align-items: flex-start; color: var(--accent); }
+.clan-meta { flex: 1; min-width: 0; }
+.clan-name { font-size: 18px; font-weight: 900; line-height: 1.2; }
+.clan-name.small { font-size: 15px; }
+.clan-tag { color: var(--hint); font-weight: 800; }
+.clan-card .muted { font-size: 13px; margin-top: 2px; }
+.clan-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.clan-badges span { padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.05); font-size: 11px; font-weight: 800; color: #c9cfda; }
+.clan-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.clan-actions .secondary { min-height: 44px; font-size: 15px; }
+.clan-list { display: flex; flex-direction: column; gap: 8px; }
+.clan-item .muted { font-size: 12.5px; }
+.search { width: 100%; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 700 15px var(--font); }
+.join input, .chat-input input, .clan-form input, .clan-form textarea { font-family: var(--font); }
+.claim-title { font-weight: 900; font-size: 16px; color: var(--text); }
+
+.raid-card { border-radius: 22px; overflow: hidden; background: var(--surface); }
+.raid-stage { position: relative; height: 230px; }
+.raid-when { position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(6px); font-size: 12.5px; font-weight: 900; color: var(--gold); }
+.raid-info { padding: 10px 14px 14px; }
+.raid-name { font-size: 18px; font-weight: 900; }
+.raid-info > .muted { font-size: 13px; }
+.bar.big { height: 12px; border-radius: 6px; margin-top: 10px; }
+.raid-hp { margin-top: 5px; font-size: 13px; font-weight: 800; color: var(--hint); font-variant-numeric: tabular-nums; }
+.raid-hp b { color: var(--text); font-size: 15px; }
+.claim-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: linear-gradient(135deg, rgba(255,210,122,.16), rgba(255,122,89,.12)); border: 1px solid rgba(255,210,122,.5); }
+.claim-card > div { flex: 1; }
+.my-raid { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface); }
+.my-raid > div { flex: 1; min-width: 0; }
+.my-raid-dmg { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 900; }
+.my-raid-dmg .icon { color: var(--accent); }
+.my-raid .muted { font-size: 12.5px; }
+.tier-badge { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 900; background: var(--surface-3); color: var(--hint); }
+.tier-badge.part { background: #3a3f55; color: #dfe3ea; }
+.tier-badge.bronze { background: #6b4a2e; color: #ffd2a8; }
+.tier-badge.silver { background: #4d5566; color: #eef2f8; }
+.tier-badge.gold { background: #7a5a12; color: #ffe08a; }
+.raid-feed { display: flex; flex-wrap: wrap; gap: 6px; }
+.raid-feed span { padding: 4px 10px; border-radius: 999px; background: var(--surface); font-size: 12.5px; font-weight: 700; color: #c9cfda; }
+.raid-feed b { color: var(--accent); }
+.tiers { display: flex; flex-direction: column; gap: 6px; }
+.tier { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface); }
+.tier.on { outline: 1.5px solid var(--accent); }
+.tier-need { flex: 1; font-size: 12.5px; font-weight: 700; color: var(--hint); }
+.tier-gift { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 900; }
+.tier-potion { display: inline-flex; align-items: center; }
+.tiers-note { font-size: 12.5px; padding: 2px 2px 0; }
+
+.chat { display: flex; flex-direction: column; gap: 8px; }
+.chat-list { display: flex; flex-direction: column; gap: 8px; height: min(52vh, 420px); overflow-y: auto; padding: 10px; border-radius: var(--r-lg); background: var(--surface); }
+.chat-msg { max-width: 88%; padding: 7px 11px 8px; border-radius: 14px 14px 14px 4px; background: var(--surface-2); }
+.chat-name { font-size: 12.5px; font-weight: 900; }
+.chat-time { margin-left: 6px; font-size: 11px; color: var(--hint); }
+.chat-text { margin-top: 1px; font-size: 14.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.chat-system { align-self: center; max-width: 92%; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.04); font-size: 12px; font-weight: 700; color: var(--hint); text-align: center; }
+.chat-input { display: flex; gap: 8px; }
+.chat-input input { flex: 1; min-width: 0; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 15px; font-weight: 600; }
+.chat-input button { width: 48px; border: 0; border-radius: var(--r-md); background: var(--accent-grad); color: var(--on-accent); display: flex; align-items: center; justify-content: center; }
+.chat-input button:disabled { background: var(--surface-2); color: var(--hint); }
+
+.members { display: flex; flex-direction: column; gap: 6px; }
+.member { border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+.member-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 11px 12px; border: 0; background: transparent; color: var(--text); text-align: left; font-size: 14px; }
+.dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--surface-3); }
+.dot.on { background: var(--mint); box-shadow: 0 0 6px var(--mint); }
+.member-name { flex: 1; min-width: 0; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.role { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 900; background: var(--surface-3); color: #dfe3ea; }
+.role.leader { background: #7a5a12; color: #ffe08a; }
+.member-level { font-size: 12px; font-weight: 800; color: var(--hint); }
+.member-dmg { display: inline-flex; align-items: center; gap: 3px; min-width: 56px; justify-content: flex-end; font-size: 12.5px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.member-dmg .icon { color: var(--accent); }
+.member-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 12px; }
+
+.clan-form { display: flex; flex-direction: column; gap: 10px; }
+.clan-form > label:not(.toggle-row) { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 800; color: var(--hint); }
+.clan-form input:not(.switch), .clan-form textarea { padding: 11px 13px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-size: 15px; font-weight: 700; resize: none; }

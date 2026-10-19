@@ -2,19 +2,20 @@ import { useState } from 'react';
 import { Adventure, AdventureTab } from './game/Adventure';
 import { Duel } from './Duel';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
-import { MapIcon, Shield, Swords } from './icons';
-import { inviteCode } from './telegram';
+import { Banner, MapIcon, Shield, Swords } from './icons';
+import { clanInviteCode, inviteCode } from './telegram';
 
 type Tab = AdventureTab | 'duel';
 
 const NAV: { tab: Tab; Icon: typeof Shield; label: string }[] = [
   { tab: 'hero', Icon: Shield, label: 'Герой' },
   { tab: 'map', Icon: MapIcon, label: 'Карта' },
+  { tab: 'clan', Icon: Banner, label: 'Клан' },
   { tab: 'duel', Icon: Swords, label: 'Дуэль' },
 ];
 
 export function App() {
-  const [tab, setTab] = useState<Tab>(inviteCode() ? 'duel' : 'hero');
+  const [tab, setTab] = useState<Tab>(inviteCode() ? 'duel' : clanInviteCode() ? 'clan' : 'hero');
   const [exercise, setExercise] = useState<Exercise>('pushup');
   const [playing, setPlaying] = useState(false);
   const full = tab === 'map' && !playing;

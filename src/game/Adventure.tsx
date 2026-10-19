@@ -3,6 +3,7 @@ import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { SettingsSheet } from '../SettingsSheet';
+import { ClanScreen } from '../clan/ClanScreen';
 import { GEAR, gearText, ITEMS, itemById, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
@@ -47,7 +48,7 @@ const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const fmtMin = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 
-export type AdventureTab = 'hero' | 'map';
+export type AdventureTab = 'hero' | 'map' | 'clan';
 
 interface Props {
   tab: AdventureTab;
@@ -147,6 +148,14 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
       {toast && tab === 'hero' && <div className="toast global">{toast}</div>}
     </>
   );
+
+  if (tab === 'clan')
+    return (
+      <>
+        <ClanScreen progress={progress} setProgress={setProgress} onPlaying={onPlaying} landNow={currentDef.land} onSpendMight={() => update(spendMight)} />
+        {sheets}
+      </>
+    );
 
   if (tab === 'hero')
     return (

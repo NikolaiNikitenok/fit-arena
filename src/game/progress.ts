@@ -30,6 +30,8 @@ export interface Progress {
   potions?: Partial<Record<PotionId, number>>;
   // Выпит эликсир силы: действует на следующий бой.
   might?: boolean;
+  // Награды за рейды клана уже забраны: ключи недель.
+  raidClaimed?: string[];
 }
 
 export interface Record_ {
@@ -330,4 +332,20 @@ export function spendSwaps(p: Progress, levelId: number, count: number, now: num
 /** Начать игру заново: прогресс, предметы и монеты стираются. */
 export function resetProgress(): Progress {
   return save(fresh());
+}
+
+/** Награда за рейд клана: монеты, зелья и, для лучших или при победе, сундук рейда со снаряжением. */
+export function claimRaid(p: Progress, key: string, reward: { coins: number; potions: Partial<Record<PotionId, number>>; chest: boolean }, land: number): { progress: Progress; gear?: Gear } | null {
+  if (p.raidClaimed?.includes(key)) return null;
+  let potions = p.potions;
+  for (const [id, n] of Object.entries(reward.potions) as [PotionId, number][]) potions = addPotion(potions, id, n);
+  const gear = reward.chest ? bossDrop(land + 2, p.items) : undefined;
+  const next = {
+    ...p,
+    coins: p.coins + reward.coins,
+    potions,
+    items: gear ? [...p.items, gear.id] : p.items,
+    raidClaimed: [...(p.raidClaimed ?? []).slice(-20), key],
+  };
+  return { progress: save(next), gear };
 }

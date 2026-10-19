@@ -5,7 +5,7 @@ import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage
 import { LEAGUES, leagueOf, seasonEndsAt } from '../shared/rating';
 import { CameraGuide } from './CameraGuide';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
-import { inviteCode, inviteLink, share, tg, userName } from './telegram';
+import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
@@ -18,20 +18,6 @@ interface RoomInfo {
 
 const RESULT_TEXT = { win: 'Победа!', lose: 'Поражение', draw: 'Ничья' };
 const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'соперник покинул бой' };
-
-// Гостям без Telegram выдаём постоянный id, чтобы кубки не терялись между заходами.
-function guestId(): string {
-  try {
-    let id = localStorage.getItem('fit-arena-guest');
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem('fit-arena-guest', id);
-    }
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 
 const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 

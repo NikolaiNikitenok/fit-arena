@@ -1,5 +1,6 @@
 // Сообщения между клиентом и сервером матчей (JSON по WebSocket).
 import type { Exercise } from '../src/repCounter';
+import type { ClanClientMessage, ClanServerMessage } from './clan';
 
 export interface PlayerInfo {
   id: string;
@@ -8,7 +9,8 @@ export interface PlayerInfo {
 }
 
 export type ClientMessage =
-  | { type: 'hello'; initData: string; name: string; guestId?: string }
+  // channel: 'clan' — отдельное соединение экрана клана, дуэли его не видят.
+  | { type: 'hello'; initData: string; name: string; guestId?: string; channel?: 'clan'; level?: number }
   | { type: 'quick'; exercise: Exercise }
   | { type: 'cancelQuick' }
   | { type: 'create'; exercise: Exercise }
@@ -16,7 +18,8 @@ export type ClientMessage =
   | { type: 'ready' }
   | { type: 'rep' }
   | { type: 'leave' }
-  | { type: 'top' };
+  | { type: 'top' }
+  | ClanClientMessage;
 
 // Состояние боя всегда с точки зрения получателя: me — он сам, opponent — соперник.
 export interface FighterView {
@@ -52,4 +55,5 @@ export type ServerMessage =
   | { type: 'profile'; profile: ProfileView; delta?: number }
   | { type: 'top'; players: TopEntry[] }
   | { type: 'queue'; waiting: boolean }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | ClanServerMessage;
