@@ -128,7 +128,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
     );
 
   // Открыли в браузере, а сервер знает бота: в клан — только из Telegram, чтобы друг вошёл под своим именем.
-  if (!api.telegram && api.bot)
+  if (!api.telegram && api.bot.running)
     return (
       <>
         {head}
@@ -139,7 +139,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
             <div className="muted">Открой Атлетию в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.</div>
           </div>
         </div>
-        <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot}`}>
+        <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot.username}`}>
           Открыть в Telegram
         </a>
       </>

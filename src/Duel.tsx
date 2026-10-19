@@ -25,7 +25,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const camera = useRepCamera();
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
-  const [me, setMe] = useState<{ id: string; botUsername: string | null } | null>(null);
+  const [me, setMe] = useState<{ id: string; bot: { username: string | null; running: boolean } } | null>(null);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [state, setState] = useState<{ me: FighterView; opponent: FighterView } | null>(null);
   const [endsAt, setEndsAt] = useState(0);
@@ -57,7 +57,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
       const msg: ServerMessage = JSON.parse(event.data);
       switch (msg.type) {
         case 'welcome': {
-          setMe({ id: msg.id, botUsername: msg.botUsername });
+          setMe({ id: msg.id, bot: { username: msg.botUsername, running: msg.botRunning } });
           setPhase('menu');
           const invite = inviteCode();
           if (invite) socket.send(JSON.stringify({ type: 'join', code: invite }));
@@ -125,7 +125,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const invite = async () => {
     if (!room) return;
     const how = await share(
-      inviteLink(room.code, me?.botUsername ?? null),
+      inviteLink(room.code, me?.bot ?? { username: null, running: false }),
       `Вызываю тебя на бой в Fit Arena: ${EXERCISE_LABELS[room.exercise].toLowerCase()}, кто больше за минуту!`,
     ).catch(() => null);
     setShared(how === 'copied' ? 'Ссылка скопирована' : null);

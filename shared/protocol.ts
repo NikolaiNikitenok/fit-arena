@@ -48,7 +48,7 @@ export interface TopEntry {
 
 export type ServerMessage =
   // telegram — игрок вошёл через Telegram с проверенной подписью, а не гостем из браузера.
-  | { type: 'welcome'; id: string; name: string; botUsername: string | null; telegram: boolean }
+  | { type: 'welcome'; id: string; name: string; botUsername: string | null; botRunning: boolean; telegram: boolean }
   | { type: 'room'; code: string; exercise: Exercise; players: PlayerInfo[] }
   | { type: 'countdown'; startsInMs: number; durationMs: number }
   | { type: 'state'; me: FighterView; opponent: FighterView; leftMs: number }

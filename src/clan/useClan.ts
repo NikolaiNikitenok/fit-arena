@@ -14,7 +14,7 @@ export function useClan(level: number) {
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [attack, setAttack] = useState<{ attackId: string; endsAt: number } | null>(null);
-  const [bot, setBot] = useState<string | null>(null);
+  const [bot, setBot] = useState<{ username: string | null; running: boolean }>({ username: null, running: false });
   const [telegram, setTelegram] = useState(false);
   const [seq, setSeq] = useState(0);
 
@@ -31,7 +31,7 @@ export function useClan(level: number) {
       const msg: ServerMessage = JSON.parse(e.data);
       switch (msg.type) {
         case 'welcome':
-          setBot(msg.botUsername);
+          setBot({ username: msg.botUsername, running: msg.botRunning });
           setTelegram(msg.telegram);
           setStatus('online');
           break;

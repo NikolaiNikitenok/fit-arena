@@ -62,9 +62,18 @@ export function clanInviteCode(): string | null {
   return new URLSearchParams(location.search).get('clan');
 }
 
-export function clanInviteLink(code: string, botUsername: string | null): string {
-  // Ссылка ведёт в бота: после «Старт» он присылает кнопку, и приложение открывается уже с аккаунтом Telegram.
-  return botUsername ? `https://t.me/${botUsername}?start=clan-${code}` : `${location.origin}/?clan=${code}`;
+// Имя бота известно и без токена на сервере: ссылки-приглашения всегда ведут в Telegram.
+export const BOT_USERNAME = 'ArenaNikitenokBot';
+
+// Пока на сервере нет токена, бот не отвечает на /start, поэтому ссылка сразу открывает
+// мини-приложение (startapp). Когда бот запущен, ссылка ведёт в бота, и он присылает кнопку входа.
+const link = (param: string, bot: { username: string | null; running: boolean }) => {
+  const name = bot.username || BOT_USERNAME;
+  return name ? `https://t.me/${name}?${bot.running ? 'start' : 'startapp'}=${param}` : null;
+};
+
+export function clanInviteLink(code: string, bot: { username: string | null; running: boolean }): string {
+  return link(`clan-${code}`, bot) ?? `${location.origin}/?clan=${code}`;
 }
 
 // Гостям без Telegram выдаём постоянный id, чтобы кубки и клан не терялись между заходами.
@@ -81,8 +90,8 @@ export function guestId(): string {
   }
 }
 
-export function inviteLink(code: string, botUsername: string | null): string {
-  return botUsername ? `https://t.me/${botUsername}?start=${code}` : `${location.origin}/?room=${code}`;
+export function inviteLink(code: string, bot: { username: string | null; running: boolean }): string {
+  return link(code, bot) ?? `${location.origin}/?room=${code}`;
 }
 
 /** Окно «Переслать» в Telegram; вне Telegram — системное «Поделиться» или копирование. */
