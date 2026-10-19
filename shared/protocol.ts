@@ -19,6 +19,7 @@ export type ClientMessage =
 export interface FighterView {
   name: string;
   hp: number;
+  maxHp: number;
   hits: number;
   combo: boolean;
 }

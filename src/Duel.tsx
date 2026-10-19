@@ -17,7 +17,7 @@ interface RoomInfo {
 const RESULT_TEXT = { win: 'Победа!', lose: 'Поражение', draw: 'Ничья' };
 const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'соперник покинул бой' };
 
-const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, hits: 0, combo: false });
+const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 
 export function Duel({ exercise }: { exercise: Exercise }) {
   const camera = useRepCamera();

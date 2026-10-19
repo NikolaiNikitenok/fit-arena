@@ -9,6 +9,9 @@ export const COMBO_DAMAGE = 16;
 
 export interface Fighter {
   hp: number;
+  maxHp: number;
+  // Множитель урона: боссы бьют сильнее.
+  power: number;
   hits: number;
   streak: number;
   lastHitAt: number;
@@ -27,10 +30,22 @@ export interface Strike {
   combo: boolean;
 }
 
-const fresh = (): Fighter => ({ hp: MAX_HP, hits: 0, streak: 0, lastHitAt: -Infinity });
+export interface FighterSetup {
+  hp?: number;
+  power?: number;
+}
 
-export function newBattle(): Battle {
-  return { player: fresh(), bot: fresh() };
+const fresh = ({ hp = MAX_HP, power = 1 }: FighterSetup = {}): Fighter => ({
+  hp,
+  maxHp: hp,
+  power,
+  hits: 0,
+  streak: 0,
+  lastHitAt: -Infinity,
+});
+
+export function newBattle(setup: { player?: FighterSetup; bot?: FighterSetup } = {}): Battle {
+  return { player: fresh(setup.player), bot: fresh(setup.bot) };
 }
 
 /** Повтор бойца side в момент t: возвращает новое состояние и нанесённый удар. */
@@ -39,7 +54,7 @@ export function strike(battle: Battle, side: Side, t: number): { battle: Battle;
   const target: Side = side === 'player' ? 'bot' : 'player';
   const streak = t - attacker.lastHitAt <= COMBO_WINDOW_MS ? attacker.streak + 1 : 1;
   const combo = streak % COMBO_EVERY === 0;
-  const damage = combo ? COMBO_DAMAGE : HIT_DAMAGE;
+  const damage = Math.round((combo ? COMBO_DAMAGE : HIT_DAMAGE) * attacker.power);
   return {
     battle: {
       ...battle,
@@ -50,13 +65,15 @@ export function strike(battle: Battle, side: Side, t: number): { battle: Battle;
   };
 }
 
-/** Победитель: нокаут или больше здоровья по истечении времени. null — бой идёт или ничья. */
+/** Победитель: нокаут или больше здоровья (в долях от максимума) по истечении времени. null — бой идёт. */
 export function winner(battle: Battle, timeUp: boolean): Side | 'draw' | null {
   if (battle.bot.hp === 0) return 'player';
   if (battle.player.hp === 0) return 'bot';
   if (!timeUp) return null;
-  if (battle.player.hp === battle.bot.hp) return 'draw';
-  return battle.player.hp > battle.bot.hp ? 'player' : 'bot';
+  const p = battle.player.hp / battle.player.maxHp;
+  const b = battle.bot.hp / battle.bot.maxHp;
+  if (p === b) return 'draw';
+  return p > b ? 'player' : 'bot';
 }
 
 export interface BotLevel {

@@ -1,111 +1,121 @@
-import { useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import type { ZoneTheme } from '../campaign';
 
-// 3D-ринг с двумя бойцами из примитивов. Анимации запускаются сменой счётчиков
-// punchSeq (боец бьёт) и hitSeq (по бойцу попали).
+// 3D-ринг с двумя анимированными роботами. Модель RobotExpressive (CC0, Tomás Laulhé).
+// Анимации запускаются сменой счётчиков: punchSeq — боец бьёт, hitSeq — по нему попали.
 
-interface FighterProps {
+const MODEL_URL = `${import.meta.env.BASE_URL}models/robot.glb`;
+// Робот в модели ростом около 4,5 единиц; приводим к росту бойца на ринге (~1,9).
+const MODEL_SCALE = 0.25;
+const HIT_MS = 320;
+
+export interface FighterLook {
   color: string;
-  facing: 1 | -1;
   punchSeq: number;
   hitSeq: number;
   combo: boolean;
   knockedOut: boolean;
+  won: boolean;
+  scale?: number;
+  enraged?: boolean;
 }
 
-const PUNCH_MS = 260;
-const HIT_MS = 320;
+function Robot({ look, facing }: { look: FighterLook; facing: 1 | -1 }) {
+  const gltf = useLoader(GLTFLoader, MODEL_URL);
+  const holder = useRef<THREE.Group>(null!);
 
-function Fighter({ color, facing, punchSeq, hitSeq, combo, knockedOut }: FighterProps) {
-  const root = useRef<THREE.Group>(null!);
-  const body = useRef<THREE.Group>(null!);
-  const leftArm = useRef<THREE.Group>(null!);
-  const rightArm = useRef<THREE.Group>(null!);
-  const torsoMat = useRef<THREE.MeshStandardMaterial>(null!);
+  // Каждому бойцу свой клон со своими материалами, чтобы красить их отдельно.
+  const { model, materials, mixer, actions } = useMemo(() => {
+    const model = cloneSkinned(gltf.scene) as THREE.Group;
+    const materials: THREE.MeshStandardMaterial[] = [];
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+      if (mat.name === 'Main') mat.color.set(look.color);
+      mesh.material = mat;
+      materials.push(mat);
+    });
+    model.scale.setScalar(MODEL_SCALE);
+    const mixer = new THREE.AnimationMixer(model);
+    const actions = Object.fromEntries(gltf.animations.map((clip) => [clip.name, mixer.clipAction(clip)]));
+    return { model, materials, mixer, actions };
+    // Цвет меняем ниже, без пересоздания модели.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gltf]);
 
-  // Время начала текущей анимации удара и попадания.
-  const anim = useRef({ punchSeq, hitSeq, punchAt: -1e9, hitAt: -1e9, fall: 0 });
+  useEffect(() => {
+    for (const m of materials) if (m.name === 'Main') m.color.set(look.color);
+  }, [look.color, materials]);
 
-  useFrame(({ clock }) => {
-    const now = clock.elapsedTime * 1000;
-    const a = anim.current;
-    if (punchSeq !== a.punchSeq) {
-      a.punchSeq = punchSeq;
-      a.punchAt = now;
-    }
-    if (hitSeq !== a.hitSeq) {
-      a.hitSeq = hitSeq;
-      a.hitAt = now;
-    }
+  const current = useRef<THREE.AnimationAction | null>(null);
+  const play = (name: string, once = false, speed = 1) => {
+    const next = actions[name];
+    if (!next) return;
+    next.reset();
+    next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+    next.clampWhenFinished = once;
+    next.timeScale = speed;
+    next.enabled = true;
+    if (current.current && current.current !== next) next.crossFadeFrom(current.current, 0.12, false);
+    next.play();
+    current.current = next;
+  };
 
-    // Удар: рука выстреливает вперёд и возвращается.
-    const p = Math.min(1, (now - a.punchAt) / PUNCH_MS);
-    const punch = p < 1 ? Math.sin(p * Math.PI) : 0;
-    rightArm.current.rotation.x = -Math.PI / 2 * (0.35 + 0.65 * punch);
-    rightArm.current.position.z = 0.35 * punch;
-    const both = combo ? punch : 0;
-    leftArm.current.rotation.x = -Math.PI / 2 * (0.35 + 0.65 * both);
-    leftArm.current.position.z = 0.35 * both;
+  // Базовая поза: стойка, победный танец или падение.
+  const base = look.knockedOut ? 'Death' : look.won ? 'Dance' : 'Idle';
+  useEffect(() => {
+    play(base, base === 'Death');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base]);
 
-    // Попадание: откидывает назад и подсвечивает красным.
-    const h = Math.min(1, (now - a.hitAt) / HIT_MS);
+  useEffect(() => {
+    const onDone = (e: { action: THREE.AnimationAction }) => {
+      if (e.action === actions.Punch && current.current === actions.Punch && base === 'Idle') play('Idle');
+    };
+    mixer.addEventListener('finished', onDone);
+    return () => mixer.removeEventListener('finished', onDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mixer, actions, base]);
+
+  useEffect(() => {
+    if (look.punchSeq > 0 && base === 'Idle') play('Punch', true, look.combo ? 2.6 : 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [look.punchSeq]);
+
+  const hitAt = useRef(-1e9);
+  useEffect(() => {
+    if (look.hitSeq > 0) hitAt.current = performance.now();
+  }, [look.hitSeq]);
+
+  useFrame((_, delta) => {
+    mixer.update(delta);
+    // Попадание: отбрасывает назад и подсвечивает красным; босс в ярости светится.
+    const h = Math.min(1, (performance.now() - hitAt.current) / HIT_MS);
     const recoil = h < 1 ? Math.sin(h * Math.PI) : 0;
-    body.current.rotation.x = -0.35 * recoil;
-    torsoMat.current.emissive.setRGB(0.8 * recoil, 0, 0);
-
-    // Нокаут: плавно падает на спину, иначе пружинит на месте.
-    a.fall = THREE.MathUtils.lerp(a.fall, knockedOut ? 1 : 0, 0.08);
-    root.current.rotation.x = -a.fall * (Math.PI / 2);
-    root.current.position.y = knockedOut ? 0 : Math.abs(Math.sin(clock.elapsedTime * 4)) * 0.05;
+    holder.current.position.z = -0.25 * recoil;
+    const rage = look.enraged ? 0.25 + 0.15 * Math.sin(performance.now() / 120) : 0;
+    for (const m of materials) m.emissive.setRGB(Math.max(0.9 * recoil, rage), 0, 0);
   });
 
-  const skin = '#f1c8a5';
+  const s = look.scale ?? 1;
   return (
-    <group position={[0, 0, -facing * 0.9]} rotation={[0, facing === 1 ? 0 : Math.PI, 0]}>
-      <group ref={root}>
-        <group ref={body}>
-          {/* ноги */}
-          {[-0.18, 0.18].map((x) => (
-            <mesh key={x} position={[x, 0.45, 0]} castShadow>
-              <capsuleGeometry args={[0.11, 0.6, 4, 12]} />
-              <meshStandardMaterial color="#2b2f3a" />
-            </mesh>
-          ))}
-          {/* корпус */}
-          <mesh position={[0, 1.2, 0]} castShadow>
-            <capsuleGeometry args={[0.3, 0.55, 6, 16]} />
-            <meshStandardMaterial ref={torsoMat} color={color} roughness={0.5} />
-          </mesh>
-          {/* голова */}
-          <mesh position={[0, 1.85, 0]} castShadow>
-            <sphereGeometry args={[0.22, 24, 24]} />
-            <meshStandardMaterial color={skin} />
-          </mesh>
-          {/* руки с перчатками: поворачиваются от плеча */}
-          {[
-            { ref: leftArm, x: -0.42 },
-            { ref: rightArm, x: 0.42 },
-          ].map(({ ref, x }) => (
-            <group key={x} ref={ref} position={[x, 1.45, 0]}>
-              <mesh position={[0, -0.28, 0]} castShadow>
-                <capsuleGeometry args={[0.08, 0.4, 4, 10]} />
-                <meshStandardMaterial color={skin} />
-              </mesh>
-              <mesh position={[0, -0.6, 0]} castShadow>
-                <sphereGeometry args={[0.15, 20, 20]} />
-                <meshStandardMaterial color={color} roughness={0.3} />
-              </mesh>
-            </group>
-          ))}
-        </group>
+    <group position={[0, 0, -facing * 1.15]} rotation={[0, facing === 1 ? 0 : Math.PI, 0]} scale={s}>
+      <group ref={holder}>
+        <primitive object={model} />
       </group>
+      {look.enraged && <pointLight position={[0, 1.4, 0.6]} color="#ff2d2d" intensity={6} distance={4} />}
     </group>
   );
 }
 
-function Ring() {
-  const size = 4;
+function Ring({ theme }: { theme: ZoneTheme }) {
+  const size = 4.4;
   const posts: [number, number][] = [
     [-1, -1],
     [1, -1],
@@ -116,31 +126,32 @@ function Ring() {
     <group>
       <mesh position={[0, -0.15, 0]} receiveShadow>
         <boxGeometry args={[size, 0.3, size]} />
-        <meshStandardMaterial color="#1d4ed8" />
+        <meshStandardMaterial color={theme.ring} roughness={0.8} />
       </mesh>
       <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[40, 40]} />
-        <meshStandardMaterial color="#0b0d12" />
+        <planeGeometry args={[60, 60]} />
+        <meshStandardMaterial color={theme.background} />
       </mesh>
       {posts.map(([x, z]) => (
         <mesh key={`${x}${z}`} position={[(x * size) / 2, 0.6, (z * size) / 2]} castShadow>
-          <cylinderGeometry args={[0.06, 0.06, 1.2, 12]} />
-          <meshStandardMaterial color="#e5e7eb" metalness={0.6} roughness={0.3} />
+          <cylinderGeometry args={[0.07, 0.07, 1.2, 16]} />
+          <meshStandardMaterial color="#e5e7eb" metalness={0.8} roughness={0.25} />
         </mesh>
       ))}
-      {/* канаты в три ряда по периметру */}
       {[0.4, 0.75, 1.1].map((y, row) =>
         posts.map(([x, z], i) => {
           const [nx, nz] = posts[(i + 1) % 4];
           const from = new THREE.Vector3((x * size) / 2, y, (z * size) / 2);
           const to = new THREE.Vector3((nx * size) / 2, y, (nz * size) / 2);
-          const mid = from.clone().add(to).multiplyScalar(0.5);
-          const len = from.distanceTo(to);
-          const horizontal = Math.abs(nz - z) < 0.01;
+          const along = Math.abs(nz - z) < 0.01;
           return (
-            <mesh key={`${row}-${i}`} position={mid} rotation={horizontal ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.025, 0.025, len, 8]} />
-              <meshStandardMaterial color={row === 1 ? '#f8fafc' : '#ef4444'} />
+            <mesh
+              key={`${row}-${i}`}
+              position={from.clone().add(to).multiplyScalar(0.5)}
+              rotation={along ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]}
+            >
+              <cylinderGeometry args={[0.028, 0.028, from.distanceTo(to), 8]} />
+              <meshStandardMaterial color={theme.ropes[row % 2]} emissive={theme.ropes[row % 2]} emissiveIntensity={0.35} />
             </mesh>
           );
         }),
@@ -150,25 +161,24 @@ function Ring() {
 }
 
 export interface Arena3DProps {
-  playerPunch: number;
-  botPunch: number;
-  playerCombo: boolean;
-  botCombo: boolean;
-  playerKO: boolean;
-  botKO: boolean;
+  player: FighterLook;
+  opponent: FighterLook;
+  theme: ZoneTheme;
 }
 
-export function Arena3D({ playerPunch, botPunch, playerCombo, botCombo, playerKO, botKO }: Arena3DProps) {
+export function Arena3D({ player, opponent, theme }: Arena3DProps) {
   return (
-    <Canvas shadows dpr={[1, 2]} camera={{ position: [2.8, 2.4, -4.2], fov: 40 }} onCreated={({ camera }) => camera.lookAt(0, 0.9, 0)}>
-      <color attach="background" args={['#0b0d12']} />
-      <fog attach="fog" args={['#0b0d12', 8, 18]} />
-      <ambientLight intensity={0.5} />
-      <spotLight position={[0, 6, 0]} angle={0.7} penumbra={0.5} intensity={60} castShadow />
-      <directionalLight position={[4, 5, 2]} intensity={0.8} />
-      <Ring />
-      <Fighter color="#ff5a36" facing={1} punchSeq={playerPunch} hitSeq={botPunch} combo={playerCombo} knockedOut={playerKO} />
-      <Fighter color="#22c55e" facing={-1} punchSeq={botPunch} hitSeq={playerPunch} combo={botCombo} knockedOut={botKO} />
+    <Canvas shadows dpr={[1, 2]} camera={{ position: [-2.6, 2.3, -4.8], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1, 0)}>
+      <color attach="background" args={[theme.background]} />
+      <fog attach="fog" args={[theme.background, 9, 20]} />
+      <hemisphereLight args={[theme.light, '#111', 0.7]} />
+      <spotLight position={[0, 7, 0]} angle={0.65} penumbra={0.6} intensity={70} color={theme.light} castShadow />
+      <directionalLight position={[4, 5, -3]} intensity={1.1} />
+      <Ring theme={theme} />
+      <Suspense fallback={null}>
+        <Robot look={player} facing={1} />
+        <Robot look={opponent} facing={-1} />
+      </Suspense>
     </Canvas>
   );
 }

@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { BotFight } from './BotFight';
+import { Campaign } from './Campaign';
 import { Duel } from './Duel';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { inviteCode } from './telegram';
 
-type Mode = 'bot' | 'duel';
+type Mode = 'campaign' | 'duel';
 
 export function App() {
-  const [mode, setMode] = useState<Mode>(inviteCode() ? 'duel' : 'bot');
+  const [mode, setMode] = useState<Mode>(inviteCode() ? 'duel' : 'campaign');
   const [exercise, setExercise] = useState<Exercise>('pushup');
 
   return (
@@ -18,23 +18,28 @@ export function App() {
       </div>
 
       <div className="tabs">
-        <button className={mode === 'bot' ? 'active' : ''} onClick={() => setMode('bot')}>
-          С ботом
+        <button className={mode === 'campaign' ? 'active' : ''} onClick={() => setMode('campaign')}>
+          Кампания
         </button>
         <button className={mode === 'duel' ? 'active' : ''} onClick={() => setMode('duel')}>
           Дуэль
         </button>
       </div>
 
-      <div className="tabs small">
-        {(Object.keys(EXERCISE_LABELS) as Exercise[]).map((ex) => (
-          <button key={ex} className={ex === exercise ? 'active' : ''} onClick={() => setExercise(ex)}>
-            {EXERCISE_LABELS[ex]}
-          </button>
-        ))}
-      </div>
-
-      {mode === 'bot' ? <BotFight exercise={exercise} /> : <Duel exercise={exercise} />}
+      {mode === 'campaign' ? (
+        <Campaign />
+      ) : (
+        <>
+          <div className="tabs small">
+            {(Object.keys(EXERCISE_LABELS) as Exercise[]).map((ex) => (
+              <button key={ex} className={ex === exercise ? 'active' : ''} onClick={() => setExercise(ex)}>
+                {EXERCISE_LABELS[ex]}
+              </button>
+            ))}
+          </div>
+          <Duel exercise={exercise} />
+        </>
+      )}
     </div>
   );
 }

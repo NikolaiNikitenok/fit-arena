@@ -136,7 +136,7 @@ export class Room {
 
   private view(seat: Seat | undefined, side: Side): FighterView {
     const f = this.battle[side];
-    return { name: seat?.player.name ?? '…', hp: f.hp, hits: f.hits, combo: seat?.lastCombo ?? false };
+    return { name: seat?.player.name ?? '…', hp: f.hp, maxHp: f.maxHp, hits: f.hits, combo: seat?.lastCombo ?? false };
   }
 
   private broadcastState(): void {
