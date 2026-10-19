@@ -7,7 +7,9 @@ import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
 import { MissionScene3D } from './MissionScene3D';
-import { Progress, WinReward } from './progress';
+import { Dialog, Remark } from './Dialog';
+import { MAX_LIVES, Progress, WinReward } from './progress';
+import { afterLine, bossDefeat, restLine } from './story';
 
 const PREP_S = 5;
 
@@ -38,17 +40,22 @@ interface Props {
   progress: Progress;
   onExit: () => void;
   onWin: (stars: number, record?: number) => WinReward;
+  // Поражение стоит жизнь; победа бесплатна.
+  onLose: () => void;
+  onActivity: (exercise: Exercise | null, reps: number) => void;
+  lives: { lives: number; nextMs: number };
   onNext?: () => void;
 }
 
-export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
+export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity, lives, onNext }: Props) {
   const camera = useRepCamera();
   const land = LANDS[level.land];
   const item = itemById(progress.equipped);
   const make = () => new Mission(level, progress.baseline);
   const mission = useRef<Mission>(make());
   const [status, setStatus] = useState<Status>(level.story.length ? 'story' : 'ready');
-  const [line, setLine] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  const [epilogue, setEpilogue] = useState(false);
   const [view, setView] = useState<MissionView>(() => mission.current.view(0));
   const [elapsedShare, setElapsedShare] = useState(0);
   const [result, setResult] = useState<{ stars: number; reward: WinReward } | null>(null);
@@ -63,14 +70,21 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
     const v = m.view(now);
     setView(v);
     reportAdventure(repsBy.current);
+    onActivity(level.exercises.length === 1 ? level.exercises[0] : null, v.reps);
     if (v.outcome === 'won') {
       const stars = m.stars(now);
       setResult({ stars, reward: onWin(stars, v.record) });
+      setEpilogue(level.type === 'boss');
       setStatus('won');
-    } else setStatus('lost');
+    } else {
+      onLose();
+      setStatus('lost');
+    }
   };
 
   const start = async () => {
+    if (lives.lives <= 0) return;
+    setAttempt((a) => a + 1);
     setError(null);
     setStatus('loading');
     const m = make();
@@ -130,8 +144,16 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
 
   const surrender = () => {
     camera.stop();
+    const m = mission.current;
+    // Сдался до старта отсчёта — попытка не считается.
+    if (!m.started) return setStatus('ready');
+    const v = m.view(performance.now());
+    onActivity(level.exercises.length === 1 ? level.exercises[0] : null, v.reps);
+    onLose();
     setStatus('lost');
   };
+  const noLives = lives.lives <= 0;
+  const waitMin = Math.max(1, Math.ceil(lives.nextMs / 60000));
 
   const busy = status === 'loading' || status === 'running';
   const tag = level.world === 3 ? 'Финал' : `${WORLD_NAMES[land.world]} · ${land.name} · уровень ${level.num}`;
@@ -177,13 +199,8 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
             <div>Займи позицию</div>
           </div>
         )}
-        {status === 'story' && (
-          <div className="story" onClick={() => (line + 1 < level.story.length ? setLine(line + 1) : setStatus('ready'))}>
-            <div className="story-who">{level.story[line].who}</div>
-            <div className="story-text">{level.story[line].text}</div>
-            <div className="story-next">нажми, чтобы продолжить</div>
-          </div>
-        )}
+        {status === 'story' && <Dialog lines={level.story} onDone={() => setStatus('ready')} />}
+        {status === 'won' && epilogue && <Dialog lines={bossDefeat(level.land)} onDone={() => setEpilogue(false)} />}
         {status === 'ready' && (
           <div className="result">
             <div className="level-tag">{tag}</div>
@@ -193,9 +210,10 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
               {level.type !== 'trial' && ` · цель ${mission.current.target}`}
               {level.rest && ' · лёгкий день'}
             </div>
+            {noLives && <Remark line={restLine(waitMin)} />}
           </div>
         )}
-        {status === 'won' && result && (
+        {status === 'won' && result && !epilogue && (
           <div className="result">
             <div className="result-title">Победа!</div>
             <Stars n={result.stars} />
@@ -203,12 +221,17 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
               {view.reps} повторов · +{result.reward.coins} монет
               {view.record != null && ` · рекорд ${view.record}`}
             </div>
+            <Remark line={afterLine(level.world, true, level.id + attempt)} />
           </div>
         )}
         {status === 'lost' && (
           <div className="result">
             <div className="result-title">Не вышло</div>
-            <div className="muted light">{level.type === 'chase' ? 'Чудище догнало. Держи темп ровнее!' : 'Отдохни минутку и попробуй ещё раз.'}</div>
+            <div className="muted light">{level.type === 'chase' ? 'Чудище догнало. Держи темп ровнее!' : 'Не хватило совсем чуть-чуть.'}</div>
+            <div className="life-lost">
+              −1 ♥ · осталось {lives.lives} из {MAX_LIVES}
+            </div>
+            <Remark line={noLives ? restLine(waitMin) : afterLine(level.world, false, level.id + attempt)} />
           </div>
         )}
 
@@ -235,11 +258,16 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
           Дальше
         </button>
       )}
-      {(status === 'ready' || status === 'lost' || status === 'error') && (
-        <button className="primary" onClick={start}>
-          {status === 'ready' ? 'Начать' : 'Ещё раз'}
-        </button>
-      )}
+      {(status === 'ready' || status === 'lost' || status === 'error') &&
+        (noLives ? (
+          <button className="primary" disabled>
+            ♥ через {waitMin} мин
+          </button>
+        ) : (
+          <button className="primary" onClick={start}>
+            {status === 'ready' ? 'Начать' : 'Ещё раз'} · ♥ {lives.lives}
+          </button>
+        ))}
       {status === 'loading' && (
         <button className="primary" disabled>
           Загружаю камеру…
