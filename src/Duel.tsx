@@ -161,18 +161,18 @@ export function Duel({ exercise }: { exercise: Exercise }) {
 
   return (
     <>
-      <ArenaStage me={view.me} opponent={view.opponent} seconds={phase === 'fight' ? seconds : 60} camera={camera} overlay={overlay} />
+      <ArenaStage me={view.me} opponent={view.opponent} seconds={phase === 'fight' ? seconds : 60} camera={camera} overlay={overlay} result={phase === 'over' ? result?.result : null} />
 
       <div className="hint-line">
         {error ??
           (phase === 'fight'
             ? camera.hint ?? 'Отлично, продолжай!'
             : phase === 'room' && !opponentInfo
-              ? 'Отправь другу приглашение и жди его на ринге'
+              ? 'Отправь другу приглашение и жди его на арене'
               : phase === 'room' && myInfo?.ready
                 ? `Ждём, пока ${opponentInfo?.name} будет готов`
                 : phase === 'room'
-                  ? `${opponentInfo?.name} на ринге. Встань в кадр и жми «Я готов»`
+                  ? `${opponentInfo?.name} на арене. Встань в кадр и жми «Я готов»`
                   : '')}
       </div>
 

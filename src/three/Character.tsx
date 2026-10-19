@@ -48,8 +48,9 @@ export interface CharacterProps {
   // Смена числа — разовое движение поверх основного (удар, прыжок).
   pulse?: number;
   pulseAnim?: CharAnim;
-  // Смена числа — по персонажу попали: вспышка.
+  // Смена числа — по персонажу попали: вспышка (и движение hitAnim, если задано).
   hit?: number;
+  hitAnim?: CharAnim;
   tint?: string;
   glow?: string;
   stone?: boolean;
@@ -71,7 +72,7 @@ export interface HandGear {
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands }: CharacterProps) {
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
@@ -131,20 +132,30 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anim, stone]);
 
-  useEffect(() => {
-    if (pulse <= 0 || stone) return;
-    play(pulseAnim, 1.6);
+  // Разовое движение, после которого возвращаемся к основному, если его не сменило другое.
+  const base = useRef(anim);
+  base.current = anim;
+  const once = (name: CharAnim) => {
+    play(name, 1.6);
     const back = (e: { action: THREE.AnimationAction }) => {
-      if (e.action === actions[pulseAnim]) play(anim);
+      if (e.action === actions[name] && current.current === e.action) play(base.current);
     };
     mixer.addEventListener('finished', back);
     return () => mixer.removeEventListener('finished', back);
+  };
+
+  useEffect(() => {
+    if (pulse <= 0 || stone) return;
+    return once(pulseAnim);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pulse]);
 
   const hitAt = useRef(-1e9);
   useEffect(() => {
-    if (hit > 0) hitAt.current = performance.now();
+    if (hit <= 0) return;
+    hitAt.current = performance.now();
+    if (hitAnim && !stone && anim === 'idle') return once(hitAnim);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hit]);
 
   const glowColor = useMemo(() => new THREE.Color(glow ?? '#000000'), [glow]);
