@@ -14,6 +14,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+html, body { overscroll-behavior: none; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-weight: 600; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input { font-family: inherit; }
 .app { max-width: 480px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
@@ -152,3 +153,57 @@ h1 { font-size: 24px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .guide-tips { margin: 4px 0 0; padding-left: 18px; text-align: left; font-size: 13px; font-weight: 700; line-height: 1.35; color: #dfe3ea; }
 .guide-tips li::marker { color: var(--gold); }
 .mhud.hidden { display: none; }
+
+/* Нижнее меню */
+:root { --nav-h: 62px; }
+.app.with-nav { padding-bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom)); }
+.bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: flex; justify-content: center; gap: 4px; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); background: rgba(15,17,21,.92); border-top: 1px solid var(--glass-line); backdrop-filter: blur(10px); }
+.bottom-nav button { flex: 1; max-width: 150px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0; border: 0; border-radius: 12px; background: transparent; color: var(--hint); font-size: 12px; font-weight: 800; }
+.bottom-nav button.active { color: var(--text); background: rgba(255,255,255,.06); }
+.nav-icon { font-size: 21px; line-height: 1.15; filter: grayscale(.6); }
+.bottom-nav button.active .nav-icon { filter: none; }
+
+/* Карта на весь экран */
+.app.full { max-width: none; padding: 0; height: 100dvh; overflow: hidden; }
+.map-screen { position: fixed; inset: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
+.map-screen .arena.map3d { aspect-ratio: auto; height: 100%; border-radius: 0; }
+.map-top { position: absolute; top: 0; left: 0; right: 0; padding: calc(8px + env(safe-area-inset-top)) 10px 0; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.map-top .map-hud { position: static; }
+.world-tabs { display: flex; gap: 6px; overflow-x: auto; pointer-events: auto; scrollbar-width: none; }
+.world-tabs button { flex: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(6px); color: #fff; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.world-tabs button.active { background: var(--accent); border-color: var(--accent); }
+.world-tabs button:disabled { opacity: .55; }
+.map-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.map-bottom .map-help { position: static; transform: none; align-self: center; }
+.map-bottom .level-card { position: relative; background: rgba(23,26,34,.94); backdrop-filter: blur(8px); }
+.close-x { position: absolute; top: 6px; right: 8px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: var(--hint); font-size: 20px; line-height: 1; }
+.toast.global { position: fixed; top: calc(14px + env(safe-area-inset-top)); z-index: 12; }
+
+/* Главное меню героя */
+.home { display: flex; flex-direction: column; gap: 12px; }
+.home-stats { display: flex; gap: 8px; justify-content: flex-end; }
+.hero-card { border-radius: 18px; overflow: hidden; background: linear-gradient(180deg, #232741, #171a22 70%); border: 1px solid var(--glass-line); }
+.hero-stage { height: 280px; }
+.hero-info { display: flex; gap: 12px; align-items: center; padding: 10px 14px 0; }
+.hero-level { flex: none; width: 54px; height: 54px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: var(--accent); font-size: 26px; font-weight: 900; box-shadow: 0 4px 16px rgba(255,90,54,.35); }
+.hero-meta { flex: 1; min-width: 0; }
+.hero-title { font-size: 19px; font-weight: 900; line-height: 1.15; }
+.hero-skin { font-size: 13px; font-weight: 800; }
+.xp-bar { height: 8px; margin-top: 6px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; }
+.xp-bar div { height: 100%; background: linear-gradient(90deg, #ffb703, #ff5a36); border-radius: 4px; }
+.xp-text { margin-top: 3px; font-size: 11.5px; font-weight: 700; color: var(--hint); }
+.hero-perks { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 14px; }
+.hero-perks span { padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.06); font-size: 12px; font-weight: 800; color: #dfe3ea; }
+.section-title { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 17px; font-weight: 900; }
+.inventory { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.inv-item { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 6px; border-radius: 14px; border: 1.5px solid var(--glass-line); background: var(--panel); color: var(--text); text-align: center; }
+.inv-item.on { background: #1f2330; }
+.inv-item.locked { opacity: .55; }
+.inv-name { font-size: 12px; font-weight: 800; line-height: 1.2; }
+.inv-meta { font-size: 11px; font-weight: 800; color: var(--hint); }
+.strength-mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.strength-mini div { padding: 10px; border-radius: 14px; background: var(--panel); border: 1px solid var(--glass-line); display: flex; flex-direction: column; align-items: center; }
+.strength-mini b { font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.strength-mini span { font-size: 12px; font-weight: 700; color: var(--hint); }
+.inv-face { width: 52px; height: 52px; border-radius: 14px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+.inv-face img { width: 120%; height: 120%; object-fit: cover; object-position: 50% 8%; pointer-events: none; }

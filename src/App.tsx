@@ -1,34 +1,33 @@
 import { useState } from 'react';
-import { Adventure } from './game/Adventure';
+import { Adventure, AdventureTab } from './game/Adventure';
 import { Duel } from './Duel';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { inviteCode } from './telegram';
 
-type Mode = 'campaign' | 'duel';
+type Tab = AdventureTab | 'duel';
+
+const NAV: { tab: Tab; icon: string; label: string }[] = [
+  { tab: 'hero', icon: '🛡️', label: 'Герой' },
+  { tab: 'map', icon: '🗺️', label: 'Карта' },
+  { tab: 'duel', icon: '⚔️', label: 'Дуэль' },
+];
 
 export function App() {
-  const [mode, setMode] = useState<Mode>(inviteCode() ? 'duel' : 'campaign');
+  const [tab, setTab] = useState<Tab>(inviteCode() ? 'duel' : 'hero');
   const [exercise, setExercise] = useState<Exercise>('pushup');
+  const [playing, setPlaying] = useState(false);
+  const full = tab === 'map' && !playing;
 
   return (
-    <div className="app">
-      <div>
-        <h1>Атлетия</h1>
-        <div className="muted">Каждый честный повтор спасает мир от Лени.</div>
-      </div>
+    <div className={`app ${full ? 'full' : ''} ${playing ? '' : 'with-nav'}`}>
+      {!full && !playing && (
+        <div className="app-head">
+          <h1>Атлетия</h1>
+          <div className="muted">Каждый честный повтор спасает мир от Лени.</div>
+        </div>
+      )}
 
-      <div className="tabs">
-        <button className={mode === 'campaign' ? 'active' : ''} onClick={() => setMode('campaign')}>
-          Приключение
-        </button>
-        <button className={mode === 'duel' ? 'active' : ''} onClick={() => setMode('duel')}>
-          Дуэль
-        </button>
-      </div>
-
-      {mode === 'campaign' ? (
-        <Adventure />
-      ) : (
+      {tab === 'duel' ? (
         <>
           <div className="tabs small">
             {(Object.keys(EXERCISE_LABELS) as Exercise[]).map((ex) => (
@@ -39,6 +38,19 @@ export function App() {
           </div>
           <Duel exercise={exercise} />
         </>
+      ) : (
+        <Adventure tab={tab} onTab={setTab} onPlaying={setPlaying} />
+      )}
+
+      {!playing && (
+        <nav className="bottom-nav">
+          {NAV.map((n) => (
+            <button key={n.tab} className={tab === n.tab ? 'active' : ''} onClick={() => setTab(n.tab)}>
+              <span className="nav-icon">{n.icon}</span>
+              {n.label}
+            </button>
+          ))}
+        </nav>
       )}
     </div>
   );

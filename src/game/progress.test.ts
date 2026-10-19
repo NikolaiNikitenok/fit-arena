@@ -47,3 +47,18 @@ describe('рекорды', () => {
     expect(p.days[dayKey(NOW)]).toBe(26);
   });
 });
+
+describe('уровень героя', () => {
+  it('растёт от повторов и пройденных уровней', async () => {
+    const { heroLevel, heroXp, xpToNext, claimHeroLevels, maxLives } = await import('./progress');
+    expect(heroLevel(0).level).toBe(1);
+    expect(heroLevel(xpToNext(1)).level).toBe(2);
+    let p = loadProgress();
+    p = recordActivity(p, 'squat', 200, NOW);
+    expect(heroXp(p)).toBe(200);
+    const r = claimHeroLevels(p)!;
+    expect(r.levels.length).toBeGreaterThan(0);
+    expect(claimHeroLevels(r.progress)).toBeNull();
+    expect(maxLives(p)).toBe(MAX_LIVES);
+  });
+});

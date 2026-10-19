@@ -8,7 +8,7 @@ import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
 import { MissionScene3D } from './MissionScene3D';
 import { Dialog, Remark } from './Dialog';
-import { MAX_LIVES, Progress, WinReward } from './progress';
+import { Progress, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
 
 const PREP_S = 5;
@@ -44,7 +44,7 @@ interface Props {
   // Поражение стоит жизнь; победа бесплатна.
   onLose: () => void;
   onActivity: (exercise: Exercise | null, reps: number) => void;
-  lives: { lives: number; nextMs: number };
+  lives: { lives: number; max: number; nextMs: number };
   onNext?: () => void;
 }
 
@@ -224,7 +224,7 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
             <div className="result-title">Не вышло</div>
             <div className="muted light">{level.type === 'chase' ? 'Чудище догнало. Держи темп ровнее!' : 'Не хватило совсем чуть-чуть.'}</div>
             <div className="life-lost">
-              −1 ♥ · осталось {lives.lives} из {MAX_LIVES}
+              −1 ♥ · осталось {lives.lives} из {lives.max}
             </div>
             <Remark line={noLives ? restLine(waitMin) : afterLine(level.world, false, level.id + attempt)} />
           </div>

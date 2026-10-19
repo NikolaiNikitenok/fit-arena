@@ -19,6 +19,8 @@ export interface Progress {
   // Лучший подход по упражнению и самый первый — чтобы показать рост.
   best: Partial<Record<Exercise, Record_>>;
   first: Partial<Record<Exercise, Record_>>;
+  // До какого уровня героя награды уже выданы.
+  heroRewarded: number;
 }
 
 export interface Record_ {
@@ -43,6 +45,7 @@ const fresh = (): Progress => ({
   days: {},
   best: {},
   first: {},
+  heroRewarded: 1,
 });
 
 export function loadProgress(): Progress {
@@ -106,20 +109,62 @@ export function claimChest(p: Progress, land: number): { progress: Progress; coi
   return { progress: save(next), coins: loot.coins, itemName: loot.item?.name };
 }
 
+// Опыт героя: каждый честный повтор и каждый впервые пройденный уровень.
+export const XP_PER_LEVEL_WON = 20;
+
+export function heroXp(p: Progress): number {
+  const reps = Object.values(p.days).reduce((s, n) => s + n, 0);
+  return reps + Object.keys(p.stars).length * XP_PER_LEVEL_WON;
+}
+
+/** Сколько опыта нужно, чтобы перейти с уровня n на n + 1. */
+export const xpToNext = (n: number) => 60 + 30 * n;
+
+export function heroLevel(xp: number): { level: number; into: number; need: number } {
+  let level = 1;
+  let left = xp;
+  while (left >= xpToNext(level)) left -= xpToNext(level++);
+  return { level, into: left, need: xpToNext(level) };
+}
+
+const TITLES: [number, string][] = [
+  [50, 'Легенда Атлетии'],
+  [35, 'Чемпион'],
+  [20, 'Ветеран'],
+  [10, 'Боец'],
+  [5, 'Ученик Грома'],
+  [1, 'Новичок'],
+];
+export const heroTitle = (level: number) => TITLES.find(([l]) => level >= l)![1];
+
+/** Каждые 10 уровней героя — ещё одна жизнь, до восьми. */
+export const maxLives = (p: Progress) => MAX_LIVES + Math.min(3, Math.floor(heroLevel(heroXp(p)).level / 10));
+export const levelReward = (level: number) => 30 * level;
+
+/** Выдать монеты за новые уровни героя. */
+export function claimHeroLevels(p: Progress): { progress: Progress; levels: number[]; coins: number } | null {
+  const { level } = heroLevel(heroXp(p));
+  if (level <= (p.heroRewarded ?? 1)) return null;
+  const levels = Array.from({ length: level - (p.heroRewarded ?? 1) }, (_, i) => (p.heroRewarded ?? 1) + i + 1);
+  const coins = levels.reduce((s, l) => s + levelReward(l), 0);
+  return { progress: save({ ...p, heroRewarded: level, coins: p.coins + coins }), levels, coins };
+}
+
 /** Жизни сейчас и сколько ждать следующую. */
-export function livesNow(p: Progress, now: number): { lives: number; nextMs: number } {
-  if (p.lives >= MAX_LIVES) return { lives: MAX_LIVES, nextMs: 0 };
+export function livesNow(p: Progress, now: number): { lives: number; max: number; nextMs: number } {
+  const max = maxLives(p);
+  if (p.lives >= max) return { lives: max, max, nextMs: 0 };
   const gained = Math.floor((now - p.livesAt) / LIFE_MS);
-  const lives = Math.min(MAX_LIVES, p.lives + gained);
-  return { lives, nextMs: lives >= MAX_LIVES ? 0 : LIFE_MS - ((now - p.livesAt) % LIFE_MS) };
+  const lives = Math.min(max, p.lives + gained);
+  return { lives, max, nextMs: lives >= max ? 0 : LIFE_MS - ((now - p.livesAt) % LIFE_MS) };
 }
 
 /** Поражение стоит одну жизнь, победа — ничего. */
 export function spendLife(p: Progress, now: number): Progress {
-  const { lives, nextMs } = livesNow(p, now);
+  const { lives, max, nextMs } = livesNow(p, now);
   if (lives <= 0) return p;
   // Отсчёт до следующей жизни продолжается с того же места, если жизни уже копились.
-  const livesAt = lives >= MAX_LIVES ? now : now - (LIFE_MS - nextMs);
+  const livesAt = lives >= max ? now : now - (LIFE_MS - nextMs);
   return save({ ...p, lives: lives - 1, livesAt });
 }
 

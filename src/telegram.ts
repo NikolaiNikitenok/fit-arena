@@ -7,6 +7,7 @@ interface TelegramWebApp {
   initDataUnsafe: { user?: { id: number; first_name: string; username?: string }; start_param?: string };
   HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy'): void };
   setHeaderColor?(color: string): void;
+  disableVerticalSwipes?(): void;
   setBackgroundColor?(color: string): void;
   openTelegramLink?(url: string): void;
 }
@@ -22,6 +23,12 @@ export const tg: TelegramWebApp | undefined = window.Telegram?.WebApp;
 export function initTelegram(): void {
   tg?.ready();
   tg?.expand();
+  // Без этого свайп вниз по карте сворачивает всё мини-приложение.
+  try {
+    tg?.disableVerticalSwipes?.();
+  } catch {
+    // Клиенты до Bot API 7.7.
+  }
   // Шапка Telegram в цвет игры, чтобы не было светлой полосы над тёмным экраном.
   try {
     tg?.setHeaderColor?.('#0f1115');
