@@ -36,6 +36,9 @@ interface Rule {
 
 const seen = (...points: Landmark[]) => points.every((p) => (p.visibility ?? 1) >= 0.5);
 
+// Нижняя точка тела: стопа, а если её не видно (лёжа ноги часто уходят за край кадра) — колено.
+const lowest = (lm: Landmark[], s: number) => (seen(lm[ANKLE[s]]) ? lm[ANKLE[s]] : lm[KNEE[s]]);
+
 // Наклон отрезка ab к горизонтали, 0..90°.
 function tilt(a: Landmark, b: Landmark): number {
   return (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI;
@@ -44,14 +47,14 @@ function tilt(a: Landmark, b: Landmark): number {
 export const RULES: Record<Exercise, Rule> = {
   pushup: {
     joint: [SHOULDER, ELBOW, WRIST],
-    down: 90,
-    up: 155,
+    down: 100,
+    up: 150,
     posture: [
-      { ok: (lm, s) => seen(lm[HIP[s]], lm[ANKLE[s]]), hint: 'Камера должна видеть тебя целиком, до стоп' },
-      { ok: (lm, s) => tilt(lm[SHOULDER[s]], lm[ANKLE[s]]) < 35, hint: 'Прими упор лёжа' },
+      { ok: (lm, s) => seen(lm[HIP[s]]) && seen(lowest(lm, s)), hint: 'Камера должна видеть тебя целиком, хотя бы до колен' },
+      { ok: (lm, s) => tilt(lm[SHOULDER[s]], lowest(lm, s)) < 40, hint: 'Прими упор лёжа' },
       // Ладони на полу, то есть не выше плеч (ось y в кадре направлена вниз).
-      { ok: (lm, s) => lm[WRIST[s]].y > lm[SHOULDER[s]].y - 0.02, hint: 'Упрись руками в пол' },
-      { ok: (lm, s) => angle(lm[SHOULDER[s]], lm[HIP[s]], lm[ANKLE[s]]) > 150, hint: 'Держи корпус прямым' },
+      { ok: (lm, s) => lm[WRIST[s]].y > lm[SHOULDER[s]].y - 0.03, hint: 'Упрись руками в пол' },
+      { ok: (lm, s) => angle(lm[SHOULDER[s]], lm[HIP[s]], lowest(lm, s)) > 140, hint: 'Держи корпус прямым' },
     ],
   },
   squat: {
@@ -133,8 +136,13 @@ export class RepCounter {
     this.failHint = null;
   }
 
-  update(lm: Landmark[] | undefined, timestampMs: number): RepState {
+  /**
+   * aspect — ширина кадра, делённая на высоту. Координаты MediaPipe нормированы отдельно по
+   * ширине и высоте, поэтому без поправки углы в вертикальном кадре телефона искажаются.
+   */
+  update(raw: Landmark[] | undefined, timestampMs: number, aspect = 1): RepState {
     const rule = RULES[this.exercise];
+    const lm = raw?.map((p) => ({ ...p, x: p.x * aspect }));
     if (!lm || lm.length < 33) {
       return (this.state = { ...this.state, hint: 'Встань в кадр целиком' });
     }
@@ -146,8 +154,8 @@ export class RepCounter {
       return (this.state = { ...this.state, hint: 'Камера не видит суставы' });
     }
 
-    const raw = angle(a, b, c);
-    this.smoothed = this.smoothed === null ? raw : this.smoothed * SMOOTHING + raw * (1 - SMOOTHING);
+    const measured = angle(a, b, c);
+    this.smoothed = this.smoothed === null ? measured : this.smoothed * SMOOTHING + measured * (1 - SMOOTHING);
     const value = this.smoothed;
 
     let { reps, phase } = this.state;

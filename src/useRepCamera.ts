@@ -15,6 +15,7 @@ export function useRepCamera() {
   const frameRef = useRef(0);
   const [hint, setHint] = useState<string | null>(null);
   const [active, setActive] = useState(false);
+  const [angle, setAngle] = useState<number | null>(null);
 
   const stop = () => {
     cancelAnimationFrame(frameRef.current);
@@ -62,18 +63,19 @@ export function useRepCamera() {
           drawing.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
           drawing.drawLandmarks(lm, { color: '#ffffff', radius: 3 });
         }
-        const state = counter.update(lm, now);
+        const state = counter.update(lm, now, video.videoWidth / video.videoHeight);
         if (state.reps > lastReps) {
           lastReps = state.reps;
           hapticRep();
           onRep();
         }
         setHint(state.hint);
+        setAngle(state.angle);
       }
       frameRef.current = requestAnimationFrame(loop);
     };
     loop();
   };
 
-  return { videoRef, canvasRef, start, stop, hint, active };
+  return { videoRef, canvasRef, start, stop, hint, active, angle };
 }

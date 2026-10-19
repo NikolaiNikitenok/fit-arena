@@ -22,7 +22,7 @@ function skeleton(fixed: Record<number, Point>, joint: [number, number, number],
 }
 
 // Упор лёжа боком к камере: плечо, таз и стопы на одной линии, руки под плечами.
-const pushup = (t: number) => skeleton({ 23: [0.55, 0.6], 27: [0.85, 0.61] }, [11, 13, 15], [0.3, 0.7], [0, -1], -t);
+const pushup = (t: number) => skeleton({ 23: [0.55, 0.6], 25: [0.7, 0.605], 27: [0.85, 0.61] }, [11, 13, 15], [0.3, 0.7], [0, -1], -t);
 // Стоя, сгибаем руки: тело вертикально.
 const standingCurl = (t: number) => skeleton({ 23: [0.5, 0.55], 27: [0.5, 0.9] }, [11, 13, 15], [0.5, 0.4], [0, -1], -t);
 // Приседание: плечи над тазом, угол в колене меняется.
@@ -70,13 +70,31 @@ describe('RepCounter', () => {
     expect(c.current.hint).toBe('Прими упор лёжа');
   });
 
-  it('не считает отжимания, если стопы не видно', () => {
-    const hidden = (t: number) => {
+  it('считает отжимания, если стопы за кадром, но видны колени', () => {
+    const noFeet = (t: number) => {
       const lm = pushup(t);
       lm[27].visibility = lm[28].visibility = 0.1;
       return lm;
     };
+    expect(run(new RepCounter('pushup'), noFeet, FULL)).toBe(2);
+  });
+
+  it('не считает отжимания, если не видно ни стоп, ни колен', () => {
+    const hidden = (t: number) => {
+      const lm = pushup(t);
+      for (const i of [25, 26, 27, 28]) lm[i].visibility = 0.1;
+      return lm;
+    };
     expect(run(new RepCounter('pushup'), hidden, FULL)).toBe(0);
+  });
+
+  it('учитывает вертикальный кадр телефона', () => {
+    // В кадре 480×640 координата x сжата: возвращаем пропорции, и угол снова верный.
+    const portrait = (t: number) => pushup(t).map((p) => ({ ...p, x: p.x / 0.75 }));
+    const c = new RepCounter('pushup');
+    let time = 0;
+    for (const theta of FULL) for (let i = 0; i < 4; i++) c.update(portrait(theta), (time += 50), 0.75);
+    expect(c.current.reps).toBe(2);
   });
 
   it('считает полные приседания', () => {
