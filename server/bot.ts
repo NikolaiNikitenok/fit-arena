@@ -38,10 +38,12 @@ interface Update {
   message?: { chat: { id: number; type: string }; text?: string };
 }
 
+export const botApi = (token: string) => (method: string, body: unknown) =>
+  fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; result?: unknown; description?: string; error_code?: number }>);
+
 /** Долгий опрос Telegram. Вебхук снимаем: этому боту нужен только /start. */
 export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2]): void {
-  const api = (method: string, body: unknown) =>
-    fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; result?: unknown; description?: string }>);
+  const api = botApi(token);
   let offset = 0;
   const loop = async () => {
     await api('deleteWebhook', {}).catch(() => null);

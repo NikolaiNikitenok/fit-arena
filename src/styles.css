@@ -452,3 +452,18 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .clan-form select { width: 100%; min-width: 0; padding: 11px 10px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-family: var(--font); font-weight: 700; appearance: none; -webkit-appearance: none; }
 .clan-form .form-pair input { min-width: 0; width: 100%; }
 .btn-link { text-decoration: none; }
+
+/* Задание дня */
+.daily-card { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
+.daily-card.claimed { opacity: .7; }
+.daily-top { display: flex; gap: 10px; align-items: flex-start; }
+.daily-meta { flex: 1; min-width: 0; }
+.daily-who { font-size: 12.5px; font-weight: 900; color: var(--hint); }
+.daily-ask { margin-top: 2px; font-size: 14px; line-height: 1.35; }
+.daily-goal { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; font-weight: 800; color: #c9cfda; }
+.daily-goal b { color: var(--text); font-size: 15px; }
+.daily-gift { display: inline-flex; align-items: center; gap: 4px; font-weight: 900; }
+.daily-card .bar { margin-top: 0; }
+.daily-card .secondary, .daily-card .primary { min-height: 44px; font-size: 15px; }
+.daily-note { font-size: 13px; }
+.remind-hour { margin-top: 8px; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: 800 16px var(--font); }

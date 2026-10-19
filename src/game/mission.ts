@@ -68,7 +68,7 @@ export class Mission {
   ) {
     this.hearts = combat?.hearts ?? BOSS_HEARTS;
     // Обычная цель по форме игрока; урон героя меняет её в пределах 80–130%.
-    const fit = (base: number) => (combat && level.type !== 'trial' ? repsFor(base, enemyHp(level, base), combat.damage) : base);
+    const fit = (base: number) => (combat && level.type !== 'trial' && !level.daily ? repsFor(base, enemyHp(level, base), combat.damage) : base);
     const base = targetReps(level, baseline);
     this.hpMax = level.type === 'trial' ? 0 : enemyHp(level, base);
     // У босса здоровье делится на фазы, в каждой своё упражнение и своя цель.

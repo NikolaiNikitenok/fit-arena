@@ -6,7 +6,7 @@
 //   ALLOW_GUESTS=1 — пускать без подписи Telegram (для разработки в браузере)
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 import { randomUUID } from 'node:crypto';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
@@ -14,7 +14,10 @@ import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { runBot } from './bot';
+import { botApi, runBot } from './bot';
+import { dueReminders, SaveStore } from './saves';
+import { dailyTask, npcName } from '../src/game/daily';
+import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -22,6 +25,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
+const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 // Соединения экрана клана: у игрока может быть открыто несколько.
 const clanSockets = new Map<string, Set<(msg: ServerMessage) => void>>();
@@ -100,7 +104,63 @@ function cleanName(name: unknown): string {
   return s.slice(0, 24) || 'Боец';
 }
 
+/** Кто прислал запрос: игрок Telegram по подписи или гость по id из браузера. */
+function identify(body: { initData?: unknown; guestId?: unknown }): { id: string; guest?: string } | null {
+  const tgUser = BOT_TOKEN && typeof body.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
+  const guest = typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : undefined;
+  if (tgUser) return { id: `tg:${tgUser.id}`, guest };
+  return ALLOW_GUESTS && guest ? { id: guest } : null;
+}
+
+function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > 300_000) req.destroy();
+      else chunks.push(c);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+/** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind. */
+async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => {
+    res.writeHead(code, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  };
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
+  if (path === '/api/progress/load') {
+    if (who.guest) saves.adopt(who.id, who.guest);
+    const s = saves.get(who.id);
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN, telegram: who.id.startsWith('tg:') });
+  }
+  if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
+  if (path === '/api/remind') {
+    const r = body!.remind as { hour: number; tz: number } | null;
+    return reply(200, { remind: saves.setRemind(who.id, r && { hour: Number(r.hour), tz: Number(r.tz) }).remind ?? null });
+  }
+  reply(404, { error: 'not found' });
+}
+
 const http = createServer((req, res) => {
+  const path = req.url?.split('?')[0] ?? '';
+  if (path.startsWith('/api/progress/') || path === '/api/remind') {
+    onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
   if (req.url?.startsWith('/api/top')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(store.top(50).map((p) => ({ name: p.name, cups: p.cups, wins: p.wins }))));
@@ -379,8 +439,29 @@ setInterval(() => {
 }, 30_000);
 
 http.listen(PORT, () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
+// Напоминания: раз в несколько минут ищем тех, у кого наступил их час, а тренировки сегодня ещё не было.
+const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
 if (BOT_TOKEN)
-  runBot(BOT_TOKEN, process.env.APP_URL ?? 'https://arena.nikitenok.ru', (code) => {
+  setInterval(() => {
+    const api = botApi(BOT_TOKEN);
+    for (const { save, date } of dueReminders(saves.all(), Date.now())) {
+      saves.markReminded(save.id, date);
+      const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
+      const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
+      const text =
+        p?.dailyDone === date
+          ? 'Мастер Гром: «Сегодня ещё ни одного повтора. Пять минут — и день не потерян!»'
+          : `${npcName(task.npc)}: «${task.ask}»\n\nЗадание дня: ${EXERCISE_LABELS[task.exercise].toLowerCase()} × ${task.target}. Награда: ${task.coins} монет.`;
+      api('sendMessage', { chat_id: Number(save.id.slice(3)), text, reply_markup: { inline_keyboard: [[{ text: 'Тренироваться', web_app: { url: `${APP_URL}/` } }]] } })
+        .then((r) => {
+          // Игрок остановил бота: больше не пишем.
+          if (r.error_code === 403) saves.setRemind(save.id, null);
+        })
+        .catch(() => null);
+    }
+  }, 5 * 60_000);
+if (BOT_TOKEN)
+  runBot(BOT_TOKEN, APP_URL, (code) => {
     const c = clans.byCode(code);
     return c && { name: c.name, tag: c.tag, members: c.members.length };
   });
@@ -390,5 +471,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
   process.on(signal, () => {
     store.flush();
     clans.flush();
+    saves.flush();
     process.exit(0);
   });

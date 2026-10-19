@@ -9,6 +9,8 @@ import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { MissionPlay, Stars } from './MissionPlay';
 import { NPCS } from './npcs';
+import { dailyTask } from './daily';
+import { startCloud } from '../cloud';
 import {
   buy,
   buyGear,
@@ -17,6 +19,8 @@ import {
   resetProgress,
   usePotion,
   claimChest,
+  claimDaily,
+  dailyProgress,
   claimHeroLevels,
   currentLevel,
   dayKey,
@@ -69,6 +73,12 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const now = Date.now();
   const lives = livesNow(progress, now);
   const [strength, setStrength] = useState(false);
+  const daily = dailyTask(dayKey(now), progress.baseline);
+  // Прогресс с сервера: на новом телефоне герой подтягивается сам.
+  useEffect(() => {
+    void startCloud((p) => setProgress(p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const current = currentLevel(progress, LEVEL_COUNT);
   const currentDef = LEVELS[current - 1];
   const [world, setWorld] = useState(currentDef.world);
@@ -116,26 +126,27 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   if (playing)
     return (
       <MissionPlay
-        key={playing.id}
+        key={playing.daily ? 'daily' : playing.id}
         level={playing}
         progress={progress}
         onExit={() => setPlaying(null)}
         onWin={(stars, record) => {
+          if (playing.daily) return { coins: 0, firstTime: false };
           const r = recordWin(latest.current, playing, stars, record);
           setProgress(r.progress);
           return r.reward;
         }}
-        onLose={() => update((p) => recordLoss(spendLife(p, Date.now()), playing))}
+        onLose={() => !playing.daily && update((p) => recordLoss(spendLife(p, Date.now()), playing))}
         onStart={() => update(spendMight)}
         onActivity={(ex, reps) => update((p) => ({ ...recordActivity(p, ex, reps, Date.now()), clanPending: (p.clanPending ?? 0) + reps }))}
         lives={lives}
-        swaps={swapsLeft(progress, playing.id, Date.now())}
+        swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
         onSwap={(count) => {
           const next = spendSwaps(latest.current, playing.id, count, Date.now());
           if (next) update(() => next);
           return next != null;
         }}
-        onNext={playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
+        onNext={!playing.daily && playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
       />
     );
 
@@ -165,6 +176,19 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           lives={<LivesPill progress={progress} />}
           current={currentDef}
           onTrain={() => setPlaying(currentDef)}
+          daily={daily}
+          dailyDone={dailyProgress(progress, daily)}
+          onDaily={() => {
+            const left = Math.max(5, daily.target - dailyProgress(progress, daily));
+            // Миссия на месте текущего уровня: та же земля и декорации, но цель — остаток задания.
+            setPlaying({ ...currentDef, daily: true, type: 'build', title: `Задание: ${NPCS[daily.npc].name}`, exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
+          }}
+          onClaimDaily={() => {
+            const next = claimDaily(progress, daily);
+            if (!next) return;
+            setProgress(next);
+            showToast(`Задание выполнено! +${daily.coins} монет${daily.potion ? ' и зелье' : ''}`);
+          }}
           onMap={() => onTab('map')}
           onShop={(t) => setShop(t ?? 'weapon')}
           onStrength={() => setStrength(true)}

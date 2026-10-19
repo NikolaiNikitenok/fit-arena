@@ -1,7 +1,8 @@
-// Прогресс игрока хранится в браузере. Сервер профилей подключим вместе с рейтингом дуэлей.
+// Прогресс игрока хранится в браузере и копией на сервере (src/cloud.ts), чтобы не терялся при смене телефона.
 import type { Exercise } from '../repCounter';
 import { clanGift } from '../../shared/clanLevel';
 import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
+import type { DailyTask } from './daily';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 
 export interface Progress {
@@ -37,6 +38,12 @@ export interface Progress {
   clanGift?: { clan: string; level: number };
   // Повторы, ещё не отправленные клану: уходят, когда открыт экран клана.
   clanPending?: number;
+  // Повторы за сегодня по упражнениям: для задания дня.
+  dayEx?: { date: string; reps: Partial<Record<Exercise, number>> };
+  // День, за который награда задания уже забрана.
+  dailyDone?: string;
+  // Когда прогресс менялся: при синхронизации побеждает более свежий.
+  savedAt?: number;
 }
 
 export interface Record_ {
@@ -78,7 +85,23 @@ export function loadProgress(): Progress {
   }
 }
 
+// Подписчик на сохранения: облачная копия (src/cloud.ts).
+let onSaved: ((p: Progress) => void) | null = null;
+export const onProgressSaved = (fn: (p: Progress) => void) => (onSaved = fn);
+
+/** Записать прогресс, пришедший с сервера, без отправки обратно. */
+export function replaceProgress(p: Progress): Progress {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(p));
+  } catch {
+    // Нет хранилища.
+  }
+  return p;
+}
+
 function save(p: Progress): Progress {
+  p = { ...p, savedAt: Date.now() };
+  onSaved?.(p);
   try {
     localStorage.setItem(KEY, JSON.stringify(p));
   } catch {
@@ -269,6 +292,8 @@ export function recordActivity(p: Progress, exercise: Exercise | null, reps: num
   const date = dayKey(now);
   const next = { ...p, days: { ...p.days, [date]: (p.days[date] ?? 0) + reps } };
   if (exercise) {
+    const ex = p.dayEx?.date === date ? p.dayEx.reps : {};
+    next.dayEx = { date, reps: { ...ex, [exercise]: (ex[exercise] ?? 0) + reps } };
     if (!p.first[exercise]) next.first = { ...p.first, [exercise]: { reps, date } };
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
@@ -381,3 +406,13 @@ export function claimClanGift(p: Progress, clan: string, level: number): Progres
 }
 
 export const clearClanPending = (p: Progress): Progress => save({ ...p, clanPending: 0 });
+
+/** Сколько повторов задания дня сделано сегодня. */
+export function dailyProgress(p: Progress, task: DailyTask): number {
+  return p.dayEx?.date === task.date ? (p.dayEx.reps[task.exercise] ?? 0) : 0;
+}
+
+export function claimDaily(p: Progress, task: DailyTask): Progress | null {
+  if (p.dailyDone === task.date || dailyProgress(p, task) < task.target) return null;
+  return save({ ...p, coins: p.coins + task.coins, potions: task.potion ? addPotion(p.potions, task.potion, 1) : p.potions, dailyDone: task.date });
+}

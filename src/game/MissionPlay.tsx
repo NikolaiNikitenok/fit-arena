@@ -65,7 +65,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [picking, setPicking] = useState<number | null>(null);
   const level: LevelDef = exercises === original.exercises ? original : { ...original, exercises };
   const swapCount = exercises.filter((e, i) => e !== original.exercises[i]).length;
-  const canSwap = original.type !== 'trial';
+  const canSwap = original.type !== 'trial' && !original.daily;
   const land = LANDS[level.land];
   const item = itemById(progress.equipped);
   // Сила героя на этот бой: уровень, оружие, щит и эликсир.
@@ -110,7 +110,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   };
 
   const start = async () => {
-    if (lives.lives <= 0) return;
+    if (lives.lives <= 0 && !level.daily) return;
     if (swapCount > 0 && !onSwap(swapCount)) return;
     setAttempt((a) => a + 1);
     setError(null);
@@ -178,7 +178,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     onLose();
     setStatus('lost');
   };
-  const noLives = lives.lives <= 0;
+  // Задание дня жизнь не тратит и доступно всегда.
+  const noLives = lives.lives <= 0 && !original.daily;
   const waitMin = Math.max(1, Math.ceil(lives.nextMs / 60000));
 
   const busy = status === 'loading' || status === 'running';
@@ -293,9 +294,11 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           <div className="result">
             <div className="result-title">Не вышло</div>
             <div className="muted light">{level.type === 'chase' ? 'Чудище догнало. Держи темп ровнее!' : 'Не хватило совсем чуть-чуть.'}</div>
-            <div className="life-lost">
-              −1 ♥ · осталось {lives.lives} из {lives.max}
-            </div>
+            {!level.daily && (
+              <div className="life-lost">
+                −1 ♥ · осталось {lives.lives} из {lives.max}
+              </div>
+            )}
             <Remark line={noLives ? restLine(waitMin) : afterLine(level.world, false, level.id + attempt)} />
           </div>
         )}
@@ -331,9 +334,11 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         ) : (
           <button className="primary" onClick={start}>
             {status === 'ready' ? 'Начать' : 'Ещё раз'}
-            <span className="btn-cost">
-              <Heart size={14} /> {lives.lives}
-            </span>
+            {!level.daily && (
+              <span className="btn-cost">
+                <Heart size={14} /> {lives.lives}
+              </span>
+            )}
           </button>
         ))}
       {status === 'loading' && (

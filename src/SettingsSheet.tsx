@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { cloudState, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
 import { setSetting, Settings, useSettings } from './settings';
 
@@ -28,11 +29,12 @@ export function SettingsSheet({ progress, onReset, onClose }: { progress: Progre
             <input type="checkbox" className="switch" checked={s[t.key]} onChange={(e) => setSetting(t.key, e.target.checked)} />
           </label>
         ))}
+        <RemindRow />
         <div className="settings-note">
-          <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты дуэлей.
+          <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.
         </div>
         <div className="settings-note">
-          <b>Прогресс</b> хранится на этом устройстве: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
+          <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
         </div>
         {confirm ? (
           <div className="danger-row">
@@ -59,6 +61,45 @@ export function SettingsSheet({ progress, onReset, onClose }: { progress: Progre
           Готово
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Напоминание от бота, если к этому часу ещё не было тренировки. */
+function RemindRow() {
+  const cloud = cloudState();
+  const [hour, setHour] = useState<number | null>(cloud?.remind?.hour ?? null);
+  const [busy, setBusy] = useState(false);
+  const change = (h: number | null) => {
+    setHour(h);
+    setBusy(true);
+    setRemind(h)
+      .then((r) => setHour(r?.hour ?? null))
+      .catch(() => setHour(cloud?.remind?.hour ?? null))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="toggle-row remind-row">
+      <div>
+        <div className="toggle-title">Напоминание в Telegram</div>
+        <div className="muted">
+          {!cloud
+            ? 'Нет связи с сервером, попробуй позже.'
+            : !cloud.telegram
+              ? 'Работает, когда приложение открыто из Telegram.'
+              : `Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.${cloud.bot ? '' : ' Бот подключается, напоминания начнут приходить чуть позже.'}`}
+        </div>
+        {hour != null && (
+          <select className="remind-hour" value={hour} disabled={busy} onChange={(e) => change(Number(e.target.value))}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>
+                в {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <input type="checkbox" className="switch" checked={hour != null} disabled={busy || !cloud || !cloud.telegram} onChange={(e) => change(e.target.checked ? 19 : null)} />
     </div>
   );
 }

@@ -7,7 +7,9 @@ import { Character } from '../three/Character';
 import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
 import { BASE_DAMAGE, heroHands, heroPower } from './power';
 import { LevelDef } from './levels';
-import { portraitUrl } from './npcs';
+import type { DailyTask } from './daily';
+import { Portrait } from './Dialog';
+import { NPCS, portraitUrl } from './npcs';
 import { heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
 import { Coin, Cog, Flame, Flask, Heart, Swords } from '../icons';
 
@@ -68,6 +70,10 @@ interface Props {
   onEquipGear: (id: string) => void;
   onPotion: (id: PotionId) => void;
   onSettings: () => void;
+  daily: DailyTask;
+  dailyDone: number;
+  onDaily: () => void;
+  onClaimDaily: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -84,7 +90,7 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily }: Props) {
   const item = itemById(progress.equipped);
   const xp = heroXp(progress);
   const lvl = heroLevel(xp);
@@ -177,6 +183,8 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
         </button>
       </div>
 
+      <DailyCard task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
+
       <button className="primary daily" onClick={onTrain}>
         {series.today ? 'Продолжить приключение' : 'Тренировка дня'}
         <small>
@@ -186,6 +194,7 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
       <button className="secondary" onClick={onMap}>
         Открыть карту мира
       </button>
+
 
       <div className="section-title">
         Инвентарь
@@ -273,6 +282,48 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Задание дня от жителя: просьба, полоска повторов за сегодня и награда. */
+function DailyCard({ task, done, claimed, onPlay, onClaim }: { task: DailyTask; done: number; claimed: boolean; onPlay: () => void; onClaim: () => void }) {
+  const npc = NPCS[task.npc];
+  const ready = done >= task.target;
+  return (
+    <div className={`daily-card ${claimed ? 'claimed' : ''}`}>
+      <div className="daily-top">
+        <Portrait line={{ face: task.npc, color: npc.color, who: npc.name }} size={46} />
+        <div className="daily-meta">
+          <div className="daily-who">
+            Задание дня · <span style={{ color: npc.color }}>{npc.name}</span>
+          </div>
+          <div className="daily-ask">«{task.ask}»</div>
+        </div>
+      </div>
+      <div className="daily-goal">
+        <span>
+          {EXERCISE_LABELS[task.exercise]}: <b>{Math.min(done, task.target)}</b> / {task.target}
+        </span>
+        <span className="daily-gift">
+          <Coin size={13} className="coin" /> {task.coins}
+          {task.potion && <Flask size={15} color={task.potion === 'vigor' ? '#ff6b81' : task.potion === 'might' ? '#ffb46b' : '#7dd3fc'} scroll={task.potion === 'swap'} />}
+        </span>
+      </div>
+      <div className="bar">
+        <div className="bar-fill" style={{ width: `${Math.min(100, (done / task.target) * 100)}%`, background: npc.color }} />
+      </div>
+      {claimed ? (
+        <div className="muted daily-note">Выполнено! Завтра будет новая просьба.</div>
+      ) : ready ? (
+        <button className="primary" onClick={onClaim}>
+          Забрать награду
+        </button>
+      ) : (
+        <button className="secondary" onClick={onPlay}>
+          {done > 0 ? `Доделать: ещё ${task.target - done}` : 'Выполнить'}
+        </button>
+      )}
     </div>
   );
 }
