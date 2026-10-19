@@ -17,16 +17,28 @@ const HIP = [23, 24];
 const KNEE = [25, 26];
 const ANKLE = [27, 28];
 
+interface Check {
+  ok: (lm: Landmark[], side: number) => boolean;
+  hint: string;
+}
+
 interface Rule {
   // Угол, по которому считаем амплитуду.
   joint: [number[], number[], number[]];
   // Нижняя точка достигнута, когда угол меньше down; верхняя — когда больше up.
+  // Для пресса «рабочая» фаза — сгибание, поэтому логика та же: лёжа (угол большой) → сел (малый) → лёг.
   down: number;
   up: number;
-  // Повтор засчитывается при возврате в верхнюю точку после нижней.
-  // Для пресса «рабочая» фаза — сгибание, поэтому логика та же: лёжа (угол большой) → сел (малый) → лёг.
-  formCheck?: (lm: Landmark[], side: number) => boolean;
-  formHint?: string;
+  // Положение тела для упражнения. Проверяется в каждом кадре повтора:
+  // без него, например, сгибание рук стоя считалось бы отжиманием.
+  posture: Check[];
+}
+
+const seen = (...points: Landmark[]) => points.every((p) => (p.visibility ?? 1) >= 0.5);
+
+// Наклон отрезка ab к горизонтали, 0..90°.
+function tilt(a: Landmark, b: Landmark): number {
+  return (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI;
 }
 
 export const RULES: Record<Exercise, Rule> = {
@@ -34,19 +46,33 @@ export const RULES: Record<Exercise, Rule> = {
     joint: [SHOULDER, ELBOW, WRIST],
     down: 90,
     up: 155,
-    // Корпус прямой: плечо-таз-лодыжка почти на одной линии.
-    formCheck: (lm, s) => angle(lm[SHOULDER[s]], lm[HIP[s]], lm[ANKLE[s]]) > 150,
-    formHint: 'Держи корпус прямым',
+    posture: [
+      { ok: (lm, s) => seen(lm[HIP[s]], lm[ANKLE[s]]), hint: 'Камера должна видеть тебя целиком, до стоп' },
+      { ok: (lm, s) => tilt(lm[SHOULDER[s]], lm[ANKLE[s]]) < 35, hint: 'Прими упор лёжа' },
+      // Ладони на полу, то есть не выше плеч (ось y в кадре направлена вниз).
+      { ok: (lm, s) => lm[WRIST[s]].y > lm[SHOULDER[s]].y - 0.02, hint: 'Упрись руками в пол' },
+      { ok: (lm, s) => angle(lm[SHOULDER[s]], lm[HIP[s]], lm[ANKLE[s]]) > 150, hint: 'Держи корпус прямым' },
+    ],
   },
   squat: {
     joint: [HIP, KNEE, ANKLE],
     down: 100,
     up: 160,
+    posture: [
+      // Стоя плечи выше таза, корпус может наклоняться, но не ложиться.
+      { ok: (lm, s) => seen(lm[SHOULDER[s]]), hint: 'Камера должна видеть тебя целиком' },
+      { ok: (lm, s) => lm[SHOULDER[s]].y < lm[HIP[s]].y && tilt(lm[SHOULDER[s]], lm[HIP[s]]) > 30, hint: 'Встань прямо' },
+    ],
   },
   situp: {
     joint: [SHOULDER, HIP, KNEE],
     down: 70,
     up: 110,
+    posture: [
+      // Таз и стопы на полу на одной высоте.
+      { ok: (lm, s) => seen(lm[ANKLE[s]]), hint: 'Камера должна видеть тебя целиком, до стоп' },
+      { ok: (lm, s) => tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45, hint: 'Ляг на пол, стопы на полу' },
+    ],
   },
 };
 
@@ -91,6 +117,7 @@ export class RepCounter {
   private smoothed: number | null = null;
   private lastRepAt = -Infinity;
   private formOk = true;
+  private failHint: string | null = null;
 
   constructor(readonly exercise: Exercise) {}
 
@@ -103,6 +130,7 @@ export class RepCounter {
     this.smoothed = null;
     this.lastRepAt = -Infinity;
     this.formOk = true;
+    this.failHint = null;
   }
 
   update(lm: Landmark[] | undefined, timestampMs: number): RepState {
@@ -123,23 +151,24 @@ export class RepCounter {
     const value = this.smoothed;
 
     let { reps, phase } = this.state;
-    let hint: string | null = null;
+    const failed = rule.posture.find((check) => !check.ok(lm, side));
+    let hint: string | null = failed?.hint ?? null;
 
-    if (phase === 'up' && value < rule.down) {
+    if (phase === 'up' && value < rule.down && !failed) {
       phase = 'down';
       this.formOk = true;
     }
-    if (phase === 'down' && rule.formCheck && !rule.formCheck(lm, side)) {
+    if (phase === 'down' && failed) {
       this.formOk = false;
-      hint = rule.formHint ?? null;
+      this.failHint = failed.hint;
     }
     if (phase === 'down' && value > rule.up) {
       phase = 'up';
-      if (this.formOk && timestampMs - this.lastRepAt >= MIN_REP_MS) {
+      if (this.formOk && !failed && timestampMs - this.lastRepAt >= MIN_REP_MS) {
         reps += 1;
         this.lastRepAt = timestampMs;
       } else if (!this.formOk) {
-        hint = 'Повтор не засчитан: ' + (rule.formHint ?? 'неполная амплитуда').toLowerCase();
+        hint = 'Повтор не засчитан: ' + (this.failHint ?? 'нарушена техника').toLowerCase();
       }
     }
 
