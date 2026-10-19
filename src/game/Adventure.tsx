@@ -1,18 +1,34 @@
-import { useRef, useState } from 'react';
-import { EXERCISE_LABELS } from '../repCounter';
+import { useEffect, useRef, useState } from 'react';
+import { EXERCISE_LABELS, Exercise } from '../repCounter';
+import { Portrait } from './Dialog';
 import { ITEMS, itemById, RARITY_COLORS, RARITY_NAMES } from './items';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { MissionPlay, Stars } from './MissionPlay';
-import { buy, claimChest, currentLevel, equip, isUnlocked, loadProgress, recordWin } from './progress';
+import { NPCS } from './npcs';
+import { buy, claimChest, currentLevel, dayKey, equip, isUnlocked, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, recordWin, REST_PER_WEEK, spendLife, streak } from './progress';
 import { WorldMap3D } from './WorldMap3D';
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
 const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
 
+const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
+const fmtMin = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
+
 export function Adventure() {
-  const [progress, setProgress] = useState(loadProgress);
+  const [progress, setProgressState] = useState(loadProgress);
+  // Последний прогресс: победа и запись подхода приходят подряд в одном кадре.
+  const latest = useRef(progress);
+  const setProgress = (p: Progress) => {
+    latest.current = p;
+    setProgressState(p);
+  };
+  const update = (fn: (p: Progress) => Progress) => setProgress(fn(latest.current));
+  const now = Date.now();
+  const lives = livesNow(progress, now);
+  const series = streak(progress.days, now);
+  const [strength, setStrength] = useState(false);
   const current = currentLevel(progress, LEVEL_COUNT);
   const currentDef = LEVELS[current - 1];
   const [world, setWorld] = useState(currentDef.world);
@@ -49,10 +65,13 @@ export function Adventure() {
         progress={progress}
         onExit={() => setPlaying(null)}
         onWin={(stars, record) => {
-          const r = recordWin(progress, playing, stars, record);
+          const r = recordWin(latest.current, playing, stars, record);
           setProgress(r.progress);
           return r.reward;
         }}
+        onLose={() => update((p) => spendLife(p, Date.now()))}
+        onActivity={(ex, reps) => update((p) => recordActivity(p, ex, reps, Date.now()))}
+        lives={lives}
         onNext={playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
       />
     );
@@ -115,7 +134,13 @@ export function Adventure() {
             <div className="map-land">{L.name}</div>
             <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
           </div>
-          <div className="coins">🪙 {progress.coins}</div>
+          <div className="map-stats">
+            <LivesPill progress={progress} />
+            <button className="pill btn" onClick={() => setStrength(true)}>
+              🔥 {series.days}
+            </button>
+            <span className="pill">🪙 {progress.coins}</span>
+          </div>
         </div>
         {toast && <div className="toast">{toast}</div>}
         <div className="map-help">Листай карту пальцем · сундуки и купец ждут на дороге</div>
@@ -142,16 +167,27 @@ export function Adventure() {
         </div>
       )}
       {!selected && (
-        <button className="primary" onClick={() => setPlaying(currentDef)}>
-          Уровень {currentDef.num}: {currentDef.title}
+        <button className="primary daily" onClick={() => setPlaying(currentDef)}>
+          {series.today ? `Уровень ${currentDef.num}: ${currentDef.title}` : 'Тренировка дня'}
+          <small>{series.today ? `Сегодня уже ${progress.days[dayKey(now)]} повторов · серия ${series.days}` : `Уровень ${currentDef.num}: ${currentDef.title}`}</small>
         </button>
       )}
+      <button className="link" onClick={() => setStrength(true)}>
+        Твоя сила и серия
+      </button>
+
+      {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
 
       {shop && (
         <div className="sheet" onClick={() => setShop(false)}>
           <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="level-title">Купец Фёдор</div>
-            <div className="muted">«Смотри, герой, товар со всех трёх миров! Найденное в сундуках тоже можно надеть.»</div>
+            <div className="remark">
+              <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
+              <div>
+                <div className="level-title">Купец Фёдор</div>
+                <div className="muted">«Смотри, герой, товар со всех трёх миров! Найденное в сундуках тоже можно надеть.»</div>
+              </div>
+            </div>
             <div className="coins">🪙 {progress.coins}</div>
             {ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
               const owned = progress.items.includes(i.id);
@@ -191,5 +227,80 @@ export function Adventure() {
         </div>
       )}
     </>
+  );
+}
+
+const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+/** «Твоя сила»: рост по упражнениям, серия и повторы за две недели. */
+function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: number; onClose: () => void }) {
+  const series = streak(progress.days, now);
+  const last = Array.from({ length: 14 }, (_, i) => {
+    const t = now - (13 - i) * 86400000;
+    return { day: WEEKDAY[new Date(t).getDay()], reps: progress.days[dayKey(t)] ?? 0 };
+  });
+  const max = Math.max(10, ...last.map((d) => d.reps));
+  const total = last.reduce((s, d) => s + d.reps, 0);
+  return (
+    <div className="sheet" onClick={onClose}>
+      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+        <div className="remark">
+          <Portrait line={{ face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name }} size={52} />
+          <div>
+            <div className="level-title">Твоя сила</div>
+            <div className="muted">
+              {series.days > 0
+                ? `Серия ${series.days} ${series.days === 1 ? 'день' : series.days < 5 ? 'дня' : 'дней'}. Отдыхать можно ${REST_PER_WEEK} дня в неделю, серия не сгорит.`
+                : 'Начни серию сегодня: одна тренировка в день, отдыхать можно два дня в неделю.'}
+            </div>
+          </div>
+        </div>
+        {EXERCISES.map((ex) => {
+          const best = progress.best[ex];
+          const first = progress.first[ex];
+          const up = best && first && best.reps > first.reps ? best.reps - first.reps : 0;
+          return (
+            <div key={ex} className="strength-row">
+              <div className="strength-ex">
+                {EXERCISE_LABELS[ex]}
+                <div className="strength-was">{first ? `первый подход: ${first.reps}` : 'ещё не делал'}</div>
+              </div>
+              {up > 0 && <span className="strength-up">+{up}</span>}
+              <span className="strength-val">{best?.reps ?? '—'}</span>
+            </div>
+          );
+        })}
+        <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
+        <div className="week-bars">
+          {last.map((d, i) => (
+            <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
+          ))}
+        </div>
+        <div className="week-days">
+          {last.map((d, i) => (
+            <span key={i}>{d.day}</span>
+          ))}
+        </div>
+        <button className="link" onClick={onClose}>
+          Закрыть
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Жизни с таймером до следующей: тикает сама, чтобы не перерисовывать карту каждую секунду. */
+function LivesPill({ progress }: { progress: Progress }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const lives = livesNow(progress, now);
+  return (
+    <span className={`pill ${lives.lives ? '' : 'empty'}`}>
+      ♥ {lives.lives}/{MAX_LIVES}
+      {lives.nextMs > 0 && <small>{fmtMin(lives.nextMs)}</small>}
+    </span>
   );
 }

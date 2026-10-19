@@ -2,12 +2,16 @@
 // а цели подстраиваются под результаты входных испытаний игрока.
 import type { Exercise } from '../repCounter';
 import { LANDS } from './lands';
+import { storyFor } from './story';
 
 export type MissionType = 'trial' | 'build' | 'chase' | 'climb' | 'defend' | 'rescue' | 'boss';
 
 export interface Line {
   who: string;
   text: string;
+  // Портрет (public/portraits) и цвет рамки.
+  face: string;
+  color: string;
 }
 
 export interface LevelDef {
@@ -62,16 +66,6 @@ const TITLES: Record<Exercise, Partial<Record<MissionType, string[]>>> = {
   },
 };
 
-const GOALS: Record<MissionType, string> = {
-  trial: 'Покажи, на что способен: сделай как можно больше за минуту.',
-  build: 'Каждый повтор кладёт новую доску. Достроим?',
-  chase: 'Держи темп, иначе чудище догонит!',
-  climb: 'Каждый повтор поднимает выше. Успей до заката.',
-  defend: 'Три волны приспешников Лени. Каждый повтор отбрасывает их.',
-  rescue: 'Каждые пять повторов расколдовывают одного жителя.',
-  boss: 'Хранитель Лени. Бей его повторами и не давай себе отдыха!',
-};
-
 function pick<T>(list: T[], seed: number): T {
   return list[seed % list.length];
 }
@@ -95,13 +89,7 @@ function makeLevel(id: number): LevelDef {
   // Каждый мир начинается с трёх испытаний силы: база игрока обновляется под новый уровень формы.
   if (num <= 3) {
     const ex = ORDER[num - 1];
-    const story: Line[] = [
-      ...(num === 1 ? [{ who: 'Тренер Борис', text: L.intro }] : []),
-      {
-        who: 'Тренер Борис',
-        text: world === 0 ? 'Сначала узнаем твою силу. От этого будут зависеть все испытания.' : 'Новый мир — новая проверка. Посмотрим, насколько ты вырос.',
-      },
-    ];
+    const story = storyFor({ id, world, land, num, pos, type: 'trial', rest: false });
     return { ...base, type: 'trial', title: `Испытание силы: ${['приседания', 'отжимания', 'пресс'][num - 1]}`, exercises: [ex], load: 1, seconds: 60, rest: false, story, coins: 20 };
   }
 
@@ -115,10 +103,7 @@ function makeLevel(id: number): LevelDef {
       load: growth * 1.1,
       seconds: 120,
       rest: false,
-      story: [
-        { who: 'Тренер Борис', text: `Впереди хранитель этой земли — ${L.boss.name}.` },
-        { who: L.boss.name, text: L.boss.intro },
-      ],
+      story: storyFor({ id, world, land, num, pos, type: 'boss', rest: false }),
       coins: 150 + (land % 10) * 30 + world * 100,
     };
   }
@@ -126,9 +111,7 @@ function makeLevel(id: number): LevelDef {
   const type = PATTERN[pos];
   const ex = ORDER[(id + land) % 3];
   const rest = pos === 4;
-  const story: Line[] = [];
-  if (pos === 0) story.push({ who: 'Тренер Борис', text: L.intro });
-  story.push({ who: 'Тренер Борис', text: rest ? 'Сегодня полегче: восстановление тоже тренировка.' : GOALS[type] });
+  const story = storyFor({ id, world, land, num, pos, type, rest });
   return {
     ...base,
     type,
@@ -156,11 +139,7 @@ function finalLevel(id: number): LevelDef {
     load: growthAt(id) * 1.15,
     seconds: 180,
     rest: false,
-    story: [
-      { who: 'Тренер Борис', text: L.intro },
-      { who: L.boss.name, text: L.boss.intro },
-      { who: 'Тренер Борис', text: 'Всё, чему ты научился в трёх мирах, — сейчас.' },
-    ],
+    story: storyFor({ id, world: 3, land, num: 1, pos: 0, type: 'boss', rest: false }),
     coins: 1000,
   };
 }
