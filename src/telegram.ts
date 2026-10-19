@@ -48,14 +48,14 @@ export function hapticRep(): void {
 
 const startParam = (): string | null => tg?.initDataUnsafe.start_param ?? null;
 
-/** Код боя из ссылки-приглашения: t.me/<бот>?startapp=КОД или ?room=КОД в браузере. */
+/** Код боя из ссылки-приглашения: ?room=КОД (кнопка бота) или startapp=КОД. */
 export function inviteCode(): string | null {
   const p = startParam();
   if (p?.startsWith('clan-')) return null;
   return p ?? new URLSearchParams(location.search).get('room');
 }
 
-/** Приглашение в клан: t.me/<бот>?startapp=clan-КОД или ?clan=КОД в браузере. */
+/** Приглашение в клан: ?clan=КОД (кнопка бота после «Старт») или startapp=clan-КОД. */
 export function clanInviteCode(): string | null {
   const p = startParam();
   if (p?.startsWith('clan-')) return p.slice(5);
@@ -63,7 +63,8 @@ export function clanInviteCode(): string | null {
 }
 
 export function clanInviteLink(code: string, botUsername: string | null): string {
-  return botUsername ? `https://t.me/${botUsername}?startapp=clan-${code}` : `${location.origin}/?clan=${code}`;
+  // Ссылка ведёт в бота: после «Старт» он присылает кнопку, и приложение открывается уже с аккаунтом Telegram.
+  return botUsername ? `https://t.me/${botUsername}?start=clan-${code}` : `${location.origin}/?clan=${code}`;
 }
 
 // Гостям без Telegram выдаём постоянный id, чтобы кубки и клан не терялись между заходами.
@@ -81,7 +82,7 @@ export function guestId(): string {
 }
 
 export function inviteLink(code: string, botUsername: string | null): string {
-  return botUsername ? `https://t.me/${botUsername}?startapp=${code}` : `${location.origin}/?room=${code}`;
+  return botUsername ? `https://t.me/${botUsername}?start=${code}` : `${location.origin}/?room=${code}`;
 }
 
 /** Окно «Переслать» в Telegram; вне Telegram — системное «Поделиться» или копирование. */

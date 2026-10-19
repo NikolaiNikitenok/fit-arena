@@ -139,7 +139,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
             <div className="muted">Открой Атлетию в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.</div>
           </div>
         </div>
-        <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot}?startapp=clan`}>
+        <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot}`}>
           Открыть в Telegram
         </a>
       </>

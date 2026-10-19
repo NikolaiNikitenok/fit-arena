@@ -101,6 +101,10 @@ export class ClanStore {
     return id ? this.clans.get(id) : undefined;
   }
 
+  byCode(code: string): Clan | undefined {
+    return [...this.clans.values()].find((c) => c.code === code);
+  }
+
   get(id: string): Clan | undefined {
     return this.clans.get(id);
   }

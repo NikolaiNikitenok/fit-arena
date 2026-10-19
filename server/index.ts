@@ -1,6 +1,7 @@
 // Сервер матчей Fit Arena: комнаты на двоих и бой по WebSocket.
 //   PORT — порт (по умолчанию 8787)
 //   BOT_TOKEN — токен бота: проверяем подпись Telegram и узнаём имя бота для ссылок
+//   APP_URL — адрес мини-приложения для кнопок бота (по умолчанию https://arena.nikitenok.ru)
 //   BOT_USERNAME — имя бота для ссылок-приглашений, если Telegram недоступен с сервера
 //   ALLOW_GUESTS=1 — пускать без подписи Telegram (для разработки в браузере)
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
@@ -13,6 +14,7 @@ import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
+import { runBot } from './bot';
 import { verifyInitData } from './telegramAuth';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -377,6 +379,11 @@ setInterval(() => {
 }, 30_000);
 
 http.listen(PORT, () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
+if (BOT_TOKEN)
+  runBot(BOT_TOKEN, process.env.APP_URL ?? 'https://arena.nikitenok.ru', (code) => {
+    const c = clans.byCode(code);
+    return c && { name: c.name, tag: c.tag, members: c.members.length };
+  });
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
