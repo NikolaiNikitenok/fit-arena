@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
-import { Heart } from '../icons';
+import { Heart, Swords } from '../icons';
+import { getSettings, useSettings } from '../settings';
 import { useRepCamera } from '../useRepCamera';
-import { itemById } from './items';
+import { gearIcon, gearText, itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
+import { heroHands, heroPower } from './power';
 import { MissionScene3D } from './MissionScene3D';
 import { Dialog, Remark } from './Dialog';
 import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
@@ -49,12 +51,14 @@ interface Props {
   // Замены упражнений на сегодня; onSwap списывает их при старте и говорит, хватило ли.
   swaps: { left: number; paid: number };
   onSwap: (count: number) => boolean;
+  // Попытка началась: тратится выпитый эликсир силы.
+  onStart: () => void;
   onNext?: () => void;
 }
 
 const ALL: Exercise[] = ['squat', 'pushup', 'situp'];
 
-export function MissionPlay({ level: original, progress, onExit, onWin, onLose, onActivity, lives, swaps, onSwap, onNext }: Props) {
+export function MissionPlay({ level: original, progress, onExit, onWin, onLose, onActivity, lives, swaps, onSwap, onStart, onNext }: Props) {
   const camera = useRepCamera();
   // Упражнения уровня с учётом замен игрока.
   const [exercises, setExercises] = useState<Exercise[]>(original.exercises);
@@ -64,9 +68,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const canSwap = original.type !== 'trial';
   const land = LANDS[level.land];
   const item = itemById(progress.equipped);
-  const make = () => new Mission(level, progress.baseline);
+  // Сила героя на этот бой: уровень, оружие, щит и эликсир.
+  const power = heroPower(progress, progress.might);
+  const combat = { damage: power.damage, hearts: power.hearts };
+  const make = () => new Mission(level, progress.baseline, combat);
   const mission = useRef<Mission>(make());
-  const [status, setStatus] = useState<Status>(level.story.length ? 'story' : 'ready');
+  const settings = useSettings();
+  const [status, setStatus] = useState<Status>(original.story.length && getSettings().story ? 'story' : 'ready');
   const [attempt, setAttempt] = useState(0);
   const [epilogue, setEpilogue] = useState(false);
   const [view, setView] = useState<MissionView>(() => mission.current.view(0));
@@ -96,7 +104,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     const next = exercises.map((e, i) => (i === slot ? ex : e));
     setExercises(next);
     setPicking(null);
-    const m = new Mission({ ...original, exercises: next }, progress.baseline);
+    const m = new Mission({ ...original, exercises: next }, progress.baseline, combat);
     mission.current = m;
     setView(m.view(0));
   };
@@ -107,6 +115,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     setAttempt((a) => a + 1);
     setError(null);
     setStatus('loading');
+    onStart();
     const m = make();
     mission.current = m;
     exercise.current = level.exercises[0];
@@ -187,13 +196,14 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           hero={item.hero}
           heroTint={item.tint}
           heroGlow={item.glow}
+          heroHands={heroHands(progress)}
         />
         <div className={`mhud ${busy ? '' : 'hidden'}`}>
           <div className="mhud-row">
             <span className="mhud-ex">{EXERCISE_LABELS[view.exercise]}</span>
             {level.type === 'boss' && (
               <span className="hearts">
-                {[1, 2, 3].map((i) => (
+                {Array.from({ length: combat.hearts }, (_, k) => k + 1).map((i) => (
                   <span key={i} className={i <= (view.hearts ?? 3) ? 'on' : ''}>
                     ♥
                   </span>
@@ -206,9 +216,15 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             <div className="bar-fill" style={{ width: `${Math.min(1, level.type === 'boss' ? 1 - view.progress : view.progress) * 100}%`, background: level.type === 'boss' ? land.boss.color : land.accent }} />
           </div>
           <div className="mhud-label">
-            {level.type === 'boss' ? `${land.boss.name} · ${view.label}` : level.type === 'chase' ? `${view.label} · отрыв ${Math.round((view.gap ?? 1) * 100)}%` : view.label}
+            {level.type === 'boss' ? `${land.boss.name} · ${view.hp} HP · ${view.label}` : level.type === 'chase' ? `${view.label} · отрыв ${Math.round((view.gap ?? 1) * 100)}%` : view.label}
           </div>
         </div>
+        {/* Урон каждого повтора всплывает над сценой. */}
+        {status === 'running' && view.reps > 0 && view.damage > 0 && (
+          <div key={view.reps} className="dmg-pop">
+            −{view.damage}
+          </div>
+        )}
 
         {status === 'running' && countdown > 0 && (
           <div className="countdown">
@@ -227,6 +243,18 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
               {level.type !== 'trial' && ` · цель ${mission.current.target}`}
               {level.rest && ' · лёгкий день'}
             </div>
+            {level.type !== 'trial' && (
+              <div className="power-line">
+                <span>
+                  <Swords size={14} /> урон {view.damage}
+                </span>
+                <span>
+                  <Heart size={13} className="heart" /> {level.type === 'boss' ? `${land.boss.name}: ` : 'враги: '}
+                  {view.hpMax} HP
+                </span>
+                {progress.might && <span className="might">эликсир силы +30%</span>}
+              </div>
+            )}
             {canSwap && !noLives && (
               <SwapRow
                 original={original.exercises}
@@ -238,7 +266,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
                 onChoose={choose}
               />
             )}
-            {noLives ? <Remark line={restLine(waitMin)} /> : <CameraGuide exercise={level.exercises[0]} model={item.hero} />}
+            {noLives ? <Remark line={restLine(waitMin)} /> : settings.guide && <CameraGuide exercise={level.exercises[0]} model={item.hero} />}
           </div>
         )}
         {status === 'won' && result && !epilogue && (
@@ -249,6 +277,15 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
               {view.reps} повторов · +{result.reward.coins} монет
               {view.record != null && ` · рекорд ${view.record}`}
             </div>
+            {result.reward.drop && (
+              <div className="drop">
+                <img src={gearIcon(result.reward.drop.id)} alt="" />
+                <div>
+                  <div className="drop-title">Трофей: {result.reward.drop.name}</div>
+                  <div className="muted">{gearText(result.reward.drop)} · уже в инвентаре</div>
+                </div>
+              </div>
+            )}
             <Remark line={afterLine(level.world, true, level.id + attempt)} />
           </div>
         )}

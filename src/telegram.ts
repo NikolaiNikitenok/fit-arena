@@ -31,8 +31,8 @@ export function initTelegram(): void {
   }
   // Шапка Telegram в цвет игры, чтобы не было светлой полосы над тёмным экраном.
   try {
-    tg?.setHeaderColor?.('#0f1115');
-    tg?.setBackgroundColor?.('#0f1115');
+    tg?.setHeaderColor?.('#0d0f17');
+    tg?.setBackgroundColor?.('#0d0f17');
   } catch {
     // Старые клиенты не умеют менять цвета.
   }

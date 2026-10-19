@@ -3,6 +3,7 @@ import { DrawingUtils, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker } from './pose';
 import { frameRotations, enableOrientation } from './orientation';
 import { Exercise, RepCounter } from './repCounter';
+import { getSettings, repSound } from './settings';
 import { hapticRep } from './telegram';
 
 // Модель общая на всё приложение: грузится один раз.
@@ -64,7 +65,7 @@ export function useRepCamera() {
         const now = performance.now();
         const lm = model.detectForVideo(video, now).landmarks[0];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (lm) {
+        if (lm && getSettings().skeleton) {
           drawing.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
           drawing.drawLandmarks(lm, { color: '#ffffff', radius: 3 });
         }
@@ -75,7 +76,8 @@ export function useRepCamera() {
         }
         if (state.reps > lastReps) {
           lastReps = state.reps;
-          hapticRep();
+          if (getSettings().haptics) hapticRep();
+          repSound(state.reps);
           onRep();
         }
         setHint(state.hint);

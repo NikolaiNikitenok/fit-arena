@@ -1,8 +1,9 @@
 import { Suspense, useMemo, useRef } from 'react';
+import { canvasProps, getSettings } from '../settings';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
-import { CharAnim, Character } from '../three/Character';
+import { CharAnim, Character, CharacterProps } from '../three/Character';
 import { CharName } from '../three/kit';
 import { Prop } from '../three/Prop';
 import { Sky } from '../three/Sky';
@@ -26,6 +27,7 @@ interface Props {
   hero: CharName;
   heroTint?: string;
   heroGlow?: string;
+  heroHands?: CharacterProps['hands'];
 }
 
 const levelsOfWorld = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
@@ -80,7 +82,7 @@ export function MissionScene3D(props: Props) {
   const world = props.level.world;
   const look = LOOK[world];
   return (
-    <Canvas shadows dpr={[1, 1.6]} camera={{ position: [0, 3, 7], fov: 45, far: 400 }}>
+    <Canvas {...canvasProps(getSettings())} camera={{ position: [0, 3, 7], fov: 45, far: 400 }}>
       <Sky top={look.top} horizon={look.horizon} stars={look.stars} planet={look.planet} />
       <fog attach="fog" args={[look.fog, 14, 38]} />
       <hemisphereLight args={['#ffffff', '#4a4038', world === 0 ? 1.3 : 1.0]} />
@@ -91,7 +93,7 @@ export function MissionScene3D(props: Props) {
   );
 }
 
-function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow }: Props) {
+function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow, heroHands }: Props) {
   const world = level.world;
   const layout = layoutFor(world);
   const index = layout.nodes.findIndex((n) => n.id === level.id);
@@ -112,6 +114,7 @@ function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow
       model={hero}
       tint={heroTint}
       glow={heroGlow}
+      hands={heroHands}
       anim={heroBase(view, running)}
       pulse={chase || type === 'build' ? 0 : view.reps}
       pulseAnim={pulseAnim}

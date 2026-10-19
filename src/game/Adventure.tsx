@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Portrait } from './Dialog';
-import { HeroHome } from './HeroHome';
-import { ITEMS, itemById, RARITY_COLORS, RARITY_NAMES } from './items';
+import { GearFace, HeroHome, ShopTab } from './HeroHome';
+import { SettingsSheet } from '../SettingsSheet';
+import { GEAR, gearText, ITEMS, itemById, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { MissionPlay, Stars } from './MissionPlay';
 import { NPCS } from './npcs';
 import {
   buy,
+  buyGear,
+  buyPotion,
+  equipGear,
+  resetProgress,
+  usePotion,
   claimChest,
   claimHeroLevels,
   currentLevel,
@@ -19,7 +25,9 @@ import {
   loadProgress,
   Progress,
   recordActivity,
+  recordLoss,
   recordWin,
+  spendMight,
   REST_PER_WEEK,
   spendLife,
   spendSwaps,
@@ -27,7 +35,8 @@ import {
   swapsLeft,
 } from './progress';
 import { WorldMap3D } from './WorldMap3D';
-import { Coin, Heart, Lock } from '../icons';
+import { Coin, Flask, Heart, Lock, Swords } from '../icons';
+import { heroHands, heroPower } from './power';
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
@@ -68,7 +77,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     onPlaying(!!l);
   };
   const [selected, setSelected] = useState<LevelDef | null>(null);
-  const [shop, setShop] = useState(false);
+  const [shop, setShop] = useState<ShopTab | null>(null);
+  const [settings, setSettings] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const levels = levelsOf(world);
   const startIndex = () => Math.max(0, levels.findIndex((l) => l.id === current));
@@ -114,7 +124,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           setProgress(r.progress);
           return r.reward;
         }}
-        onLose={() => update((p) => spendLife(p, Date.now()))}
+        onLose={() => update((p) => recordLoss(spendLife(p, Date.now()), playing))}
+        onStart={() => update(spendMight)}
         onActivity={(ex, reps) => update((p) => recordActivity(p, ex, reps, Date.now()))}
         lives={lives}
         swaps={swapsLeft(progress, playing.id, Date.now())}
@@ -130,8 +141,10 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const sheets = (
     <>
       {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
-      {shop && <Shop progress={progress} setProgress={setProgress} onClose={() => setShop(false)} />}
+      {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
+      {settings && <SettingsSheet progress={progress} onReset={() => setProgress(resetProgress())} onClose={() => setSettings(false)} />}
       {levelUp && <div className="toast global">{levelUp}</div>}
+      {toast && tab === 'hero' && <div className="toast global">{toast}</div>}
     </>
   );
 
@@ -144,9 +157,17 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           current={currentDef}
           onTrain={() => setPlaying(currentDef)}
           onMap={() => onTab('map')}
-          onShop={() => setShop(true)}
+          onShop={(t) => setShop(t ?? 'weapon')}
           onStrength={() => setStrength(true)}
           onEquip={(id) => setProgress(equip(progress, id))}
+          onEquipGear={(id) => setProgress(equipGear(progress, id))}
+          onPotion={(id) => {
+            const next = usePotion(progress, id, Date.now());
+            if (!next) return showToast(id === 'vigor' ? 'Жизни и так полные.' : 'Сейчас не нужно.');
+            setProgress(next);
+            showToast(id === 'vigor' ? '+1 жизнь!' : id === 'might' ? 'Эликсир выпит: +30% урона в следующем бою.' : 'Ещё одна замена упражнения на сегодня.');
+          }}
+          onSettings={() => setSettings(true)}
         />
         {sheets}
       </>
@@ -185,11 +206,12 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           hero={item.hero}
           heroTint={item.tint}
           heroGlow={item.glow}
+          heroHands={heroHands(progress)}
           focus={focus}
           focusLand={focusLand}
           openedChests={progress.chests}
           onSelect={(l) => tap(() => setSelected(l))()}
-          onMerchant={tap(() => setShop(true))}
+          onMerchant={tap(() => setShop('weapon'))}
           onChest={(land) =>
             tap(() => {
               const r = claimChest(progress, land);
@@ -262,8 +284,21 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   );
 }
 
-/** Лавка купца Фёдора. */
-function Shop({ progress, setProgress, onClose }: { progress: Progress; setProgress: (p: Progress) => void; onClose: () => void }) {
+/** Лавка купца Фёдора: облики, оружие, щиты и зелья. Новое оружие появляется по мере продвижения. */
+function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (t: ShopTab) => void; reachedLand: number; onClose: () => void }) {
+  const price = (cost: number, buyIt: () => Progress | null) => (
+    <button
+      className="small-btn"
+      disabled={progress.coins < cost}
+      onClick={() => {
+        const next = buyIt();
+        if (next) setProgress(next);
+      }}
+    >
+      <Coin size={14} /> {cost}
+    </button>
+  );
+  const gear = GEAR.filter((g) => g.slot === tab && (g.inShop || progress.items.includes(g.id)) && g.minLand <= reachedLand + 6).sort((a, b) => a.price - b.price);
   return (
     <div className="sheet" onClick={onClose}>
       <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
@@ -271,43 +306,88 @@ function Shop({ progress, setProgress, onClose }: { progress: Progress; setProgr
           <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
           <div>
             <div className="level-title">Купец Фёдор</div>
-            <div className="muted">«Смотри, герой, товар со всех трёх миров! Найденное в сундуках тоже можно надеть.»</div>
+            <div className="muted">«Оружие бьёт сильнее, щит бережёт сердца в бою с боссом. Лучшее привожу, когда ты уходишь дальше.»</div>
           </div>
         </div>
-        <div className="coins">
-          <Coin className="coin" /> {progress.coins}
+        <div className="shop-head">
+          <div className="coins">
+            <Coin className="coin" /> {progress.coins}
+          </div>
+          <div className="muted">
+            <Swords size={13} /> урон {heroPower(progress).damage}
+          </div>
         </div>
-        {ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
-          const owned = progress.items.includes(i.id);
-          return (
-            <div key={i.id} className="shop-item">
-              <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
+        <div className="tabs">
+          {SHOP_TABS.map((t) => (
+            <button key={t.tab} className={tab === t.tab ? 'active' : ''} onClick={() => setTab(t.tab)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {tab === 'potion' &&
+          POTIONS.map((pt) => (
+            <div key={pt.id} className="shop-item">
+              <Flask color={pt.color} scroll={pt.id === 'swap'} />
               <div className="shop-name">
-                <div>{i.name}</div>
-                <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
-                  {RARITY_NAMES[i.rarity]}
-                  {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
+                <div>
+                  {pt.name} <span className="potion-count">×{progress.potions?.[pt.id] ?? 0}</span>
                 </div>
+                <div className="shop-meta muted">{pt.text}</div>
               </div>
-              {owned ? (
-                <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
-                  {progress.equipped === i.id ? 'Надето' : 'Надеть'}
-                </button>
-              ) : (
-                <button
-                  className="small-btn"
-                  disabled={progress.coins < i.price}
-                  onClick={() => {
-                    const next = buy(progress, i.id);
-                    if (next) setProgress(next);
-                  }}
-                >
-                  <Coin size={14} /> {i.price}
-                </button>
-              )}
+              {price(pt.price, () => buyPotion(progress, pt.id))}
             </div>
-          );
-        })}
+          ))}
+        {(tab === 'weapon' || tab === 'offhand') &&
+          gear.map((g) => {
+            const owned = progress.items.includes(g.id);
+            const on = progress.weapon === g.id || progress.offhand === g.id;
+            const locked = !owned && g.minLand > reachedLand;
+            return (
+              <div key={g.id} className={`shop-item ${locked ? 'locked' : ''}`}>
+                <GearFace g={g} size={44} />
+                <div className="shop-name">
+                  <div>{g.name}</div>
+                  <div className="shop-meta" style={{ color: RARITY_COLORS[g.rarity] }}>
+                    {RARITY_NAMES[g.rarity]} · {gearText(g)}
+                  </div>
+                </div>
+                {owned ? (
+                  <button className="small-btn" disabled={on && g.slot === 'weapon'} onClick={() => setProgress(equipGear(progress, g.id))}>
+                    {on ? (g.slot === 'weapon' ? 'Надето' : 'Снять') : 'Надеть'}
+                  </button>
+                ) : locked ? (
+                  <span className="shop-lock">
+                    <Lock size={12} /> с {LANDS[g.minLand].name}
+                  </span>
+                ) : (
+                  price(g.price, () => buyGear(progress, g.id))
+                )}
+              </div>
+            );
+          })}
+        {tab === 'outfit' &&
+          ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
+            const owned = progress.items.includes(i.id);
+            return (
+              <div key={i.id} className="shop-item">
+                <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
+                <div className="shop-name">
+                  <div>{i.name}</div>
+                  <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
+                    {RARITY_NAMES[i.rarity]}
+                    {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
+                  </div>
+                </div>
+                {owned ? (
+                  <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
+                    {progress.equipped === i.id ? 'Надето' : 'Надеть'}
+                  </button>
+                ) : (
+                  price(i.price, () => buy(progress, i.id))
+                )}
+              </div>
+            );
+          })}
         <button className="link" onClick={onClose}>
           Закрыть
         </button>
@@ -315,6 +395,13 @@ function Shop({ progress, setProgress, onClose }: { progress: Progress; setProgr
     </div>
   );
 }
+
+const SHOP_TABS: { tab: ShopTab; label: string }[] = [
+  { tab: 'weapon', label: 'Оружие' },
+  { tab: 'offhand', label: 'Щиты' },
+  { tab: 'outfit', label: 'Облик' },
+  { tab: 'potion', label: 'Зелья' },
+];
 
 const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 

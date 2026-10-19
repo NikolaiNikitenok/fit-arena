@@ -1,6 +1,6 @@
 // Прогресс игрока хранится в браузере. Сервер профилей подключим вместе с рейтингом дуэлей.
 import type { Exercise } from '../repCounter';
-import { ITEMS, itemById, openChest } from './items';
+import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 
 export interface Progress {
@@ -22,7 +22,14 @@ export interface Progress {
   // До какого уровня героя награды уже выданы.
   heroRewarded: number;
   // Замены упражнений за день: сколько замен оплачено на каждом уровне.
-  swaps?: { date: string; used: Record<number, number> };
+  swaps?: { date: string; used: Record<number, number>; bonus?: number };
+  // Оружие и вещь во второй руке (id из GEAR).
+  weapon?: string;
+  offhand?: string;
+  // Зелья и свитки: сколько штук.
+  potions?: Partial<Record<PotionId, number>>;
+  // Выпит эликсир силы: действует на следующий бой.
+  might?: boolean;
 }
 
 export interface Record_ {
@@ -39,7 +46,6 @@ const fresh = (): Progress => ({
   stars: {},
   baseline: { ...DEFAULT_BASELINE },
   coins: 0,
-  items: ['starter'],
   equipped: 'starter',
   chests: [],
   lives: MAX_LIVES,
@@ -48,11 +54,18 @@ const fresh = (): Progress => ({
   best: {},
   first: {},
   heroRewarded: 1,
+  items: ['starter', 'sword'],
+  weapon: 'sword',
+  potions: { vigor: 1, might: 1 },
 });
 
 export function loadProgress(): Progress {
   try {
-    return { ...fresh(), ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+    const p: Progress = { ...fresh(), ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+    // Сохранения до оружия: выдаём стартовый меч.
+    if (!p.items.includes('sword')) p.items = [...p.items, 'sword'];
+    p.weapon ??= 'sword';
+    return p;
   } catch {
     return fresh();
   }
@@ -78,6 +91,8 @@ export function currentLevel(p: Progress, count: number): number {
 export interface WinReward {
   coins: number;
   firstTime: boolean;
+  // Трофей за первую победу над боссом.
+  drop?: Gear;
 }
 
 /** Победа: звёзды, монеты (полные — за первое прохождение), новая база после испытания. */
@@ -87,8 +102,32 @@ export function recordWin(p: Progress, level: LevelDef, stars: number, record?: 
   const coins = Math.round((firstTime ? level.coins : Math.round(level.coins / 4)) * (1 + bonus));
   const baseline = { ...p.baseline };
   if (level.type === 'trial' && record != null) baseline[level.exercises[0] as Exercise] = Math.max(3, record);
-  const next = { ...p, stars: { ...p.stars, [level.id]: Math.max(p.stars[level.id] ?? 0, stars) }, coins: p.coins + coins, baseline };
-  return { progress: save(next), reward: { coins, firstTime } };
+  // Лёгкая победа: форма выросла, враги в этом упражнении становятся крепче.
+  if (level.type !== 'trial' && !level.rest && stars === 3) adapt(baseline, level.exercises, WIN_GROWTH);
+  const drop = level.type === 'boss' && firstTime ? bossDrop(level.land, p.items) : undefined;
+  const next = {
+    ...p,
+    stars: { ...p.stars, [level.id]: Math.max(p.stars[level.id] ?? 0, stars) },
+    coins: p.coins + coins,
+    baseline,
+    items: drop ? [...p.items, drop.id] : p.items,
+  };
+  return { progress: save(next), reward: { coins, firstTime, drop } };
+}
+
+// Форма игрока между испытаниями: победа на 3 звезды поднимает базу на 3%, поражение снижает на 2%.
+export const WIN_GROWTH = 1.03;
+export const LOSS_DROP = 0.98;
+function adapt(baseline: Baseline, exercises: Exercise[], factor: number) {
+  for (const ex of new Set(exercises)) baseline[ex] = Math.max(3, Math.round(baseline[ex] * factor * 10) / 10);
+}
+
+/** Поражение: база по упражнениям уровня чуть ниже, чтобы игра не убегала от игрока. */
+export function recordLoss(p: Progress, level: LevelDef): Progress {
+  if (level.type === 'trial') return p;
+  const baseline = { ...p.baseline };
+  adapt(baseline, level.exercises, LOSS_DROP);
+  return save({ ...p, baseline });
 }
 
 export function buy(p: Progress, itemId: string): Progress | null {
@@ -101,15 +140,57 @@ export const equip = (p: Progress, itemId: string): Progress => (p.items.include
 
 export function claimChest(p: Progress, land: number): { progress: Progress; coins: number; itemName?: string } | null {
   if (p.chests.includes(land)) return null;
-  const loot = openChest(land + 1, p.items);
+  const loot = openChest(land + 1, p.items, land);
+  const found = loot.item?.id ?? loot.gear?.id;
   const next = {
     ...p,
     chests: [...p.chests, land],
     coins: p.coins + loot.coins,
-    items: loot.item ? [...p.items, loot.item.id] : p.items,
+    items: found ? [...p.items, found] : p.items,
+    potions: loot.potion ? addPotion(p.potions, loot.potion, 1) : p.potions,
   };
-  return { progress: save(next), coins: loot.coins, itemName: loot.item?.name };
+  return { progress: save(next), coins: loot.coins, itemName: loot.item?.name ?? loot.gear?.name ?? (loot.potion && potionById(loot.potion).name) };
 }
+
+const addPotion = (have: Progress['potions'], id: PotionId, n: number) => ({ ...have, [id]: Math.max(0, (have?.[id] ?? 0) + n) });
+
+/** Надеть оружие или вещь во вторую руку; повторное нажатие на щит снимает его. */
+export function equipGear(p: Progress, id: string): Progress {
+  const g = gearById(id);
+  if (!g || !p.items.includes(id)) return p;
+  if (g.slot === 'weapon') return save({ ...p, weapon: id });
+  return save({ ...p, offhand: p.offhand === id ? undefined : id });
+}
+
+export function buyGear(p: Progress, id: string): Progress | null {
+  const g = GEAR.find((x) => x.id === id);
+  if (!g || !g.inShop || p.items.includes(id) || p.coins < g.price) return null;
+  return equipGear({ ...p, coins: p.coins - g.price, items: [...p.items, id] }, id);
+}
+
+export function buyPotion(p: Progress, id: PotionId): Progress | null {
+  const potion = potionById(id);
+  if (p.coins < potion.price) return null;
+  return save({ ...p, coins: p.coins - potion.price, potions: addPotion(p.potions, id, 1) });
+}
+
+/** Выпить зелье. null — нечего пить или сейчас бесполезно (жизни полные, эликсир уже выпит). */
+export function usePotion(p: Progress, id: PotionId, now: number): Progress | null {
+  if (!(p.potions?.[id] ?? 0)) return null;
+  const potions = addPotion(p.potions, id, -1);
+  if (id === 'vigor') {
+    const { lives, max, nextMs } = livesNow(p, now);
+    if (lives >= max) return null;
+    const next = lives + 1;
+    return save({ ...p, potions, lives: next, livesAt: next >= max ? now : now - (LIFE_MS - nextMs) });
+  }
+  if (id === 'might') return p.might ? null : save({ ...p, potions, might: true });
+  const used = p.swaps?.date === dayKey(now) ? p.swaps : { date: dayKey(now), used: {} };
+  return save({ ...p, potions, swaps: { ...used, bonus: (used.bonus ?? 0) + 1 } });
+}
+
+/** Эликсир силы тратится, когда начинается бой. */
+export const spendMight = (p: Progress): Progress => (p.might ? save({ ...p, might: false }) : p);
 
 // Опыт героя: каждый честный повтор и каждый впервые пройденный уровень.
 export const XP_PER_LEVEL_WON = 20;
@@ -232,7 +313,8 @@ const swapsToday = (p: Progress, now: number) => (p.swaps?.date === dayKey(now) 
 export function swapsLeft(p: Progress, levelId: number, now: number): { left: number; paid: number } {
   const used = swapsToday(p, now);
   const spent = Object.values(used).reduce((a, b) => a + b, 0);
-  return { left: Math.max(0, SWAPS_PER_DAY - spent), paid: used[levelId] ?? 0 };
+  const bonus = p.swaps?.date === dayKey(now) ? (p.swaps.bonus ?? 0) : 0;
+  return { left: Math.max(0, SWAPS_PER_DAY + bonus - spent), paid: used[levelId] ?? 0 };
 }
 
 /** Списывает замены при старте попытки; null, если замен не хватает. */
@@ -241,5 +323,11 @@ export function spendSwaps(p: Progress, levelId: number, count: number, now: num
   const extra = count - paid;
   if (extra <= 0) return p;
   if (extra > left) return null;
-  return save({ ...p, swaps: { date: dayKey(now), used: { ...swapsToday(p, now), [levelId]: count } } });
+  const bonus = p.swaps?.date === dayKey(now) ? p.swaps.bonus : undefined;
+  return save({ ...p, swaps: { date: dayKey(now), used: { ...swapsToday(p, now), [levelId]: count }, bonus } });
+}
+
+/** Начать игру заново: прогресс, предметы и монеты стираются. */
+export function resetProgress(): Progress {
+  return save(fresh());
 }

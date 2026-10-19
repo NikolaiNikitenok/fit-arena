@@ -58,9 +58,20 @@ export interface CharacterProps {
   position?: [number, number, number];
   rotation?: number;
   onClick?: () => void;
+  // Снаряжение героя по отдельности: оружие и вещь во второй руке. Если задано,
+  // стандартное оружие набора прячется.
+  hands?: { weapon?: HandGear; offhand?: HandGear };
 }
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick }: CharacterProps) {
+export interface HandGear {
+  mesh: string;
+  source: CharName;
+  glow?: string;
+}
+
+const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
+
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
@@ -72,13 +83,15 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       if (gear && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(mesh.name)) mesh.visible = false;
+      if (hands && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && WEAPONISH.test(mesh.name)) mesh.visible = false;
       mesh.castShadow = true;
       const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
       mesh.material = mat;
       materials.push(mat);
     });
     return { root, materials, mixer: new THREE.AnimationMixer(root) };
-  }, [gltf, model]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gltf, model, !!hands]);
 
   const actions = useMemo(() => {
     const out: Partial<Record<CharAnim, THREE.AnimationAction>> = {};
@@ -160,6 +173,36 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       }
     >
       <primitive object={root} />
+      {hands?.weapon && <HandItem root={root} gear={hands.weapon} />}
+      {hands?.offhand && <HandItem root={root} gear={hands.offhand} />}
     </group>
   );
+}
+
+// Предмет из набора другого героя: берём меш вместе с его положением на кости руки.
+function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
+  const src = useGltf(charUrl(gear.source));
+  useEffect(() => {
+    const node = src.scene.getObjectByName(gear.mesh);
+    const bone = node?.parent && root.getObjectByName(node.parent.name);
+    if (!node || !bone) return;
+    const copy = node.clone();
+    copy.visible = true;
+    copy.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.castShadow = true;
+      const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      if (gear.glow) {
+        mat.emissive.set(gear.glow);
+        mat.emissiveIntensity = 0.45;
+      }
+      m.material = mat;
+    });
+    bone.add(copy);
+    return () => {
+      bone.remove(copy);
+    };
+  }, [src, root, gear.mesh, gear.glow]);
+  return null;
 }

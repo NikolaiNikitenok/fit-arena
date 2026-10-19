@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { canvasProps, getSettings } from './settings';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -291,7 +292,7 @@ export function CameraGuide({ exercise, compact, model = 'Knight' }: { exercise:
   return (
     <div className={`guide ${compact ? 'compact' : ''}`}>
       <div className="guide-stage">
-        <Canvas shadows dpr={[1, 1.6]} camera={{ fov: 25, near: 0.05, far: 60 }}>
+        <Canvas {...canvasProps(getSettings())} camera={{ fov: 25, near: 0.05, far: 60 }}>
           <hemisphereLight args={['#ffffff', '#30303c', 1.4]} />
           <directionalLight position={[4, 8, 5]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
           <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>

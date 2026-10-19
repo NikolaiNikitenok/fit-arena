@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { canvasProps, getSettings } from '../settings';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -168,7 +169,7 @@ export interface Arena3DProps {
 
 export function Arena3D({ player, opponent, theme }: Arena3DProps) {
   return (
-    <Canvas shadows dpr={[1, 2]} camera={{ position: [-2.6, 2.3, -4.8], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1, 0)}>
+    <Canvas {...canvasProps(getSettings())} camera={{ position: [-2.6, 2.3, -4.8], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1, 0)}>
       <color attach="background" args={[theme.background]} />
       <fog attach="fog" args={[theme.background, 9, 20]} />
       <hemisphereLight args={[theme.light, '#111', 0.7]} />

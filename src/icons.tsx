@@ -55,3 +55,31 @@ export const Lock = ({ size = 14, className }: P) =>
       <path d="M8 11V8a4 4 0 018 0v3" />
     </>,
   );
+
+export const Cog = ({ size = 18, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z" />
+    </>,
+  );
+
+/** Склянка с зельем или свиток: цвет — из описания зелья. */
+export const Flask = ({ size = 40, color = '#ff6b81', scroll = false }: { size?: number; color?: string; scroll?: boolean }) =>
+  scroll ? (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <rect x="9" y="8" width="22" height="24" rx="3" fill="#f3e3c2" />
+      <rect x="6" y="6" width="28" height="6" rx="3" fill="#d9bf8f" />
+      <rect x="6" y="28" width="28" height="6" rx="3" fill="#d9bf8f" />
+      <path d="M13 17h14M13 21h14M13 25h9" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  ) : (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <rect x="16" y="4" width="8" height="5" rx="1.5" fill="#b07a4f" />
+      <path d="M17 9h6v6.5l7.2 10.6A5 5 0 0126 34H14a5 5 0 01-4.2-7.9L17 15.5z" fill="rgba(255,255,255,.18)" stroke="rgba(255,255,255,.55)" strokeWidth="1.5" />
+      <path d="M11.6 24h16.8l1.6 2.4A3.6 3.6 0 0127 32H13a3.6 3.6 0 01-3-5.6z" fill={color} />
+      <circle cx="16" cy="27" r="1.4" fill="rgba(255,255,255,.7)" />
+    </svg>
+  );
