@@ -93,7 +93,8 @@ export function Adventure() {
           levels={levels}
           stars={progress.stars}
           currentId={current}
-          heroColor={item.color}
+          hero={item.hero}
+          heroTint={item.tint}
           heroGlow={item.glow}
           focus={focus}
           focusLand={focusLand}

@@ -138,7 +138,8 @@ export function MissionPlay({ level, progress, onExit, onWin, onNext }: Props) {
           view={view}
           live={status === 'running'}
           elapsedShare={elapsedShare}
-          heroColor={item.color}
+          hero={item.hero}
+          heroTint={item.tint}
           heroGlow={item.glow}
         />
         <div className="mhud">
