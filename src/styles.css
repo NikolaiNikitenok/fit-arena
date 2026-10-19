@@ -1,0 +1,21 @@
+:root {
+  --bg: var(--tg-theme-bg-color, #0f1115);
+  --text: var(--tg-theme-text-color, #f2f3f5);
+  --hint: var(--tg-theme-hint-color, #8b919c);
+  --accent: var(--tg-theme-button-color, #ff5a36);
+  --accent-text: var(--tg-theme-button-text-color, #fff);
+  color-scheme: dark light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+.app { max-width: 480px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
+h1 { font-size: 22px; margin: 0; }
+.muted { color: var(--hint); font-size: 14px; }
+.tabs { display: flex; gap: 8px; }
+.tabs button { flex: 1; padding: 10px; border-radius: 12px; border: 1px solid var(--hint); background: transparent; color: var(--text); font-size: 15px; }
+.tabs button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.stage { position: relative; aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden; background: #000; }
+.stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.counter { position: absolute; top: 12px; left: 12px; font-size: 64px; font-weight: 800; text-shadow: 0 2px 8px #000; color: #fff; }
+.hint { position: absolute; bottom: 12px; left: 12px; right: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; }
+.primary { padding: 14px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-text); font-size: 17px; font-weight: 600; }
