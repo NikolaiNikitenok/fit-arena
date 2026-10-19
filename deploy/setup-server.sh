@@ -28,18 +28,54 @@ if ! grep -q "^$DOMAIN" "$CADDYFILE"; then
   cat >> "$CADDYFILE" <<CADDY
 
 $DOMAIN {
-	root * $WEBROOT
-	encode gzip
-	@immutable path /assets/*
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
-	@heavy path *.wasm *.task
-	header @heavy Cache-Control "public, max-age=2592000"
-	try_files {path} /index.html
-	file_server
+	# Сервер матчей (deploy/arena-server.service)
+	handle /ws* {
+		reverse_proxy localhost:8787
+	}
+	handle /api/* {
+		reverse_proxy localhost:8787
+	}
+	handle {
+		root * $WEBROOT
+		encode gzip
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		@heavy path *.wasm *.task *.glb
+		header @heavy Cache-Control "public, max-age=2592000"
+		try_files {path} /index.html
+		file_server
+	}
 }
 CADDY
 fi
 caddy validate --config "$CADDYFILE" --adapter caddyfile
+
+# Сервер матчей: Node.js, каталог для выкладки и сервис, который deploy может перезапускать.
+command -v node >/dev/null || { curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs; }
+mkdir -p /opt/arena-server && chown "$DEPLOY_USER:$DEPLOY_USER" /opt/arena-server
+[ -f /etc/arena-server.env ] || { printf 'ALLOW_GUESTS=1\nBOT_TOKEN=%s\n' "${BOT_TOKEN:-}" > /etc/arena-server.env; chmod 600 /etc/arena-server.env; }
+cat > /etc/systemd/system/arena-server.service <<'UNIT'
+# /etc/systemd/system/arena-server.service — сервер матчей Fit Arena.
+[Unit]
+Description=Fit Arena match server
+After=network.target
+
+[Service]
+User=deploy
+WorkingDirectory=/opt/arena-server
+EnvironmentFile=-/etc/arena-server.env
+Environment=PORT=8787
+ExecStart=/usr/bin/node /opt/arena-server/server.cjs
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+echo "$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart arena-server" > /etc/sudoers.d/arena-server
+chmod 440 /etc/sudoers.d/arena-server
+systemctl daemon-reload
+systemctl enable arena-server
 systemctl reload caddy
 
 if [ -n "${BOT_TOKEN:-}" ]; then

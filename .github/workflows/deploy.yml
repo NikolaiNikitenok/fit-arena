@@ -21,10 +21,17 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run build:server
       - name: Upload to server
         # Пока секреты не добавлены, сборка проверяется, но никуда не выкладывается.
         if: env.DEPLOY_KEY != ''
         run: |
           install -m 600 /dev/null ~/.ssh_key
           echo "$DEPLOY_KEY" > ~/.ssh_key
-          rsync -az --delete -e "ssh -i ~/.ssh_key -o StrictHostKeyChecking=accept-new" dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/arena/"
+          SSH="ssh -i $HOME/.ssh_key -o StrictHostKeyChecking=accept-new"
+          rsync -az --delete -e "$SSH" dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/arena/"
+          # Сервер матчей: выкладываем и перезапускаем, если он уже настроен на сервере.
+          if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -d /opt/arena-server; then
+            rsync -az -e "$SSH" dist-server/ "$DEPLOY_USER@$DEPLOY_HOST:/opt/arena-server/"
+            $SSH "$DEPLOY_USER@$DEPLOY_HOST" sudo -n /usr/bin/systemctl restart arena-server
+          fi
