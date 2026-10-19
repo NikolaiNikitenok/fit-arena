@@ -3,7 +3,11 @@
 // уже под своим аккаунтом Telegram, а код клана передаётся в адресе приложения.
 
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import https from 'node:https';
+import net from 'node:net';
+import { join } from 'node:path';
+import tls from 'node:tls';
 
 export interface StartReply {
   text: string;
@@ -58,7 +62,74 @@ type TgReply = { ok: boolean; result?: unknown; description?: string; error_code
 // Адрес Bot API: если с сервера Telegram недоступен напрямую, можно указать свой прокси-адрес.
 const TG_API = (process.env.TG_API_BASE ?? 'https://api.telegram.org').replace(/\/$/, '');
 // На части VPS нет рабочего IPv6, а fetch пробует его первым и падает с «fetch failed». Ходим по IPv4.
-const agent = new https.Agent({ keepAlive: true, family: 4 });
+const direct = new https.Agent({ keepAlive: true, family: 4 });
+
+/**
+ * Прокси до Telegram (VPN на сервере): http://host:port или socks5://host:port.
+ * Берём TG_PROXY, потом HTTPS_PROXY/ALL_PROXY, потом файл .tg-proxy рядом с сервером.
+ */
+export function proxyAgent(url: string): https.Agent {
+  const u = new URL(url);
+  const host = u.hostname;
+  const port = Number(u.port || (u.protocol.startsWith('socks') ? 1080 : 8080));
+  const agent = new https.Agent({ keepAlive: true });
+  // Соединение с прокси, через которое потом идёт TLS до api.telegram.org.
+  (agent as unknown as { createConnection: unknown }).createConnection = (opts: { host: string; port: number; servername?: string }, cb: (err: Error | null, sock?: tls.TLSSocket) => void) => {
+    const sock = net.connect(port, host);
+    const fail = (e: Error) => cb(e);
+    sock.once('error', fail);
+    const ready = () => {
+      sock.removeListener('error', fail);
+      cb(null, tls.connect({ socket: sock, servername: opts.servername ?? opts.host }));
+    };
+    let buf = Buffer.alloc(0);
+    if (u.protocol.startsWith('socks')) {
+      let step = 0;
+      sock.once('connect', () => sock.write(Buffer.from([5, 1, 0])));
+      sock.on('data', function onData(d: Buffer) {
+        buf = Buffer.concat([buf, d]);
+        if (step === 0 && buf.length >= 2) {
+          if (buf[1] !== 0) return fail(new Error('SOCKS: нужен вход без пароля'));
+          buf = buf.subarray(2);
+          step = 1;
+          const name = Buffer.from(opts.host);
+          sock.write(Buffer.concat([Buffer.from([5, 1, 0, 3, name.length]), name, Buffer.from([opts.port >> 8, opts.port & 255])]));
+        }
+        if (step === 1 && buf.length >= 10) {
+          sock.removeListener('data', onData);
+          if (buf[1] !== 0) return fail(new Error(`SOCKS: отказ ${buf[1]}`));
+          ready();
+        }
+      });
+    } else {
+      sock.once('connect', () => sock.write(`CONNECT ${opts.host}:${opts.port} HTTP/1.1\r\nHost: ${opts.host}:${opts.port}\r\n\r\n`));
+      sock.on('data', function onData(d: Buffer) {
+        buf = Buffer.concat([buf, d]);
+        const end = buf.indexOf('\r\n\r\n');
+        if (end < 0) return;
+        sock.removeListener('data', onData);
+        const status = /^HTTP\/1\.\d (\d+)/.exec(buf.toString('latin1'))?.[1];
+        if (status !== '200') return fail(new Error(`прокси ответил ${status ?? '?'}`));
+        ready();
+      });
+    }
+  };
+  return agent;
+}
+
+const readFile = (f: string) => {
+  try {
+    return readFileSync(f, 'utf8').trim();
+  } catch {
+    return '';
+  }
+};
+export const TG_PROXY = process.env.TG_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.ALL_PROXY || process.env.all_proxy || readFile(join(__dirname, '.tg-proxy'));
+let agent: https.Agent = TG_PROXY ? proxyAgent(TG_PROXY) : direct;
+export const useProxy = (url: string | null) => {
+  agent = url ? proxyAgent(url) : direct;
+  botStatus.proxy = url ? new URL(url).host : null;
+};
 
 /** Вызов Bot API. Ошибка сети приходит с кодом (ETIMEDOUT, ECONNREFUSED…), чтобы её было видно в /api/health. */
 export const botApi = (token: string) => (method: string, body: unknown, timeoutMs = 65_000) =>
@@ -81,7 +152,8 @@ export const botApi = (token: string) => (method: string, body: unknown, timeout
   });
 
 // Состояние бота для /api/health: видно без доступа к логам сервера (без токена).
-export const botStatus: { polling: boolean; webhook: boolean; webhookAt: number | null; lastOkAt: number | null; lastError: string | null; handled: number } = {
+export const botStatus: { proxy: string | null; polling: boolean; webhook: boolean; webhookAt: number | null; lastOkAt: number | null; lastError: string | null; handled: number } = {
+  proxy: null,
   polling: false,
   webhook: false,
   webhookAt: null,

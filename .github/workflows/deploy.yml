@@ -13,6 +13,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      TG_PROXY: ${{ secrets.TG_PROXY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +38,10 @@ jobs:
             # Токен бота из секрета репозитория: передаём через stdin, чтобы он не попал в команду и логи.
             if [ -n "$BOT_TOKEN" ]; then
               printf '%s' "$BOT_TOKEN" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.bot-token'
+            fi
+            # Прокси до Telegram (VPN на сервере), например socks5://127.0.0.1:1080.
+            if [ -n "$TG_PROXY" ]; then
+              printf '%s' "$TG_PROXY" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.tg-proxy'
             fi
             $SSH "$DEPLOY_USER@$DEPLOY_HOST" sudo -n /usr/bin/systemctl restart arena-server
           fi
