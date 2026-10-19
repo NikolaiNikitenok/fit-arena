@@ -17,12 +17,12 @@ npm run build   # сборка в dist/
 
 ## Деплой на arena.nikitenok.ru
 
-1. На сервере один раз запустить от root `deploy/setup-server.sh`: он ставит nginx, выпускает сертификат Let's Encrypt, создаёт пользователя `deploy` с SSH-ключом и печатает значения для секретов.
+1. На сервере один раз запустить от root `deploy/setup-server.sh`: он добавляет сайт в Caddy (сертификат Caddy выпускает сам), создаёт пользователя `deploy` с SSH-ключом и показывает, где лежит ключ для секретов.
    ```bash
-   EMAIL=you@example.com BOT_TOKEN=<токен бота> bash setup-server.sh
+   BOT_TOKEN=<токен бота> bash setup-server.sh
    ```
    `BOT_TOKEN` необязателен: с ним скрипт сразу добавит кнопку «Арена» в меню бота. Токен никуда не сохраняется.
-2. Добавить в GitHub → Settings → Secrets and variables → Actions секреты `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KEY` из вывода скрипта.
+2. Добавить в GitHub → Settings → Secrets and variables → Actions секреты `DEPLOY_HOST` (IP сервера), `DEPLOY_USER` (`deploy`) и `DEPLOY_KEY` (приватный ключ из вывода скрипта).
 3. Дальше каждый push в `main` проходит тесты, собирается и выкладывается на сервер (`.github/workflows/deploy.yml`).
 
 ## Как считаются повторы
