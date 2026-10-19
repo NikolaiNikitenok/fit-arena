@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { dayKey, LIFE_MS, livesNow, loadProgress, MAX_LIVES, recordActivity, spendLife, streak } from './progress';
+import { dayKey, LIFE_MS, livesNow, loadProgress, MAX_LIVES, recordActivity, spendLife, spendSwaps, streak, swapsLeft } from './progress';
 
 const DAY = 86400000;
 const NOW = new Date(2026, 9, 19, 12).getTime();
@@ -60,5 +60,20 @@ describe('уровень героя', () => {
     expect(r.levels.length).toBeGreaterThan(0);
     expect(claimHeroLevels(r.progress)).toBeNull();
     expect(maxLives(p)).toBe(MAX_LIVES);
+  });
+});
+
+describe('замены упражнений', () => {
+  const day = new Date(2026, 9, 19, 12).getTime();
+  it('три в день, переигрывать с уже оплаченной заменой бесплатно', () => {
+    let p = loadProgress();
+    expect(swapsLeft(p, 5, day)).toEqual({ left: 3, paid: 0 });
+    p = spendSwaps(p, 5, 1, day)!;
+    expect(swapsLeft(p, 5, day)).toEqual({ left: 2, paid: 1 });
+    expect(spendSwaps(p, 5, 1, day)).toBe(p);
+    p = spendSwaps(p, 7, 2, day)!;
+    expect(swapsLeft(p, 8, day).left).toBe(0);
+    expect(spendSwaps(p, 8, 1, day)).toBeNull();
+    expect(swapsLeft(p, 8, day + 86_400_000)).toEqual({ left: 3, paid: 0 });
   });
 });

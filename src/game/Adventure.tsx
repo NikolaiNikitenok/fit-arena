@@ -22,7 +22,9 @@ import {
   recordWin,
   REST_PER_WEEK,
   spendLife,
+  spendSwaps,
   streak,
+  swapsLeft,
 } from './progress';
 import { WorldMap3D } from './WorldMap3D';
 
@@ -112,6 +114,12 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         onLose={() => update((p) => spendLife(p, Date.now()))}
         onActivity={(ex, reps) => update((p) => recordActivity(p, ex, reps, Date.now()))}
         lives={lives}
+        swaps={swapsLeft(progress, playing.id, Date.now())}
+        onSwap={(count) => {
+          const next = spendSwaps(latest.current, playing.id, count, Date.now());
+          if (next) update(() => next);
+          return next != null;
+        }}
         onNext={playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
       />
     );

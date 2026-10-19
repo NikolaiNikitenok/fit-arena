@@ -8,7 +8,7 @@ import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
 import { MissionScene3D } from './MissionScene3D';
 import { Dialog, Remark } from './Dialog';
-import { Progress, WinReward } from './progress';
+import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
 
 const PREP_S = 5;
@@ -45,11 +45,22 @@ interface Props {
   onLose: () => void;
   onActivity: (exercise: Exercise | null, reps: number) => void;
   lives: { lives: number; max: number; nextMs: number };
+  // Замены упражнений на сегодня; onSwap списывает их при старте и говорит, хватило ли.
+  swaps: { left: number; paid: number };
+  onSwap: (count: number) => boolean;
   onNext?: () => void;
 }
 
-export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity, lives, onNext }: Props) {
+const ALL: Exercise[] = ['squat', 'pushup', 'situp'];
+
+export function MissionPlay({ level: original, progress, onExit, onWin, onLose, onActivity, lives, swaps, onSwap, onNext }: Props) {
   const camera = useRepCamera();
+  // Упражнения уровня с учётом замен игрока.
+  const [exercises, setExercises] = useState<Exercise[]>(original.exercises);
+  const [picking, setPicking] = useState<number | null>(null);
+  const level: LevelDef = exercises === original.exercises ? original : { ...original, exercises };
+  const swapCount = exercises.filter((e, i) => e !== original.exercises[i]).length;
+  const canSwap = original.type !== 'trial';
   const land = LANDS[level.land];
   const item = itemById(progress.equipped);
   const make = () => new Mission(level, progress.baseline);
@@ -80,8 +91,18 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
     }
   };
 
+  const choose = (slot: number, ex: Exercise) => {
+    const next = exercises.map((e, i) => (i === slot ? ex : e));
+    setExercises(next);
+    setPicking(null);
+    const m = new Mission({ ...original, exercises: next }, progress.baseline);
+    mission.current = m;
+    setView(m.view(0));
+  };
+
   const start = async () => {
     if (lives.lives <= 0) return;
+    if (swapCount > 0 && !onSwap(swapCount)) return;
     setAttempt((a) => a + 1);
     setError(null);
     setStatus('loading');
@@ -205,7 +226,18 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
               {level.type !== 'trial' && ` · цель ${mission.current.target}`}
               {level.rest && ' · лёгкий день'}
             </div>
-            {noLives ? <Remark line={restLine(waitMin)} /> : <CameraGuide exercise={level.exercises[0]} />}
+            {canSwap && !noLives && (
+              <SwapRow
+                original={original.exercises}
+                exercises={exercises}
+                picking={picking}
+                // Сколько ещё замен можно сделать на этом уровне сверх уже выбранных.
+                free={swaps.left + swaps.paid - swapCount}
+                onPick={setPicking}
+                onChoose={choose}
+              />
+            )}
+            {noLives ? <Remark line={restLine(waitMin)} /> : <CameraGuide exercise={level.exercises[0]} model={item.hero} />}
           </div>
         )}
         {status === 'won' && result && !epilogue && (
@@ -274,5 +306,36 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
         </button>
       )}
     </>
+  );
+}
+
+function SwapRow({ original, exercises, picking, free, onPick, onChoose }: { original: Exercise[]; exercises: Exercise[]; picking: number | null; free: number; onPick: (slot: number | null) => void; onChoose: (slot: number, ex: Exercise) => void }) {
+  return (
+    <div className="swap">
+      <div className="swap-row">
+        {exercises.map((ex, i) => {
+          const changed = ex !== original[i];
+          const locked = !changed && free <= 0;
+          return (
+            <button key={i} className={`swap-chip ${changed ? 'changed' : ''} ${picking === i ? 'on' : ''}`} disabled={locked} onClick={() => onPick(picking === i ? null : i)}>
+              {EXERCISE_LABELS[ex]} ⇄
+            </button>
+          );
+        })}
+      </div>
+      {picking != null && (
+        <div className="swap-pick">
+          <span>Заменить на</span>
+          {ALL.filter((e) => e !== exercises[picking]).map((e) => (
+            <button key={e} className="swap-chip" onClick={() => onChoose(picking, e)}>
+              {e === original[picking] ? `${EXERCISE_LABELS[e]} (как было)` : EXERCISE_LABELS[e]}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="swap-note">
+        {free > 0 ? `Негде сделать упражнение? Замени его: сегодня осталось ${free} из ${SWAPS_PER_DAY}` : `Замены на сегодня закончились, завтра будет ещё ${SWAPS_PER_DAY}`}
+      </div>
+    </div>
   );
 }

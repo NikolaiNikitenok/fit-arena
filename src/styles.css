@@ -207,3 +207,17 @@ h1 { font-size: 24px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .strength-mini span { font-size: 12px; font-weight: 700; color: var(--hint); }
 .inv-face { width: 52px; height: 52px; border-radius: 14px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
 .inv-face img { width: 120%; height: 120%; object-fit: cover; object-position: 50% 8%; pointer-events: none; }
+.guide-stage { position: relative; height: 190px; border-radius: 10px; overflow: hidden; background: radial-gradient(circle at 50% 30%, #2c3346, #151821 75%); }
+.guide.compact .guide-stage { height: 140px; }
+.guide-dist { position: absolute; right: 10px; bottom: 8px; padding: 2px 8px; border-radius: 8px; background: rgba(0,0,0,.5); color: var(--gold); font-size: 12px; font-weight: 800; }
+.swap { margin: 6px auto 0; max-width: 340px; }
+.swap-row, .swap-pick { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; align-items: center; }
+.swap-pick { margin-top: 6px; font-size: 13px; font-weight: 700; color: #dfe3ea; }
+.swap-chip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--glass-line); background: rgba(12,14,22,.7); color: #fff; font: 800 13px var(--font); cursor: pointer; }
+.swap-chip.on { border-color: var(--gold); }
+.swap-chip.changed { border-color: var(--gold); color: var(--gold); }
+.swap-chip:disabled { opacity: .45; cursor: default; }
+.swap-note { margin-top: 5px; font-size: 12px; font-weight: 700; color: #b8bfcc; }
+/* Экран перед стартом уровня: если не влезает, листается, а не обрезается. */
+.mission .result { justify-content: safe center; overflow-y: auto; padding-top: 10px; padding-bottom: 10px; }
+.mission .guide-stage { height: 160px; }

@@ -21,6 +21,8 @@ export interface Progress {
   first: Partial<Record<Exercise, Record_>>;
   // До какого уровня героя награды уже выданы.
   heroRewarded: number;
+  // Замены упражнений за день: сколько замен оплачено на каждом уровне.
+  swaps?: { date: string; used: Record<number, number> };
 }
 
 export interface Record_ {
@@ -219,4 +221,25 @@ export function streak(days: Record<string, number>, now: number): { days: numbe
     break;
   }
   return { days: count, restLeft: Math.max(0, REST_PER_WEEK - restUsed), today };
+}
+
+// Три замены упражнения в день, например пресс на приседания, когда негде лечь.
+export const SWAPS_PER_DAY = 3;
+
+const swapsToday = (p: Progress, now: number) => (p.swaps?.date === dayKey(now) ? p.swaps.used : {});
+
+/** Сколько замен ещё есть сегодня и сколько уже оплачено на этом уровне (переигрывать с ними бесплатно). */
+export function swapsLeft(p: Progress, levelId: number, now: number): { left: number; paid: number } {
+  const used = swapsToday(p, now);
+  const spent = Object.values(used).reduce((a, b) => a + b, 0);
+  return { left: Math.max(0, SWAPS_PER_DAY - spent), paid: used[levelId] ?? 0 };
+}
+
+/** Списывает замены при старте попытки; null, если замен не хватает. */
+export function spendSwaps(p: Progress, levelId: number, count: number, now: number): Progress | null {
+  const { left, paid } = swapsLeft(p, levelId, now);
+  const extra = count - paid;
+  if (extra <= 0) return p;
+  if (extra > left) return null;
+  return save({ ...p, swaps: { date: dayKey(now), used: { ...swapsToday(p, now), [levelId]: count } } });
 }
