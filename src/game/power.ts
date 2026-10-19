@@ -2,7 +2,7 @@
 // с номером уровня и с реальной формой игрока. Сильный герой экономит не больше 20% повторов:
 // прокачка ощутима, но тренировка остаётся настоящей.
 import type { HandGear } from '../three/Character';
-import { gearById, GEAR } from './items';
+import { gearById } from './items';
 import { LevelDef } from './levels';
 import { heroLevel, heroXp, Progress } from './progress';
 
@@ -37,9 +37,12 @@ export function heroPower(p: Progress, might = false): Power {
 }
 
 // Какой урон ожидаем от героя к этому уровню игры: уровень героя по типичному опыту
-// и оружие, которое к тому времени есть у купца.
+// и оружие средней цены, которое к тому времени есть у купца. Планка — секира вождя (+22):
+// дорогие эпические и легендарные вещи дают преимущество (до тех же 20% повторов),
+// но не поднимают здоровье врагов для всех.
 const XP_PER_LEVEL_TYPICAL = 45;
-const bestShopAtk = Math.max(...GEAR.filter((g) => g.inShop).map((g) => g.atk));
+export const PAR_ATK = 22;
+const bestShopAtk = PAR_ATK;
 
 export function expectedDamage(levelId: number): number {
   const level = heroLevel(XP_PER_LEVEL_TYPICAL * levelId).level;
@@ -63,6 +66,6 @@ export function repsFor(baseReps: number, hp: number, damage: number): number {
 export function heroHands(p: Progress): { weapon?: HandGear; offhand?: HandGear } {
   const weapon = gearById(p.weapon);
   const offhand = gearById(p.offhand);
-  const hand = (g: typeof weapon) => g && { mesh: g.mesh, source: g.source, glow: g.glow };
+  const hand = (g: typeof weapon) => g && { mesh: g.mesh, source: g.source, glow: g.glow, tint: g.tint, bone: g.bone };
   return { weapon: hand(weapon), offhand: weapon?.twoHanded ? undefined : hand(offhand) };
 }

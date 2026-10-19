@@ -68,6 +68,10 @@ export interface HandGear {
   mesh: string;
   source: CharName;
   glow?: string;
+  // Множитель цвета (mul:r,g,b), чтобы одна модель давала разные вещи.
+  tint?: string;
+  // Кость руки, если не та, что в наборе.
+  bone?: string;
 }
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
@@ -195,15 +199,24 @@ function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
   const src = useGltf(charUrl(gear.source));
   useEffect(() => {
     const node = src.scene.getObjectByName(gear.mesh);
-    const bone = node?.parent && root.getObjectByName(node.parent.name);
+    // Имена костей загрузчик очищает от точек: handslot.l → handslotl.
+    const boneName = gear.bone ? THREE.PropertyBinding.sanitizeNodeName(gear.bone) : node?.parent?.name;
+    const bone = node?.parent && boneName && root.getObjectByName(boneName);
     if (!node || !bone) return;
     const copy = node.clone();
     copy.visible = true;
+    // На другой руке: слоты рук зеркальны, предмет разворачиваем вокруг оси кости.
+    if (boneName !== node.parent!.name) {
+      const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+      copy.position.applyQuaternion(flip);
+      copy.quaternion.premultiply(flip);
+    }
     copy.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       m.castShadow = true;
       const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      if (gear.tint) mat.color.multiply(parseTint(gear.tint));
       if (gear.glow) {
         mat.emissive.set(gear.glow);
         mat.emissiveIntensity = 0.45;
@@ -214,6 +227,6 @@ function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
     return () => {
       bone.remove(copy);
     };
-  }, [src, root, gear.mesh, gear.glow]);
+  }, [src, root, gear.mesh, gear.glow, gear.tint, gear.bone]);
   return null;
 }

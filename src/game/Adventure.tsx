@@ -4,7 +4,7 @@ import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { SettingsSheet } from '../SettingsSheet';
 import { ClanScreen } from '../clan/ClanScreen';
-import { GEAR, gearText, ITEMS, itemById, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
+import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { MissionPlay, Stars } from './MissionPlay';
@@ -388,7 +388,14 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
       <Coin size={14} /> {cost}
     </button>
   );
-  const gear = GEAR.filter((g) => g.slot === tab && (g.inShop || progress.items.includes(g.id)) && g.minLand <= reachedLand + 6).sort((a, b) => a.price - b.price);
+  const [rarity, setRarity] = useState<Rarity | 'all'>('all');
+  // Товар этой вкладки: что продаётся рядом по карте и что уже есть у героя.
+  const stock = GEAR.filter((g) => g.slot === tab && (g.inShop || progress.items.includes(g.id)));
+  const near = stock.filter((g) => progress.items.includes(g.id) || g.minLand <= reachedLand + 6);
+  const gear = near.filter((g) => rarity === 'all' || g.rarity === rarity).sort((a, b) => a.price - b.price || RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
+  // Когда купец привезёт вещи выбранной редкости, которых пока не видно.
+  const later = stock.filter((g) => !near.includes(g) && (rarity === 'all' || g.rarity === rarity)).sort((a, b) => a.minLand - b.minLand)[0];
+  const damageNow = heroPower(progress).damage;
   return (
     <div className="sheet" onClick={onClose}>
       <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
@@ -427,19 +434,48 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
               {price(pt.price, () => buyPotion(progress, pt.id))}
             </div>
           ))}
+        {(tab === 'weapon' || tab === 'offhand') && (
+          <div className="rarity-chips">
+            {(['all', ...RARITY_ORDER] as const).map((r) => {
+              const n = r === 'all' ? near.length : near.filter((g) => g.rarity === r).length;
+              return (
+                <button
+                  key={r}
+                  className={`rarity-chip ${rarity === r ? 'on' : ''}`}
+                  style={r !== 'all' ? { ['--rc' as string]: RARITY_COLORS[r] } : undefined}
+                  onClick={(e) => {
+                    setRarity(r);
+                    e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                  }}
+                >
+                  {r !== 'all' && <i />}
+                  {r === 'all' ? 'Все' : RARITY_SHORT[r]} <small>{n}</small>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {(tab === 'weapon' || tab === 'offhand') &&
           gear.map((g) => {
             const owned = progress.items.includes(g.id);
             const on = progress.weapon === g.id || progress.offhand === g.id;
             const locked = !owned && g.minLand > reachedLand;
+            const damage = heroPower({ ...progress, [g.slot]: g.id }).damage;
+            const blocked = g.slot === 'offhand' && !!gearById(progress.weapon)?.twoHanded;
             return (
-              <div key={g.id} className={`shop-item ${locked ? 'locked' : ''}`}>
+              <div key={g.id} className={`shop-item gear-row ${locked ? 'locked' : ''}`} style={{ ['--rc' as string]: RARITY_COLORS[g.rarity] }}>
                 <GearFace g={g} size={44} />
                 <div className="shop-name">
                   <div>{g.name}</div>
                   <div className="shop-meta" style={{ color: RARITY_COLORS[g.rarity] }}>
                     {RARITY_NAMES[g.rarity]} · {gearText(g)}
                   </div>
+                  {!on && damage > damageNow && (
+                    <div className="shop-delta up">
+                      <Swords size={11} /> урон {damageNow} → {damage}
+                    </div>
+                  )}
+                  {!on && blocked && <div className="shop-delta">не действует с двуручным оружием</div>}
                 </div>
                 {owned ? (
                   <button className="small-btn" disabled={on && g.slot === 'weapon'} onClick={() => setProgress(equipGear(progress, g.id))}>
@@ -455,6 +491,11 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
               </div>
             );
           })}
+        {(tab === 'weapon' || tab === 'offhand') && later && (
+          <div className="shop-later muted">
+            <Lock size={12} /> {gear.length ? 'Ещё товар' : 'Такого пока нет'}: Фёдор привезёт его с земли «{LANDS[later.minLand].name}».
+          </div>
+        )}
         {tab === 'outfit' &&
           ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
             const owned = progress.items.includes(i.id);
