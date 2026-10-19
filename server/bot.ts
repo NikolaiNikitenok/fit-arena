@@ -2,6 +2,7 @@
 // Приглашения ведут сюда (t.me/<бот>?start=clan-КОД): после «Старт» игрок входит в приложение
 // уже под своим аккаунтом Telegram, а код клана передаётся в адресе приложения.
 
+import { createHash } from 'node:crypto';
 import https from 'node:https';
 
 export interface StartReply {
@@ -47,7 +48,7 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
   return { text: WELCOME_TEXT, button: 'Играть', url: `${base}/`, photo: `${base}/bot/welcome.jpg` };
 }
 
-interface Update {
+export interface Update {
   update_id: number;
   message?: { chat: { id: number; type: string }; text?: string };
 }
@@ -80,14 +81,36 @@ export const botApi = (token: string) => (method: string, body: unknown, timeout
   });
 
 // Состояние бота для /api/health: видно без доступа к логам сервера (без токена).
-export const botStatus: { polling: boolean; lastOkAt: number | null; lastError: string | null; handled: number } = { polling: false, lastOkAt: null, lastError: null, handled: 0 };
+export const botStatus: { polling: boolean; webhook: boolean; webhookAt: number | null; lastOkAt: number | null; lastError: string | null; handled: number } = {
+  polling: false,
+  webhook: false,
+  webhookAt: null,
+  lastOkAt: null,
+  lastError: null,
+  handled: 0,
+};
 
-/** Долгий опрос Telegram. Вебхук снимаем: этому боту нужен только /start. */
+/** Секрет вебхука: Telegram присылает его в заголовке, так чужие запросы к /api/tg отсекаются. */
+export const webhookSecret = (token: string) => createHash('sha256').update(`webhook:${token}`).digest('hex').slice(0, 40);
+
+/**
+ * Ответ на обновление из вебхука. Если с сервера Telegram недоступен, ответить можно прямо
+ * в теле ответа на вебхук: Telegram сам выполнит этот метод.
+ */
+export function webhookReply(update: Update, appUrl: string, clanByCode: Parameters<typeof startReply>[2]): Record<string, unknown> | null {
+  const msg = update.message;
+  if (!msg?.text || msg.chat.type !== 'private') return null;
+  const reply = startReply(msg.text, appUrl, clanByCode);
+  if (!reply) return null;
+  const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
+  return reply.photo ? { method: 'sendPhoto', chat_id: msg.chat.id, photo: reply.photo, caption: reply.text, reply_markup } : { method: 'sendMessage', chat_id: msg.chat.id, text: reply.text, reply_markup };
+}
+
+/** Долгий опрос Telegram. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
 export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2]): void {
   const api = botApi(token);
   let offset = 0;
   const loop = async () => {
-    await api('deleteWebhook', {}).catch(() => null);
     await api('setMyDescription', { description: BOT_DESCRIPTION }).catch(() => null);
     await api('setMyShortDescription', { short_description: BOT_SHORT_DESCRIPTION }).catch(() => null);
     await api('setMyCommands', { commands: [{ command: 'start', description: 'Начать игру' }] }).catch(() => null);
@@ -95,6 +118,11 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
     for (;;) {
       try {
         const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message'] });
+        if (r.error_code === 409) {
+          botStatus.webhook = true;
+          botStatus.polling = false;
+          return;
+        }
         if (!r.ok) throw new Error(`${r.error_code ?? ''} ${r.description ?? ''}`.trim());
         botStatus.polling = true;
         botStatus.lastOkAt = Date.now();

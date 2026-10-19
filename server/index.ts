@@ -17,7 +17,7 @@ import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, botStatus, runBot } from './bot';
+import { botApi, botStatus, runBot, type Update, webhookReply, webhookSecret } from './bot';
 import { dueReminders, SaveStore } from './saves';
 import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
@@ -160,7 +160,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   if (path === '/api/progress/load') {
     if (who.guest) saves.adopt(who.id, who.guest);
     const s = saves.get(who.id);
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN, telegram: who.id.startsWith('tg:') });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:') });
   }
   if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
   if (path === '/api/remind') {
@@ -170,8 +170,27 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   reply(404, { error: 'not found' });
 }
 
+const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
+const clanInfo = (code: string) => {
+  const c = clans.byCode(code);
+  return c && { name: c.name, tag: c.tag, members: c.members.length };
+};
+
 const http = createServer((req, res) => {
   const path = req.url?.split('?')[0] ?? '';
+  if (path === '/api/tg' && req.method === 'POST') {
+    if (!BOT_TOKEN || req.headers['x-telegram-bot-api-secret-token'] !== webhookSecret(BOT_TOKEN)) return void res.writeHead(403).end();
+    readJson(req)
+      .then((update) => {
+        botStatus.webhook = true;
+        botStatus.webhookAt = Date.now();
+        const answer = webhookReply(update as unknown as Update, APP_URL, clanInfo);
+        if (answer) botStatus.handled++;
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
+      })
+      .catch(() => res.writeHead(400).end());
+    return;
+  }
   if (path.startsWith('/api/progress/') || path === '/api/remind') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
@@ -460,7 +479,6 @@ setInterval(() => {
 
 http.listen(PORT, () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
 // Напоминания: раз в несколько минут ищем тех, у кого наступил их час, а тренировки сегодня ещё не было.
-const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
 if (BOT_TOKEN)
   setInterval(() => {
     const api = botApi(BOT_TOKEN);
@@ -481,10 +499,7 @@ if (BOT_TOKEN)
     }
   }, 5 * 60_000);
 if (BOT_TOKEN)
-  runBot(BOT_TOKEN, APP_URL, (code) => {
-    const c = clans.byCode(code);
-    return c && { name: c.name, tag: c.tag, members: c.members.length };
-  });
+  runBot(BOT_TOKEN, APP_URL, clanInfo);
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
