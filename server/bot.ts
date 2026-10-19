@@ -132,10 +132,20 @@ export const useProxy = (url: string | null) => {
 };
 
 /** Вызов Bot API. Ошибка сети приходит с кодом (ETIMEDOUT, ECONNREFUSED…), чтобы её было видно в /api/health. */
-export const botApi = (token: string) => (method: string, body: unknown, timeoutMs = 65_000) =>
-  new Promise<TgReply>((resolve, reject) => {
-    const data = JSON.stringify(body);
-    const req = https.request(`${TG_API}/bot${token}/${method}`, { method: 'POST', agent, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, timeout: timeoutMs }, (res) => {
+export const botApi = (token: string) => (method: string, body: unknown, timeoutMs = 65_000) => tgRequest(token, method, Buffer.from(JSON.stringify(body)), 'application/json', timeoutMs);
+
+/** Отправка файла (multipart): Telegram не всегда может сам скачать картинку с нашего сайта. */
+export function botUpload(token: string, method: string, fields: Record<string, unknown>, file: { field: string; name: string; type: string; data: Buffer }): Promise<TgReply> {
+  const boundary = `----atletia${Date.now().toString(16)}`;
+  const parts: Buffer[] = [];
+  for (const [k, v] of Object.entries(fields)) parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${typeof v === 'string' ? v : JSON.stringify(v)}\r\n`));
+  parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.name}"\r\nContent-Type: ${file.type}\r\n\r\n`), file.data, Buffer.from(`\r\n--${boundary}--\r\n`));
+  return tgRequest(token, method, Buffer.concat(parts), `multipart/form-data; boundary=${boundary}`, 60_000);
+}
+
+function tgRequest(token: string, method: string, data: Buffer, contentType: string, timeoutMs: number): Promise<TgReply> {
+  return new Promise<TgReply>((resolve, reject) => {
+    const req = https.request(`${TG_API}/bot${token}/${method}`, { method: 'POST', agent, headers: { 'Content-Type': contentType, 'Content-Length': data.length }, timeout: timeoutMs }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c: Buffer) => chunks.push(c));
       res.on('end', () => {
@@ -150,6 +160,7 @@ export const botApi = (token: string) => (method: string, body: unknown, timeout
     req.on('error', (e: NodeJS.ErrnoException) => reject(new Error(e.code ? `${e.code} ${e.message}` : e.message)));
     req.end(data);
   });
+}
 
 // Состояние бота для /api/health: видно без доступа к логам сервера (без токена).
 export const botStatus: { proxy: string | null; polling: boolean; webhook: boolean; webhookAt: number | null; lastOkAt: number | null; lastError: string | null; handled: number } = {
@@ -176,6 +187,28 @@ export function webhookReply(update: Update, appUrl: string, clanByCode: Paramet
   if (!reply) return null;
   const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
   return reply.photo ? { method: 'sendPhoto', chat_id: msg.chat.id, photo: reply.photo, caption: reply.text, reply_markup } : { method: 'sendMessage', chat_id: msg.chat.id, text: reply.text, reply_markup };
+}
+
+// Картинка приветствия лежит рядом с сервером; после первой отправки Telegram даёт file_id, дальше шлём его.
+let welcomeFileId: string | null = null;
+async function sendWelcomePhoto(token: string, chat_id: number, url: string, caption: string, reply_markup: unknown): Promise<TgReply | null> {
+  const fields = { chat_id, caption, reply_markup };
+  try {
+    if (welcomeFileId) {
+      const r = await botApi(token)('sendPhoto', { ...fields, photo: welcomeFileId });
+      if (r.ok) return r;
+    }
+    const data = readFileSync(join(__dirname, 'welcome.jpg'));
+    const r = await botUpload(token, 'sendPhoto', fields, { field: 'photo', name: 'welcome.jpg', type: 'image/jpeg', data });
+    const sizes = (r.result as { photo?: { file_id: string }[] } | undefined)?.photo;
+    if (r.ok && sizes?.length) welcomeFileId = sizes[sizes.length - 1].file_id;
+    if (!r.ok) botStatus.lastError = `sendPhoto: ${r.description}`;
+    return r;
+  } catch (e) {
+    botStatus.lastError = `sendPhoto: ${e instanceof Error ? e.message : e}`;
+    // Файла нет рядом с сервером — пусть Telegram попробует скачать по ссылке.
+    return botApi(token)('sendPhoto', { ...fields, photo: url }).catch(() => null);
+  }
 }
 
 /** Долгий опрос Telegram. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
@@ -206,8 +239,8 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           const reply = startReply(msg.text, appUrl, clanByCode);
           if (!reply) continue;
           const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
-          const sent = reply.photo ? await api('sendPhoto', { chat_id: msg.chat.id, photo: reply.photo, caption: reply.text, reply_markup }) : null;
-          // Картинка не загрузилась (например, сайт недоступен Telegram) — шлём просто текст.
+          const sent = reply.photo ? await sendWelcomePhoto(token, msg.chat.id, reply.photo, reply.text, reply_markup) : null;
+          // Картинка не ушла — шлём просто текст.
           botStatus.handled++;
           if (!sent?.ok) await api('sendMessage', { chat_id: msg.chat.id, text: reply.text, reply_markup });
         }

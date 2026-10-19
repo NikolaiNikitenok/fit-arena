@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "dev:server": "ALLOW_GUESTS=1 tsx watch server/index.ts",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node20 --format=cjs --external:bufferutil --external:utf-8-validate --outfile=dist-server/server.cjs"
+    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node20 --format=cjs --external:bufferutil --external:utf-8-validate --outfile=dist-server/server.cjs && cp public/bot/welcome.jpg dist-server/welcome.jpg"
   },
   "license": "ISC",
   "dependencies": {
