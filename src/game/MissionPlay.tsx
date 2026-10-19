@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
+import { CameraGuide } from '../CameraGuide';
 import { useRepCamera } from '../useRepCamera';
 import { itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
@@ -11,6 +12,7 @@ import { MAX_LIVES, Progress, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
 
 const PREP_S = 5;
+
 
 type Status = 'story' | 'ready' | 'loading' | 'running' | 'won' | 'lost' | 'error';
 
@@ -164,7 +166,7 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
           heroTint={item.tint}
           heroGlow={item.glow}
         />
-        <div className="mhud">
+        <div className={`mhud ${busy ? '' : 'hidden'}`}>
           <div className="mhud-row">
             <span className="mhud-ex">{EXERCISE_LABELS[view.exercise]}</span>
             {level.type === 'boss' && (
@@ -203,7 +205,7 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
               {level.type !== 'trial' && ` · цель ${mission.current.target}`}
               {level.rest && ' · лёгкий день'}
             </div>
-            {noLives && <Remark line={restLine(waitMin)} />}
+            {noLives ? <Remark line={restLine(waitMin)} /> : <CameraGuide exercise={level.exercises[0]} />}
           </div>
         )}
         {status === 'won' && result && !epilogue && (
@@ -238,7 +240,7 @@ export function MissionPlay({ level, progress, onExit, onWin, onLose, onActivity
 
       <div className="hint-line">
         {status === 'running' && (camera.hint ?? 'Отлично, продолжай!')}
-        {status === 'ready' && 'Поставь телефон сбоку в 1,5–2 метрах, чтобы тело было в кадре целиком.'}
+        {status === 'ready' && level.exercises.length > 1 && 'Упражнения меняются по фазам: поставь телефон так, чтобы было видно всё тело.'}
         {status === 'error' && `Не удалось запустить камеру: ${error}`}
       </div>
       {status === 'running' && (

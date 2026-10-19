@@ -45,7 +45,7 @@ function labelTexture(text: string, color: string): THREE.Texture {
   c.width = 128;
   c.height = 64;
   const g = c.getContext('2d')!;
-  g.font = 'bold 44px system-ui, sans-serif';
+  g.font = "900 44px Nunito, system-ui, sans-serif";
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = 8;

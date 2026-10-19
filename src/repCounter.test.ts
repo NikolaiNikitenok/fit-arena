@@ -79,13 +79,44 @@ describe('RepCounter', () => {
     expect(run(new RepCounter('pushup'), noFeet, FULL)).toBe(2);
   });
 
-  it('не считает отжимания, если не видно ни стоп, ни колен', () => {
-    const hidden = (t: number) => {
+  it('считает отжимания, если ноги за кадром, но виден таз', () => {
+    const noLegs = (t: number) => {
       const lm = pushup(t);
       for (const i of [25, 26, 27, 28]) lm[i].visibility = 0.1;
       return lm;
     };
+    expect(run(new RepCounter('pushup'), noLegs, FULL)).toBe(2);
+  });
+
+  it('не считает отжимания, если не видно и таза', () => {
+    const hidden = (t: number) => {
+      const lm = pushup(t);
+      for (const i of [23, 24, 25, 26, 27, 28]) lm[i].visibility = 0.1;
+      return lm;
+    };
     expect(run(new RepCounter('pushup'), hidden, FULL)).toBe(0);
+  });
+
+  it('не считает неполные отжимания', () => {
+    expect(run(new RepCounter('pushup'), pushup, [170, 125, 170, 125, 170])).toBe(0);
+  });
+
+  // Телефон положен боком, интерфейс вертикальный: в кадре человек повёрнут на 90°.
+  const turn = (lm: Landmark[]) => lm.map((p) => ({ ...p, x: 0.5 + (p.y - 0.5), y: 0.5 - (p.x - 0.5) }));
+  const runRotated = (make: (t: number) => Landmark[], rotations: number[]) => {
+    const c = new RepCounter('pushup');
+    let time = 0;
+    for (const theta of FULL) for (let i = 0; i < 4; i++) c.update(turn(make(theta)), (time += 50), 1, rotations);
+    return c.current.reps;
+  };
+
+  it('считает отжимания, когда телефон лежит боком', () => {
+    expect(runRotated(pushup, [0])).toBe(0);
+    expect(runRotated(pushup, [90, 270])).toBe(2);
+  });
+
+  it('и боком не считает сгибание рук стоя', () => {
+    expect(runRotated(standingCurl, [90, 270])).toBe(0);
   });
 
   it('учитывает вертикальный кадр телефона', () => {

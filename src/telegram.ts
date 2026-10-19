@@ -6,6 +6,8 @@ interface TelegramWebApp {
   initData: string;
   initDataUnsafe: { user?: { id: number; first_name: string; username?: string }; start_param?: string };
   HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy'): void };
+  setHeaderColor?(color: string): void;
+  setBackgroundColor?(color: string): void;
   openTelegramLink?(url: string): void;
 }
 
@@ -20,6 +22,13 @@ export const tg: TelegramWebApp | undefined = window.Telegram?.WebApp;
 export function initTelegram(): void {
   tg?.ready();
   tg?.expand();
+  // Шапка Telegram в цвет игры, чтобы не было светлой полосы над тёмным экраном.
+  try {
+    tg?.setHeaderColor?.('#0f1115');
+    tg?.setBackgroundColor?.('#0f1115');
+  } catch {
+    // Старые клиенты не умеют менять цвета.
+  }
 }
 
 export function userName(): string {

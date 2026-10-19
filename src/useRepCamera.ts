@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DrawingUtils, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker } from './pose';
+import { frameRotations, enableOrientation } from './orientation';
 import { Exercise, RepCounter } from './repCounter';
 import { hapticRep } from './telegram';
 
@@ -30,6 +31,8 @@ export function useRepCamera() {
 
   /** onFrame вызывается каждый кадр; вернёт false — камера остановится. */
   const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean) => {
+    // До первого await: на iPhone разрешение на датчик можно спросить только прямо из нажатия.
+    enableOrientation();
     landmarker ??= createPoseLandmarker().catch((e) => {
       landmarker = null;
       throw e;
@@ -65,7 +68,7 @@ export function useRepCamera() {
           drawing.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
           drawing.drawLandmarks(lm, { color: '#ffffff', radius: 3 });
         }
-        const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight);
+        const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight, frameRotations());
         if (lastRepsReset.current) {
           lastRepsReset.current = false;
           lastReps = 0;

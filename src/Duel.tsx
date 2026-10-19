@@ -3,6 +3,7 @@ import { ArenaStage } from './ArenaStage';
 import { MAX_HP } from '../shared/battle';
 import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
 import { LEAGUES, leagueOf, seasonEndsAt } from '../shared/rating';
+import { CameraGuide } from './CameraGuide';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { inviteCode, inviteLink, share, tg, userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
@@ -247,6 +248,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               {room.players.length < 2 && ' · ждём соперника'}
             </div>
           </div>
+          {phase === 'room' && !myInfo?.ready && <CameraGuide exercise={room.exercise} />}
           {room.players.length < 2 && (
             <button className="secondary" onClick={invite}>
               {shared ?? 'Позвать друга'}

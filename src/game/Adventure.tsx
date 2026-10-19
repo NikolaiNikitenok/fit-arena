@@ -130,7 +130,7 @@ export function Adventure() {
           }
         />
         <div className="map-hud">
-          <div>
+          <div className="map-title">
             <div className="map-land">{L.name}</div>
             <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
           </div>
