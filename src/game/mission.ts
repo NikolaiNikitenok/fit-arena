@@ -63,6 +63,10 @@ export class Mission {
     this.catchS = Math.max(CHASE_CATCH_S, (CHASE_CATCH_REPS * level.seconds) / this.target);
   }
 
+  get started(): boolean {
+    return this.startedAt !== null;
+  }
+
   start(now: number): void {
     this.startedAt = now;
     this.lastRepAt = now;

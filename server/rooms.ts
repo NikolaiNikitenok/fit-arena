@@ -11,6 +11,8 @@ export interface Player {
   id: string;
   name: string;
   send: (msg: ServerMessage) => void;
+  // Сервер сообщает соединению, что игрока посадили в комнату (быстрый бой).
+  joinedRoom?: (room: Room) => void;
 }
 
 interface Seat {
@@ -19,6 +21,13 @@ interface Seat {
   ready: boolean;
   lastRepAt: number;
   lastCombo: boolean;
+}
+
+/** Итог рейтингового боя: a и b — id игроков. */
+export interface MatchEnd {
+  a: string;
+  b: string;
+  outcome: 'a' | 'b' | 'draw';
 }
 
 type Phase = 'lobby' | 'countdown' | 'fight' | 'over';
@@ -41,6 +50,7 @@ export class Room {
     readonly code: string,
     readonly exercise: Exercise,
     private readonly now: () => number = Date.now,
+    private readonly onEnd?: (end: MatchEnd) => void,
   ) {}
 
   get empty(): boolean {
@@ -67,6 +77,9 @@ export class Room {
     if (this.phase === 'fight' || this.phase === 'countdown') {
       this.clearTimers();
       this.phase = 'over';
+      // Ушёл из боя — проиграл.
+      const other = this.seats[0];
+      if (other) this.onEnd?.({ a: other.player.id, b: seat.player.id, outcome: 'a' });
       for (const s of this.seats) s.player.send({ type: 'end', result: 'win', reason: 'left' });
     }
     if (this.phase === 'over') this.phase = 'lobby';
@@ -122,6 +135,10 @@ export class Room {
     this.clearTimers();
     this.phase = 'over';
     const w = winner(this.battle, true);
+    if (this.seats.length === 2) {
+      const [a, b] = this.seats;
+      this.onEnd?.({ a: a.player.id, b: b.player.id, outcome: w === 'draw' ? 'draw' : w === a.side ? 'a' : 'b' });
+    }
     for (const s of this.seats) {
       s.ready = false;
       s.player.send({ type: 'end', result: w === 'draw' ? 'draw' : w === s.side ? 'win' : 'lose', reason });

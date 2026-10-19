@@ -13,6 +13,8 @@ export function useRepCamera() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef(0);
+  const counterRef = useRef<RepCounter | null>(null);
+  const lastRepsReset = useRef(false);
   const [hint, setHint] = useState<string | null>(null);
   const [active, setActive] = useState(false);
   const [angle, setAngle] = useState<number | null>(null);
@@ -42,7 +44,7 @@ export function useRepCamera() {
     video.srcObject = stream;
     await video.play();
 
-    const counter = new RepCounter(exercise);
+    counterRef.current = new RepCounter(exercise);
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
     const drawing = new DrawingUtils(ctx);
@@ -63,7 +65,11 @@ export function useRepCamera() {
           drawing.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
           drawing.drawLandmarks(lm, { color: '#ffffff', radius: 3 });
         }
-        const state = counter.update(lm, now, video.videoWidth / video.videoHeight);
+        const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight);
+        if (lastRepsReset.current) {
+          lastRepsReset.current = false;
+          lastReps = 0;
+        }
         if (state.reps > lastReps) {
           lastReps = state.reps;
           hapticRep();
@@ -77,5 +83,12 @@ export function useRepCamera() {
     loop();
   };
 
-  return { videoRef, canvasRef, start, stop, hint, active, angle };
+  /** Смена упражнения на ходу (фазы босса): счёт начинается заново. */
+  const switchExercise = (exercise: Exercise) => {
+    if (!counterRef.current) return;
+    counterRef.current = new RepCounter(exercise);
+    lastRepsReset.current = true;
+  };
+
+  return { videoRef, canvasRef, start, stop, switchExercise, hint, active, angle };
 }

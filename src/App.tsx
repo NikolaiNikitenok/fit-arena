@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Campaign } from './Campaign';
+import { Adventure } from './game/Adventure';
 import { Duel } from './Duel';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { inviteCode } from './telegram';
@@ -13,13 +13,13 @@ export function App() {
   return (
     <div className="app">
       <div>
-        <h1>Fit Arena</h1>
-        <div className="muted">Каждый повтор — удар по сопернику, три подряд — комбо.</div>
+        <h1>Атлетия</h1>
+        <div className="muted">Каждый честный повтор спасает мир от Лени.</div>
       </div>
 
       <div className="tabs">
         <button className={mode === 'campaign' ? 'active' : ''} onClick={() => setMode('campaign')}>
-          Кампания
+          Приключение
         </button>
         <button className={mode === 'duel' ? 'active' : ''} onClick={() => setMode('duel')}>
           Дуэль
@@ -27,7 +27,7 @@ export function App() {
       </div>
 
       {mode === 'campaign' ? (
-        <Campaign />
+        <Adventure />
       ) : (
         <>
           <div className="tabs small">

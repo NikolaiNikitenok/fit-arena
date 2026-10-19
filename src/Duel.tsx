@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ArenaStage } from './ArenaStage';
 import { MAX_HP } from '../shared/battle';
-import type { ClientMessage, FighterView, PlayerInfo, ServerMessage } from '../shared/protocol';
+import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
+import { LEAGUES, leagueOf, seasonEndsAt } from '../shared/rating';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { inviteCode, inviteLink, share, tg, userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
@@ -16,6 +17,20 @@ interface RoomInfo {
 
 const RESULT_TEXT = { win: 'Победа!', lose: 'Поражение', draw: 'Ничья' };
 const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'соперник покинул бой' };
+
+// Гостям без Telegram выдаём постоянный id, чтобы кубки не терялись между заходами.
+function guestId(): string {
+  try {
+    let id = localStorage.getItem('fit-arena-guest');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('fit-arena-guest', id);
+    }
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
 
 const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 
@@ -33,6 +48,10 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const [code, setCode] = useState('');
   const [shared, setShared] = useState<string | null>(null);
   const [connectSeq, setConnectSeq] = useState(0);
+  const [profile, setProfile] = useState<ProfileView | null>(null);
+  const [delta, setDelta] = useState<number | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const [top, setTop] = useState<TopEntry[] | null>(null);
 
   const send = (msg: ClientMessage) => ws.current?.readyState === WebSocket.OPEN && ws.current.send(JSON.stringify(msg));
 
@@ -41,7 +60,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
     const socket = new WebSocket(`${proto}//${location.host}/ws`);
     ws.current = socket;
     setPhase('connecting');
-    socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', initData: tg?.initData ?? '', name: userName() }));
+    socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', initData: tg?.initData ?? '', name: userName(), guestId: guestId() }));
     socket.onclose = () => {
       if (ws.current !== socket) return;
       camera.stop();
@@ -61,7 +80,18 @@ export function Duel({ exercise }: { exercise: Exercise }) {
           setRoom({ code: msg.code, exercise: msg.exercise, players: msg.players });
           setPhase((p) => (p === 'countdown' || p === 'fight' || p === 'over' ? p : 'room'));
           break;
+        case 'profile':
+          setProfile(msg.profile);
+          if (msg.delta != null) setDelta(msg.delta);
+          break;
+        case 'queue':
+          setWaiting(msg.waiting);
+          break;
+        case 'top':
+          setTop(msg.players);
+          break;
         case 'countdown':
+          setDelta(null);
           setResult(null);
           setState(null);
           setEndsAt(Date.now() + msg.startsInMs);
@@ -128,6 +158,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
         <div className="muted">
           {result.reason === 'left' ? REASON_TEXT.left : `${REASON_TEXT[result.reason]} · ${view.me.hits} повторов`}
         </div>
+        {delta != null && delta !== 0 && <div className={`cups-delta ${delta > 0 ? 'up' : 'down'}`}>{delta > 0 ? `+${delta}` : delta} 🏆</div>}
       </>
     );
   if (phase === 'connecting') overlay = <div className="muted">Подключаюсь к арене…</div>;
@@ -158,9 +189,20 @@ export function Duel({ exercise }: { exercise: Exercise }) {
                   : '')}
       </div>
 
+      {phase === 'menu' && profile && <LeagueCard profile={profile} />}
+
       {phase === 'menu' && (
         <>
-          <button className="primary" onClick={() => send({ type: 'create', exercise })}>
+          {waiting ? (
+            <button className="secondary" onClick={() => send({ type: 'cancelQuick' })}>
+              Ищу соперника… отменить
+            </button>
+          ) : (
+            <button className="primary" onClick={() => send({ type: 'quick', exercise })}>
+              Быстрый бой: {EXERCISE_LABELS[exercise].toLowerCase()}
+            </button>
+          )}
+          <button className="secondary" onClick={() => send({ type: 'create', exercise })}>
             Создать бой: {EXERCISE_LABELS[exercise].toLowerCase()}
           </button>
           <div className="join">
@@ -175,6 +217,22 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               Войти
             </button>
           </div>
+          <button className="link" onClick={() => (top ? setTop(null) : send({ type: 'top' }))}>
+            {top ? 'Скрыть рейтинг' : 'Рейтинг сезона'}
+          </button>
+          {top && (
+            <div className="top">
+              {top.length === 0 && <div className="muted">Пока никто не сыграл в этом сезоне. Будь первым!</div>}
+              {top.map((p, i) => (
+                <div key={i} className={`top-row ${p.me ? 'me' : ''}`}>
+                  <span className="top-place">{i + 1}</span>
+                  <span className="top-name">{p.name}</span>
+                  <span style={{ color: leagueOf(p.cups).color }}>{leagueOf(p.cups).name}</span>
+                  <b>{p.cups} 🏆</b>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -215,5 +273,31 @@ export function Duel({ exercise }: { exercise: Exercise }) {
         </>
       )}
     </>
+  );
+}
+
+function LeagueCard({ profile }: { profile: ProfileView }) {
+  const league = leagueOf(profile.cups);
+  const next = LEAGUES[LEAGUES.indexOf(league) + 1];
+  const days = Math.max(1, Math.ceil((seasonEndsAt(Date.now()) - Date.now()) / 86_400_000));
+  return (
+    <div className="league-card" style={{ borderColor: league.color }}>
+      <div className="league-row">
+        <span className="league-name" style={{ color: league.color }}>
+          {league.name} лига
+        </span>
+        <b>{profile.cups} 🏆</b>
+      </div>
+      {next && (
+        <div className="bar">
+          <div className="bar-fill" style={{ width: `${((profile.cups - league.from) / (next.from - league.from)) * 100}%`, background: league.color }} />
+        </div>
+      )}
+      <div className="muted">
+        {next ? `До лиги «${next.name}» ${next.from - profile.cups} 🏆 · ` : ''}
+        {profile.wins} побед, {profile.losses} поражений
+        {profile.rank ? ` · ${profile.rank} место` : ''} · сезон {profile.season}, ещё {days} дн.
+      </div>
+    </div>
   );
 }
