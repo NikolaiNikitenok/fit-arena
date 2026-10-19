@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
+import { Heart } from '../icons';
 import { useRepCamera } from '../useRepCamera';
 import { itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
@@ -288,11 +289,14 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       {(status === 'ready' || status === 'lost' || status === 'error') &&
         (noLives ? (
           <button className="primary" disabled>
-            ♥ через {waitMin} мин
+            <Heart /> через {waitMin} мин
           </button>
         ) : (
           <button className="primary" onClick={start}>
-            {status === 'ready' ? 'Начать' : 'Ещё раз'} · ♥ {lives.lives}
+            {status === 'ready' ? 'Начать' : 'Ещё раз'}
+            <span className="btn-cost">
+              <Heart size={14} /> {lives.lives}
+            </span>
           </button>
         ))}
       {status === 'loading' && (
@@ -334,7 +338,7 @@ function SwapRow({ original, exercises, picking, free, onPick, onChoose }: { ori
         </div>
       )}
       <div className="swap-note">
-        {free > 0 ? `Негде сделать упражнение? Замени его: сегодня осталось ${free} из ${SWAPS_PER_DAY}` : `Замены на сегодня закончились, завтра будет ещё ${SWAPS_PER_DAY}`}
+        {free > 0 ? `Негде сделать? Замени упражнение · осталось ${free} из ${SWAPS_PER_DAY} на сегодня` : `Замены на сегодня закончились, завтра будет ещё ${SWAPS_PER_DAY}`}
       </div>
     </div>
   );

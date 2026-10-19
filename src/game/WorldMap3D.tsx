@@ -97,12 +97,15 @@ function FogOfLaziness({ z0, z1 }: { z0: number; z1: number }) {
   const len = z0 - z1;
   return (
     <group position={[0, 0, (z0 + z1) / 2]}>
-      {[0.6, 1.4, 2.4].map((y, i) => (
-        <mesh key={y} position={[0, y, 0]}>
-          <boxGeometry args={[44, 1.2 + i * 0.4, len]} />
-          <meshStandardMaterial color="#c7c3cf" transparent opacity={0.32} depthWrite={false} />
-        </mesh>
-      ))}
+      {/* Низкая дымка над закрытыми землями: видно, что там, но земля ещё во власти Лени. */}
+      <mesh position={[0, 0.35, 0]}>
+        <boxGeometry args={[44, 0.7, len]} />
+        <meshStandardMaterial color="#b9b4c8" transparent opacity={0.2} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 1.1, 0]}>
+        <boxGeometry args={[44, 0.8, len]} />
+        <meshStandardMaterial color="#b9b4c8" transparent opacity={0.08} depthWrite={false} />
+      </mesh>
     </group>
   );
 }

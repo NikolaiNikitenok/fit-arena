@@ -27,9 +27,12 @@ import {
   swapsLeft,
 } from './progress';
 import { WorldMap3D } from './WorldMap3D';
+import { Coin, Heart, Lock } from '../icons';
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
+// На вкладках карты короткие названия, чтобы все четыре мира помещались в строку.
+const SHORT_WORLD: Record<(typeof TABS)[number], string> = { fantasy: 'Королевство', space: 'Космос', zombie: 'Зомби', castle: 'Замок' };
 const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
@@ -200,7 +203,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           <div className="world-tabs">
             {TABS.map((w, i) => (
               <button key={w} className={world === i ? 'active' : ''} disabled={!worldOpen(i)} onClick={() => switchWorld(i)}>
-                {worldOpen(i) ? WORLD_NAMES[w] : `🔒 ${WORLD_NAMES[w]}`}
+                {!worldOpen(i) && <Lock size={12} />}
+                {SHORT_WORLD[w]}
               </button>
             ))}
           </div>
@@ -209,12 +213,11 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
               <div className="map-land">{L.name}</div>
               <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
             </div>
-            <div className="map-stats">
+            <div className="stats">
               <LivesPill progress={progress} />
-              <button className="pill btn" onClick={() => setStrength(true)}>
-                🔥 {series.days}
-              </button>
-              <span className="pill">🪙 {progress.coins}</span>
+              <span className="pill">
+                <Coin className="coin" /> {progress.coins}
+              </span>
             </div>
           </div>
         </div>
@@ -271,7 +274,9 @@ function Shop({ progress, setProgress, onClose }: { progress: Progress; setProgr
             <div className="muted">«Смотри, герой, товар со всех трёх миров! Найденное в сундуках тоже можно надеть.»</div>
           </div>
         </div>
-        <div className="coins">🪙 {progress.coins}</div>
+        <div className="coins">
+          <Coin className="coin" /> {progress.coins}
+        </div>
         {ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
           const owned = progress.items.includes(i.id);
           return (
@@ -297,7 +302,7 @@ function Shop({ progress, setProgress, onClose }: { progress: Progress; setProgr
                     if (next) setProgress(next);
                   }}
                 >
-                  🪙 {i.price}
+                  <Coin size={14} /> {i.price}
                 </button>
               )}
             </div>
@@ -380,7 +385,7 @@ function LivesPill({ progress }: { progress: Progress }) {
   const lives = livesNow(progress, now);
   return (
     <span className={`pill ${lives.lives ? '' : 'empty'}`}>
-      ♥ {lives.lives}/{lives.max}
+      <Heart className="heart" /> {lives.lives}/{lives.max}
       {lives.nextMs > 0 && <small>{fmtMin(lives.nextMs)}</small>}
     </span>
   );

@@ -7,6 +7,7 @@ import { ITEMS, itemById, RARITY_COLORS, RARITY_NAMES } from './items';
 import { LevelDef } from './levels';
 import { portraitUrl } from './npcs';
 import { heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
+import { Coin, Flame, Heart } from '../icons';
 
 // Главное меню: герой в надетом снаряжении, его уровень, инвентарь и тренировка дня.
 
@@ -75,12 +76,17 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
 
   return (
     <div className="home">
-      <div className="home-stats">
-        {lives}
-        <button className="pill btn" onClick={onStrength}>
-          🔥 {series.days}
-        </button>
-        <span className="pill">🪙 {progress.coins}</span>
+      <div className="app-head">
+        <h1>Атлетия</h1>
+        <div className="stats">
+          {lives}
+          <button className="pill btn" onClick={onStrength}>
+            <Flame className="flame" /> {series.days}
+          </button>
+          <span className="pill">
+            <Coin className="coin" /> {progress.coins}
+          </span>
+        </div>
       </div>
 
       <div className="hero-card">
@@ -103,7 +109,9 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           </div>
         </div>
         <div className="hero-perks">
-          <span>♥ жизней: {5 + extraLives}</span>
+          <span>
+            <Heart size={13} className="heart" /> жизней: {5 + extraLives}
+          </span>
           <span>{lvl.level < 30 ? `+1 жизнь на ${(Math.floor(lvl.level / 10) + 1) * 10} уровне` : 'максимум жизней'}</span>
           {item.coinBonus > 0 && <span>+{Math.round(item.coinBonus * 100)}% монет</span>}
         </div>
@@ -139,7 +147,9 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           <button key={i.id} className="inv-item locked" onClick={onShop}>
             <ItemFace hero={i.hero} color={i.color} />
             <span className="inv-name">{i.name}</span>
-            <span className="inv-meta">🪙 {i.price}</span>
+            <span className="inv-meta">
+              <Coin size={12} className="coin" /> {i.price}
+            </span>
           </button>
         ))}
       </div>

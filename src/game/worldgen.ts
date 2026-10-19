@@ -261,8 +261,12 @@ export function generateWorld(levels: LevelDef[]): WorldLayout {
     for (let i = 0; i < length / 6; i++) {
       const z = -i * 6 + hash(i, 1) * 3;
       const sky = kindOf(landAt(z)) === 'sky';
-      for (let k = 0; k < (sky ? 3 : 1); k++)
-        props.push({ name: hash(i, k, 2) < 0.5 ? 'cloud_big' : 'cloud_small', x: (hash(i, k, 3) - 0.5) * 34, y: sky ? 1 + hash(i, k) * 2 : 5 + hash(i, k, 4) * 3, z, ry: hash(i, k, 5) * 6, s: 1 + hash(i, k, 6) });
+      for (let k = 0; k < (sky ? 3 : 1); k++) {
+        // Только по краям карты и ниже камеры, чтобы облака не заслоняли дорогу и камни уровней.
+        const side = hash(i, k, 3) < 0.5 ? -1 : 1;
+        const x = side * (9 + hash(i, k, 7) * 8);
+        props.push({ name: hash(i, k, 2) < 0.5 ? 'cloud_big' : 'cloud_small', x, y: sky ? 0.6 + hash(i, k) * 1.2 : 2.2 + hash(i, k, 4) * 1.5, z, ry: hash(i, k, 5) * 6, s: 1 + hash(i, k, 6) });
+      }
     }
     for (const l of lands) {
       if (l.boss) props.push({ name: l.kind === 'dragon' || l.kind === 'volcano' ? 'building_castle_red' : 'building_castle_blue', x: l.boss.x + Math.sign(l.boss.x - px(l.boss.z)) * 1.2, z: l.boss.z - 1, s: 0.9 });
