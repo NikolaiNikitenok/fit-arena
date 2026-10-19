@@ -3,8 +3,9 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { CHAT_MAX, CLAN_MAX_MEMBERS, type ChatMessage, type ClanListItem, type ClanRole, type ClanSettings, type ClanView, type RaidView } from '../shared/clan';
-import { dayOf, RAID_ATTACK_S, RAID_ATTACKS_PER_DAY, RAID_MAX_DAMAGE, RAID_MIN_REP_MS, RAID_PREP_S, raidHp, raidWindow } from '../shared/raid';
+import { CHAT_MAX, COUNTRIES, defaultFlag, parseFlag, type ChatMessage, type ClanListItem, type ClanRole, type ClanSettings, type ClanView, type RaidView } from '../shared/clan';
+import { CLAN_REPS_PER_DAY, CLAN_XP_KILL, CLAN_XP_PER_DAMAGE, CLAN_XP_PER_REP, clanLevel, clanPerks } from '../shared/clanLevel';
+import { dayOf, RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_MIN_REP_MS, RAID_PREP_S, raidHp, raidWindow } from '../shared/raid';
 
 interface Member {
   id: string;
@@ -12,6 +13,7 @@ interface Member {
   role: ClanRole;
   level: number;
   joinedAt: number;
+  xp?: number;
 }
 
 interface Raid {
@@ -33,6 +35,13 @@ export interface Clan {
   description: string;
   open: boolean;
   minLevel: number;
+  flag?: string;
+  country?: string;
+  city?: string;
+  // Опыт клана; уровень считается из него.
+  xp?: number;
+  // Повторы участников за сегодня: дневной предел опыта.
+  repsDay?: { day: string; reps: Record<string, number> };
   code: string;
   members: Member[];
   chat: ChatMessage[];
@@ -106,7 +115,19 @@ export class ClanStore {
     if (name.length < 3) return 'Название клана — хотя бы 3 буквы';
     if (tag.length < 2) return 'Тег клана — 2–4 буквы или цифры';
     const taken = [...this.clans.values()].find((c) => c.name.toLowerCase() === name.toLowerCase() || c.tag === tag);
-    return { name, tag, description: clean(s?.description, 200), open: s?.open !== false, minLevel: Math.max(1, Math.min(99, Math.round(Number(s?.minLevel) || 1))), ...(taken ? { taken: taken.id } : {}) } as ClanSettings;
+    const flag = typeof s?.flag === 'string' && parseFlag(s.flag) ? s.flag : defaultFlag(tag);
+    const country = typeof s?.country === 'string' && s.country in COUNTRIES ? s.country : '';
+    return {
+      name,
+      tag,
+      description: clean(s?.description, 200),
+      open: s?.open !== false,
+      minLevel: Math.max(1, Math.min(99, Math.round(Number(s?.minLevel) || 1))),
+      flag,
+      country,
+      city: clean(s?.city, 30),
+      ...(taken ? { taken: taken.id } : {}),
+    } as ClanSettings;
   }
 
   create(who: Who, s: ClanSettings, now: number): Clan | string {
@@ -121,6 +142,10 @@ export class ClanStore {
       description: ok.description,
       open: ok.open,
       minLevel: ok.minLevel,
+      flag: ok.flag,
+      country: ok.country,
+      city: ok.city,
+      xp: 0,
       code: newCode(),
       members: [{ id: who.id, name: who.name, role: 'leader', level: who.level, joinedAt: now }],
       chat: [],
@@ -143,7 +168,7 @@ export class ClanStore {
     if (typeof ok === 'string') return ok;
     const taken = (ok as ClanSettings & { taken?: string }).taken;
     if (taken && taken !== c.id) return 'Клан с таким названием или тегом уже есть';
-    Object.assign(c, { name: ok.name, tag: ok.tag, description: ok.description, open: ok.open, minLevel: ok.minLevel });
+    Object.assign(c, { name: ok.name, tag: ok.tag, description: ok.description, open: ok.open, minLevel: ok.minLevel, flag: ok.flag, country: ok.country, city: ok.city });
     this.save();
     return c;
   }
@@ -158,7 +183,7 @@ export class ClanStore {
     if (mine) return 'Сначала выйди из своего клана';
     if (!code && !c.open) return 'Это закрытый клан: вступить можно только по приглашению';
     if (!code && who.level < c.minLevel) return `В этот клан берут с ${c.minLevel} уровня героя`;
-    if (c.members.length >= CLAN_MAX_MEMBERS) return 'В клане нет мест';
+    if (c.members.length >= this.perks(c).slots) return 'В клане нет мест: клану нужно подрасти в уровне';
     c.members.push({ id: who.id, name: who.name, role: 'member', level: who.level, joinedAt: now });
     this.byPlayer.set(who.id, c.id);
     this.system(c, `${who.name} вступил в клан`, now);
@@ -219,10 +244,48 @@ export class ClanStore {
   search(q: string): ClanListItem[] {
     const s = clean(q, 24).toLowerCase();
     return [...this.clans.values()]
-      .filter((c) => !s || c.name.toLowerCase().includes(s) || c.tag.toLowerCase() === s)
+      .filter((c) => !s || c.name.toLowerCase().includes(s) || c.tag.toLowerCase() === s || (c.city ?? '').toLowerCase().includes(s) || (COUNTRIES[c.country ?? ''] ?? '').toLowerCase().includes(s))
       .sort((a, b) => Number(b.open) - Number(a.open) || b.raidWins - a.raidWins || b.members.length - a.members.length)
       .slice(0, 30)
-      .map((c) => ({ id: c.id, name: c.name, tag: c.tag, description: c.description, members: c.members.length, open: c.open, minLevel: c.minLevel, raidWins: c.raidWins }));
+      .map((c) => ({ id: c.id, name: c.name, tag: c.tag, description: c.description, members: c.members.length, open: c.open, minLevel: c.minLevel, raidWins: c.raidWins, ...this.look(c) }));
+  }
+
+  private look(c: Clan) {
+    return { flag: c.flag ?? defaultFlag(c.tag), country: c.country ?? '', city: c.city ?? '', xp: Math.floor(c.xp ?? 0) };
+  }
+
+  level(c: Clan): number {
+    return clanLevel(c.xp ?? 0).level;
+  }
+
+  private perks(c: Clan) {
+    return clanPerks(this.level(c));
+  }
+
+  /** Опыт клану и вкладу участника; при новом уровне — сообщение в чат. */
+  private addXp(c: Clan, playerId: string, xp: number, now: number): void {
+    if (xp <= 0) return;
+    const before = this.level(c);
+    c.xp = (c.xp ?? 0) + xp;
+    const m = this.member(c, playerId);
+    if (m) m.xp = (m.xp ?? 0) + xp;
+    const after = this.level(c);
+    if (after > before) this.system(c, `Клан достиг ${after} уровня! Подарок ждёт каждого`, now);
+    this.save();
+  }
+
+  /** Повторы из приключения приносят клану опыт, не больше дневного предела на участника. */
+  reps(playerId: string, reps: number, now: number): Clan | null {
+    const c = this.clanOf(playerId);
+    if (!c) return null;
+    const day = dayOf(now);
+    if (c.repsDay?.day !== day) c.repsDay = { day, reps: {} };
+    const done = c.repsDay.reps[playerId] ?? 0;
+    const add = Math.max(0, Math.min(CLAN_REPS_PER_DAY - done, Math.round(Number(reps) || 0)));
+    if (!add) return null;
+    c.repsDay.reps[playerId] = done + add;
+    this.addXp(c, playerId, add * CLAN_XP_PER_REP, now);
+    return c;
   }
 
   /** Обновить имя и уровень героя участника (приходят при каждом входе). */
@@ -282,7 +345,7 @@ export class ClanStore {
 
   attacksLeft(c: Clan, playerId: string, now: number): number {
     const r = this.raid(c, now);
-    return r ? Math.max(0, RAID_ATTACKS_PER_DAY - (r.attacks[playerId]?.[dayOf(now)] ?? 0)) : 0;
+    return r ? Math.max(0, this.perks(c).attacks - (r.attacks[playerId]?.[dayOf(now)] ?? 0)) : 0;
   }
 
   raidStart(playerId: string, now: number): { attackId: string; endsAt: number } | string {
@@ -291,7 +354,7 @@ export class ClanStore {
     const r = this.raid(c, now);
     if (!r || !raidWindow(now).active) return 'Рейд начнётся в субботу';
     if (r.killedAt) return 'Босс уже повержен! Забери награду';
-    if (this.attacksLeft(c, playerId, now) <= 0) return 'Атаки на сегодня закончились, завтра будут ещё три';
+    if (this.attacksLeft(c, playerId, now) <= 0) return 'Атаки на сегодня закончились, завтра будут новые';
     const day = dayOf(now);
     r.attacks[playerId] = { ...r.attacks[playerId], [day]: (r.attacks[playerId]?.[day] ?? 0) + 1 };
     for (const [id, a] of this.attacks) if (a.player === playerId || a.endsAt < now) this.attacks.delete(id);
@@ -325,11 +388,13 @@ export class ClanStore {
       if (r.recent.length > RECENT_KEEP) r.recent.shift();
     }
     const killed = dealt >= hp;
+    this.addXp(c, playerId, dealt * CLAN_XP_PER_DAMAGE, now);
     if (killed) {
       r.killedAt = now;
       c.raidWins++;
       c.raidLevel++;
       this.system(c, `${a.name} нанёс последний удар! Босс повержен, награды ждут всех, кто бился`, now);
+      this.addXp(c, '', CLAN_XP_KILL * r.level, now);
     }
     this.save();
     return { clan: c, killed, dealt };
@@ -376,11 +441,12 @@ export class ClanStore {
       description: c.description,
       open: c.open,
       minLevel: c.minLevel,
+      ...this.look(c),
       code: c.code,
       myRole: this.member(c, playerId)?.role ?? 'member',
       members: [...c.members]
         .sort((a, b) => order[a.role] - order[b.role] || (r?.damage[b.id] ?? 0) - (r?.damage[a.id] ?? 0) || b.level - a.level)
-        .map((m) => ({ id: m.id, name: m.name, role: m.role, level: m.level, raidDamage: r?.damage[m.id] ?? 0, online: online(m.id), me: m.id === playerId })),
+        .map((m) => ({ id: m.id, name: m.name, role: m.role, level: m.level, xp: Math.floor(m.xp ?? 0), raidDamage: r?.damage[m.id] ?? 0, online: online(m.id), me: m.id === playerId })),
       raid: this.raidView(c, playerId, now),
       raidWins: c.raidWins,
       reward: this.reward(c, playerId, now),

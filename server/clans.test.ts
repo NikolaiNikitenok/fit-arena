@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { clanLevel, clanPerks, clanXpNeed } from '../shared/clanLevel';
 import { ClanStore, type Clan } from './clans';
 
 const now = Date.parse('2026-10-20T12:00:00+03:00');
 const a = { id: 'tg:1', name: 'Аня', level: 5 };
 const b = { id: 'tg:2', name: 'Боря', level: 2 };
 const c = { id: 'tg:3', name: 'Вика', level: 9 };
-const settings = { name: 'Железные', tag: 'жел', description: 'Тренируемся каждый день', open: true, minLevel: 3 };
+const settings = { name: 'Железные', tag: 'жел', description: 'Тренируемся каждый день', open: true, minLevel: 3, flag: '2.1.3.0', country: 'RU', city: 'Казань' };
 
 describe('кланы', () => {
   it('создание, вступление по уровню и по приглашению, смена главы', () => {
@@ -54,5 +55,30 @@ describe('кланы', () => {
     expect(s.chat(a.id, '  Привет,   клан! ', now)).toMatchObject({ text: 'Привет, клан!' });
     expect(s.chat(a.id, 'ещё', now + 100)).toMatch(/быстро/);
     expect(s.chat(b.id, 'я тут', now)).toMatch(/не в клане/);
+  });
+
+  it('флаг и место проверяются, по городу можно найти клан', () => {
+    const s = new ClanStore(null);
+    const clan = s.create(a, { ...settings, flag: '99.0.0.0', country: 'XX' }, now) as Clan;
+    expect(clan.flag).not.toBe('99.0.0.0');
+    expect(clan.country).toBe('');
+    expect(clan.city).toBe('Казань');
+    expect(s.search('казан')).toHaveLength(1);
+  });
+
+  it('опыт клана: повторы с дневным пределом, уровни, места и атаки растут', () => {
+    const s = new ClanStore(null);
+    const clan = s.create(a, settings, now) as Clan;
+    s.reps(a.id, 1000, now);
+    expect(clan.xp).toBe(300);
+    expect(s.reps(a.id, 10, now)).toBeNull();
+    expect(s.level(clan)).toBe(2);
+    expect(clan.chat.some((m) => /достиг 2 уровня/.test(m.text))).toBe(true);
+    expect(clan.members[0].xp).toBe(300);
+    // Мест на первом уровне 10, к 30-му — 30.
+    expect(clanPerks(1).slots).toBe(10);
+    expect(clanPerks(30)).toMatchObject({ slots: 30, attacks: 5 });
+    expect(clanLevel(clanXpNeed(1) + clanXpNeed(2)).level).toBe(3);
+    expect(clanLevel(1e9)).toMatchObject({ level: 30, need: 0 });
   });
 });

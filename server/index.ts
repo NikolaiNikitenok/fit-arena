@@ -1,6 +1,7 @@
 // Сервер матчей Fit Arena: комнаты на двоих и бой по WebSocket.
 //   PORT — порт (по умолчанию 8787)
 //   BOT_TOKEN — токен бота: проверяем подпись Telegram и узнаём имя бота для ссылок
+//   BOT_USERNAME — имя бота для ссылок-приглашений, если Telegram недоступен с сервера
 //   ALLOW_GUESTS=1 — пускать без подписи Telegram (для разработки в браузере)
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 import { randomUUID } from 'node:crypto';
@@ -78,14 +79,14 @@ function newRoom(exercise: Exercise): Room {
   rooms.set(code, room);
   return room;
 }
-let botUsername: string | null = null;
+let botUsername: string | null = process.env.BOT_USERNAME?.replace(/^@/, '') || null;
 
 async function loadBotUsername(): Promise<void> {
   if (!BOT_TOKEN) return;
   try {
     const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
     const body = (await res.json()) as { ok: boolean; result?: { username: string } };
-    botUsername = body.result?.username ?? null;
+    botUsername = body.result?.username ?? botUsername;
     console.log('bot:', botUsername);
   } catch (e) {
     console.error('getMe failed:', e);
@@ -190,13 +191,27 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       break;
     }
     case 'raidHit': {
+      const c = mine();
+      const lastMsg = c?.nextMsg;
       const r = clans.raidHit(who.id, String(msg.attackId), Number(msg.damage), now);
       if (typeof r === 'string') return;
       sendRaid(r.clan);
-      if (r.killed) {
-        toClan(r.clan, { type: 'chatMsg', message: r.clan.chat[r.clan.chat.length - 1] });
+      // Босс повержен или клан вырос в уровне: всем новый клан и сообщения.
+      if (r.killed || r.clan.nextMsg !== lastMsg) {
+        toClan(r.clan, { type: 'chat', messages: r.clan.chat });
         sendClan(r.clan);
       }
+      break;
+    }
+    case 'clanReps': {
+      const c = mine();
+      const lastMsg = c?.nextMsg;
+      const level = c && clans.level(c);
+      const r = clans.reps(who.id, Number(msg.reps), now);
+      if (!r) return;
+      if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: r.chat });
+      if (clans.level(r) !== level || r.nextMsg !== lastMsg) sendClan(r);
+      else send({ type: 'clan', clan: clans.view(r, who.id, isOnline, now) });
       break;
     }
     case 'raidEnd':
@@ -250,8 +265,13 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
       player = tgUser
         ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name), send, joinedRoom: attach }
         : { id: `guest:${/^[\w-]{8,40}$/.test(msg.guestId ?? '') ? msg.guestId : randomUUID()}`, name: cleanName(msg.name), send, joinedRoom: attach };
-      send({ type: 'welcome', id: player.id, name: player.name, botUsername });
+      send({ type: 'welcome', id: player.id, name: player.name, botUsername, telegram: !!tgUser });
       if (msg.channel === 'clan') {
+        // Когда сервер знает токен бота, в кланах только настоящие игроки Telegram: гости из браузера каждый раз новые.
+        if (BOT_TOKEN && !tgUser) {
+          send({ type: 'clan', clan: null });
+          return;
+        }
         clanChannel = true;
         who = { id: player.id, name: player.name, level: Math.max(1, Math.min(999, Math.round(Number(msg.level) || 1))) };
         if (!clanSockets.has(player.id)) clanSockets.set(player.id, new Set());

@@ -1,5 +1,6 @@
 // Прогресс игрока хранится в браузере. Сервер профилей подключим вместе с рейтингом дуэлей.
 import type { Exercise } from '../repCounter';
+import { clanGift } from '../../shared/clanLevel';
 import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 
@@ -32,6 +33,10 @@ export interface Progress {
   might?: boolean;
   // Награды за рейды клана уже забраны: ключи недель.
   raidClaimed?: string[];
+  // До какого уровня клана подарки уже забраны (в каком клане).
+  clanGift?: { clan: string; level: number };
+  // Повторы, ещё не отправленные клану: уходят, когда открыт экран клана.
+  clanPending?: number;
 }
 
 export interface Record_ {
@@ -349,3 +354,30 @@ export function claimRaid(p: Progress, key: string, reward: { coins: number; pot
   };
   return { progress: save(next), gear };
 }
+
+/** Подарки за уровни клана. В новом клане отсчёт начинается с его текущего уровня. */
+export function syncClanGift(p: Progress, clan: string, level: number): Progress | null {
+  if (p.clanGift?.clan === clan) return null;
+  return save({ ...p, clanGift: { clan, level } });
+}
+
+export function clanGiftsDue(p: Progress, clan: string, level: number): { coins: number; potions: Partial<Record<PotionId, number>>; levels: number } {
+  const from = p.clanGift?.clan === clan ? p.clanGift.level : level;
+  const out = { coins: 0, potions: {} as Partial<Record<PotionId, number>>, levels: Math.max(0, level - from) };
+  for (let l = from + 1; l <= level; l++) {
+    const g = clanGift(l);
+    out.coins += g.coins;
+    for (const [id, n] of Object.entries(g.potions) as [PotionId, number][]) out.potions[id] = (out.potions[id] ?? 0) + n;
+  }
+  return out;
+}
+
+export function claimClanGift(p: Progress, clan: string, level: number): Progress | null {
+  const due = clanGiftsDue(p, clan, level);
+  if (!due.levels) return null;
+  let potions = p.potions;
+  for (const [id, n] of Object.entries(due.potions) as [PotionId, number][]) potions = addPotion(potions, id, n);
+  return save({ ...p, coins: p.coins + due.coins, potions, clanGift: { clan, level } });
+}
+
+export const clearClanPending = (p: Progress): Progress => save({ ...p, clanPending: 0 });

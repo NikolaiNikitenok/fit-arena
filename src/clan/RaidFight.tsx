@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { RaidView } from '../../shared/clan';
-import { RAID_ATTACK_S, RAID_PREP_S, raidBoss } from '../../shared/raid';
+import { RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_PREP_S, raidBoss } from '../../shared/raid';
 import { itemById } from '../game/items';
 import { heroHands, heroPower } from '../game/power';
 import { Progress } from '../game/progress';
@@ -42,14 +42,17 @@ interface Props {
   attack: { attackId: string; endsAt: number };
   exercise: Exercise;
   progress: Progress;
+  // Надбавка уровня клана к урону в рейде, доля.
+  bonus: number;
   onHit: (damage: number) => void;
   onDone: (dealt: number) => void;
 }
 
 /** Атака на босса: минута повторов, каждый повтор — удар по общему здоровью. */
-export function RaidFight({ raid, attack, exercise, progress, onHit, onDone }: Props) {
+export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDone }: Props) {
   const camera = useRepCamera();
-  const power = heroPower(progress, progress.might);
+  const hero = heroPower(progress, progress.might);
+  const power = { ...hero, damage: Math.min(RAID_MAX_DAMAGE, Math.round(hero.damage * (1 + bonus))) };
   const item = itemById(progress.equipped);
   const [phase, setPhase] = useState<'loading' | 'prep' | 'fight' | 'done' | 'error'>('loading');
   const [reps, setReps] = useState(0);

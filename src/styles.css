@@ -390,3 +390,63 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .clan-form { display: flex; flex-direction: column; gap: 10px; }
 .clan-form > label:not(.toggle-row) { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 800; color: var(--hint); }
 .clan-form input:not(.switch), .clan-form textarea { padding: 11px 13px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-size: 15px; font-weight: 700; resize: none; }
+
+/* Поля ввода не мельче 16px: иначе iOS увеличивает страницу при вводе и всё съезжает. */
+.chat-input input, .clan-form input:not(.switch), .clan-form textarea, .clan-form select, .search, .join input { font-size: 16px; }
+html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
+
+/* Чат клана на весь экран */
+.chat-screen { position: fixed; left: 0; right: 0; z-index: 11; display: flex; flex-direction: column; background: var(--bg); padding: env(safe-area-inset-top) 0 0; animation: fade .15s ease-out; }
+.chat-head { flex: none; display: flex; align-items: center; gap: 10px; max-width: 480px; width: 100%; margin: 0 auto; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.chat-head .back { width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--text); font-size: 24px; line-height: 1; padding-bottom: 3px; }
+.chat-title { flex: 1; min-width: 0; font-weight: 900; font-size: 16px; }
+.chat-title .muted { font-size: 12px; font-weight: 700; }
+.chat-screen .chat-list { flex: 1; min-height: 0; height: auto; max-width: 480px; width: 100%; margin: 0 auto; border-radius: 0; background: transparent; padding: 12px 16px; overscroll-behavior: contain; }
+.chat-screen .chat-list > :first-child { margin-top: auto; }
+.chat-msg.mine { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: #2b2f45; }
+.chat-screen .chat-input { flex: none; max-width: 480px; width: 100%; margin: 0 auto; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); }
+.chat-screen .chat-input button { height: 46px; }
+
+/* Флаг и уровень клана */
+.flag { flex: none; overflow: visible; }
+.flag.gold { filter: drop-shadow(0 0 4px rgba(255,207,90,.45)); }
+.flag.legend { filter: drop-shadow(0 0 7px rgba(196,161,255,.75)); }
+.clan-place { font-size: 12.5px; font-weight: 800; color: var(--accent); margin-top: 2px; }
+.clan-level { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 0; border-radius: var(--r-lg); background: var(--surface); color: var(--text); text-align: left; }
+.clan-level-num { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--accent-grad); color: var(--on-accent); font-size: 18px; font-weight: 900; }
+.clan-level-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.clan-level-title { font-size: 14px; font-weight: 900; }
+.clan-level-title .muted { font-size: 12px; font-weight: 700; margin-left: 4px; }
+.clan-level .bar-fill { display: block; background: var(--accent-grad); }
+.clan-level .chev { color: var(--hint); font-size: 22px; }
+.perk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.perk-grid span { padding: 9px 10px; border-radius: var(--r-sm); background: var(--surface-2); font-size: 12.5px; font-weight: 700; color: #c9cfda; }
+.perk-grid b { display: block; font-size: 17px; color: var(--text); }
+.sheet-body > .muted { font-size: 12.5px; }
+.levels-list { display: flex; flex-direction: column; gap: 4px; }
+.level-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-sm); background: rgba(255,255,255,.03); font-size: 13px; font-weight: 700; color: #c9cfda; }
+.level-row-num { flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--surface-3); font-weight: 900; color: var(--text); }
+.level-row.done { opacity: .55; }
+.level-row.done .level-row-num { background: var(--mint); color: #0d1a14; }
+.level-row.next { outline: 1.5px solid var(--accent); background: rgba(255,180,107,.08); }
+.member-xp { flex-basis: 100%; font-size: 12.5px; }
+.about-clan { display: flex; gap: 14px; align-items: flex-start; }
+.about-clan > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+/* Выбор флага */
+.form-label { font-size: 13px; font-weight: 800; color: var(--hint); }
+.flag-picker { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: var(--r-md); background: var(--surface-2); }
+.flag-preview { display: flex; justify-content: center; padding: 4px 0 6px; }
+.pick-label { font-size: 12px; font-weight: 800; color: var(--hint); margin-top: 2px; }
+.pick-row { display: flex; gap: 6px; overflow-x: auto; padding: 3px 2px 5px; scrollbar-width: none; }
+.pick-row::-webkit-scrollbar { display: none; }
+.swatch-btn { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.12); padding: 0; }
+.swatch-btn.on { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+.pick-btn { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 48px; border: 1.5px solid transparent; border-radius: 10px; background: var(--surface-3); color: var(--text); padding: 0; }
+.pick-btn.sym { width: 40px; height: 40px; }
+.pick-btn.on { border-color: var(--accent); background: rgba(255,180,107,.12); color: var(--accent); }
+.form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.form-pair label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 800; color: var(--hint); min-width: 0; }
+.clan-form select { width: 100%; min-width: 0; padding: 11px 10px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-family: var(--font); font-weight: 700; appearance: none; -webkit-appearance: none; }
+.clan-form .form-pair input { min-width: 0; width: 100%; }
+.btn-link { text-decoration: none; }

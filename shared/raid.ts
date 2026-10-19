@@ -104,12 +104,13 @@ export interface RaidReward {
   chest: boolean;
 }
 
-export function raidReward(damage: number, hpMax: number, members: number, killed: boolean): RaidReward {
+/** coinBonus — надбавка уровня клана к монетам, доля. */
+export function raidReward(damage: number, hpMax: number, members: number, killed: boolean, coinBonus = 0): RaidReward {
   const tier = raidTier(damage, hpMax, members);
   const hit = damage > 0;
   return {
     tier,
-    coins: Math.round(tier.coins * (killed && hit ? KILL_COIN_FACTOR : 1)),
+    coins: Math.round(tier.coins * (killed && hit ? KILL_COIN_FACTOR : 1) * (1 + coinBonus)),
     potions: tier.potions,
     chest: tier.chest || (killed && hit),
   };

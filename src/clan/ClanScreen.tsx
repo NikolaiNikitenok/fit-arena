@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { CLAN_MAX_MEMBERS, CHAT_MAX, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
-import { fairShare, RAID_ATTACKS_PER_DAY, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
-import type { Gear } from '../game/items';
-import { claimRaid, heroLevel, heroXp, Progress } from '../game/progress';
+import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
+import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
+import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
+import { claimClanGift, claimRaid, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
 import { Banner, Coin, Flask, Lock, Send, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { clanInviteCode, clanInviteLink, share } from '../telegram';
 import { RaidFight, RaidScene } from './RaidFight';
+import { Flag, FlagPicker } from './Flag';
 import { useClan } from './useClan';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
@@ -18,13 +19,8 @@ const fmtLeft = (ms: number) => {
 };
 const num = (n: number) => n.toLocaleString('ru');
 
-// Цвет эмблемы по тегу: у каждого клана свой.
-const emblemColor = (tag: string) => `hsl(${[...tag].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 360} 70% 62%)`;
-const Emblem = ({ tag, size = 48 }: { tag: string; size?: number }) => (
-  <span className="emblem" style={{ width: size, height: size, fontSize: size * 0.34, background: emblemColor(tag) }}>
-    {tag}
-  </span>
-);
+// Цвет имени в чате: у каждого свой.
+const nameColor = (name: string) => `hsl(${[...name].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 360} 70% 62%)`;
 
 interface Props {
   progress: Progress;
@@ -42,6 +38,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
   const [tab, setTab] = useState<'raid' | 'chat' | 'members'>('raid');
   const [exercise, setExercise] = useState<Exercise>('squat');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [levelsOpen, setLevelsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const invite = useRef(clanInviteCode());
 
@@ -60,6 +57,24 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.attack]);
 
+  // Повторы из приключения уходят клану; без клана копить их незачем.
+  const pending = progress.clanPending ?? 0;
+  useEffect(() => {
+    if (status !== 'online' || clan === undefined || pending <= 0) return;
+    if (clan) send({ type: 'clanReps', reps: Math.min(pending, CLAN_REPS_PER_DAY) });
+    setProgress(clearClanPending(progress));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, clan?.id, pending]);
+
+  // В новом клане подарки считаем с его текущего уровня.
+  const cl = clan ? clanLevel(clan.xp) : null;
+  useEffect(() => {
+    if (!clan || !cl) return;
+    const next = syncClanGift(progress, clan.id, cl.level);
+    if (next) setProgress(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clan?.id, cl?.level]);
+
   const show = (t: string) => {
     setToast(t);
     setTimeout(() => setToast((x) => (x === t ? null : t)), 3000);
@@ -72,6 +87,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         attack={api.attack}
         exercise={exercise}
         progress={progress}
+        bonus={clanPerks(clanLevel(clan.xp).level).raidDamage}
         onHit={(damage) => send({ type: 'raidHit', attackId: api.attack!.attackId, damage })}
         onDone={() => {
           send({ type: 'raidEnd', attackId: api.attack!.attackId });
@@ -84,7 +100,11 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
   const head = (
     <div className="app-head">
       <h1>Клан</h1>
-      {clan && <span className="muted">{clan.members.length} из {CLAN_MAX_MEMBERS}</span>}
+      {clan && (
+        <span className="muted">
+          {clan.members.length} из {clanPerks(clanLevel(clan.xp).level).slots}
+        </span>
+      )}
     </div>
   );
 
@@ -107,6 +127,24 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
       </>
     );
 
+  // Открыли в браузере, а сервер знает бота: в клан — только из Telegram, чтобы друг вошёл под своим именем.
+  if (!api.telegram && api.bot)
+    return (
+      <>
+        {head}
+        <div className="clan-intro">
+          <Banner size={28} />
+          <div>
+            <div className="claim-title">Кланы живут в Telegram</div>
+            <div className="muted">Открой Атлетию в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.</div>
+          </div>
+        </div>
+        <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot}?startapp=clan`}>
+          Открыть в Telegram
+        </a>
+      </>
+    );
+
   if (!clan)
     return (
       <>
@@ -117,16 +155,20 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
     );
 
   const startAttack = () => send({ type: 'raidStart', exercise });
+  const lv = cl!;
+  const perks = clanPerks(lv.level);
+  const gifts = clanGiftsDue(progress, clan.id, lv.level);
 
   return (
     <>
       {head}
       <div className="clan-card">
-        <Emblem tag={clan.tag} size={56} />
+        <Flag flag={clan.flag} tag={clan.tag} level={lv.level} size={64} />
         <div className="clan-meta">
           <div className="clan-name">
             {clan.name} <span className="clan-tag">[{clan.tag}]</span>
           </div>
+          {clanPlace(clan) && <div className="clan-place">{clanPlace(clan)}</div>}
           <div className="muted">{clan.description || 'Без описания'}</div>
           <div className="clan-badges">
             <span>{clan.open ? 'открытый' : 'по приглашению'}</span>
@@ -135,6 +177,40 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           </div>
         </div>
       </div>
+      <button className="clan-level" onClick={() => setLevelsOpen(true)}>
+        <span className="clan-level-num">{lv.level}</span>
+        <span className="clan-level-body">
+          <span className="clan-level-title">
+            Уровень клана <span className="muted">{lv.level < CLAN_MAX_LEVEL ? `${num(lv.into)} / ${num(lv.need)} опыта` : 'максимальный'}</span>
+          </span>
+          <span className="bar">
+            <span className="bar-fill" style={{ width: `${lv.need ? (lv.into / lv.need) * 100 : 100}%` }} />
+          </span>
+        </span>
+        <span className="chev">›</span>
+      </button>
+      {gifts.levels > 0 && (
+        <div className="claim-card">
+          <div>
+            <div className="claim-title">{gifts.levels > 1 ? `Клан вырос на ${gifts.levels} уровня!` : `Клан достиг ${lv.level} уровня!`}</div>
+            <div className="muted">
+              Подарок: {gifts.coins} монет
+              {gifts.potions.vigor ? ` · зелье жизни ×${gifts.potions.vigor}` : ''}
+              {gifts.potions.might ? ` · эликсир силы ×${gifts.potions.might}` : ''}
+            </div>
+          </div>
+          <button
+            className="small-btn"
+            onClick={() => {
+              const next = claimClanGift(progress, clan.id, lv.level);
+              if (next) setProgress(next);
+              show(`+${gifts.coins} монет!`);
+            }}
+          >
+            Забрать
+          </button>
+        </div>
+      )}
       <div className="clan-actions">
         <button
           className="secondary"
@@ -166,12 +242,14 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         <RaidTab
           clan={clan}
           progress={progress}
+          attacks={perks.attacks}
+          coinBonus={perks.raidCoins}
           exercise={exercise}
           setExercise={setExercise}
           onAttack={startAttack}
           onClaim={() => {
             const r = clan.reward!;
-            const reward = raidReward(r.damage, r.hpMax, r.members, r.killed);
+            const reward = raidReward(r.damage, r.hpMax, r.members, r.killed, perks.raidCoins);
             const res = claimRaid(progress, r.key, reward, landNow);
             if (!res) return;
             setProgress(res.progress);
@@ -179,15 +257,16 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           }}
         />
       )}
-      {tab === 'chat' && <Chat api={api} />}
+      {tab === 'chat' && <Chat api={api} clan={clan} onClose={() => setTab('raid')} />}
       {tab === 'members' && <Members clan={clan} api={api} />}
+      {levelsOpen && <LevelsSheet level={lv.level} onClose={() => setLevelsOpen(false)} />}
       {settingsOpen && <ClanSettingsSheet clan={clan} api={api} onClose={() => setSettingsOpen(false)} />}
       {(error || toast) && <div className="toast global">{error ?? toast}</div>}
     </>
   );
 }
 
-function RaidTab({ clan, progress, exercise, setExercise, onAttack, onClaim }: { clan: ClanView; progress: Progress; exercise: Exercise; setExercise: (e: Exercise) => void; onAttack: () => void; onClaim: () => void }) {
+function RaidTab({ clan, progress, attacks, coinBonus, exercise, setExercise, onAttack, onClaim }: { clan: ClanView; progress: Progress; attacks: number; coinBonus: number; exercise: Exercise; setExercise: (e: Exercise) => void; onAttack: () => void; onClaim: () => void }) {
   const r = clan.raid;
   const boss = raidBoss(r.key);
   const now = Date.now();
@@ -223,7 +302,7 @@ function RaidTab({ clan, progress, exercise, setExercise, onAttack, onClaim }: {
           <div>
             <div className="claim-title">{reward.killed ? 'Босс повержен! Твоя награда' : 'Рейд окончен. Твоя награда'}</div>
             <div className="muted">
-              {num(reward.damage)} урона · {raidReward(reward.damage, reward.hpMax, reward.members, reward.killed).tier.name}
+              {num(reward.damage)} урона · {raidReward(reward.damage, reward.hpMax, reward.members, reward.killed, coinBonus).tier.name}
             </div>
           </div>
           <button className="small-btn" onClick={onClaim}>
@@ -256,7 +335,7 @@ function RaidTab({ clan, progress, exercise, setExercise, onAttack, onClaim }: {
           <button className="primary" disabled={r.attacksLeft <= 0} onClick={onAttack}>
             {r.attacksLeft > 0 ? 'Атаковать босса' : 'Атаки кончились до завтра'}
             <span className="btn-cost">
-              {r.attacksLeft}/{RAID_ATTACKS_PER_DAY}
+              {r.attacksLeft}/{attacks}
             </span>
           </button>
         </>
@@ -294,7 +373,7 @@ function RaidTab({ clan, progress, exercise, setExercise, onAttack, onClaim }: {
             <span className={`tier-badge ${t.id}`}>{t.name}</span>
             <span className="tier-need">{t.id === 'part' ? 'любой урон' : `от ${num(Math.ceil(t.from * fair))}`}</span>
             <span className="tier-gift">
-              <Coin size={12} className="coin" /> {t.coins}
+              <Coin size={12} className="coin" /> {Math.round(t.coins * (1 + coinBonus))}
               {Object.entries(t.potions).map(([id, n]) => (
                 <span key={id} className="tier-potion">
                   <Flask size={16} color={id === 'vigor' ? '#ff6b81' : id === 'might' ? '#ffb46b' : '#7dd3fc'} scroll={id === 'swap'} />×{n}
@@ -304,25 +383,64 @@ function RaidTab({ clan, progress, exercise, setExercise, onAttack, onClaim }: {
             </span>
           </div>
         ))}
-        <div className="muted tiers-note">Если клан добьёт босса, монеты удваиваются, а каждому, кто бился, достаётся сундук рейда со снаряжением. Атак — {RAID_ATTACKS_PER_DAY} в день, каждая длится минуту.</div>
+        <div className="muted tiers-note">Если клан добьёт босса, монеты удваиваются, а каждому, кто бился, достаётся сундук рейда со снаряжением. Атак — {attacks} в день, каждая длится минуту.{coinBonus > 0 && ` Уровень клана добавляет +${Math.round(coinBonus * 100)}% монет.`}</div>
       </div>
     </>
   );
 }
 
-function Chat({ api }: { api: ReturnType<typeof useClan> }) {
+/** Видимая часть экрана: при открытой клавиатуре она меньше окна, и чат подстраивается под неё. */
+function useVisibleViewport() {
+  const read = () => ({ top: window.visualViewport?.offsetTop ?? 0, height: window.visualViewport?.height ?? window.innerHeight });
+  const [vp, setVp] = useState(read);
+  useEffect(() => {
+    const v = window.visualViewport;
+    const on = () => setVp(read());
+    v?.addEventListener('resize', on);
+    v?.addEventListener('scroll', on);
+    window.addEventListener('resize', on);
+    return () => {
+      v?.removeEventListener('resize', on);
+      v?.removeEventListener('scroll', on);
+      window.removeEventListener('resize', on);
+    };
+  }, []);
+  return vp;
+}
+
+/** Чат на весь экран: поле ввода всегда над клавиатурой, страница под ним не двигается. */
+function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: ClanView; onClose: () => void }) {
   const [text, setText] = useState('');
   const list = useRef<HTMLDivElement>(null);
+  const vp = useVisibleViewport();
+  const meId = clan.members.find((m) => m.me)?.id;
+  const toBottom = () => list.current?.scrollTo({ top: list.current.scrollHeight });
+  useEffect(toBottom, [api.chat.length, vp.height]);
+  // Пока открыт чат, страница под ним не прокручивается.
   useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [api.chat.length]);
+    const html = document.documentElement;
+    html.classList.add('locked');
+    return () => html.classList.remove('locked');
+  }, []);
   const sendIt = () => {
     if (!text.trim()) return;
     api.send({ type: 'chatSend', text });
     setText('');
   };
   return (
-    <div className="chat">
+    <div className="chat-screen" style={{ top: vp.top, height: vp.height }}>
+      <div className="chat-head">
+        <button className="back" onClick={onClose} aria-label="Назад">
+          ‹
+        </button>
+        <Flag flag={clan.flag} tag={clan.tag} level={clanLevel(clan.xp).level} size={30} />
+        <div className="chat-title">
+          <div>{clan.name}</div>
+          <div className="muted">
+            {clan.members.filter((m) => m.online).length} в сети · {clan.members.length} в клане
+          </div>
+        </div>
+      </div>
       <div className="chat-list" ref={list}>
         {api.chat.length === 0 && <div className="muted">Пока тихо. Напиши первым!</div>}
         {api.chat.map((m) =>
@@ -331,8 +449,8 @@ function Chat({ api }: { api: ReturnType<typeof useClan> }) {
               {m.text}
             </div>
           ) : (
-            <div key={m.id} className="chat-msg">
-              <span className="chat-name" style={{ color: emblemColor(m.name || '?') }}>
+            <div key={m.id} className={`chat-msg ${m.from === meId ? 'mine' : ''}`}>
+              <span className="chat-name" style={{ color: nameColor(m.name || '?') }}>
                 {m.name}
               </span>
               <span className="chat-time">{new Date(m.at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -348,8 +466,8 @@ function Chat({ api }: { api: ReturnType<typeof useClan> }) {
           sendIt();
         }}
       >
-        <input value={text} maxLength={CHAT_MAX} onChange={(e) => setText(e.target.value)} placeholder="Сообщение клану" />
-        <button type="submit" aria-label="Отправить" disabled={!text.trim()}>
+        <input value={text} maxLength={CHAT_MAX} onChange={(e) => setText(e.target.value)} onFocus={() => setTimeout(toBottom, 300)} placeholder="Сообщение клану" enterKeyHint="send" />
+        <button type="submit" aria-label="Отправить" disabled={!text.trim()} onPointerDown={(e) => e.preventDefault()}>
           <Send />
         </button>
       </form>
@@ -379,8 +497,9 @@ function Members({ clan, api }: { clan: ClanView; api: ReturnType<typeof useClan
                 <Swords size={12} /> {num(m.raidDamage)}
               </span>
             </button>
-            {open === m.id && (canKick || canRole) && (
+            {open === m.id && (
               <div className="member-actions">
+                <span className="member-xp muted">Вклад в клан: {num(m.xp)} опыта</span>
                 {canRole && m.role !== 'officer' && (
                   <button className="small-btn ghost" onClick={() => api.send({ type: 'clanRole', id: m.id, role: 'officer' })}>
                     Сделать заместителем
@@ -428,6 +547,25 @@ function SettingsForm({ initial, submit, onSubmit }: { initial: ClanSettings; su
         Тег (2–4 знака)
         <input value={s.tag} maxLength={4} onChange={(e) => setS({ ...s, tag: e.target.value.toUpperCase() })} placeholder="ЖС" />
       </label>
+      <div className="form-label">Флаг клана</div>
+      <FlagPicker flag={s.flag} tag={s.tag} onChange={(flag) => setS({ ...s, flag })} />
+      <div className="form-pair">
+        <label>
+          Страна
+          <select value={s.country} onChange={(e) => setS({ ...s, country: e.target.value })}>
+            <option value="">Не указана</option>
+            {Object.entries(COUNTRIES).map(([code, name]) => (
+              <option key={code} value={code}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Город
+          <input value={s.city} maxLength={30} onChange={(e) => setS({ ...s, city: e.target.value })} placeholder="Москва" />
+        </label>
+      </div>
       <label>
         Описание
         <textarea value={s.description} maxLength={200} rows={3} onChange={(e) => setS({ ...s, description: e.target.value })} placeholder="Кто мы и как тренируемся" />
@@ -458,7 +596,7 @@ function ClanSettingsSheet({ clan, api, onClose }: { clan: ClanView; api: Return
         <div className="level-title">{clan.myRole === 'leader' ? 'Настройки клана' : `Клан «${clan.name}»`}</div>
         {clan.myRole === 'leader' ? (
           <SettingsForm
-            initial={{ name: clan.name, tag: clan.tag, description: clan.description, open: clan.open, minLevel: clan.minLevel }}
+            initial={{ name: clan.name, tag: clan.tag, description: clan.description, open: clan.open, minLevel: clan.minLevel, flag: clan.flag, country: clan.country, city: clan.city }}
             submit="Сохранить"
             onSubmit={(s) => {
               api.send({ type: 'clanUpdate', clan: s });
@@ -466,7 +604,13 @@ function ClanSettingsSheet({ clan, api, onClose }: { clan: ClanView; api: Return
             }}
           />
         ) : (
-          <div className="settings-note">{clan.description || 'Глава клана пока не добавил описание.'}</div>
+          <div className="about-clan">
+            <Flag flag={clan.flag} tag={clan.tag} level={clanLevel(clan.xp).level} size={84} />
+            <div>
+              {clanPlace(clan) && <div className="clan-place">{clanPlace(clan)}</div>}
+              <div className="settings-note">{clan.description || 'Глава клана пока не добавил описание.'}</div>
+            </div>
+          </div>
         )}
         <div className="settings-note">
           <b>Код приглашения: {clan.code}</b>. Его можно ввести вручную, если ссылка не открывается.
@@ -529,20 +673,21 @@ function NoClan({ api, level }: { api: ReturnType<typeof useClan>; level: number
         <button disabled={code.trim().length < 4}>Войти</button>
       </form>
       <div className="section-title">Кланы</div>
-      <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по названию или тегу" />
+      <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Название, тег или город" />
       <div className="clan-list">
         {api.list?.length === 0 && <div className="muted">Пока ни одного клана. Создай первый!</div>}
         {api.list?.map((c) => {
           const low = level < c.minLevel;
           return (
             <div key={c.id} className="clan-item">
-              <Emblem tag={c.tag} size={42} />
+              <Flag flag={c.flag} tag={c.tag} level={clanLevel(c.xp).level} size={46} />
               <div className="clan-meta">
                 <div className="clan-name small">
                   {c.name} <span className="clan-tag">[{c.tag}]</span>
                 </div>
                 <div className="muted">
-                  {c.members}/{CLAN_MAX_MEMBERS} · рейдов {c.raidWins}
+                  {clanLevel(c.xp).level} ур. · {c.members}/{clanPerks(clanLevel(c.xp).level).slots}
+                  {clanPlace(c) && ` · ${clanPlace(c)}`}
                   {c.minLevel > 1 && ` · с ${c.minLevel} ур.`}
                 </div>
               </div>
@@ -564,7 +709,7 @@ function NoClan({ api, level }: { api: ReturnType<typeof useClan>; level: number
           <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
             <div className="level-title">Новый клан</div>
             <SettingsForm
-              initial={{ name: '', tag: '', description: '', open: true, minLevel: 1 }}
+              initial={{ name: '', tag: '', description: '', open: true, minLevel: 1, flag: defaultFlag(String(Math.random())), country: 'RU', city: '' }}
               submit="Создать"
               onSubmit={(s) => {
                 api.send({ type: 'clanCreate', clan: s });
@@ -579,3 +724,48 @@ function NoClan({ api, level }: { api: ReturnType<typeof useClan>; level: number
 }
 
 
+
+/** Уровни клана и что они дают. */
+function LevelsSheet({ level, onClose }: { level: number; onClose: () => void }) {
+  const perks = clanPerks(level);
+  const now = useRef<HTMLDivElement>(null);
+  useEffect(() => now.current?.scrollIntoView({ block: 'center' }), []);
+  return (
+    <div className="sheet" onClick={onClose}>
+      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+        <div className="level-title">Уровень клана {level}</div>
+        <div className="perk-grid">
+          <span>
+            <b>{perks.slots}</b> мест
+          </span>
+          <span>
+            <b>{perks.attacks}</b> атаки в день
+          </span>
+          <span>
+            <b>+{Math.round(perks.raidCoins * 100)}%</b> монет рейда
+          </span>
+          <span>
+            <b>+{Math.round(perks.raidDamage * 100)}%</b> урона в рейде
+          </span>
+        </div>
+        <div className="muted">Опыт клану приносят повторы участников в приключении (до {CLAN_REPS_PER_DAY} в день от каждого), урон по рейд-боссу и победа над ним. На каждом новом уровне все участники получают подарок.</div>
+        <div className="levels-list">
+          {Array.from({ length: CLAN_MAX_LEVEL - 1 }, (_, i) => i + 2).map((l) => {
+            const gift = clanGift(l);
+            return (
+              <div key={l} ref={l === level + 1 ? now : undefined} className={`level-row ${l <= level ? 'done' : ''} ${l === level + 1 ? 'next' : ''}`}>
+                <span className="level-row-num">{l}</span>
+                <span className="level-row-text">
+                  {[...clanUnlocks(l), `подарок ${gift.coins} монет${gift.potions.vigor ? ' и эликсиры' : ''}`].join(' · ')}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <button className="link" onClick={onClose}>
+          Закрыть
+        </button>
+      </div>
+    </div>
+  );
+}

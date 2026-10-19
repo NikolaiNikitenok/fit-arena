@@ -127,7 +127,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         }}
         onLose={() => update((p) => recordLoss(spendLife(p, Date.now()), playing))}
         onStart={() => update(spendMight)}
-        onActivity={(ex, reps) => update((p) => recordActivity(p, ex, reps, Date.now()))}
+        onActivity={(ex, reps) => update((p) => ({ ...recordActivity(p, ex, reps, Date.now()), clanPending: (p.clanPending ?? 0) + reps }))}
         lives={lives}
         swaps={swapsLeft(progress, playing.id, Date.now())}
         onSwap={(count) => {
@@ -206,90 +206,93 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
 
   // Карта на весь экран: листается только сама сцена, страница и Telegram не двигаются.
   return (
-    <div className="map-screen">
-      <div className="arena map3d" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setTimeout(() => (drag.current = null))}>
-        <WorldMap3D
-          levels={levels}
-          stars={progress.stars}
-          currentId={current}
-          hero={item.hero}
-          heroTint={item.tint}
-          heroGlow={item.glow}
-          heroHands={heroHands(progress)}
-          focus={focus}
-          focusLand={focusLand}
-          openedChests={progress.chests}
-          onSelect={(l) => tap(() => setSelected(l))()}
-          onMerchant={tap(() => setShop('weapon'))}
-          onChest={(land) =>
-            tap(() => {
-              const r = claimChest(progress, land);
-              if (!r) return showToast('Этот сундук уже пуст.');
-              setProgress(r.progress);
-              showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
-            })()
-          }
-        />
-        <div className="map-top">
-          <div className="world-tabs">
-            {TABS.map((w, i) => (
-              <button key={w} className={world === i ? 'active' : ''} disabled={!worldOpen(i)} onClick={() => switchWorld(i)}>
-                {!worldOpen(i) && <Lock size={12} />}
-                {SHORT_WORLD[w]}
-              </button>
-            ))}
-          </div>
-          <div className="map-hud">
-            <div className="map-title">
-              <div className="map-land">{L.name}</div>
-              <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
-            </div>
-            <div className="stats">
-              <LivesPill progress={progress} />
-              <span className="pill">
-                <Coin className="coin" /> {progress.coins}
-              </span>
-            </div>
-          </div>
-        </div>
-        {toast && <div className="toast">{toast}</div>}
-
-        <div className="map-bottom">
-          {selected ? (
-            <div className="level-card">
-              <button className="close-x" onClick={() => setSelected(null)} aria-label="Закрыть">
-                ×
-              </button>
-              <div className="level-tag">
-                {WORLD_NAMES[LANDS[selected.land].world]} · уровень {selected.num}
-              </div>
-              <div className="level-title">{selected.title}</div>
-              <div className="muted">
-                {selected.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
-                {selected.type !== 'trial' && ` · цель ${targetReps(selected, progress.baseline)}`} · {selected.coins} монет
-              </div>
-              <Stars n={progress.stars[selected.id] ?? 0} />
-              {isUnlocked(progress, selected.id) ? (
-                <button className="primary" onClick={() => setPlaying(selected)}>
-                  {progress.stars[selected.id] ? 'Пройти ещё раз' : 'В путь'}
+    <>
+      <div className="map-screen">
+        <div className="arena map3d" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setTimeout(() => (drag.current = null))}>
+          <WorldMap3D
+            levels={levels}
+            stars={progress.stars}
+            currentId={current}
+            hero={item.hero}
+            heroTint={item.tint}
+            heroGlow={item.glow}
+            heroHands={heroHands(progress)}
+            focus={focus}
+            focusLand={focusLand}
+            openedChests={progress.chests}
+            onSelect={(l) => tap(() => setSelected(l))()}
+            onMerchant={tap(() => setShop('weapon'))}
+            onChest={(land) =>
+              tap(() => {
+                const r = claimChest(progress, land);
+                if (!r) return showToast('Этот сундук уже пуст.');
+                setProgress(r.progress);
+                showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
+              })()
+            }
+          />
+          <div className="map-top">
+            <div className="world-tabs">
+              {TABS.map((w, i) => (
+                <button key={w} className={world === i ? 'active' : ''} disabled={!worldOpen(i)} onClick={() => switchWorld(i)}>
+                  {!worldOpen(i) && <Lock size={12} />}
+                  {SHORT_WORLD[w]}
                 </button>
-              ) : (
-                <div className="muted">Сначала пройди предыдущие уровни.</div>
-              )}
+              ))}
             </div>
-          ) : (
-            <>
-              <div className="map-help">Листай карту пальцем · нажми на камень уровня</div>
-              <button className="primary daily" onClick={() => setPlaying(currentDef)}>
-                {series.today ? `Уровень ${currentDef.num}: ${currentDef.title}` : 'Тренировка дня'}
-                <small>{series.today ? `Сегодня уже ${progress.days[dayKey(now)]} повторов · серия ${series.days}` : `Уровень ${currentDef.num}: ${currentDef.title}`}</small>
-              </button>
-            </>
-          )}
+            <div className="map-hud">
+              <div className="map-title">
+                <div className="map-land">{L.name}</div>
+                <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
+              </div>
+              <div className="stats">
+                <LivesPill progress={progress} />
+                <span className="pill">
+                  <Coin className="coin" /> {progress.coins}
+                </span>
+              </div>
+            </div>
+          </div>
+          {toast && <div className="toast">{toast}</div>}
+
+          <div className="map-bottom">
+            {selected ? (
+              <div className="level-card">
+                <button className="close-x" onClick={() => setSelected(null)} aria-label="Закрыть">
+                  ×
+                </button>
+                <div className="level-tag">
+                  {WORLD_NAMES[LANDS[selected.land].world]} · уровень {selected.num}
+                </div>
+                <div className="level-title">{selected.title}</div>
+                <div className="muted">
+                  {selected.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
+                  {selected.type !== 'trial' && ` · цель ${targetReps(selected, progress.baseline)}`} · {selected.coins} монет
+                </div>
+                <Stars n={progress.stars[selected.id] ?? 0} />
+                {isUnlocked(progress, selected.id) ? (
+                  <button className="primary" onClick={() => setPlaying(selected)}>
+                    {progress.stars[selected.id] ? 'Пройти ещё раз' : 'В путь'}
+                  </button>
+                ) : (
+                  <div className="muted">Сначала пройди предыдущие уровни.</div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="map-help">Листай карту пальцем · нажми на камень уровня</div>
+                <button className="primary daily" onClick={() => setPlaying(currentDef)}>
+                  {series.today ? `Уровень ${currentDef.num}: ${currentDef.title}` : 'Тренировка дня'}
+                  <small>{series.today ? `Сегодня уже ${progress.days[dayKey(now)]} повторов · серия ${series.days}` : `Уровень ${currentDef.num}: ${currentDef.title}`}</small>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+      {/* Листы вне карты: иначе нижнее меню перекрывает их низ вместе с кнопкой «Закрыть». */}
       {sheets}
-    </div>
+    </>
   );
 }
 
