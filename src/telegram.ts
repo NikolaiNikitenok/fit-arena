@@ -10,6 +10,10 @@ interface TelegramWebApp {
   disableVerticalSwipes?(): void;
   setBackgroundColor?(color: string): void;
   openTelegramLink?(url: string): void;
+  // Bot API 8.0: в полноэкранном режиме сверху лежат статус-бар и кнопки Telegram («Закрыть», «…»).
+  safeAreaInset?: { top: number; bottom: number };
+  contentSafeAreaInset?: { top: number; bottom: number };
+  onEvent?(event: string, cb: () => void): void;
 }
 
 declare global {
@@ -28,6 +32,19 @@ export function initTelegram(): void {
     tg?.disableVerticalSwipes?.();
   } catch {
     // Клиенты до Bot API 7.7.
+  }
+  // Отступ сверху под кнопки Telegram: весь интерфейс берёт его из --safe-top.
+  const insets = () => {
+    const top = (tg?.safeAreaInset?.top ?? 0) + (tg?.contentSafeAreaInset?.top ?? 0);
+    document.documentElement.style.setProperty('--tg-top', `${top}px`);
+  };
+  insets();
+  try {
+    tg?.onEvent?.('safeAreaChanged', insets);
+    tg?.onEvent?.('contentSafeAreaChanged', insets);
+    tg?.onEvent?.('fullscreenChanged', insets);
+  } catch {
+    // Старые клиенты без этих событий.
   }
   // Шапка Telegram в цвет игры, чтобы не было светлой полосы над тёмным экраном.
   try {
