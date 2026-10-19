@@ -104,12 +104,13 @@ let botUsername: string | null = process.env.BOT_USERNAME?.replace(/^@/, '') || 
 async function loadBotUsername(): Promise<void> {
   if (!BOT_TOKEN) return;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
-    const body = (await res.json()) as { ok: boolean; result?: { username: string } };
+    const body = (await botApi(BOT_TOKEN)('getMe', {}, 15_000)) as { ok: boolean; result?: { username: string }; description?: string };
+    if (!body.ok) botStatus.lastError = `getMe: ${body.description ?? 'ошибка'}`;
     botUsername = body.result?.username ?? botUsername;
     console.log('bot:', botUsername);
   } catch (e) {
-    console.error('getMe failed:', e);
+    botStatus.lastError = `getMe: ${e instanceof Error ? e.message : e}`;
+    console.error('getMe failed:', botStatus.lastError);
   }
 }
 

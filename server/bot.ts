@@ -2,6 +2,8 @@
 // Приглашения ведут сюда (t.me/<бот>?start=clan-КОД): после «Старт» игрок входит в приложение
 // уже под своим аккаунтом Telegram, а код клана передаётся в адресе приложения.
 
+import https from 'node:https';
+
 export interface StartReply {
   text: string;
   button: string;
@@ -50,8 +52,32 @@ interface Update {
   message?: { chat: { id: number; type: string }; text?: string };
 }
 
-export const botApi = (token: string) => (method: string, body: unknown) =>
-  fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; result?: unknown; description?: string; error_code?: number }>);
+type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number };
+
+// Адрес Bot API: если с сервера Telegram недоступен напрямую, можно указать свой прокси-адрес.
+const TG_API = (process.env.TG_API_BASE ?? 'https://api.telegram.org').replace(/\/$/, '');
+// На части VPS нет рабочего IPv6, а fetch пробует его первым и падает с «fetch failed». Ходим по IPv4.
+const agent = new https.Agent({ keepAlive: true, family: 4 });
+
+/** Вызов Bot API. Ошибка сети приходит с кодом (ETIMEDOUT, ECONNREFUSED…), чтобы её было видно в /api/health. */
+export const botApi = (token: string) => (method: string, body: unknown, timeoutMs = 65_000) =>
+  new Promise<TgReply>((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = https.request(`${TG_API}/bot${token}/${method}`, { method: 'POST', agent, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, timeout: timeoutMs }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        } catch {
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+    req.on('error', (e: NodeJS.ErrnoException) => reject(new Error(e.code ? `${e.code} ${e.message}` : e.message)));
+    req.end(data);
+  });
 
 // Состояние бота для /api/health: видно без доступа к логам сервера (без токена).
 export const botStatus: { polling: boolean; lastOkAt: number | null; lastError: string | null; handled: number } = { polling: false, lastOkAt: null, lastError: null, handled: 0 };
