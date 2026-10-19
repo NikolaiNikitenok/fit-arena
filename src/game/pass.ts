@@ -229,3 +229,9 @@ export function passReady(p: Progress, pro: boolean, now: number): number {
 }
 
 export const passEndsAt = (now: number) => seasonEndsAt(noon(dayKey(now)));
+
+/** Когда сменятся задания недели: местная полночь после последнего дня недели сезона. */
+export function passWeekEndsAt(now: number): number {
+  const [y, m, d] = weekDates(dayKey(now))[6].split('-').map(Number);
+  return new Date(y, m - 1, d + 1).getTime();
+}

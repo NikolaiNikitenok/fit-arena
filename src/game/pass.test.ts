@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimPassTier, claimQuest, dailyQuests, PASS_TIERS, passQuests, passRewards, passTier, passWeek, questValue, seasonQuests, weeklyQuests, XP_PER_TIER } from './pass';
+import { claimPassTier, claimQuest, dailyQuests, PASS_TIERS, passQuests, passRewards, passTier, passWeek, passWeekEndsAt, questValue, seasonQuests, weeklyQuests, XP_PER_TIER } from './pass';
 import { countPass, dayKey, loadProgress, passOf, type Progress, recordActivity, recordDuel } from './progress';
 
 const base = { squat: 20, pushup: 10, situp: 15 };
@@ -110,5 +110,17 @@ describe('ступени и награды', () => {
     expect(got.progress.items).toContain('pass-gold');
     const again = claimPassTier({ ...got.progress, pass: { ...passOf(got.progress, t), pro: [] } }, 'pro', PASS_TIERS, true, 0, t)!;
     expect(again.progress.coins).toBe(got.progress.coins + 2500);
+  });
+});
+
+describe('смена заданий недели', () => {
+  it('неделя кончается в полночь, не позже конца сезона и через 1–7 дней', () => {
+    for (let i = 0; i < 40; i++) {
+      const now = new Date(2026, 9, 19 + i, 15).getTime();
+      const left = passWeekEndsAt(now) - now;
+      expect(left).toBeGreaterThan(0);
+      expect(left).toBeLessThanOrEqual(7 * 86400000);
+      expect(new Date(passWeekEndsAt(now)).getHours()).toBe(0);
+    }
   });
 });

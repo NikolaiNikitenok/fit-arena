@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Chest, Coin, Flask, Lock, PassShield, Swords } from '../icons';
 import { itemById, potionById } from './items';
 import { portraitUrl } from './npcs';
-import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
+import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';
 import { sfx } from '../audio';
 
@@ -139,8 +139,8 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
       ) : (
         <div className="pass-quests">
           <QuestGroup title="Задания дня" note={`обновятся через ${fmtLeft(untilMidnight(now))}`} quests={quests.filter((q) => q.kind === 'daily')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
-          <QuestGroup title="Задания недели" quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
-          <QuestGroup title="Задания сезона" quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
+          <QuestGroup title="Задания недели" note={`обновятся через ${fmtLeft(passWeekEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
+          <QuestGroup title="Задания сезона" note={`до конца сезона ${fmtLeft(passEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
         </div>
       )}
       {toast && <div className="toast global">{toast}</div>}
