@@ -45,6 +45,8 @@ export interface Item {
   price: number;
   // Продаётся у купца или только находится в сундуках.
   inShop: boolean;
+  // Только из пропуска сезона: в сундуках не выпадает.
+  pass?: boolean;
 }
 
 export const ITEMS: Item[] = [
@@ -57,6 +59,8 @@ export const ITEMS: Item[] = [
   { id: 'zombie-hunter', hero: 'Barbarian', name: 'Охотник на зомби', rarity: 'epic', color: '#33691e', glow: '#aeea00', coinBonus: 0.15, price: 0, inShop: false },
   { id: 'crystal', hero: 'Mage', name: 'Кристальный маг', rarity: 'epic', color: '#ce93d8', glow: '#e040fb', tint: 'mul:1.1,0.85,1.4', coinBonus: 0.2, price: 0, inShop: false },
   { id: 'dragon', hero: 'Barbarian', name: 'Драконоборец', rarity: 'legendary', color: '#d84315', glow: '#ff3d00', tint: 'mul:1.3,0.75,0.6', coinBonus: 0.3, price: 0, inShop: false },
+  { id: 'pass-silver', hero: 'Knight', name: 'Серый страж', rarity: 'epic', color: '#cfd8dc', glow: '#b0bec5', tint: 'mul:0.95,1.0,1.1', coinBonus: 0.15, price: 0, inShop: false, pass: true },
+  { id: 'pass-gold', hero: 'Knight', name: 'Страж Золотого щита', rarity: 'legendary', color: '#ffd54a', glow: '#ffc400', tint: 'mul:1.5,1.2,0.5', coinBonus: 0.3, price: 0, inShop: false, pass: true },
   { id: 'gold', hero: 'Knight', name: 'Золотой чемпион', rarity: 'legendary', color: '#ffc400', glow: '#ffea00', tint: 'mul:1.45,1.15,0.45', coinBonus: 0.3, price: 5000, inShop: true },
 ];
 
@@ -192,7 +196,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };

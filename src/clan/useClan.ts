@@ -16,6 +16,8 @@ export function useClan(level: number) {
   const [attack, setAttack] = useState<{ attackId: string; endsAt: number } | null>(null);
   const [bot, setBot] = useState<{ username: string | null; running: boolean }>({ username: null, running: false });
   const [telegram, setTelegram] = useState(false);
+  // Pro Pass: сервер решает по id в Telegram.
+  const [pro, setPro] = useState(false);
   const [seq, setSeq] = useState(0);
 
   useEffect(() => {
@@ -33,6 +35,7 @@ export function useClan(level: number) {
         case 'welcome':
           setBot({ username: msg.botUsername, running: msg.botRunning });
           setTelegram(msg.telegram);
+          setPro(!!msg.pro);
           setStatus('online');
           break;
         case 'clan':
@@ -72,7 +75,7 @@ export function useClan(level: number) {
     if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify(msg));
   };
 
-  return { status, clan, list, chat, error, attack, setAttack, bot, telegram, send, reconnect: () => setSeq((n) => n + 1) };
+  return { status, clan, list, chat, error, attack, setAttack, bot, telegram, pro, send, reconnect: () => setSeq((n) => n + 1) };
 }
 
 export type ClanApi = ReturnType<typeof useClan>;

@@ -14,6 +14,8 @@ export interface ClanMemberView {
   raidDamage: number;
   online: boolean;
   me: boolean;
+  // Pro Pass: имя золотом.
+  pro: boolean;
 }
 
 export interface ChatMessage {
@@ -24,6 +26,8 @@ export interface ChatMessage {
   at: number;
   // Системное сообщение: вступил, вышел, босс повержен.
   system?: boolean;
+  // Автор с Pro Pass: сервер отмечает при отправке, в истории чата не хранится.
+  pro?: boolean;
 }
 
 export interface RaidView {
@@ -40,7 +44,7 @@ export interface RaidView {
   myDamage: number;
   attacksLeft: number;
   // Лучшие по урону в этом рейде.
-  top: { name: string; damage: number; me: boolean }[];
+  top: { name: string; damage: number; me: boolean; pro?: boolean }[];
   // Последние удары: кто сейчас бьёт босса.
   recent: { name: string; damage: number; at: number }[];
 }

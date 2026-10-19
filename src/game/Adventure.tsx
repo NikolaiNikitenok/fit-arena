@@ -10,7 +10,8 @@ import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels'
 import { MissionPlay, Stars } from './MissionPlay';
 import { NPCS } from './npcs';
 import { dailyTask } from './daily';
-import { startCloud } from '../cloud';
+import { startCloud, usePro } from '../cloud';
+import { PassScreen } from './PassScreen';
 import { Calendar, RepsChart } from './Stats';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
@@ -102,6 +103,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [settings, setSettings] = useState(false);
   const [replayOnb, setReplayOnb] = useState(false);
   const [achOpen, setAchOpen] = useState(false);
+  const [passOpen, setPassOpen] = useState(false);
+  const pro = usePro();
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const levels = levelsOf(world);
@@ -206,6 +209,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           {achToast}
         </button>
       )}
+      {passOpen && <PassScreen progress={progress} setProgress={setProgress} pro={pro} land={currentDef.land} onClose={() => setPassOpen(false)} />}
       {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
       {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
       {settings && <SettingsSheet
@@ -265,6 +269,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           }}
           onSettings={() => setSettings(true)}
           onAchievements={() => setAchOpen(true)}
+          pro={pro}
+          onPass={() => setPassOpen(true)}
         />
         {sheets}
       </>

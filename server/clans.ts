@@ -76,6 +76,8 @@ const clean = (s: unknown, max: number) => (typeof s === 'string' ? s.replace(/[
 const newCode = () => randomBytes(4).toString('base64url').replace(/[-_]/g, 'x').slice(0, 6).toUpperCase();
 
 export class ClanStore {
+  // Pro Pass по id игрока: задаёт сервер (server/pro.ts).
+  isPro: (id: string) => boolean = () => false;
   private clans = new Map<string, Clan>();
   private byPlayer = new Map<string, string>();
   private attacks = new Map<string, Attack>();
@@ -469,7 +471,7 @@ export class ClanStore {
         ? Object.entries(r.damage)
             .sort((x, y) => y[1] - x[1])
             .slice(0, 10)
-            .map(([id, damage]) => ({ name: names.get(id) ?? 'Бывший участник', damage, me: id === playerId }))
+            .map(([id, damage]) => ({ name: names.get(id) ?? 'Бывший участник', damage, me: id === playerId, pro: this.isPro(id) }))
         : [],
       recent: r?.recent ?? [],
     };
@@ -490,7 +492,7 @@ export class ClanStore {
       myRole: this.member(c, playerId)?.role ?? 'member',
       members: [...c.members]
         .sort((a, b) => order[a.role] - order[b.role] || (r?.damage[b.id] ?? 0) - (r?.damage[a.id] ?? 0) || b.level - a.level)
-        .map((m) => ({ id: m.id, name: m.name, role: m.role, level: m.level, xp: Math.floor(m.xp ?? 0), raidDamage: r?.damage[m.id] ?? 0, online: online(m.id), me: m.id === playerId })),
+        .map((m) => ({ id: m.id, name: m.name, role: m.role, level: m.level, xp: Math.floor(m.xp ?? 0), raidDamage: r?.damage[m.id] ?? 0, online: online(m.id), me: m.id === playerId, pro: this.isPro(m.id) })),
       raid: this.raidView(c, playerId, now),
       raidWins: c.raidWins,
       reward: this.reward(c, playerId, now),

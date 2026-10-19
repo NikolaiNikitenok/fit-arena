@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { cloudState, onCloud, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
 import { setSetting, Settings, useSettings } from './settings';
+import { tg } from './telegram';
 
 const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -40,6 +41,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         <div className="settings-note">
           <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
         </div>
+        <TelegramIdRow />
         {confirm ? (
           <div className="danger-row">
             <span>Стереть героя, предметы и монеты?</span>
@@ -65,6 +67,31 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
           Готово
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Id в Telegram: по нему вручную выдаётся Pro Pass (файл .pro-ids на сервере). */
+function TelegramIdRow() {
+  const id = tg?.initDataUnsafe.user?.id;
+  const [copied, setCopied] = useState(false);
+  if (!id) return null;
+  return (
+    <div className="settings-note tg-id-row">
+      <span>
+        Твой ID в Telegram: <b>{id}</b>
+      </span>
+      <button
+        className="small-btn ghost"
+        onClick={() =>
+          navigator.clipboard
+            ?.writeText(String(id))
+            .then(() => setCopied(true))
+            .catch(() => null)
+        }
+      >
+        {copied ? 'Скопировано' : 'Копировать'}
+      </button>
     </div>
   );
 }

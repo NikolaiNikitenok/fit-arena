@@ -7,6 +7,7 @@
 //   BOT_USERNAME — имя бота для ссылок-приглашений, если Telegram недоступен с сервера
 //   ALLOW_GUESTS=1 — пускать без подписи Telegram (для разработки в браузере)
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
+//   PRO_IDS — id в Telegram с Pro Pass через запятую; ещё можно файлом .pro-ids рядом с сервером (PRO_FILE)
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -22,6 +23,8 @@ import { dueReminders, SaveStore } from './saves';
 import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
+import { ProList } from './pro';
+import type { ChatMessage } from '../shared/clan';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -41,6 +44,12 @@ const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
+const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
+const isPro = (id: string) => pro.has(id);
+clans.isPro = isPro;
+// Отметка Pro у автора ставится при отправке: список мог поменяться после сообщения.
+const proChat = (m: ChatMessage): ChatMessage => (m.from && isPro(m.from) ? { ...m, pro: true } : m);
+const chatOf = (c: Clan) => c.chat.map(proChat);
 // Соединения экрана клана: у игрока может быть открыто несколько.
 const clanSockets = new Map<string, Set<(msg: ServerMessage) => void>>();
 const isOnline = (id: string) => (clanSockets.get(id)?.size ?? 0) > 0 || online.has(id);
@@ -160,7 +169,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   if (path === '/api/progress/load') {
     if (who.guest) saves.adopt(who.id, who.guest);
     const s = saves.get(who.id);
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:') });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id) });
   }
   if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
   if (path === '/api/remind') {
@@ -197,7 +206,7 @@ const http = createServer((req, res) => {
   }
   if (req.url?.startsWith('/api/top')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(store.top(50).map((p) => ({ name: p.name, cups: p.cups, wins: p.wins }))));
+    res.end(JSON.stringify(store.top(50).map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, pro: isPro(p.id) }))));
     return;
   }
   if (req.url === '/api/health') {
@@ -221,7 +230,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
     case 'clanMine': {
       const c = mine();
       send({ type: 'clan', clan: c ? clans.view(c, who.id, isOnline, now) : null });
-      if (c) send({ type: 'chat', messages: c.chat });
+      if (c) send({ type: 'chat', messages: chatOf(c) });
       break;
     }
     case 'clanSearch':
@@ -231,15 +240,15 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const r = clans.create(who, msg.clan, now);
       if (fail(r)) return;
       sendClan(r);
-      send({ type: 'chat', messages: r.chat });
+      send({ type: 'chat', messages: chatOf(r) });
       break;
     }
     case 'clanJoin': {
       const r = clans.join(who, { id: msg.id, code: msg.code }, now);
       if (fail(r)) return;
       sendClan(r);
-      toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
-      send({ type: 'chat', messages: r.chat });
+      toClan(r, { type: 'chatMsg', message: proChat(r.chat[r.chat.length - 1]) });
+      send({ type: 'chat', messages: chatOf(r) });
       break;
     }
     case 'clanLeave': {
@@ -247,7 +256,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       send({ type: 'clan', clan: null });
       if (r) {
         sendClan(r);
-        toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
+        toClan(r, { type: 'chatMsg', message: proChat(r.chat[r.chat.length - 1]) });
       }
       break;
     }
@@ -261,7 +270,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const r = clans.setRole(who.id, String(msg.id), msg.role, now);
       if (fail(r)) return;
       sendClan(r);
-      toClan(r, { type: 'chat', messages: r.chat });
+      toClan(r, { type: 'chat', messages: chatOf(r) });
       break;
     }
     case 'clanKick': {
@@ -270,13 +279,13 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       if (fail(r)) return;
       for (const s of clanSockets.get(target) ?? []) s({ type: 'clan', clan: null });
       sendClan(r);
-      toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
+      toClan(r, { type: 'chatMsg', message: proChat(r.chat[r.chat.length - 1]) });
       break;
     }
     case 'chatSend': {
       const r = clans.chat(who.id, String(msg.text ?? ''), now);
       if (fail(r)) return;
-      toClan(mine()!, { type: 'chatMsg', message: r });
+      toClan(mine()!, { type: 'chatMsg', message: proChat(r) });
       break;
     }
     case 'raidStart': {
@@ -294,7 +303,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       sendRaid(r.clan);
       // Босс повержен или клан вырос в уровне: всем новый клан и сообщения.
       if (r.killed || r.clan.nextMsg !== lastMsg) {
-        toClan(r.clan, { type: 'chat', messages: r.clan.chat });
+        toClan(r.clan, { type: 'chat', messages: chatOf(r.clan) });
         sendClan(r.clan);
       }
       break;
@@ -305,7 +314,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const level = c && clans.level(c);
       const r = clans.reps(who.id, Number(msg.reps), now);
       if (!r) return;
-      if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: r.chat });
+      if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: chatOf(r) });
       if (clans.level(r) !== level || r.nextMsg !== lastMsg) sendClan(r);
       else send({ type: 'clan', clan: clans.view(r, who.id, isOnline, now) });
       break;
@@ -361,12 +370,13 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
       player = tgUser
         ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name), send, joinedRoom: attach }
         : { id: `guest:${/^[\w-]{8,40}$/.test(msg.guestId ?? '') ? msg.guestId : randomUUID()}`, name: cleanName(msg.name), send, joinedRoom: attach };
+      player.pro = isPro(player.id);
       // Раньше на этом телефоне играли гостем: клан и кубки переходят в аккаунт Telegram.
       if (tgUser && /^[\w-]{8,40}$/.test(msg.guestId ?? '')) {
         store.adopt(player.id, `guest:${msg.guestId}`);
         clans.adopt(player.id, `guest:${msg.guestId}`);
       }
-      send({ type: 'welcome', id: player.id, name: player.name, botUsername, botRunning: !!BOT_TOKEN, telegram: !!tgUser });
+      send({ type: 'welcome', id: player.id, name: player.name, botUsername, botRunning: !!BOT_TOKEN, telegram: !!tgUser, pro: !!player.pro });
       if (msg.channel === 'clan') {
         // Когда сервер знает токен бота, в кланах только настоящие игроки Telegram: гости из браузера каждый раз новые.
         if (BOT_TOKEN && !tgUser) {
@@ -380,7 +390,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         clans.touch(who);
         const mine = clans.clanOf(player.id);
         send({ type: 'clan', clan: mine ? clans.view(mine, player.id, isOnline, Date.now()) : null });
-        if (mine) send({ type: 'chat', messages: mine.chat });
+        if (mine) send({ type: 'chat', messages: chatOf(mine) });
         return;
       }
       online.set(player.id, player);
@@ -424,7 +434,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         break;
       case 'top': {
         const top = store.top(50);
-        send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id })) });
+        send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id, pro: isPro(p.id) })) });
         break;
       }
       case 'join': {

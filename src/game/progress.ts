@@ -1,6 +1,7 @@
 // Прогресс игрока хранится в браузере и копией на сервере (src/cloud.ts), чтобы не терялся при смене телефона.
 import type { Exercise } from '../repCounter';
 import { clanGift } from '../../shared/clanLevel';
+import { seasonAt } from '../../shared/rating';
 import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
 import type { DailyTask } from './daily';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
@@ -54,6 +55,22 @@ export interface Progress {
   log?: Record<string, { r: Partial<Record<Exercise, number>>; b: Partial<Record<Exercise, number>> }>;
   // Знакомство с игрой пройдено.
   onboarded?: boolean;
+  // Пропуск сезона: опыт, забранные задания и награды, счётчики по дням сезона.
+  pass?: PassState;
+}
+
+// Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
+export type PassStat = 'reps' | Exercise | 'win' | 'boss' | 'stars3' | 'daily' | 'duel' | 'duelWin' | 'raid';
+
+export interface PassState {
+  season: number;
+  xp: number;
+  // Забранные задания (id из pass.ts) и ступени бесплатной и Pro-дорожки.
+  quests: string[];
+  free: number[];
+  pro: number[];
+  // Счётчики по дням (YYYY-MM-DD по местному времени).
+  c: Record<string, Partial<Record<PassStat, number>>>;
 }
 
 export interface Record_ {
@@ -65,6 +82,26 @@ export const MAX_LIVES = 5;
 export const LIFE_MS = 20 * 60 * 1000;
 
 const KEY = 'fit-arena-adventure';
+
+// Сезон пропуска по местной дате: тот же номер, что у сезона дуэлей в этот день.
+export const passSeason = (date: string) => seasonAt(Date.parse(`${date}T12:00:00Z`));
+
+/** Пропуск текущего сезона: в новом сезоне всё начинается заново. */
+export function passOf(p: Progress, now: number): PassState {
+  const season = passSeason(dayKey(now));
+  return p.pass?.season === season ? p.pass : { season, xp: 0, quests: [], free: [], pro: [], c: {} };
+}
+
+/** Прибавить к счётчику пропуска за сегодня (без сохранения). */
+export function countPass(p: Progress, stat: PassStat, n: number, now: number): Progress {
+  if (n <= 0) return p;
+  const pass = passOf(p, now);
+  const date = dayKey(now);
+  const day = pass.c[date] ?? {};
+  return { ...p, pass: { ...pass, c: { ...pass.c, [date]: { ...day, [stat]: (day[stat] ?? 0) + n } } } };
+}
+
+export const saveProgress = (p: Progress): Progress => save(p);
 
 const fresh = (): Progress => ({
   stars: {},
@@ -145,8 +182,11 @@ export function recordWin(p: Progress, level: LevelDef, stars: number, record?: 
   // Лёгкая победа: форма выросла, враги в этом упражнении становятся крепче.
   if (level.type !== 'trial' && !level.rest && stars === 3) adapt(baseline, level.exercises, WIN_GROWTH);
   const drop = level.type === 'boss' && firstTime ? bossDrop(level.land, p.items) : undefined;
+  let counted = countPass(p, 'win', 1, Date.now());
+  if (level.type === 'boss') counted = countPass(counted, 'boss', 1, Date.now());
+  if (stars >= 3) counted = countPass(counted, 'stars3', 1, Date.now());
   const next = {
-    ...p,
+    ...counted,
     stars: { ...p.stars, [level.id]: Math.max(p.stars[level.id] ?? 0, stars) },
     coins: p.coins + coins,
     baseline,
@@ -303,10 +343,22 @@ export const recordOutsideReps = (exercise: Exercise, reps: number, now: number)
   return reps > 0 ? recordActivity({ ...p, clanPending: (p.clanPending ?? 0) + reps }, exercise, reps, now) : p;
 };
 
+/** Дуэль закончилась: в пропуск идут бой и победа. */
+export function recordDuel(result: 'win' | 'lose' | 'draw', now: number): Progress {
+  const p = countPass(loadProgress(), 'duel', 1, now);
+  return save(result === 'win' ? countPass(p, 'duelWin', 1, now) : p);
+}
+
+/** Атака на рейд-босса клана: для заданий пропуска. */
+export const recordRaidAttack = (p: Progress, now: number): Progress => save(countPass(p, 'raid', 1, now));
+
+export const addPotions = addPotion;
+
 export function recordActivity(p: Progress, exercise: Exercise | null, reps: number, now: number): Progress {
   if (reps <= 0) return p;
   const date = dayKey(now);
-  const next = { ...p, days: { ...p.days, [date]: (p.days[date] ?? 0) + reps } };
+  const counted = countPass(exercise ? countPass(p, exercise, reps, now) : p, 'reps', reps, now);
+  const next = { ...counted, days: { ...p.days, [date]: (p.days[date] ?? 0) + reps } };
   if (exercise) {
     const ex = p.dayEx?.date === date ? p.dayEx.reps : {};
     next.dayEx = { date, reps: { ...ex, [exercise]: (ex[exercise] ?? 0) + reps } };
@@ -436,7 +488,8 @@ export function dailyProgress(p: Progress, task: DailyTask): number {
 
 export function claimDaily(p: Progress, task: DailyTask): Progress | null {
   if (p.dailyDone === task.date || dailyProgress(p, task) < task.target) return null;
-  return save({ ...p, coins: p.coins + task.coins, potions: task.potion ? addPotion(p.potions, task.potion, 1) : p.potions, dailyDone: task.date, dailyCount: (p.dailyCount ?? 0) + 1 });
+  const counted = countPass(p, 'daily', 1, Date.now());
+  return save({ ...counted, coins: p.coins + task.coins, potions: task.potion ? addPotion(p.potions, task.potion, 1) : p.potions, dailyDone: task.date, dailyCount: (p.dailyCount ?? 0) + 1 });
 }
 
 export const markAchSeen = (p: Progress, ids: string[]): Progress => save({ ...p, achSeen: [...new Set([...(p.achSeen ?? []), ...ids])] });

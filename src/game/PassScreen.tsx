@@ -1,0 +1,236 @@
+import { useEffect, useRef, useState } from 'react';
+import { Check, Chest, Coin, Flask, Lock, PassShield, Swords } from '../icons';
+import { itemById, potionById } from './items';
+import { portraitUrl } from './npcs';
+import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
+import { passOf, Progress } from './progress';
+import { sfx } from '../audio';
+
+// Пропуск сезона: два щита — серый бесплатный и золотой Pro, ступени наград и задания.
+
+const fmtLeft = (ms: number) => {
+  const h = Math.max(0, Math.floor(ms / 3600_000));
+  return h >= 24 ? `${Math.floor(h / 24)} д ${h % 24} ч` : h >= 1 ? `${h} ч ${Math.floor((ms % 3600_000) / 60000)} мин` : `${Math.max(1, Math.ceil(ms / 60000))} мин`;
+};
+const untilMidnight = (now: number) => {
+  const d = new Date(now);
+  d.setHours(24, 0, 0, 0);
+  return d.getTime() - now;
+};
+
+interface Props {
+  progress: Progress;
+  setProgress: (p: Progress) => void;
+  pro: boolean;
+  land: number;
+  onClose: () => void;
+}
+
+export function PassScreen({ progress, setProgress, pro, land, onClose }: Props) {
+  const now = Date.now();
+  const pass = passOf(progress, now);
+  const t = passTier(pass.xp);
+  const quests = passQuests(progress, now);
+  const readyQuests = quests.filter((q) => !pass.quests.includes(q.id) && questValue(progress, q, now) >= q.target).length;
+  const [tab, setTab] = useState<'rewards' | 'quests'>(readyQuests ? 'quests' : 'rewards');
+  const [toast, setToast] = useState<string | null>(null);
+  const current = useRef<HTMLDivElement>(null);
+  const show = (text: string) => {
+    setToast(text);
+    setTimeout(() => setToast((x) => (x === text ? null : x)), 2600);
+  };
+  useEffect(() => {
+    if (tab === 'rewards') current.current?.scrollIntoView({ block: 'center' });
+  }, [tab]);
+
+  const claimTier = (track: Track, tier: number) => {
+    const r = claimPassTier(progress, track, tier, pro, land, Date.now());
+    if (!r) return;
+    setProgress(r.progress);
+    sfx(r.gear ? 'chest' : 'coin');
+    show(`Ступень ${tier}: ${r.label}!`);
+  };
+  const claim = (q: Quest) => {
+    const next = claimQuest(progress, q, Date.now());
+    if (!next) return;
+    const before = t.tier;
+    setProgress(next);
+    const after = passTier(passOf(next, Date.now()).xp).tier;
+    sfx(after > before ? 'levelup' : 'coin');
+    show(after > before ? `Новая ступень щита: ${after}!` : `+${q.xp} опыта пропуска`);
+  };
+
+  return (
+    <div className="pass-screen">
+      <div className="pass-top">
+        <button className="pill btn icon-only" onClick={onClose} aria-label="Назад">
+          ‹
+        </button>
+        <div className="pass-heading">
+          <div className="pass-name">Пропуск сезона {pass.season}</div>
+          <div className="pass-left">до конца сезона {fmtLeft(passEndsAt(now) - now)}</div>
+        </div>
+      </div>
+
+      <div className="pass-hero">
+        <div className="pass-shields">
+          <div className="pass-badge">
+            <PassShield size={64} label={t.tier} />
+            <span>Бесплатный</span>
+          </div>
+          <div className={`pass-badge gold ${pro ? 'on' : ''}`}>
+            <span className="pass-glow" />
+            <PassShield size={78} gold star={!pro} label={pro ? t.tier : undefined} />
+            <span className={pro ? 'pro-name' : ''}>Pro Pass</span>
+          </div>
+        </div>
+        <div className="pass-xp">
+          <div className="pass-xp-row">
+            <b>{t.tier >= PASS_TIERS ? 'Все ступени открыты' : `Ступень ${t.tier} → ${t.tier + 1}`}</b>
+            <span>
+              {t.into} / {t.need} опыта
+            </span>
+          </div>
+          <div className="pass-bar">
+            <div style={{ width: `${(t.into / t.need) * 100}%` }} />
+          </div>
+        </div>
+        {pro ? (
+          <div className="pass-pro-note">
+            <span className="pro-name">Pro Pass активен</span> · золотые награды открыты, имя светится золотом
+          </div>
+        ) : (
+          <div className="pass-pro-note">
+            <Lock size={12} /> <b>Pro Pass скоро</b> · золотая дорожка, золотое имя в клане и рейтинге, золотой щит за героем
+          </div>
+        )}
+      </div>
+
+      <div className="tabs">
+        <button className={tab === 'rewards' ? 'active' : ''} onClick={() => setTab('rewards')}>
+          Награды
+        </button>
+        <button className={tab === 'quests' ? 'active' : ''} onClick={() => setTab('quests')}>
+          Задания{readyQuests > 0 && <span className="tab-dot">{readyQuests}</span>}
+        </button>
+      </div>
+
+      {tab === 'rewards' ? (
+        <div className="pass-track">
+          <div className="pass-track-head">
+            <span>Серый щит</span>
+            <span />
+            <span className="gold-text">Золотой щит</span>
+          </div>
+          {Array.from({ length: PASS_TIERS }, (_, i) => i + 1).map((tier) => {
+            const r = passRewards(tier);
+            const open = tier <= t.tier;
+            return (
+              <div key={tier} ref={tier === Math.min(PASS_TIERS, t.tier + 1) ? current : undefined} className={`pass-row ${open ? 'open' : ''} ${tier === t.tier + 1 ? 'next' : ''}`}>
+                <RewardCard reward={r.free} state={pass.free.includes(tier) ? 'got' : open ? 'ready' : 'locked'} onClaim={() => claimTier('free', tier)} />
+                <div className="pass-node">
+                  <PassShield size={30} gold={open} dim={!open} label={tier} />
+                </div>
+                <RewardCard reward={r.pro} gold state={pass.pro.includes(tier) ? 'got' : !pro ? 'pro' : open ? 'ready' : 'locked'} onClaim={() => claimTier('pro', tier)} />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="pass-quests">
+          <QuestGroup title="Задания дня" note={`обновятся через ${fmtLeft(untilMidnight(now))}`} quests={quests.filter((q) => q.kind === 'daily')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
+          <QuestGroup title="Задания недели" quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
+          <QuestGroup title="Задания сезона" quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
+        </div>
+      )}
+      {toast && <div className="toast global">{toast}</div>}
+    </div>
+  );
+}
+
+function RewardIcon({ reward }: { reward: PassReward }) {
+  switch (reward.kind) {
+    case 'coins':
+      return <Coin size={26} className="coin" />;
+    case 'potion':
+      return <Flask size={32} color={potionById(reward.id).color} scroll={reward.id === 'swap'} />;
+    case 'chest':
+      return <Chest size={32} />;
+    case 'gear':
+      return <Swords size={26} />;
+    case 'outfit': {
+      const item = itemById(reward.id);
+      return (
+        <span className="pass-outfit" style={{ background: `radial-gradient(circle at 50% 35%, ${item.color}, #1b1d26 80%)`, boxShadow: item.glow ? `0 0 12px ${item.glow}` : undefined }}>
+          <img src={portraitUrl('hero')} alt="" draggable={false} />
+        </span>
+      );
+    }
+  }
+}
+
+function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassReward; gold?: boolean; state: 'got' | 'ready' | 'locked' | 'pro'; onClaim: () => void }) {
+  return (
+    <button className={`pass-reward ${gold ? 'gold' : ''} ${state}`} disabled={state !== 'ready'} onClick={onClaim}>
+      <span className="pass-reward-icon">
+        <RewardIcon reward={reward} />
+      </span>
+      <span className="pass-reward-name">{rewardLabel(reward)}</span>
+      <span className="pass-reward-state">
+        {state === 'got' ? (
+          <>
+            <Check size={12} /> получено
+          </>
+        ) : state === 'ready' ? (
+          'Забрать'
+        ) : state === 'pro' ? (
+          <>
+            <Lock size={11} /> скоро
+          </>
+        ) : (
+          <Lock size={11} />
+        )}
+      </span>
+    </button>
+  );
+}
+
+function QuestGroup({ title, note, quests, progress, now, claimed, onClaim }: { title: string; note?: string; quests: Quest[]; progress: Progress; now: number; claimed: string[]; onClaim: (q: Quest) => void }) {
+  return (
+    <>
+      <div className="section-title">
+        {title}
+        {note && <span className="muted small-note">{note}</span>}
+      </div>
+      {quests.map((q) => {
+        const v = Math.min(q.target, questValue(progress, q, now));
+        const got = claimed.includes(q.id);
+        const ready = !got && v >= q.target;
+        return (
+          <div key={q.id} className={`pass-quest ${got ? 'got' : ''} ${ready ? 'ready' : ''}`}>
+            <div className="pass-quest-body">
+              <div className="pass-quest-title">{q.title}</div>
+              <div className="pass-quest-bar">
+                <div style={{ width: `${(v / q.target) * 100}%` }} />
+              </div>
+              <div className="pass-quest-count">
+                {v} / {q.target}
+              </div>
+            </div>
+            {got ? (
+              <span className="pass-quest-xp done">
+                <Check size={14} />
+              </span>
+            ) : ready ? (
+              <button className="small-btn pass-claim" onClick={() => onClaim(q)}>
+                +{q.xp}
+              </button>
+            ) : (
+              <span className="pass-quest-xp">+{q.xp}</span>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}

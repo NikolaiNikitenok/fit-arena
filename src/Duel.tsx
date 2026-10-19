@@ -9,7 +9,7 @@ import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram
 import { useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
 import { useDuelSounds } from './gameSounds';
-import { recordOutsideReps } from './game/progress';
+import { recordDuel, recordOutsideReps } from './game/progress';
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
 
@@ -28,7 +28,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const camera = useRepCamera();
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
-  const [me, setMe] = useState<{ id: string; bot: { username: string | null; running: boolean } } | null>(null);
+  const [me, setMe] = useState<{ id: string; pro: boolean; bot: { username: string | null; running: boolean } } | null>(null);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [state, setState] = useState<{ me: FighterView; opponent: FighterView } | null>(null);
   const [endsAt, setEndsAt] = useState(0);
@@ -63,7 +63,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
       const msg: ServerMessage = JSON.parse(event.data);
       switch (msg.type) {
         case 'welcome': {
-          setMe({ id: msg.id, bot: { username: msg.botUsername, running: msg.botRunning } });
+          setMe({ id: msg.id, pro: !!msg.pro, bot: { username: msg.botUsername, running: msg.botRunning } });
           setPhase('menu');
           const invite = inviteCode();
           if (invite) socket.send(JSON.stringify({ type: 'join', code: invite }));
@@ -99,6 +99,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
           break;
         case 'end':
           if (fight.current?.hits) recordOutsideReps(fight.current.exercise, fight.current.hits, Date.now());
+          if (fight.current) recordDuel(msg.result, Date.now());
           if (fight.current) fight.current.hits = 0;
           setResult(msg);
           setPhase('over');
@@ -144,7 +145,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const seconds = Math.max(0, Math.ceil((endsAt - now) / 1000));
   const opponentInfo = room?.players.find((p) => p.id !== me?.id);
   const myInfo = room?.players.find((p) => p.id === me?.id);
-  const view = state ?? { me: freshFighter(userName()), opponent: freshFighter(opponentInfo?.name ?? 'Соперник') };
+  const view = state ?? { me: { ...freshFighter(userName()), pro: me?.pro }, opponent: freshFighter(opponentInfo?.name ?? 'Соперник') };
   // В меню спокойная тема, на арене барабаны.
   useMusic(phase === 'room' || phase === 'countdown' || phase === 'fight' || phase === 'over' ? 'arena' : 'calm');
   useDuelSounds(phase, seconds, view.me, view.opponent, result);
@@ -226,7 +227,9 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               {top.map((p, i) => (
                 <div key={i} className={`top-row ${p.me ? 'me' : ''}`}>
                   <span className="top-place">{i + 1}</span>
-                  <span className="top-name">{p.name}</span>
+                  <span className="top-name">
+                    <span className={p.pro ? 'pro-name' : ''}>{p.name}</span>
+                  </span>
                   <span style={{ color: leagueOf(p.cups).color }}>{leagueOf(p.cups).name}</span>
                   <b>{p.cups} 🏆</b>
                 </div>
@@ -243,7 +246,13 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               Код боя <b>{room.code}</b> · {EXERCISE_LABELS[room.exercise]}
             </div>
             <div className="muted">
-              {room.players.map((p) => `${p.name}${p.ready ? ' ✓' : ''}`).join(' против ')}
+              {room.players.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && ' против '}
+                  <span className={p.pro ? 'pro-name' : ''}>{p.name}</span>
+                  {p.ready && ' ✓'}
+                </span>
+              ))}
               {room.players.length < 2 && ' · ждём соперника'}
             </div>
           </div>

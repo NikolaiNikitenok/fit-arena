@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
 import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
-import { claimClanGift, claimRaid, recordActivity, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
+import { claimClanGift, claimRaid, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
 import { Banner, Coin, Flask, Lock, Send, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { clanInviteCode, clanInviteLink, share } from '../telegram';
@@ -92,6 +92,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         onReps={(reps) => setProgress(recordActivity(progress, exercise, reps, Date.now()))}
         onHit={(damage) => send({ type: 'raidHit', attackId: api.attack!.attackId, damage })}
         onDone={() => {
+          setProgress(recordRaidAttack(progress, Date.now()));
           send({ type: 'raidEnd', attackId: api.attack!.attackId });
           api.setAttack(null);
         }}
@@ -361,7 +362,9 @@ function RaidTab({ clan, progress, attacks, coinBonus, exercise, setExercise, on
             {r.top.map((t, i) => (
               <div key={i} className={`top-row ${t.me ? 'me' : ''}`}>
                 <span className="top-place">{i + 1}</span>
-                <span className="top-name">{t.name}</span>
+                <span className="top-name">
+                  <span className={t.pro ? 'pro-name' : ''}>{t.name}</span>
+                </span>
                 <b>{num(t.damage)}</b>
               </div>
             ))}
@@ -453,7 +456,7 @@ function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: C
             </div>
           ) : (
             <div key={m.id} className={`chat-msg ${m.from === meId ? 'mine' : ''}`}>
-              <span className="chat-name" style={{ color: nameColor(m.name || '?') }}>
+              <span className={`chat-name ${m.pro ? 'pro-name' : ''}`} style={m.pro ? undefined : { color: nameColor(m.name || '?') }}>
                 {m.name}
               </span>
               <span className="chat-time">{new Date(m.at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -491,7 +494,8 @@ function Members({ clan, api }: { clan: ClanView; api: ReturnType<typeof useClan
             <button className="member-row" onClick={() => setOpen(open === m.id ? null : m.id)}>
               <span className={`dot ${m.online ? 'on' : ''}`} />
               <span className="member-name">
-                {m.name}
+                <span className={m.pro ? 'pro-name' : ''}>{m.name}</span>
+                {m.pro && <span className="pro-chip">PRO</span>}
                 {m.me && <span className="muted"> · ты</span>}
               </span>
               {ROLE[m.role] && <span className={`role ${m.role}`}>{ROLE[m.role]}</span>}

@@ -1,4 +1,5 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
+import { useEffect, useState } from 'react';
 import { loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
 import { guestId, tg } from './telegram';
 
@@ -15,7 +16,8 @@ export interface Remind {
   tz: number;
 }
 
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean };
+// pro — Pro Pass: решает только сервер по id в Telegram.
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -43,8 +45,8 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
   });
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && push(true));
   try {
-    const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean };
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram };
+    const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean; pro?: boolean };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro };
     listeners.forEach((fn) => fn(cloud!));
     const local = loadProgress();
     // Новый телефон: своего прогресса нет, берём серверный, даже если игра уже успела что-то сохранить.
@@ -63,6 +65,13 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
 }
 
 export const cloudState = () => cloud;
+
+/** Есть ли Pro Pass: до ответа сервера — нет. */
+export function usePro(): boolean {
+  const [pro, setPro] = useState(() => !!cloud?.pro);
+  useEffect(() => onCloud((c) => setPro(c.pro)), []);
+  return pro;
+}
 
 /** Напоминание в боте в заданный час (null — выключить). */
 export async function setRemind(hour: number | null): Promise<Remind | null> {

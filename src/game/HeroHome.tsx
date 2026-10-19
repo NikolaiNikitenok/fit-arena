@@ -13,7 +13,9 @@ import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
-import { Coin, Cog, Flame, Flask, Heart, Swords } from '../icons';
+import { Coin, Cog, Flame, Flask, GoldShieldArt, Heart, PassShield, Swords } from '../icons';
+import { PASS_TIERS, passReady, passTier } from './pass';
+import { passOf } from './progress';
 
 // Главное меню: герой в надетом снаряжении, его уровень, инвентарь и тренировка дня.
 
@@ -77,6 +79,9 @@ interface Props {
   onDaily: () => void;
   onClaimDaily: () => void;
   onAchievements: () => void;
+  // Pro Pass от сервера: золотой щит за героем.
+  pro: boolean;
+  onPass: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -93,7 +98,9 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass }: Props) {
+  const passT = passTier(passOf(progress, Date.now()).xp);
+  const passWaiting = passReady(progress, pro, Date.now());
   const badge = heroBadge(progress);
   const achGot = ACHIEVEMENTS.filter((a) => achDone(a, progress, Date.now()));
   const achReady = achGot.filter((a) => !progress.achClaimed?.includes(a.id)).length;
@@ -125,14 +132,18 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
         </div>
       </div>
 
-      <div className="hero-card">
+      <div className={`hero-card ${pro ? 'pro' : ''}`}>
         <div className="hero-stage">
+          {pro && <GoldShieldArt className="gold-art" />}
           <HeroStage progress={progress} />
         </div>
         <div className="hero-info">
           <div className="hero-level">{lvl.level}</div>
           <div className="hero-meta">
-            <div className="hero-title">{heroTitle(lvl.level)}</div>
+            <div className="hero-title">
+              <span className={pro ? 'pro-name' : ''}>{heroTitle(lvl.level)}</span>
+              {pro && <span className="pro-chip">PRO</span>}
+            </div>
             {badge && (
               <button className="hero-badge" onClick={onAchievements}>
                 <AchBadge ach={badge} done size={18} /> {badge.title}
@@ -193,6 +204,24 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           <span className="slot-name">{offhand?.name ?? 'пусто'}</span>
         </button>
       </div>
+
+      <button className={`pass-entry ${pro ? 'pro' : ''}`} onClick={onPass}>
+        <span className="pass-entry-shields">
+          <PassShield size={30} label={passT.tier} />
+          <PassShield size={36} gold dim={!pro} star={!pro} label={pro ? passT.tier : undefined} />
+        </span>
+        <span className="pass-entry-text">
+          <span className={pro ? 'pro-name' : ''}>Пропуск сезона</span>
+          <small>
+            Ступень {passT.tier} из {PASS_TIERS} · {pro ? 'Pro Pass' : 'задания и награды'}
+          </small>
+          <span className="pass-bar">
+            <span style={{ display: 'block', width: `${(passT.into / passT.need) * 100}%` }} />
+          </span>
+        </span>
+        {passWaiting > 0 && <span className="ach-entry-new">+{passWaiting}</span>}
+        <span className="chev">›</span>
+      </button>
 
       <button className="ach-entry" onClick={onAchievements}>
         <span className="ach-entry-badges">

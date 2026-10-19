@@ -45,9 +45,9 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
         opponent={{ ...rival, punchSeq: opponent.hits, hitSeq: me.hits, combo: opponent.combo, knockedOut: opponent.hp === 0, won: lost, lost: won && opponent.hp > 0, scale: opponentScale, enraged }}
       />
       <div className="hud">
-        <HpBar label={me.name} hp={me.hp} maxHp={me.maxHp} color={PLAYER_COLOR} />
+        <HpBar label={me.name} hp={me.hp} maxHp={me.maxHp} color={PLAYER_COLOR} pro={me.pro} />
         <div className="timer">{seconds}</div>
-        <HpBar label={opponent.name} hp={opponent.hp} maxHp={opponent.maxHp} color={opponentColor} right />
+        <HpBar label={opponent.name} hp={opponent.hp} maxHp={opponent.maxHp} color={opponentColor} right pro={opponent.pro} />
       </div>
       {me.combo && camera.active && (
         <div key={me.hits} className="combo">
@@ -70,10 +70,12 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
   );
 }
 
-function HpBar({ label, hp, maxHp, color, right }: { label: string; hp: number; maxHp: number; color: string; right?: boolean }) {
+function HpBar({ label, hp, maxHp, color, right, pro }: { label: string; hp: number; maxHp: number; color: string; right?: boolean; pro?: boolean }) {
   return (
     <div className={`hp ${right ? 'right' : ''}`}>
-      <div className="hp-label">{label}</div>
+      <div className="hp-label">
+        <span className={pro ? 'pro-name' : ''}>{label}</span>
+      </div>
       <div className="hp-track">
         <div className="hp-fill" style={{ width: `${(hp / maxHp) * 100}%`, background: color }} />
       </div>

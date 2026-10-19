@@ -14,6 +14,11 @@
   --accent-grad: linear-gradient(135deg, #ffb46b 0%, #ff7a59 100%);
   --on-accent: #2b1206;
   --gold: #ffd27a;
+  /* Pro Pass: переливающееся золото для имён и золотого щита. */
+  --pro-grad: linear-gradient(100deg, #c08a2a 0%, #ffe7a3 18%, #ffc845 34%, #fff8e1 48%, #e3a634 62%, #ffe08a 80%, #c08a2a 100%);
+  --pro-deep: #8a5a0c;
+  --pro-line: rgba(255, 210, 110, .45);
+  --pass-grey: #aeb6c2;
   --rose: #ff6b81;
   --mint: #6ee7b7;
   /* Подложка для текста поверх 3D-сцены. */
@@ -318,6 +323,8 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .switch:checked::after { transform: translateX(18px); }
 .settings-note { padding: 10px 12px; border-radius: var(--r-md); background: rgba(255,255,255,.03); font-size: 13px; line-height: 1.4; color: #c9cfda; }
 .settings-note b { color: var(--text); }
+.tg-id-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tg-id-row b { font-variant-numeric: tabular-nums; user-select: all; }
 .danger-link { color: var(--rose); }
 .danger-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
 .danger-row span { flex: 1; min-width: 150px; }
@@ -488,7 +495,7 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .ach-entry-text { flex: 1; font-weight: 900; font-size: 15px; display: flex; flex-direction: column; }
 .ach-entry-text small { font-size: 12px; font-weight: 700; color: var(--hint); }
 .ach-entry-new { padding: 3px 9px; border-radius: 999px; background: var(--accent-grad); color: var(--on-accent); font-size: 12px; font-weight: 900; }
-.ach-entry .chev { color: var(--hint); font-size: 22px; }
+.ach-entry .chev, .pass-entry .chev { color: var(--hint); font-size: 22px; }
 .hero-badge { display: inline-flex; align-items: center; gap: 4px; margin: 3px 0 1px; padding: 2px 8px 2px 3px; border: 0; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--gold); font-size: 12px; font-weight: 900; }
 .ach-hint { font-size: 12.5px; }
 .ach-list { display: flex; flex-direction: column; gap: 6px; }
@@ -540,3 +547,102 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .onb-tabs { display: flex; flex-direction: column; gap: 8px; }
 .onb-tabs div { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: var(--r-md); background: var(--surface); font-size: 14px; line-height: 1.35; }
 .onb-tabs .icon { flex: none; color: var(--accent); }
+
+/* Pro Pass: золотое имя с переливом. Ставится на внутренний span, чтобы многоточие у длинных имён работало. */
+.pro-name { font-weight: 900; background: var(--pro-grad); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 5px rgba(255, 196, 70, .35)); animation: pro-shine 3.6s linear infinite; }
+@keyframes pro-shine { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+.pro-chip { display: inline-flex; align-items: center; padding: 1px 6px; margin-left: 5px; border-radius: 6px; background: var(--pro-grad); background-size: 250% 100%; color: #3a2404; font-size: 10px; font-weight: 900; letter-spacing: .4px; vertical-align: 1px; animation: pro-shine 3.6s linear infinite; }
+
+/* Золотой щит за героем на главной. */
+.hero-card.pro { position: relative; background: #1a1408; border-color: var(--pro-line); box-shadow: 0 0 0 1px rgba(255, 210, 110, .12), 0 12px 34px rgba(255, 180, 60, .14); }
+.hero-card.pro .hero-stage { position: relative; }
+.hero-card.pro .hero-stage canvas { position: relative; z-index: 1; }
+.hero-card.pro::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(110deg, transparent 35%, rgba(255, 240, 200, .10) 48%, transparent 60%); background-size: 300% 100%; animation: pro-shine 6s linear infinite; }
+.hero-card.pro .hero-info, .hero-card.pro .power-tiles, .hero-card.pro .power-hint { position: relative; z-index: 1; }
+.hero-card.pro .hero-level { background: var(--pro-grad); background-size: 250% 100%; color: #3a2404; box-shadow: 0 6px 18px rgba(255, 190, 70, .35); animation: pro-shine 3.6s linear infinite; }
+.gold-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gold-art .gold-rays { transform-origin: 200px 130px; animation: gold-turn 40s linear infinite; }
+.gold-art .gold-spark { transform-box: fill-box; transform-origin: center; animation: gold-twinkle 3.6s ease-in-out infinite; }
+@keyframes gold-turn { to { transform: rotate(360deg); } }
+@keyframes gold-twinkle { 0%, 100% { opacity: .15; transform: scale(.6); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* Вход в пропуск на главной. */
+.pass-entry { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: linear-gradient(100deg, #1e2231 0%, #232634 55%, #2c2716 100%); color: var(--text); text-align: left; }
+.pass-entry.pro { border-color: var(--pro-line); background: linear-gradient(100deg, #2a2212 0%, #3a2c10 60%, #4a3510 100%); }
+.pass-entry-shields { display: flex; align-items: flex-end; }
+.pass-entry-shields svg + svg { margin-left: -10px; }
+.pass-entry-text { flex: 1; font-weight: 900; font-size: 15px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pass-entry-text small { font-size: 12px; font-weight: 700; color: var(--hint); }
+.pass-entry .pass-bar { height: 5px; margin-top: 2px; }
+
+/* Экран пропуска. */
+.pass-screen { position: fixed; inset: 0; z-index: 11; overflow-y: auto; overscroll-behavior: contain; background: radial-gradient(120% 50% at 50% 0%, #2a2414 0%, #141620 45%, var(--bg) 100%); padding: calc(12px + var(--safe-top)) 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; animation: fade .2s ease-out; }
+.pass-screen > * { width: 100%; max-width: 448px; margin-left: auto; margin-right: auto; flex: none; }
+.pass-top { display: flex; align-items: center; gap: 10px; }
+.pass-top .pill { font-size: 22px; line-height: 1; }
+.pass-heading { flex: 1; }
+.pass-name { font-size: 20px; font-weight: 900; letter-spacing: -.2px; }
+.pass-left { font-size: 13px; color: var(--hint); font-weight: 700; }
+.pass-hero { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 22px; background: linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .01)), var(--surface); border: 1px solid var(--line); }
+.pass-shields { display: flex; justify-content: center; align-items: flex-end; gap: 26px; }
+.pass-badge { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; font-weight: 900; color: var(--pass-grey); }
+.pass-badge.gold { color: var(--gold); }
+.pass-badge.gold:not(.on) svg { filter: saturate(.75) brightness(.8); }
+.pass-badge svg { position: relative; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .45)); }
+.pass-glow { position: absolute; top: 4px; left: 50%; width: 120px; height: 100px; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 200, 80, .45), transparent); animation: glow-pulse 3s ease-in-out infinite; }
+.pass-badge:not(.on) .pass-glow { opacity: .4; }
+@keyframes glow-pulse { 50% { transform: translateX(-50%) scale(1.12); opacity: .7; } }
+.pass-xp-row { display: flex; justify-content: space-between; font-size: 13.5px; }
+.pass-xp-row span { color: var(--hint); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pass-bar { height: 10px; margin-top: 6px; border-radius: 5px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.pass-bar > * { height: 100%; border-radius: 5px; background: var(--pro-grad); background-size: 250% 100%; animation: pro-shine 3.6s linear infinite; transition: width .3s ease-out; }
+.pass-pro-note { font-size: 12.5px; line-height: 1.4; color: var(--hint); text-align: center; }
+.pass-pro-note b { color: var(--gold); }
+.tab-dot { display: inline-flex; min-width: 18px; height: 18px; margin-left: 5px; padding: 0 5px; align-items: center; justify-content: center; border-radius: 9px; background: var(--accent-grad); color: var(--on-accent); font-size: 11px; font-weight: 900; vertical-align: 1px; }
+.gold-text { color: var(--gold); }
+
+.pass-track { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.pass-track::before { content: ''; position: absolute; top: 24px; bottom: 30px; left: 50%; width: 4px; margin-left: -2px; border-radius: 2px; background: rgba(255, 255, 255, .08); }
+.pass-track-head { display: grid; grid-template-columns: 1fr 44px 1fr; gap: 8px; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .6px; color: var(--pass-grey); text-align: center; }
+.pass-row { position: relative; display: grid; grid-template-columns: 1fr 44px 1fr; gap: 8px; align-items: center; }
+.pass-row.open::before { content: ''; position: absolute; top: -8px; bottom: 50%; left: 50%; width: 4px; margin-left: -2px; background: linear-gradient(#e3a634, #ffd45c); }
+.pass-row.open:has(+ .pass-row.open)::before { bottom: -8px; }
+.pass-node { position: relative; z-index: 1; display: flex; justify-content: center; }
+.pass-row.next .pass-node svg { filter: drop-shadow(0 0 8px rgba(255, 210, 110, .7)); }
+.pass-reward { display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 96px; padding: 8px 6px; border-radius: var(--r-md); border: 1px solid rgba(174, 182, 194, .22); background: linear-gradient(170deg, #2a2f3c, #1c202b); color: var(--text); font-family: inherit; }
+.pass-reward.gold { border-color: rgba(255, 200, 90, .35); background: linear-gradient(170deg, #3d3115, #221c10); }
+.pass-reward-icon { height: 36px; display: flex; align-items: center; justify-content: center; }
+.pass-reward-icon .icon { color: var(--pass-grey); }
+.pass-reward-icon .coin { color: var(--gold); }
+.pass-reward.gold .pass-reward-icon .icon:not(.coin) { color: var(--gold); }
+.pass-reward-name { font-size: 12.5px; font-weight: 800; line-height: 1.2; text-align: center; }
+.pass-reward-state { display: inline-flex; align-items: center; gap: 3px; margin-top: auto; font-size: 11.5px; font-weight: 800; color: var(--hint); }
+.pass-reward.ready { border-color: #e9edf3; box-shadow: 0 0 0 1px rgba(255, 255, 255, .2), 0 6px 16px rgba(0, 0, 0, .3); }
+.pass-reward.ready .pass-reward-state { padding: 3px 10px; border-radius: 8px; background: linear-gradient(135deg, #f3f6fa, #aeb6c2); color: #1d222c; }
+.pass-reward.gold.ready { border-color: #ffd45c; box-shadow: 0 0 0 1px rgba(255, 212, 92, .3), 0 6px 18px rgba(255, 180, 60, .25); }
+.pass-reward.gold.ready .pass-reward-state { background: var(--pro-grad); background-size: 250% 100%; color: #3a2404; animation: pro-shine 3.6s linear infinite; }
+.pass-reward.got { opacity: .55; }
+.pass-reward.got .pass-reward-state { color: var(--mint); }
+.pass-reward.locked .pass-reward-icon, .pass-reward.pro .pass-reward-icon { opacity: .75; }
+.pass-reward:disabled { cursor: default; }
+.pass-reward.ready:active { transform: scale(.97); }
+.pass-outfit { width: 36px; height: 36px; border-radius: 10px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+.pass-outfit img { width: 120%; height: 120%; object-fit: cover; object-position: 50% 8%; }
+
+.pass-quests { display: flex; flex-direction: column; gap: 8px; }
+.small-note { font-size: 12px; font-weight: 700; }
+.pass-quest { display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+.pass-quest.ready { border-color: var(--pro-line); background: linear-gradient(100deg, var(--surface), #2a2414); }
+.pass-quest.got { opacity: .55; }
+.pass-quest-body { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; }
+.pass-quest-title { grid-column: 1 / -1; font-size: 14px; font-weight: 800; line-height: 1.3; }
+.pass-quest-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.pass-quest-bar div { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #e3a634, #ffd45c); }
+.pass-quest-count { min-width: 64px; text-align: right; font-size: 12px; color: var(--hint); font-weight: 800; font-variant-numeric: tabular-nums; }
+.pass-quest-xp { flex: none; min-width: 52px; text-align: center; font-size: 13px; font-weight: 900; color: var(--gold); }
+.pass-quest-xp.done { color: var(--mint); }
+.pass-claim { min-width: 64px; background: var(--pro-grad); background-size: 250% 100%; color: #3a2404; animation: pro-shine 3.6s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pro-name, .pro-chip, .pass-bar > *, .pass-claim, .pass-reward.gold.ready .pass-reward-state, .hero-card.pro::after, .hero-card.pro .hero-level, .pass-glow, .gold-art .gold-rays, .gold-art .gold-spark { animation: none; }
+}

@@ -6,6 +6,7 @@ export interface PlayerInfo {
   id: string;
   name: string;
   ready: boolean;
+  pro?: boolean;
 }
 
 export type ClientMessage =
@@ -28,6 +29,7 @@ export interface FighterView {
   maxHp: number;
   hits: number;
   combo: boolean;
+  pro?: boolean;
 }
 
 export interface ProfileView {
@@ -44,11 +46,13 @@ export interface TopEntry {
   cups: number;
   wins: number;
   me: boolean;
+  pro?: boolean;
 }
 
 export type ServerMessage =
   // telegram — игрок вошёл через Telegram с проверенной подписью, а не гостем из браузера.
-  | { type: 'welcome'; id: string; name: string; botUsername: string | null; botRunning: boolean; telegram: boolean }
+  // pro — у игрока Pro Pass (по id в Telegram, см. server/pro.ts).
+  | { type: 'welcome'; id: string; name: string; botUsername: string | null; botRunning: boolean; telegram: boolean; pro: boolean }
   | { type: 'room'; code: string; exercise: Exercise; players: PlayerInfo[] }
   | { type: 'countdown'; startsInMs: number; durationMs: number }
   | { type: 'state'; me: FighterView; opponent: FighterView; leftMs: number }
