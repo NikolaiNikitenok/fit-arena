@@ -3,7 +3,8 @@ import { DrawingUtils, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker } from './pose';
 import { frameRotations, enableOrientation } from './orientation';
 import { Exercise, RepCounter } from './repCounter';
-import { getSettings, repSound } from './settings';
+import { getSettings } from './settings';
+import { repSound } from './audio';
 import { hapticRep } from './telegram';
 
 // Модель общая на всё приложение: грузится один раз.

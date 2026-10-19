@@ -4,6 +4,7 @@ import { CameraGuide } from '../CameraGuide';
 import { Heart, Swords } from '../icons';
 import { getSettings, useSettings } from '../settings';
 import { useRepCamera } from '../useRepCamera';
+import { useMissionSounds } from '../gameSounds';
 import { gearIcon, gearText, itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
@@ -83,6 +84,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [error, setError] = useState<string | null>(null);
   const exercise = useRef<Exercise>(level.exercises[0]);
   const [countdown, setCountdown] = useState(0);
+  useMissionSounds(status, countdown, view, level.type === 'boss');
 
   const finish = (m: Mission, now: number) => {
     camera.stop();

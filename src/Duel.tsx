@@ -7,6 +7,8 @@ import { CameraGuide } from './CameraGuide';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
 import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
+import { useMusic } from './audio';
+import { useDuelSounds } from './gameSounds';
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
 
@@ -135,6 +137,9 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const opponentInfo = room?.players.find((p) => p.id !== me?.id);
   const myInfo = room?.players.find((p) => p.id === me?.id);
   const view = state ?? { me: freshFighter(userName()), opponent: freshFighter(opponentInfo?.name ?? 'Соперник') };
+  // В меню спокойная тема, на арене барабаны.
+  useMusic(phase === 'room' || phase === 'countdown' || phase === 'fight' || phase === 'over' ? 'arena' : 'calm');
+  useDuelSounds(phase, seconds, view.me, view.opponent, result);
 
   let overlay: ReactNode = null;
   if (phase === 'countdown') overlay = <div className="result-title">{seconds || 'Бой!'}</div>;

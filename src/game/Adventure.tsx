@@ -50,6 +50,8 @@ import {
 import { WorldMap3D } from './WorldMap3D';
 import { Coin, Flask, Heart, Lock, Swords } from '../icons';
 import { heroHands, heroPower } from './power';
+import { sfx, useMusic } from '../audio';
+import { missionTheme, worldTheme } from '../music';
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
@@ -107,6 +109,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [focusLand, setFocusLand] = useState(levels[startIndex()].land);
   const drag = useRef<{ y: number; moved: number } | null>(null);
   const item = itemById(progress.equipped);
+  useMusic(playing ? missionTheme(playing.world, playing.type === 'boss') : tab === 'map' ? worldTheme(world) : 'calm');
 
   const showToast = (text: string) => {
     setToast(text);
@@ -120,6 +123,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     const r = claimHeroLevels(latest.current);
     if (!r) return;
     setProgress(r.progress);
+    sfx('levelup');
     setLevelUp(`Новый уровень героя: ${r.levels[r.levels.length - 1]}! +${r.coins} монет`);
     setTimeout(() => setLevelUp(null), 3500);
   }, [playing, progress.days]);
@@ -233,6 +237,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
             const next = claimDaily(progress, daily);
             if (!next) return;
             setProgress(next);
+            sfx('coin');
             showToast(`Задание выполнено! +${daily.coins} монет${daily.potion ? ' и зелье' : ''}`);
           }}
           onMap={() => onTab('map')}
@@ -298,6 +303,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
                 const r = claimChest(progress, land);
                 if (!r) return showToast('Этот сундук уже пуст.');
                 setProgress(r.progress);
+                sfx('chest');
                 showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
               })()
             }
@@ -376,6 +382,7 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
       onClick={() => {
         const next = buyIt();
         if (next) setProgress(next);
+        if (next) sfx('coin');
       }}
     >
       <Coin size={14} /> {cost}

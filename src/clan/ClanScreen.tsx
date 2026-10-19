@@ -9,6 +9,7 @@ import { clanInviteCode, clanInviteLink, share } from '../telegram';
 import { RaidFight, RaidScene } from './RaidFight';
 import { Flag, FlagPicker } from './Flag';
 import { useClan } from './useClan';
+import { sfx } from '../audio';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: 'глава', officer: 'заместитель', member: '' };
@@ -253,6 +254,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
             const res = claimRaid(progress, r.key, reward, landNow);
             if (!res) return;
             setProgress(res.progress);
+            sfx(res.gear ? 'chest' : 'coin');
             show(`+${reward.coins} монет${res.gear ? ` и ${res.gear.name}` : ''}!`);
           }}
         />

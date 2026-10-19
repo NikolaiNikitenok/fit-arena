@@ -2,8 +2,10 @@
 import { useSyncExternalStore } from 'react';
 
 export interface Settings {
-  // Короткий звук на каждый засчитанный повтор.
+  // Звуки игры: сигнал повтора, удары, победа, монеты.
   sound: boolean;
+  // Фоновая музыка миров.
+  music: boolean;
   // Вибрация телефона на повтор (Telegram).
   haptics: boolean;
   // Скелет поверх видео с камеры.
@@ -17,7 +19,7 @@ export interface Settings {
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, haptics: true, skeleton: true, guide: true, lowPower: false, story: true };
+const DEFAULTS: Settings = { sound: true, music: true, haptics: true, skeleton: true, guide: true, lowPower: false, story: true };
 
 let current: Settings = (() => {
   try {
@@ -40,36 +42,16 @@ export function setSetting<K extends keyof Settings>(key: K, value: Settings[K])
   listeners.forEach((l) => l());
 }
 
-export const useSettings = (): Settings =>
-  useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => current,
-  );
+/** Подписка на изменения настроек; возвращает отписку. */
+export const subscribeSettings = (l: () => void): (() => void) => {
+  listeners.add(l);
+  return () => listeners.delete(l);
+};
+
+export const useSettings = (): Settings => useSyncExternalStore(subscribeSettings, () => current);
 
 /** Параметры 3D-сцен с учётом экономии батареи. */
 export const canvasProps = (s: Settings) => (s.lowPower ? { shadows: false, dpr: 1 as const } : { shadows: true, dpr: [1, 1.6] as [number, number] });
 
-let audio: AudioContext | null = null;
-/** Тихий «дзынь» на повтор: высота растёт с номером повтора, чтобы было слышно темп. */
-export function repSound(n: number): void {
-  if (!current.sound) return;
-  try {
-    audio ??= new AudioContext();
-    const t = audio.currentTime;
-    const osc = audio.createOscillator();
-    const gain = audio.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = 520 + Math.min(12, n % 13) * 30;
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-    osc.connect(gain).connect(audio.destination);
-    osc.start(t);
-    osc.stop(t + 0.25);
-  } catch {
-    // Звук недоступен — не страшно.
-  }
-}
+/** Сигнал на повтор теперь живёт в звуковом движке. */
+export { repSound } from './audio';

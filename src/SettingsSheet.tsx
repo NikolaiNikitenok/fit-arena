@@ -4,7 +4,8 @@ import { heroLevel, heroXp, Progress } from './game/progress';
 import { setSetting, Settings, useSettings } from './settings';
 
 const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
-  { key: 'sound', title: 'Звук повтора', text: 'Короткий сигнал на каждый засчитанный повтор, чтобы не смотреть на экран.' },
+  { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
+  { key: 'music', title: 'Музыка', text: 'Тихая фоновая мелодия: своя в каждом мире, барабаны на арене.' },
   { key: 'haptics', title: 'Вибрация', text: 'Телефон коротко вибрирует на повтор.' },
   { key: 'guide', title: 'Подсказка перед уровнем', text: '3D-схема, как поставить телефон.' },
   { key: 'story', title: 'Диалоги сюжета', text: 'Разговоры с героями перед уровнями. Без них сразу к тренировке.' },
@@ -12,7 +13,7 @@ const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
   { key: 'lowPower', title: 'Экономия батареи', text: 'Без теней и с меньшим разрешением 3D. Помогает, если телефон греется.' },
 ];
 
-/** Настройки: звук, вибрация, подсказки, батарея, сброс прогресса. */
+/** Настройки: звуки, музыка, вибрация, подсказки, батарея, сброс прогресса. */
 export function SettingsSheet({ progress, onReset, onClose }: { progress: Progress; onReset: () => void; onClose: () => void }) {
   const s = useSettings();
   const [confirm, setConfirm] = useState(false);
