@@ -94,6 +94,8 @@ export interface Gear {
   inShop: boolean;
   // С какой земли товар появляется у купца.
   minLand: number;
+  // Награда Pro-дорожки пропуска: не продаётся и не выпадает.
+  pass?: boolean;
 }
 
 const W = (id: string, name: string, mesh: string, source: CharName, rarity: Rarity, atk: number, price: number, minLand: number, extra: Partial<Gear> = {}): Gear => ({
@@ -163,6 +165,13 @@ export const GEAR: Gear[] = [
   O('aegis', 'Эгида', 'Badge_Shield', 'Knight', 'legendary', 3, 0.2, 11500, 22, { glow: '#ffd54a', tint: 'mul:1.45,1.15,0.5' }),
   O('void-tome', 'Книга Бездны', 'Spellbook', 'Mage', 'legendary', 0, 0.35, 13000, 24, { glow: '#b388ff', tint: 'mul:0.55,0.45,0.9' }),
   O('flame-twin', 'Пламенный клинок', '1H_Sword_Offhand', 'Knight', 'legendary', 1, 0.3, 15000, 26, { glow: '#ff3d00', tint: 'mul:1.35,0.75,0.5' }),
+  // Оружие Золотого щита: только на Pro-дорожке пропуска.
+  W('pass-dagger', 'Кинжал стража', 'Knife', 'Rogue', 'epic', 14, 0, 0, { pct: 0.05, pass: true, glow: '#ffd54a', tint: 'mul:1.5,1.2,0.5' }),
+  W('pass-wand', 'Жезл Золотого щита', '1H_Wand', 'Mage', 'epic', 18, 0, 0, { pct: 0.05, pass: true, glow: '#ffd54a', tint: 'mul:1.5,1.2,0.5' }),
+  W('pass-crossbow', 'Солнечный арбалет', '1H_Crossbow', 'Rogue', 'legendary', 22, 0, 0, { pct: 0.08, pass: true, glow: '#ffc400', tint: 'mul:1.5,1.2,0.5' }),
+  W('pass-axe', 'Топор Золотого льва', '1H_Axe', 'Barbarian', 'legendary', 26, 0, 0, { pct: 0.1, pass: true, glow: '#ffc400', tint: 'mul:1.5,1.2,0.5' }),
+  W('pass-sword', 'Меч Золотого щита', '1H_Sword', 'Knight', 'legendary', 30, 0, 0, { pct: 0.12, pass: true, glow: '#ffea00', tint: 'mul:1.55,1.25,0.5' }),
+  O('pass-shield', 'Щит Золотого стража', 'Badge_Shield', 'Knight', 'legendary', 2, 0.2, 0, 0, { pass: true, glow: '#ffea00', tint: 'mul:1.55,1.25,0.5' }),
 ];
 
 export const gearById = (id: string | undefined): Gear | undefined => GEAR.find((g) => g.id === id);
@@ -184,7 +193,7 @@ export const POTIONS: Potion[] = [
 export const potionById = (id: PotionId): Potion => POTIONS.find((p) => p.id === id)!;
 
 // Легендарные вещи купца не выпадают из сундуков и боссов: на них копят.
-const droppable = (g: Gear) => !(g.inShop && g.rarity === 'legendary');
+const droppable = (g: Gear) => !g.pass && !(g.inShop && g.rarity === 'legendary');
 
 export type Loot = { coins: number; item?: Item; gear?: Gear; potion?: PotionId };
 

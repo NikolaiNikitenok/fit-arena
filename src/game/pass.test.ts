@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimPassTier, claimQuest, dailyQuests, PASS_TIERS, passQuests, passRewards, passTier, passWeek, passWeekEndsAt, questValue, seasonQuests, weeklyQuests, XP_PER_TIER } from './pass';
+import { claimPassTier, claimQuest, dailyQuests, PASS_TIERS, passQuests, passRewards, PASS_GEAR, passTier, passWeek, passWeekEndsAt, questValue, seasonQuests, weeklyQuests, XP_PER_TIER } from './pass';
 import { countPass, dayKey, loadProgress, passOf, type Progress, recordActivity, recordDuel } from './progress';
 
 const base = { squat: 20, pushup: 10, situp: 15 };
@@ -122,5 +122,20 @@ describe('смена заданий недели', () => {
       expect(left).toBeLessThanOrEqual(7 * 86400000);
       expect(new Date(passWeekEndsAt(now)).getHours()).toBe(0);
     }
+  });
+});
+
+describe('оружие Золотого щита', () => {
+  it('на Pro-дорожке есть уникальное оружие, его не продают и оно не выпадает', async () => {
+    const { GEAR, openChest, bossDrop } = await import('./items');
+    const ids = Object.values(PASS_GEAR);
+    expect(ids.length).toBeGreaterThanOrEqual(5);
+    for (const t of Object.keys(PASS_GEAR)) expect(passRewards(Number(t)).pro).toMatchObject({ kind: 'passGear' });
+    for (const id of ids) expect(GEAR.find((g) => g.id === id)).toMatchObject({ pass: true, inShop: false });
+    for (let seed = 0; seed < 400; seed++) {
+      const loot = openChest(seed, [], 30);
+      expect(ids).not.toContain(loot.gear?.id);
+    }
+    expect(ids).not.toContain(bossDrop(30, [])?.id);
   });
 });

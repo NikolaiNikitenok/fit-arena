@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Chest, Coin, Flask, Lock, PassShield, Swords } from '../icons';
-import { itemById, potionById } from './items';
+import { gearIcon, itemById, potionById } from './items';
 import { portraitUrl } from './npcs';
 import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';
@@ -158,6 +158,8 @@ function RewardIcon({ reward }: { reward: PassReward }) {
       return <Chest size={32} />;
     case 'gear':
       return <Swords size={26} />;
+    case 'passGear':
+      return <img className="pass-gear-icon" src={gearIcon(reward.id)} alt="" draggable={false} />;
     case 'outfit': {
       const item = itemById(reward.id);
       return (

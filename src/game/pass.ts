@@ -3,7 +3,7 @@
 // Сезон тот же, что у дуэлей: 4 недели. Задания одинаковые у всех и зависят только от даты.
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { seasonEndsAt } from '../../shared/rating';
-import { bossDrop, Gear, itemById, openChest, PotionId, potionById } from './items';
+import { bossDrop, Gear, gearById, itemById, openChest, PotionId, potionById } from './items';
 import type { Baseline } from './levels';
 import { addPotions, dayKey, passOf, passSeason, type PassStat, Progress, saveProgress, streak } from './progress';
 
@@ -28,6 +28,7 @@ export type PassReward =
   | { kind: 'potion'; id: PotionId; n: number }
   | { kind: 'chest' }
   | { kind: 'gear' }
+  | { kind: 'passGear'; id: string }
   | { kind: 'outfit'; id: string };
 
 const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 2166136261);
@@ -135,6 +136,8 @@ export function passTier(xp: number): { tier: number; into: number; need: number
 }
 
 const POTION_CYCLE: PotionId[] = ['vigor', 'might', 'swap'];
+// Уникальное оружие Pro-дорожки: чем дальше ступень, тем сильнее.
+export const PASS_GEAR: Record<number, string> = { 5: 'pass-dagger', 10: 'pass-wand', 15: 'pass-crossbow', 20: 'pass-axe', 25: 'pass-sword', 28: 'pass-shield' };
 
 /** Награды ступени: серый щит — бесплатно, золотой — Pro. Монеты растут к концу сезона. */
 export function passRewards(tier: number): { free: PassReward; pro: PassReward } {
@@ -147,6 +150,7 @@ export function passRewards(tier: number): { free: PassReward; pro: PassReward }
     : { kind: 'coins', n: 40 + tier * 4 };
   const pro: PassReward =
     tier === PASS_TIERS ? { kind: 'outfit', id: 'pass-gold' }
+    : PASS_GEAR[tier] ? { kind: 'passGear', id: PASS_GEAR[tier] }
     : tier % 5 === 0 ? { kind: 'gear' }
     : tier % 4 === 0 ? { kind: 'chest' }
     : tier % 3 === 0 ? { kind: 'potion', id: potion, n: 2 }
@@ -164,6 +168,8 @@ export function rewardLabel(r: PassReward): string {
       return 'Сундук';
     case 'gear':
       return 'Снаряжение';
+    case 'passGear':
+      return gearById(r.id)?.name ?? 'Снаряжение';
     case 'outfit':
       return itemById(r.id).name;
   }
@@ -205,6 +211,17 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
     } else {
       coins(track === 'pro' ? 1200 : 600);
       label = `${track === 'pro' ? 1200 : 600} монет`;
+    }
+  }
+  if (r.kind === 'passGear') {
+    const g = gearById(r.id);
+    if (g && !next.items.includes(g.id)) {
+      next.items = [...next.items, g.id];
+      gear = g;
+    } else {
+      // Уже есть с прошлого сезона.
+      coins(1500);
+      label = '1500 монет';
     }
   }
   if (r.kind === 'outfit') {

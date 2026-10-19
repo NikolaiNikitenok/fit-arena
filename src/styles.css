@@ -646,3 +646,4 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 @media (prefers-reduced-motion: reduce) {
   .pro-name, .pro-chip, .pass-bar > *, .pass-claim, .pass-reward.gold.ready .pass-reward-state, .hero-card.pro::after, .hero-card.pro .hero-level, .pass-glow, .gold-art .gold-rays, .gold-art .gold-spark { animation: none; }
 }
+.pass-gear-icon { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 6px rgba(255, 200, 60, .6)); }
