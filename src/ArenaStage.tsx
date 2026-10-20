@@ -24,10 +24,12 @@ interface Props {
   opponentLook?: { model: CharName; tint?: string; glow?: string };
   // Итог боя по времени: победитель радуется, проигравший садится без сил.
   result?: 'win' | 'lose' | 'draw' | null;
+  // Поверх сцены, под итогом: например, реплика тренера перед боем.
+  children?: ReactNode;
 }
 
 /** Арена со шкалами здоровья, таймером и окошком камеры в углу. */
-export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opponentColor = '#22c55e', opponentScale, enraged, botLevel, opponentLook, result }: Props) {
+export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opponentColor = '#22c55e', opponentScale, enraged, botLevel, opponentLook, result, children }: Props) {
   const over = me.hp === 0 || opponent.hp === 0;
   // Герой выглядит так же, как в приключении: костюм, оттенок, свечение и оружие.
   const hero = useMemo(() => {
@@ -60,6 +62,7 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
         </div>
       )}
       {overlay && <div className="result">{overlay}</div>}
+      {children}
       <div className={`pip ${camera.active ? '' : 'hidden'}`}>
         <video ref={camera.videoRef} playsInline muted />
         <canvas ref={camera.canvasRef} />

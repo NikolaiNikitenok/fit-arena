@@ -10,6 +10,7 @@ import { useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
 import { useDuelSounds } from './gameSounds';
 import { recordDuel, recordOutsideReps } from './game/progress';
+import { TrainerDuel } from './TrainerDuel';
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
 
@@ -24,7 +25,13 @@ const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'с
 
 const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 
+/** Вкладка дуэлей: живой бой через сервер или бой с тренером на устройстве. */
 export function Duel({ exercise }: { exercise: Exercise }) {
+  const [trainer, setTrainer] = useState(false);
+  return trainer ? <TrainerDuel exercise={exercise} onExit={() => setTrainer(false)} /> : <LiveDuel exercise={exercise} onTrainer={() => setTrainer(true)} />;
+}
+
+function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () => void }) {
   const camera = useRepCamera();
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
@@ -192,6 +199,13 @@ export function Duel({ exercise }: { exercise: Exercise }) {
 
       {phase === 'menu' && profile && <LeagueCard profile={profile} />}
 
+      {(phase === 'connecting' || phase === 'offline') && (
+        <button className="secondary daily" onClick={onTrainer}>
+          Бой с тренером
+          <small>в любое время и без сети, кубки не меняются</small>
+        </button>
+      )}
+
       {phase === 'menu' && (
         <>
           {waiting ? (
@@ -218,6 +232,10 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               Войти
             </button>
           </div>
+          <button className="secondary daily" onClick={onTrainer}>
+            Бой с тренером
+            <small>в любое время и без сети, кубки не меняются</small>
+          </button>
           <button className="link" onClick={() => (top ? setTop(null) : send({ type: 'top' }))}>
             {top ? 'Скрыть рейтинг' : 'Рейтинг сезона'}
           </button>

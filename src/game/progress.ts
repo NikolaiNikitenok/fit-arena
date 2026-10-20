@@ -349,6 +349,9 @@ export function recordDuel(result: 'win' | 'lose' | 'draw', now: number): Progre
   return save(result === 'win' ? countPass(p, 'duelWin', 1, now) : p);
 }
 
+/** Бой с тренером: в пропуск идёт только сам бой. Победа над ботом не засчитывается, чтобы задания «выиграй дуэль» не фармили. */
+export const recordTrainerDuel = (now: number): Progress => save(countPass(loadProgress(), 'duel', 1, now));
+
 /** Атака на рейд-босса клана: для заданий пропуска. */
 export const recordRaidAttack = (p: Progress, now: number): Progress => save(countPass(p, 'raid', 1, now));
 
