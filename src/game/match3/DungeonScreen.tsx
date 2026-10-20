@@ -15,9 +15,11 @@ import { Bolt, GemIcon, MonsterFace, ResIcon } from './art';
 import {
   beginFloor,
   blocksLeft,
+  checkSavedRun,
   dailyBonusReady,
   DUNGEON_LANDS,
   dungeonOf,
+  FAIL_KEEP,
   FLOOR_COST,
   FLOOR_COUNT,
   floorDef,
@@ -32,8 +34,13 @@ import {
   LAND_COUNT,
   playMove,
   repsToFloor,
+  restoreRun,
+  RUN_TTL,
   type Run,
+  type SavedRun,
   startRun,
+  storeRun,
+  surrenderRun,
 } from './dungeon';
 import './dungeon.css';
 
@@ -53,7 +60,7 @@ export interface DungeonScreenProps {
   startFloor?: number;
 }
 
-type View = { kind: 'list' } | { kind: 'empty'; floor: number } | { kind: 'play' } | { kind: 'result'; reward: FloorReward; run: Run };
+type View = { kind: 'list' } | { kind: 'empty'; floor: number } | { kind: 'play' } | { kind: 'result'; reward: FloorReward; run: Run; note?: string };
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const HINT_AFTER_MS = 6000;
@@ -92,38 +99,97 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
   const [view, setView] = useState<View>({ kind: 'list' });
   const [picked, setPicked] = useState<FloorDef | null>(null);
   const [run, setRun] = useState<Run | null>(null);
+  const [giveUp, setGiveUp] = useState(false);
   const latest = useRef(progress);
   latest.current = progress;
+  // Зерно и время начала идущей партии: пишутся в сохранение вместе с доской.
+  const meta = useRef({ seed: 0, startedAt: 0 });
   useMusic(view.kind === 'play' && run ? landTheme(run.floor.land, run.floor.boss) : 'calm', 1);
+  const saved = d.run;
 
   const play = (id: number) => {
-    const p = latest.current;
+    let p = latest.current;
     if (!floorOpen(p, id)) return;
+    // Новый этаж поверх незаконченного: тот засчитывается поражением.
+    const old = p.dungeon?.run && restoreRun(p.dungeon.run);
+    if (old) p = surrenderRun(p, old, Date.now()).progress;
     const next = beginFloor(p, id);
     if (!next) return setView({ kind: 'empty', floor: id });
-    setProgress(saveProgress(next));
     track('dungeon_start', id);
     setPicked(null);
     // Своё зерно на каждую попытку: этаж тот же, доска новая.
-    setRun(startRun(floorDef(id), heroPower(p).damage, (floorDef(id).seed + dungeonOf(next).plays * 101) >>> 0));
+    const seed = (floorDef(id).seed + dungeonOf(next).plays * 101) >>> 0;
+    const r = startRun(floorDef(id), heroPower(p).damage, seed);
+    meta.current = { seed, startedAt: Date.now() };
+    // Сразу в сохранение: закроют приложение до первого хода — этаж не пропадёт.
+    setProgress(saveProgress(storeRun(next, r, seed, meta.current.startedAt)));
+    setRun(r);
     setView({ kind: 'play' });
   };
 
+  const resume = () => {
+    const c = checkSavedRun(latest.current, Date.now());
+    if (c.kind !== 'resume') return;
+    meta.current = { seed: c.saved.seed, startedAt: c.saved.startedAt };
+    setRun(c.run);
+    setView({ kind: 'play' });
+  };
+
+  const showResult = (reward: FloorReward, r: Run, note?: string) => {
+    track(reward.won ? 'dungeon_win' : 'dungeon_lose', r.floor.id);
+    setTimeout(() => sfx(reward.won ? 'win' : 'lose'), 100);
+    if (reward.won) setTimeout(() => sfx('coin'), 900);
+    setView({ kind: 'result', reward, run: r, note });
+  };
+
   useEffect(() => {
+    // Сохранённая партия: кончилась или пролежала сутки — итог сразу; иначе предложим доиграть.
+    const c = checkSavedRun(latest.current, Date.now());
+    if (c.kind === 'settled') {
+      setProgress(saveProgress(c.progress));
+      return showResult(c.reward, c.run, c.stale ? `Этаж ${c.run.floor.id} не доигран за сутки — засчитано поражение.` : undefined);
+    }
+    if (c.progress !== latest.current) setProgress(saveProgress(c.progress));
+    if (c.kind === 'resume') return;
     if (startFloor) play(startFloor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Свернули или закрыли приложение посреди этажа: сохранить ещё раз (сам ход уже сохранён).
+  useEffect(() => {
+    if (view.kind !== 'play') return;
+    const flush = () => {
+      if (latest.current.dungeon?.run) saveProgress(latest.current);
+    };
+    const onVis = () => document.visibilityState === 'hidden' && flush();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [view.kind]);
+
+  // После каждого хода: партия в сохранение (маленький JSON, запись в телефоне мгновенная).
+  const persist = (r: Run) => setProgress(saveProgress(storeRun(latest.current, r, meta.current.seed, meta.current.startedAt)));
+
   const finish = (r: Run) => {
     const res = finishFloor(latest.current, r, Date.now());
     setProgress(saveProgress(res.progress));
-    track(res.reward.won ? 'dungeon_win' : 'dungeon_lose', r.floor.id);
-    setTimeout(() => sfx(res.reward.won ? 'win' : 'lose'), 100);
-    if (res.reward.won) setTimeout(() => sfx('coin'), 900);
-    setView({ kind: 'result', reward: res.reward, run: r });
+    showResult(res.reward, r);
   };
 
-  if (view.kind === 'play' && run) return <Play key={run.board.rng + run.floor.id} initial={run} charge={v.charge} onFinish={finish} />;
+  const surrender = () => {
+    setGiveUp(false);
+    const s = latest.current.dungeon?.run;
+    const r = s && restoreRun(s);
+    if (!r) return;
+    const res = surrenderRun(latest.current, r, Date.now());
+    setProgress(saveProgress(res.progress));
+    showResult(res.reward, { ...r, status: 'lost' });
+  };
+
+  if (view.kind === 'play' && run) return <Play key={run.board.rng + run.floor.id} initial={run} charge={v.charge} onMove={persist} onFinish={finish} />;
 
   if (view.kind === 'result') {
     const { reward, run: r } = view;
@@ -136,7 +202,8 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
           <div className="m3-result-tag">
             Этаж {r.floor.id} · {DUNGEON_LANDS[r.floor.land].name}
           </div>
-          <h2>{reward.won ? (r.floor.boss ? 'Хранитель повержен!' : 'Этаж пройден!') : r.heroHp <= 0 ? 'Герой отступил' : 'Ходы кончились'}</h2>
+          <h2>{reward.won ? (r.floor.boss ? 'Хранитель повержен!' : 'Этаж пройден!') : r.heroHp <= 0 ? 'Герой отступил' : r.moves > 0 ? 'Этаж покинут' : 'Ходы кончились'}</h2>
+          {view.note && <div className="muted">{view.note}</div>}
           {reward.won ? <div className="m3-result-stars"><Stars n={reward.stars} /></div> : <div className="muted">Половина добычи всё равно твоя. Попробуй ещё раз!</div>}
           <div className="m3-loot">
             {RESOURCES.map((res, i) => (
@@ -249,6 +316,8 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
         <ResRow res={v.res} />
       </div>
 
+      {saved && <ResumeCard saved={saved} onResume={resume} onGiveUp={() => setGiveUp(true)} />}
+
       <button className={`m3-next ${nextFloor.boss ? 'boss' : ''}`} style={{ ['--la' as string]: L.accent, ['--lb' as string]: L.bg }} onClick={() => setPicked(nextFloor)}>
         <span className="m3-next-face">{nextFloor.monster ? <MonsterFace shape={nextFloor.monster.shape} color={nextFloor.monster.color} boss={nextFloor.boss} size={64} /> : <GoalBadge f={nextFloor} size={64} />}</span>
         <span className="m3-next-text">
@@ -300,6 +369,27 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
         Тренируйся — копи заряд: 1 повтор = 1 <Bolt size={12} />. Этаж — {FLOOR_COST} <Bolt size={12} />. Лучшее комбо: ×{d.bestCombo}, побед: {d.wins}.
       </div>
 
+      {giveUp && saved && (
+        <div className="sheet" onClick={() => setGiveUp(false)}>
+          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+            <div className="level-title">Сдаться на этаже {saved.floor}?</div>
+            <LeaveText loot={saved.loot} />
+            <button className="primary" onClick={surrender}>
+              Сдаться
+            </button>
+            <button
+              className="secondary"
+              onClick={() => {
+                setGiveUp(false);
+                resume();
+              }}
+            >
+              Продолжить этаж {saved.floor}
+            </button>
+          </div>
+        </div>
+      )}
+
       {picked && (
         <div className="sheet" onClick={() => setPicked(null)}>
           <div className="sheet-body m3-pick" onClick={(e) => e.stopPropagation()} style={{ ['--la' as string]: DUNGEON_LANDS[picked.land].accent }}>
@@ -336,6 +426,7 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
               </span>
             </button>
             {v.charge < FLOOR_COST && <div className="muted m3-center">Заряда {v.charge} из {FLOOR_COST}: ещё {repsToFloor(progress)} повторов</div>}
+            {saved && v.charge >= FLOOR_COST && <div className="muted m3-center">Незаконченный этаж {saved.floor} засчитается поражением: останется половина его добычи.</div>}
             <button className="link" onClick={() => setPicked(null)}>
               Закрыть
             </button>
@@ -352,6 +443,44 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many;
 };
 
+const halfLoot = (loot: Resources): Resources => ({ wood: Math.round(loot.wood * FAIL_KEEP), stone: Math.round(loot.stone * FAIL_KEEP), gold: Math.round(loot.gold * FAIL_KEEP) });
+
+/** Чем кончится уход с этажа: честно, до нажатия. */
+function LeaveText({ loot }: { loot: Resources }) {
+  return (
+    <div className="muted m3-leave">
+      Это <b>поражение</b>: этаж не засчитается, звёзд и бонуса этажа не будет, заряд {FLOOR_COST} уже потрачен и не вернётся. В деревню уйдёт половина собранного: <ResRow res={halfLoot(loot)} plus />
+    </div>
+  );
+}
+
+/** Незаконченный этаж: приложение закрыли посреди партии. */
+function ResumeCard({ saved, onResume, onGiveUp }: { saved: SavedRun; onResume: () => void; onGiveUp: () => void }) {
+  const f = floorDef(saved.floor);
+  const L = DUNGEON_LANDS[f.land];
+  const hoursLeft = Math.max(1, Math.ceil((saved.startedAt + RUN_TTL - Date.now()) / 3600000));
+  return (
+    <div className={`m3-next m3-resume ${f.boss ? 'boss' : ''}`} style={{ ['--la' as string]: L.accent, ['--lb' as string]: L.bg }}>
+      <span className="m3-next-face">{f.monster ? <MonsterFace shape={f.monster.shape} color={f.monster.color} boss={f.boss} size={64} /> : <GoalBadge f={f} size={64} />}</span>
+      <span className="m3-next-text">
+        <small>Незаконченный этаж · {L.name}</small>
+        <b>{goalText(f)}</b>
+        <small>
+          Осталось {saved.moves} {plural(saved.moves, 'ход', 'хода', 'ходов')} · ждёт ещё {hoursLeft} ч
+        </small>
+        <span className="m3-resume-actions">
+          <button className="primary" onClick={onResume}>
+            Продолжить этаж {saved.floor}
+          </button>
+          <button className="secondary" onClick={onGiveUp}>
+            Сдаться
+          </button>
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** Значок цели этажа без чудовища. */
 function GoalBadge({ f, size }: { f: FloorDef; size: number }) {
   return (
@@ -365,7 +494,7 @@ function GoalBadge({ f, size }: { f: FloorDef; size: number }) {
 
 let fxKey = 1;
 
-function Play({ initial, charge, onFinish }: { initial: Run; charge: number; onFinish: (r: Run) => void }) {
+function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: number; onMove: (r: Run) => void; onFinish: (r: Run) => void }) {
   const settings = useSettings();
   const lite = settings.lowPower;
   const [run, setRun] = useState(initial);
@@ -447,6 +576,8 @@ function Play({ initial, charge, onFinish }: { initial: Run; charge: number; onF
       setBusy(false);
       return;
     }
+    // Ход в сохранение до анимации: закроют приложение посреди каскада — ход не пропадёт.
+    onMove(o.run);
     let hp = run.monsterHp;
     for (let i = 0; i < o.result.steps.length; i++) {
       const s = o.result.steps[i];
@@ -611,7 +742,8 @@ function Play({ initial, charge, onFinish }: { initial: Run; charge: number; onF
         <div className="sheet" onClick={() => setQuit(false)}>
           <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
             <div className="level-title">Покинуть этаж?</div>
-            <div className="muted">Заряд уже потрачен. Уйдёшь — останется половина добычи, как при поражении.</div>
+            <LeaveText loot={run.loot} />
+            <div className="muted m3-leave">Можно и просто закрыть приложение: этаж сохранится, доиграешь в течение суток.</div>
             <button
               className="primary"
               onClick={() => {

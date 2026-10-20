@@ -8,9 +8,12 @@ import './dungeon.css';
 
 export function DungeonEntry({ progress, onOpen }: { progress: Progress; onOpen: () => void }) {
   const charge = villageOf(progress).charge;
-  const f = floorDef(Math.min(FLOOR_COUNT, dungeonOf(progress).reached));
+  const d = dungeonOf(progress);
+  // Незаконченный этаж важнее следующего: его можно доиграть без заряда.
+  const unfinished = d.run?.floor;
+  const f = floorDef(unfinished ?? Math.min(FLOOR_COUNT, d.reached));
   const L = DUNGEON_LANDS[f.land];
-  const ready = charge >= FLOOR_COST;
+  const ready = charge >= FLOOR_COST || !!unfinished;
   const m = f.monster ?? { shape: L.boss[1], color: L.boss[2] };
   return (
     <button className={`m3-entry ${ready ? 'ready' : ''}`} style={{ ['--la' as string]: L.accent, ['--lb' as string]: L.bg }} onClick={onOpen}>
@@ -22,14 +25,14 @@ export function DungeonEntry({ progress, onOpen }: { progress: Progress; onOpen:
           Подземелье · <Bolt size={14} className="m3-bolt" /> {charge}
         </b>
         <small>
-          {ready ? `Этаж ${f.id}: ${L.name}` : `Заряд копится от повторов: ещё ${FLOOR_COST - charge} до этажа`}
-          {ready && dailyBonusReady(progress, Date.now()) ? ' · бонус дня' : ''}
+          {unfinished ? `Этаж ${f.id} не доигран — продолжи` : ready ? `Этаж ${f.id}: ${L.name}` : `Заряд копится от повторов: ещё ${FLOOR_COST - charge} до этажа`}
+          {ready && !unfinished && dailyBonusReady(progress, Date.now()) ? ' · бонус дня' : ''}
         </small>
         <span className="m3-entry-bar">
           <span style={{ width: `${(charge / CHARGE_MAX) * 100}%` }} />
         </span>
       </span>
-      {ready && <span className="ach-entry-new">×{Math.floor(charge / FLOOR_COST)}</span>}
+      {!unfinished && charge >= FLOOR_COST && <span className="ach-entry-new">×{Math.floor(charge / FLOOR_COST)}</span>}
       <span className="chev">›</span>
     </button>
   );

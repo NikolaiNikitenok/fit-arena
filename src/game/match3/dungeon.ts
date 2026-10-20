@@ -26,7 +26,7 @@
 import { RESOURCES, addResources, spendCharge, villageOf, type Resource, type Resources } from '../resources';
 import type { Progress } from '../progress';
 import { dayKey } from '../progress';
-import { createBoard, type Board, type BlockKind, type Counts, type GemKind, type Pos, type SwapResult, trySwap } from './engine';
+import { createBoard, GEM_KINDS, type Board, type BlockKind, type Cell, type Counts, type GemKind, type Pos, type Special, type SwapResult, trySwap } from './engine';
 
 export const FLOOR_COST = 20;
 export const LAND_COUNT = 10;
@@ -352,6 +352,8 @@ export interface DungeonState {
   plays: number;
   // Побеждённые хранители (этажи).
   bosses: number[];
+  // Незаконченная партия: приложение закрыли посреди этажа (метро, звонок, телефон уснул).
+  run?: SavedRun;
 }
 
 type WithDungeon = Progress;
@@ -403,6 +405,163 @@ export function finishFloor(p: WithDungeon, run: Run, now: number): { progress: 
     wins: d.wins + Number(won),
     bonusDate: daily ? dayKey(now) : d.bonusDate,
     bosses: won && run.floor.boss && !d.bosses.includes(id) ? [...d.bosses, id] : d.bosses,
+    // Этаж кончился — сохранённая партия больше не нужна.
+    run: undefined,
   };
   return { progress: { ...addResources(p, total), dungeon: next }, reward: { loot: total, bonus, daily, stars, firstClear, won } };
+}
+
+// ---------- Незаконченная партия ----------
+
+// Сколько ждёт сохранённая партия: через сутки засчитывается поражением.
+export const RUN_TTL = 24 * 3600 * 1000;
+
+/**
+ * Партия в сохранении: маленький JSON (~0,6 КБ). Доска — строкой: клетки через запятую,
+ * клетка — вид самоцвета, особый (- H V B R), номер; дальше ящик c<hp>, валун b<hp>, лёд i<слои>.
+ */
+export interface SavedRun {
+  v: 1;
+  floor: number;
+  // Зерно, с которого начата доска, и когда начат этаж.
+  seed: number;
+  startedAt: number;
+  board: { w: number; h: number; rng: number; nextId: number; kinds: string; cells: string };
+  moves: number;
+  heroHp: number;
+  heroMax: number;
+  monsterHp: number;
+  monsterMax: number;
+  attackIn: number;
+  sword: number;
+  loot: Resources;
+  gems: Counts;
+  status: RunStatus;
+  maxCombo: number;
+}
+
+const KIND_CH: Record<GemKind, string> = { wood: 'w', stone: 's', gold: 'g', heart: 'h', sword: 'x' };
+const CH_KIND: Record<string, GemKind> = { w: 'wood', s: 'stone', g: 'gold', h: 'heart', x: 'sword' };
+const SPECIAL_CH: Record<Special, string> = { lineH: 'H', lineV: 'V', bomb: 'B', rainbow: 'R' };
+const CH_SPECIAL: Record<string, Special> = { H: 'lineH', V: 'lineV', B: 'bomb', R: 'rainbow' };
+const CELL_RE = /^(?:([wsghx])([-HVBR])(\d+))?(?:([cb])(\d+))?(?:i(\d+))?$/;
+
+function encodeCell(c: Cell): string {
+  let out = c.gem ? KIND_CH[c.gem.kind] + (c.gem.special ? SPECIAL_CH[c.gem.special] : '-') + c.gem.id : '';
+  if (c.block) out += (c.block.kind === 'crate' ? 'c' : 'b') + c.block.hp;
+  if (c.ice) out += 'i' + c.ice;
+  return out;
+}
+
+function decodeCell(s: string): Cell | null {
+  const m = CELL_RE.exec(s);
+  if (!m) return null;
+  const c: Cell = { gem: null };
+  if (m[1]) {
+    c.gem = { id: Number(m[3]), kind: CH_KIND[m[1]] };
+    if (m[2] !== '-') c.gem.special = CH_SPECIAL[m[2]];
+  }
+  if (m[4]) c.block = { kind: m[4] === 'c' ? 'crate' : 'boulder', hp: Number(m[5]) };
+  if (m[6]) c.ice = Number(m[6]);
+  return c;
+}
+
+export function encodeBoard(b: Board): SavedRun['board'] {
+  return { w: b.w, h: b.h, rng: b.rng, nextId: b.nextId, kinds: b.kinds.map((k) => KIND_CH[k]).join(''), cells: b.cells.map(encodeCell).join(',') };
+}
+
+export function decodeBoard(s: SavedRun['board']): Board | null {
+  const parts = s.cells.split(',');
+  if (parts.length !== s.w * s.h) return null;
+  const cells: Cell[] = [];
+  for (const part of parts) {
+    const c = decodeCell(part);
+    if (!c) return null;
+    cells.push(c);
+  }
+  const kinds = [...s.kinds].map((ch) => CH_KIND[ch]).filter(Boolean);
+  // Тот же массив видов, что у новой доски: так восстановленная доска не отличается от живой.
+  const same = kinds.length === GEM_KINDS.length && kinds.every((k, i) => k === GEM_KINDS[i]);
+  return { w: s.w, h: s.h, cells, rng: s.rng | 0, nextId: s.nextId, kinds: same ? GEM_KINDS : kinds };
+}
+
+export function serializeRun(run: Run, seed: number, startedAt: number): SavedRun {
+  return {
+    v: 1,
+    floor: run.floor.id,
+    seed,
+    startedAt,
+    board: encodeBoard(run.board),
+    moves: run.moves,
+    heroHp: run.heroHp,
+    heroMax: run.heroMax,
+    monsterHp: run.monsterHp,
+    monsterMax: run.monsterMax,
+    attackIn: run.attackIn,
+    sword: run.sword,
+    loot: { ...run.loot },
+    gems: { ...run.gems },
+    status: run.status,
+    maxCombo: run.maxCombo,
+  };
+}
+
+/** Партия из сохранения. null — сохранение битое. */
+export function restoreRun(s: SavedRun): Run | null {
+  if (!s || s.v !== 1 || !(s.floor >= 1 && s.floor <= FLOOR_COUNT) || !s.board) return null;
+  const board = decodeBoard(s.board);
+  if (!board) return null;
+  return {
+    floor: floorDef(s.floor),
+    board,
+    moves: s.moves,
+    heroHp: s.heroHp,
+    heroMax: s.heroMax,
+    monsterHp: s.monsterHp,
+    monsterMax: s.monsterMax,
+    attackIn: s.attackIn,
+    sword: s.sword,
+    loot: { ...s.loot },
+    gems: { ...s.gems },
+    status: s.status === 'won' || s.status === 'lost' ? s.status : 'play',
+    maxCombo: s.maxCombo ?? 0,
+  };
+}
+
+/** Записать партию в прогресс (без сохранения): после начала этажа и после каждого хода. */
+export function storeRun(p: WithDungeon, run: Run, seed: number, startedAt: number): WithDungeon {
+  return { ...p, dungeon: { ...dungeonOf(p), run: serializeRun(run, seed, startedAt) } };
+}
+
+/** Убрать сохранённую партию, ничего не начисляя (битое сохранение). */
+export function dropRun(p: WithDungeon): WithDungeon {
+  return { ...p, dungeon: { ...dungeonOf(p), run: undefined } };
+}
+
+export type SavedRunCheck =
+  | { kind: 'none'; progress: WithDungeon }
+  // Можно доиграть.
+  | { kind: 'resume'; progress: WithDungeon; run: Run; saved: SavedRun }
+  // Партия уже кончилась (закрыли во время итога) или пролежала больше суток: подведён итог.
+  | { kind: 'settled'; progress: WithDungeon; run: Run; reward: FloorReward; stale: boolean };
+
+/**
+ * Что делать с сохранённой партией при входе в подземелье. Если партия уже кончилась — итог
+ * по её исходу; если ей больше суток — поражение (заряд потрачен, половина добычи).
+ */
+export function checkSavedRun(p: WithDungeon, now: number): SavedRunCheck {
+  const saved = dungeonOf(p).run;
+  if (!saved) return { kind: 'none', progress: p };
+  const run = restoreRun(saved);
+  if (!run) return { kind: 'none', progress: dropRun(p) };
+  const stale = run.status === 'play' && now - saved.startedAt > RUN_TTL;
+  if (run.status === 'play' && !stale) return { kind: 'resume', progress: p, run, saved };
+  const done = stale ? { ...run, status: 'lost' as const } : run;
+  const res = finishFloor(p, done, now);
+  return { kind: 'settled', progress: res.progress, run: done, reward: res.reward, stale };
+}
+
+/** Сдаться или уйти с этажа: как поражение — заряд потрачен, остаётся половина добычи. */
+export function surrenderRun(p: WithDungeon, run: Run, now: number) {
+  return finishFloor(p, { ...run, status: 'lost' }, now);
 }

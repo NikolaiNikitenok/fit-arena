@@ -5,6 +5,14 @@ import { findRuns, hint } from './engine';
 import {
   beginFloor,
   blocksLeft,
+  checkSavedRun,
+  decodeBoard,
+  encodeBoard,
+  restoreRun,
+  RUN_TTL,
+  serializeRun,
+  storeRun,
+  surrenderRun,
   clearBonus,
   dailyBonusReady,
   dungeonOf,
@@ -173,5 +181,98 @@ describe('заряд, награды и сохранение', () => {
   it('старое сохранение без подземелья — первый этаж', () => {
     expect(dungeonOf({})).toMatchObject({ reached: 1, stars: {}, wins: 0 });
     expect(floorOpen({}, 1)).toBe(true);
+  });
+});
+
+describe('незаконченная партия', () => {
+  // Ходы подсказкой: n ходов или до конца партии.
+  const playN = (run: Run, n: number) => {
+    for (let i = 0; i < n && run.status === 'play'; i++) {
+      const m = hint(run.board)!;
+      run = playMove(run, m.a, m.b)!.run;
+    }
+    return run;
+  };
+  // Сохранить как в игре: через JSON прогресса.
+  const roundTrip = (run: Run) => restoreRun(JSON.parse(JSON.stringify(serializeRun(run, 1, NOW))))!;
+
+  it('доска с ящиками, льдом и особыми самоцветами переживает сохранение без потерь', () => {
+    for (const id of [3, 5, 10, 47]) {
+      const run = playN(startRun(floorDef(id), 13, 777 + id), 6);
+      const back = decodeBoard(JSON.parse(JSON.stringify(encodeBoard(run.board))))!;
+      expect(back).toEqual(run.board);
+      expect(JSON.stringify(serializeRun(run, 1, NOW)).length).toBeLessThan(1500);
+    }
+  });
+
+  it('восстановленная партия продолжается ровно как без перерыва', () => {
+    for (const id of [1, 3, 5, 8, 10, 33, 100]) {
+      for (const cut of [0, 1, 4, 9]) {
+        const start = startRun(floorDef(id), 20, 4242 + id);
+        const mid = playN(start, cut);
+        const straight = playOut(mid);
+        const resumed = playOut(roundTrip(mid));
+        expect(resumed.status).toBe(straight.status);
+        expect(resumed.board).toEqual(straight.board);
+        expect({ ...resumed, floor: 0 }).toEqual({ ...straight, floor: 0 });
+      }
+    }
+  });
+
+  it('сохраняется после хода и снимается итогом этажа', () => {
+    const p0 = beginFloor(base(), 1)!;
+    const run = playN(startRun(floorDef(1), 13, 99), 2);
+    const p1 = storeRun(p0, run, 99, NOW);
+    const check = checkSavedRun(JSON.parse(JSON.stringify(p1)), NOW + 3600000);
+    expect(check.kind).toBe('resume');
+    if (check.kind === 'resume') expect(check.run).toEqual(run);
+    expect(dungeonOf(finishFloor(p1, playOut(run), NOW).progress).run).toBeUndefined();
+  });
+
+  it('сдаться — поражение: заряд потрачен, половина добычи', () => {
+    const p0 = beginFloor(base(), 1)!;
+    const run = playN(startRun(floorDef(1), 13, 5), 3);
+    const { progress, reward } = surrenderRun(storeRun(p0, run, 5, NOW), run, NOW);
+    expect(reward.won).toBe(false);
+    expect(reward.loot.wood).toBe(Math.round(run.loot.wood * FAIL_KEEP));
+    expect(villageOf(progress).charge).toBe(villageOf(p0).charge);
+    expect(dungeonOf(progress).run).toBeUndefined();
+    expect(dungeonOf(progress).reached).toBe(1);
+  });
+
+  it('партия старше суток засчитывается поражением при входе', () => {
+    const p0 = beginFloor(base(), 1)!;
+    const run = playN(startRun(floorDef(1), 13, 7), 3);
+    const p1 = storeRun(p0, run, 7, NOW);
+    expect(checkSavedRun(p1, NOW + RUN_TTL - 1000).kind).toBe('resume');
+    const check = checkSavedRun(p1, NOW + RUN_TTL + 1000);
+    expect(check.kind).toBe('settled');
+    if (check.kind !== 'settled') return;
+    expect(check.stale).toBe(true);
+    expect(check.reward.won).toBe(false);
+    expect(villageOf(check.progress).res.wood - villageOf(p1).res.wood).toBe(Math.round(run.loot.wood * FAIL_KEEP));
+    expect(dungeonOf(check.progress).run).toBeUndefined();
+    expect(checkSavedRun(check.progress, NOW + RUN_TTL + 2000).kind).toBe('none');
+  });
+
+  it('закрыли на экране итога: победа всё равно засчитывается', () => {
+    const p0 = beginFloor(base(), 1)!;
+    let won: Run | null = null;
+    for (let seed = 1; seed < 30 && !won; seed++) {
+      const r = playOut(startRun(floorDef(1), 13, seed));
+      if (r.status === 'won') won = r;
+    }
+    const check = checkSavedRun(storeRun(p0, won!, 1, NOW), NOW + 2 * DAY);
+    expect(check.kind).toBe('settled');
+    if (check.kind !== 'settled') return;
+    expect(check.reward.won).toBe(true);
+    expect(dungeonOf(check.progress).reached).toBe(2);
+  });
+
+  it('битое сохранение просто убирается', () => {
+    const p1 = { ...base(), dungeon: { ...dungeonOf(base()), run: { v: 1, floor: 1, board: { w: 8, h: 8, cells: 'zz' } } } } as unknown as Progress;
+    const check = checkSavedRun(p1, NOW);
+    expect(check.kind).toBe('none');
+    expect(dungeonOf(check.progress).run).toBeUndefined();
   });
 });

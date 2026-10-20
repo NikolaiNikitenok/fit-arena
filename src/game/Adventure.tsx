@@ -144,6 +144,14 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     setDungeonState(open);
     onPlaying(open);
   };
+  // Задание дня: с главного экрана и из подземелья, когда кончился заряд.
+  const startDaily = () => {
+    const left = Math.max(5, daily.target - dailyProgress(progress, daily));
+    // Планка — на время: не миссия, а подходы с отдыхом.
+    if (daily.exercise === 'plank') return setPrograms({ quick: plankDailyWorkout(Math.max(10, left), progress.baseline.plank ?? 30, daily.ask) });
+    // Миссия на месте текущего уровня: та же земля и декорации, но цель — остаток задания.
+    setPlaying({ ...currentDef, daily: true, type: 'build', title: `Задание: ${NPCS[daily.npc].name}`, exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
+  };
   const pro = usePro();
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -272,8 +280,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
             setPlaying(currentDef);
           }}
           onDaily={() => {
-            setDungeon(false);
-            onTab('hero');
+            setDungeonState(false);
+            startDaily();
           }}
           onPrograms={() => {
             setDungeonState(false);
@@ -374,13 +382,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           onTrain={() => setPlaying(currentDef)}
           daily={daily}
           dailyDone={dailyProgress(progress, daily)}
-          onDaily={() => {
-            const left = Math.max(5, daily.target - dailyProgress(progress, daily));
-            // Планка — на время: не миссия, а подходы с отдыхом.
-            if (daily.exercise === 'plank') return setPrograms({ quick: plankDailyWorkout(Math.max(10, left), progress.baseline.plank ?? 30, daily.ask) });
-            // Миссия на месте текущего уровня: та же земля и декорации, но цель — остаток задания.
-            setPlaying({ ...currentDef, daily: true, type: 'build', title: `Задание: ${NPCS[daily.npc].name}`, exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
-          }}
+          onDaily={startDaily}
           onClaimDaily={() => {
             const next = claimDaily(progress, daily);
             if (!next) return;
