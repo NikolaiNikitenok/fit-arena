@@ -131,7 +131,9 @@ export class Calibrator {
 }
 
 // Хранилище: пороги по упражнениям в браузере. «skipped» — игрок отказался, больше не спрашиваем сами.
-type Saved = Partial<Record<Exercise, Thresholds | { skipped: true }>>;
+// at — когда пройдена калибровка (у старых записей его нет).
+type SavedThresholds = Thresholds & { at?: number };
+type Saved = Partial<Record<Exercise, SavedThresholds | { skipped: true }>>;
 
 const KEY = 'fit-arena-calibration';
 let saved: Saved = (() => {
@@ -156,16 +158,69 @@ function write(next: Saved): void {
 /** Личные пороги упражнения, если калибровка пройдена. */
 export function personalThresholds(exercise: Exercise): Thresholds | undefined {
   const s = saved[exercise];
-  return s && 'down' in s ? s : undefined;
+  return s && 'down' in s ? { down: s.down, up: s.up } : undefined;
+}
+
+export type CalibrationStatus = { kind: 'done'; down: number; up: number; at?: number } | { kind: 'skipped' } | { kind: 'none' };
+
+/** Что сохранено по упражнению: личные пороги, отказ или ничего. */
+export function calibrationStatus(exercise: Exercise, s: Saved = saved): CalibrationStatus {
+  const e = s[exercise];
+  if (!e) return { kind: 'none' };
+  if ('down' in e) return { kind: 'done', down: e.down, up: e.up, at: e.at };
+  return { kind: 'skipped' };
 }
 
 /** Нужно ли предложить калибровку перед первым подходом. Планку калибровать не нужно: там нет амплитуды. */
 export const needsCalibration = (exercise: Exercise): boolean => exercise !== 'plank' && !saved[exercise];
 
-export const saveCalibration = (exercise: RepExercise, t: Thresholds): void => write({ ...saved, [exercise]: t });
+export const saveCalibration = (exercise: RepExercise, t: Thresholds, at = Date.now()): void =>
+  write({ ...saved, [exercise]: { down: t.down, up: t.up, at } });
 export const skipCalibration = (exercise: Exercise): void => write({ ...saved, [exercise]: saved[exercise] ?? { skipped: true } });
-/** «Перекалибровать камеру»: перед следующим подходом калибровка начнётся заново. */
-export const resetCalibration = (): void => write({});
+
+/** Сбросить калибровку одного упражнения (перед его следующим подходом спрошу снова) или, без аргумента, всех. */
+export function resetCalibration(exercise?: Exercise): void {
+  if (!exercise) return write({});
+  if (!(exercise in saved)) return;
+  const next = { ...saved };
+  delete next[exercise];
+  write(next);
+}
+
+/** Куда идёт итог калибровки в камере. Перед подходом — сразу в хранилище;
+ *  при повторной калибровке из настроек — никуда: решает игрок, прежние пороги не трогаем. */
+export const calibrationSink = (persist: boolean) => ({
+  done: (exercise: RepExercise, t: Thresholds) => {
+    if (persist) saveCalibration(exercise, t);
+  },
+  skip: (exercise: Exercise) => {
+    if (persist) skipCalibration(exercise);
+  },
+});
+
+/** Повторная калибровка одного упражнения: прежние пороги остаются, пока игрок не нажмёт «Сохранить». */
+export class Recalibration {
+  readonly before: Thresholds | undefined;
+  result: Thresholds | null = null;
+
+  constructor(readonly exercise: RepExercise) {
+    this.before = personalThresholds(exercise);
+  }
+
+  /** Камера досчитала три повтора. */
+  finish(t: Thresholds): void {
+    this.result = t;
+  }
+
+  /** «Сохранить»: новые пороги заменяют прежние. Без результата ничего не меняем. */
+  save(): boolean {
+    if (!this.result) return false;
+    saveCalibration(this.exercise, this.result);
+    return true;
+  }
+
+  // «Оставить прежнюю», «Отмена» и сбой камеры ничего не пишут: хранилище не трогаем вовсе.
+}
 
 const subscribe = (l: () => void) => {
   listeners.add(l);

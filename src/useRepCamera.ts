@@ -4,7 +4,7 @@ import { createPoseLandmarker, loadVision } from './pose';
 import { frameRotations, enableOrientation } from './orientation';
 import { Counter, Exercise, PlankTimer, RepCounter } from './repCounter';
 import { getSettings } from './settings';
-import { Calibrator, CalibrationView, personalThresholds, saveCalibration, skipCalibration } from './calibration';
+import { Calibrator, CalibrationView, calibrationSink, personalThresholds } from './calibration';
 import { repSound } from './audio';
 import { hapticRep } from './telegram';
 import { reportCameraFailure, trackOnce } from './telemetry';
@@ -44,7 +44,7 @@ export function useRepCamera(preload = true) {
   const [angle, setAngle] = useState<number | null>(null);
   const [limits, setLimits] = useState<{ down: number; up: number } | null>(null);
   // Калибровка перед подходом: пока она идёт, повторы не считаются и onFrame не вызывается.
-  const calibRef = useRef<{ c: Calibrator; doneAt: number } | null>(null);
+  const calibRef = useRef<{ c: Calibrator; doneAt: number; sink: ReturnType<typeof calibrationSink> } | null>(null);
   const [calib, setCalib] = useState<CalibrationView | null>(null);
 
   const stop = () => {
@@ -63,8 +63,9 @@ export function useRepCamera(preload = true) {
     return () => clearTimeout(t);
   }, [preload]);
 
-  /** onFrame вызывается каждый кадр; вернёт false — камера остановится. */
-  const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean } = {}) => {
+  /** onFrame вызывается каждый кадр; вернёт false — камера остановится.
+   *  persist: false — итог калибровки не сохраняется сам (повторная калибровка из настроек). */
+  const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean; persist?: boolean } = {}) => {
     // До первого await: на iPhone разрешение на датчик можно спросить только прямо из нажатия.
     enableOrientation();
     const [model, vision] = await Promise.all([
@@ -95,7 +96,7 @@ export function useRepCamera(preload = true) {
     counterRef.current = counterFor(exercise);
     setLimits({ down: counterRef.current.down, up: counterRef.current.up });
     // Планке калибровка не нужна: у неё нет амплитуды.
-    calibRef.current = opts.calibrate && exercise !== 'plank' ? { c: new Calibrator(exercise), doneAt: 0 } : null;
+    calibRef.current = opts.calibrate && exercise !== 'plank' ? { c: new Calibrator(exercise), doneAt: 0, sink: calibrationSink(opts.persist ?? true) } : null;
     setCalib(calibRef.current?.c.view ?? null);
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
@@ -141,7 +142,7 @@ export function useRepCamera(preload = true) {
           setCalib(v);
           if (v.result) {
             c.doneAt = now;
-            saveCalibration(c.c.exercise, v.result);
+            c.sink.done(c.c.exercise, v.result);
             counterRef.current = new RepCounter(c.c.exercise, v.result);
             setLimits(v.result);
             lastReps = 0;
@@ -186,7 +187,7 @@ export function useRepCamera(preload = true) {
   const skipCalib = () => {
     const c = calibRef.current;
     if (!c || c.doneAt) return;
-    skipCalibration(c.c.exercise);
+    c.sink.skip(c.c.exercise);
     // Пока шла калибровка, счётчик видел повторы: начинаем с нуля.
     counterRef.current?.reset();
     lastRepsReset.current = true;

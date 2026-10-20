@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { resetCalibration, useCalibration } from './calibration';
+import { calibrationStatus, CalibrationStatus, resetCalibration, useCalibration } from './calibration';
+import { RecalibrateScreen } from './RecalibrateScreen';
 import { cloudState, onCloud, setRaidNotify, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
-import { EXERCISE_LABELS, Exercise } from './repCounter';
+import { EXERCISE_LABELS, REP_EXERCISES, RepExercise } from './repCounter';
 import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
 import { AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
@@ -82,23 +83,60 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
   );
 }
 
-/** Личные пороги счёта: какие упражнения откалиброваны и кнопка начать заново. */
+const dateText = (at: number) => new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+
+function statusText(st: CalibrationStatus): string {
+  if (st.kind === 'done') return `Откалибровано: вниз ${st.down}°, вверх ${st.up}°${st.at ? ` · ${dateText(st.at)}` : ''}`;
+  if (st.kind === 'skipped') return 'Пропущено: считаю по общим порогам';
+  return 'Не откалибровано: спрошу перед первым подходом';
+}
+
+/** Личные пороги счёта по каждому упражнению: статус и своя кнопка «Пройти заново». Планку калибровать не нужно. */
 function RecalibrateRow() {
   const saved = useCalibration();
-  const done = (Object.keys(EXERCISE_LABELS) as Exercise[]).filter((e) => saved[e] && 'down' in saved[e]!);
+  const [again, setAgain] = useState<RepExercise | null>(null);
+  const [confirm, setConfirm] = useState(false);
   return (
     <div className="toggle-row calib-row">
-      <div>
-        <div className="toggle-title">Перекалибровать камеру</div>
-        <div className="muted">
-          {done.length
-            ? `Считаю под тебя: ${done.map((e) => EXERCISE_LABELS[e].toLowerCase()).join(', ')}. Если повторы теряются, откалибруй заново.`
-            : 'Перед первым подходом попрошу сделать 3 медленных повтора и подстрою счёт под твою амплитуду.'}
+      <div className="calib-list">
+        <div>
+          <div className="toggle-title">Калибровка камеры</div>
+          <div className="muted">3 медленных повтора, и счёт подстроится под твою амплитуду. Если повторы теряются, пройди заново только это упражнение.</div>
         </div>
+        {REP_EXERCISES.map((e) => (
+          <div key={e} className="calib-ex">
+            <div>
+              <div className="calib-ex-name">{EXERCISE_LABELS[e]}</div>
+              <div className="muted">{statusText(calibrationStatus(e, saved))}</div>
+            </div>
+            <button className="small-btn ghost" onClick={() => setAgain(e)}>
+              Пройти заново
+            </button>
+          </div>
+        ))}
+        {confirm ? (
+          <div className="danger-row">
+            <span>Сбросить калибровку всех упражнений?</span>
+            <button
+              className="small-btn danger"
+              onClick={() => {
+                resetCalibration();
+                setConfirm(false);
+              }}
+            >
+              Сбросить
+            </button>
+            <button className="small-btn ghost" onClick={() => setConfirm(false)}>
+              Отмена
+            </button>
+          </div>
+        ) : (
+          <button className="link danger-link calib-all" disabled={!Object.keys(saved).length} onClick={() => setConfirm(true)}>
+            Сбросить все
+          </button>
+        )}
       </div>
-      <button className="small-btn ghost" disabled={!Object.keys(saved).length} onClick={resetCalibration}>
-        Заново
-      </button>
+      {again && <RecalibrateScreen exercise={again} onClose={() => setAgain(null)} />}
     </div>
   );
 }

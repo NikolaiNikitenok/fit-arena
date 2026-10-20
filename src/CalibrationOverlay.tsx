@@ -14,16 +14,18 @@ const HOW: Record<RepExercise, string> = {
 const SCALE: [number, number] = [30, 180];
 const pos = (a: number) => `${Math.min(100, Math.max(0, ((a - SCALE[0]) / (SCALE[1] - SCALE[0])) * 100))}%`;
 
-/** Калибровка перед первым подходом: живая полоска угла, счётчик медленных повторов, пропуск. */
-export function CalibrationOverlay({ exercise, view, onSkip }: { exercise: RepExercise; view: CalibrationView; onSkip: () => void }) {
+/** Калибровка перед первым подходом: живая полоска угла, счётчик медленных повторов, пропуск.
+ *  again — повторная калибровка из настроек: вместо «Пропустить» — «Отмена», итог ещё не сохранён. */
+export function CalibrationOverlay({ exercise, view, onSkip, again = false }: { exercise: RepExercise; view: CalibrationView; onSkip: () => void; again?: boolean }) {
   const { reps, target, angle, min, max, result } = view;
+  const doneText = again ? 'Готово, сравни с прежней' : 'Готово, теперь считаю под тебя';
   useEffect(() => say(`Калибровка. Сделай ${target === 3 ? 'три' : target} медленных повтора`), [target]);
   useEffect(() => {
     if (reps > 0 && !result) say(COUNT[reps - 1] ?? String(reps));
   }, [reps, result]);
   useEffect(() => {
-    if (result) say('Готово, теперь считаю под тебя');
-  }, [result]);
+    if (result) say(doneText);
+  }, [result, doneText]);
 
   return (
     <div className="calib">
@@ -31,7 +33,7 @@ export function CalibrationOverlay({ exercise, view, onSkip }: { exercise: RepEx
         {result ? (
           <>
             <div className="level-tag">Калибровка · {EXERCISE_LABELS[exercise]}</div>
-            <div className="calib-title">Готово, теперь считаю под тебя</div>
+            <div className="calib-title">{doneText}</div>
             <div className="muted light">Повтор засчитаю от {result.down}° до {result.up}°</div>
           </>
         ) : (
@@ -65,7 +67,7 @@ export function CalibrationOverlay({ exercise, view, onSkip }: { exercise: RepEx
         </div>
         {!result && (
           <button className="small-btn ghost" onClick={onSkip}>
-            Пропустить
+            {again ? 'Отмена' : 'Пропустить'}
           </button>
         )}
       </div>

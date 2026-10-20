@@ -1,5 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { BOUNDS, Calibrator, deriveThresholds } from './calibration';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  BOUNDS,
+  calibrationSink,
+  calibrationStatus,
+  Calibrator,
+  deriveThresholds,
+  needsCalibration,
+  personalThresholds,
+  Recalibration,
+  resetCalibration,
+  saveCalibration,
+  skipCalibration,
+} from './calibration';
 
 // Плавный повтор: от верха к низу и обратно с шагом в 3°.
 function slowReps(top: number, bottom: number, reps: number): number[] {
@@ -72,5 +84,76 @@ describe('Calibrator', () => {
     for (const a of slowReps(170, 60, 3)) c.update(a, false, (t += 60));
     expect(c.view.reps).toBe(0);
     expect(c.view.angle).toBeNull();
+  });
+});
+
+describe('калибровка по упражнениям', () => {
+  beforeEach(() => resetCalibration());
+
+  it('статус: не откалибровано, пропущено, откалибровано с датой', () => {
+    expect(calibrationStatus('squat')).toEqual({ kind: 'none' });
+    skipCalibration('situp');
+    expect(calibrationStatus('situp')).toEqual({ kind: 'skipped' });
+    saveCalibration('squat', { down: 100, up: 150 }, 1_700_000_000_000);
+    expect(calibrationStatus('squat')).toEqual({ kind: 'done', down: 100, up: 150, at: 1_700_000_000_000 });
+    expect(personalThresholds('squat')).toEqual({ down: 100, up: 150 });
+  });
+
+  it('сброс одного упражнения не трогает остальные', () => {
+    saveCalibration('squat', { down: 100, up: 150 });
+    saveCalibration('pushup', { down: 95, up: 140 });
+    skipCalibration('situp');
+    resetCalibration('squat');
+    expect(needsCalibration('squat')).toBe(true);
+    expect(personalThresholds('pushup')).toEqual({ down: 95, up: 140 });
+    expect(calibrationStatus('situp')).toEqual({ kind: 'skipped' });
+  });
+
+  it('«Сбросить все» очищает все упражнения', () => {
+    saveCalibration('squat', { down: 100, up: 150 });
+    skipCalibration('situp');
+    resetCalibration();
+    expect(needsCalibration('squat')).toBe(true);
+    expect(needsCalibration('situp')).toBe(true);
+  });
+
+  it('повторная калибровка: камера не сохраняет итог и отказ сама', () => {
+    saveCalibration('squat', { down: 100, up: 150 });
+    const sink = calibrationSink(false);
+    sink.done('squat', { down: 90, up: 160 });
+    sink.skip('squat');
+    expect(personalThresholds('squat')).toEqual({ down: 100, up: 150 });
+    // Перед подходом итог сохраняется сразу, как раньше.
+    calibrationSink(true).done('pushup', { down: 95, up: 140 });
+    expect(personalThresholds('pushup')).toEqual({ down: 95, up: 140 });
+  });
+
+  it('отмена или «Оставить прежнюю» сохраняют старые пороги', () => {
+    saveCalibration('squat', { down: 100, up: 150 });
+    const cancelled = new Recalibration('squat');
+    expect(cancelled.before).toEqual({ down: 100, up: 150 });
+    // Отмена до конца: результата нет — сохранять нечего.
+    expect(cancelled.save()).toBe(false);
+    const kept = new Recalibration('squat');
+    kept.finish({ down: 90, up: 160 });
+    // «Оставить прежнюю» просто закрывает экран без save().
+    expect(personalThresholds('squat')).toEqual({ down: 100, up: 150 });
+  });
+
+  it('«Сохранить» заменяет пороги только этого упражнения', () => {
+    saveCalibration('squat', { down: 100, up: 150 });
+    saveCalibration('pushup', { down: 95, up: 140 });
+    const r = new Recalibration('squat');
+    r.finish({ down: 90, up: 160 });
+    expect(r.save()).toBe(true);
+    expect(personalThresholds('squat')).toEqual({ down: 90, up: 160 });
+    expect(personalThresholds('pushup')).toEqual({ down: 95, up: 140 });
+  });
+
+  it('повторная калибровка пропущенного упражнения: прежних порогов нет', () => {
+    skipCalibration('situp');
+    const r = new Recalibration('situp');
+    expect(r.before).toBeUndefined();
+    expect(calibrationStatus('situp')).toEqual({ kind: 'skipped' });
   });
 });
