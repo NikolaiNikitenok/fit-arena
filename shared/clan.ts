@@ -17,6 +17,8 @@ export interface ClanMemberView {
   me: boolean;
   // Pro Pass: имя золотом.
   pro: boolean;
+  // Глава или заместитель запретил писать в чат до этого времени.
+  mutedUntil?: number;
 }
 
 export interface ChatMessage {
@@ -74,6 +76,10 @@ export interface ClanView {
   giftFrom?: number;
   // Война кланов на выходных.
   war?: WarView;
+  // Мне нельзя писать в чат до этого времени (запрет главы или модератора).
+  mutedUntil?: number;
+  // Мой чёрный список: их сообщения в чате не показываем.
+  hidden?: string[];
 }
 
 export interface ClanListItem {
@@ -112,6 +118,9 @@ export type ClanClientMessage =
   | { type: 'clanRole'; id: string; role: ClanRole }
   | { type: 'clanKick'; id: string }
   | { type: 'chatSend'; text: string }
+  // Модерация чата: удалить сообщение, запретить участнику писать (hours: 1, 24; 0 — снять).
+  | { type: 'chatDelete'; id: number }
+  | { type: 'clanMute'; id: string; hours: number }
   // Повторы из приключения: из них растёт опыт клана.
   | { type: 'clanReps'; reps: number; since?: number }
   // Глава или заместитель: участвовать ли клану в войнах.
@@ -133,6 +142,7 @@ export type ClanServerMessage =
   | { type: 'clanList'; clans: ClanListItem[] }
   | { type: 'chat'; messages: ChatMessage[] }
   | { type: 'chatMsg'; message: ChatMessage }
+  | { type: 'chatDel'; id: number }
   | { type: 'raid'; raid: RaidView }
   | { type: 'raidAttack'; attackId: string; endsAt: number }
   | { type: 'clanError'; message: string }

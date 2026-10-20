@@ -12,6 +12,7 @@
 //   GUARD_FILE — защита от читов: забранные награды и подозрения (по умолчанию guard.json рядом с DATA_FILE, server/guard.ts)
 //   ADMIN_IDS — id админов (статистика, сводка и тревоги в боте); ещё файлом .admin-ids (ADMIN_FILE)
 //   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
+//   MODERATION_FILE, REPORTS_FILE — чёрный список, запреты писать и жалобы (server/moderation.ts, server/reports.ts); о жалобах бот пишет ADMIN_IDS
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -45,6 +46,10 @@ import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
 import { deletePlayer } from './deleteMe';
 import { alertText, FEEDBACK_THANKS, feedbackText } from './adminBot';
+import { ModerationStore } from './moderation';
+import { ReportStore } from './reports';
+import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
+import { badName } from '../shared/profanity';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -93,6 +98,12 @@ const publicTop = (me?: string) => {
     .filter((p) => p.id === me || ((!BOT_TOKEN || p.id.startsWith('tg:')) && !guard.flagged(p.id, now)))
     .slice(0, 50);
 };
+// Модерация (server/moderation.ts, server/reports.ts): чёрный список, запреты писать в чат и жалобы.
+const mod = new ModerationStore(process.env.MODERATION_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'moderation.json'));
+const reports = new ReportStore(process.env.REPORTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'reports.json'));
+clans.mutedUntil = (id) => mod.mutedUntil(id);
+clans.hiddenFor = (id) => mod.blockedBy(id).map((b) => b.id);
+friends.blocked = (a, b) => mod.either(a, b);
 // Отметка Pro у автора ставится при отправке: список мог поменяться после сообщения.
 const proChat = (m: ChatMessage): ChatMessage => (m.from && isPro(m.from) ? { ...m, pro: true } : m);
 const chatOf = (c: Clan) => c.chat.map(proChat);
@@ -223,7 +234,8 @@ async function loadBotUsername(): Promise<void> {
 
 function cleanName(name: unknown): string {
   const s = typeof name === 'string' ? name.replace(/[\u0000-\u001f]/g, '').trim() : '';
-  return s.slice(0, 24) || 'Боец';
+  // Имя из Telegram с матом в клане и у друзей не показываем.
+  return (badName(s) ? '' : s.slice(0, 24)) || 'Боец';
 }
 
 /** Кто прислал запрос: игрок Telegram по подписи или гость по id из браузера. */
@@ -317,6 +329,23 @@ const friendsDeps: FriendsDeps = {
   sendBot: sendFriendBot,
   tellDuel: (id, text) => online.get(id)?.send({ type: 'error', message: text }),
 };
+const moderationDeps: ModerationDeps = {
+  mod,
+  reports,
+  isAdmin: (id) => admins.has(id),
+  nameOf: (id) => friends.get(id)?.name ?? clans.clanOf(id)?.members.find((m) => m.id === id)?.name,
+  chatMessage: (me, msgId) => {
+    const c = clans.clanOf(me);
+    const m = c?.chat.find((x) => x.id === msgId && !x.system);
+    return c && m && { from: m.from, name: m.name, text: m.text, clan: c.name };
+  },
+  unfriend: (me, other) => friends.remove(me, other),
+  notifyAdmins: (text) => toAdmins(text),
+  muted: (id) => {
+    const c = clans.clanOf(id);
+    if (c) sendClan(c);
+  },
+};
 async function onFriendsApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -326,7 +355,8 @@ async function onFriendsApi(path: string, req: IncomingMessage, res: ServerRespo
   const guest = !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
   const me = tgUser ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) } : guest ? { id: guest, name: cleanName(body.name) } : null;
   if (!me) return reply(401, { error: 'Друзья — только в Telegram', telegram: false });
-  const r = friendsApi(friendsDeps, path, me, body);
+  // Модерация пускает так же, как друзья.
+  const r = path.startsWith('/api/moderation') ? moderationApi(moderationDeps, path, me, body) : friendsApi(friendsDeps, path, me, body);
   reply(r.status, r.body);
 }
 
@@ -412,7 +442,9 @@ const http = createServer((req, res) => {
         const chat = (update as unknown as Update).message?.chat;
         if (chat?.type === 'private') saves.setBlocked(`tg:${chat.id}`, false);
         const msg = (update as unknown as Update).message;
-        const answer = webhookReply(update as unknown as Update, APP_URL, clanInfo) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null);
+        // Команды модерации от админа (/mute_…, /unmute_…, /reports).
+        const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, msg.text) : null;
+        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
       })
@@ -432,7 +464,7 @@ const http = createServer((req, res) => {
     onDeleteMe(req, res).catch(() => res.writeHead(500).end());
     return;
   }
-  if (path === '/api/friends' || path.startsWith('/api/friends/')) {
+  if (path === '/api/friends' || path.startsWith('/api/friends/') || path === '/api/moderation' || path.startsWith('/api/moderation/')) {
     onFriendsApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
@@ -518,6 +550,19 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const r = clans.chat(who.id, String(msg.text ?? ''), now);
       if (fail(r)) return;
       toClan(mine()!, { type: 'chatMsg', message: proChat(r) });
+      break;
+    }
+    case 'chatDelete': {
+      const id = Number(msg.id);
+      const r = clans.deleteMessage(who.id, id);
+      if (!fail(r)) toClan(r, { type: 'chatDel', id });
+      break;
+    }
+    case 'clanMute': {
+      const r = clans.mute(who.id, String(msg.id), Number(msg.hours), now);
+      if (fail(r)) return;
+      sendClan(r);
+      toClan(r, { type: 'chatMsg', message: r.chat[r.chat.length - 1] });
       break;
     }
     case 'raidStart': {
@@ -822,6 +867,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
     },
+    (chatId, text) => adminCommand(moderationDeps, chatId, text),
   );
 // Админам: тревога о новой частой ошибке (раз в минуту) и сводка в 9:00 по Москве.
 if (BOT_TOKEN)
@@ -839,5 +885,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     friends.flush();
     guard.flush();
     telemetry.flush();
+    mod.flush();
+    reports.flush();
     process.exit(0);
   });

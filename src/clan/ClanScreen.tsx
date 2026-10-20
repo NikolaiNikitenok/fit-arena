@@ -13,6 +13,9 @@ import { useClan } from './useClan';
 import { WarTab } from './War';
 import { warReward } from '../../shared/war';
 import { sfx } from '../audio';
+import { BAD_NAME, badName, hasProfanity } from '../../shared/profanity';
+import { muteText } from '../../shared/moderation';
+import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: 'глава', officer: 'заместитель', member: '' };
@@ -446,8 +449,49 @@ function useVisibleViewport() {
 }
 
 /** Чат на весь экран: поле ввода всегда над клавиатурой, страница под ним не двигается. */
+const RANK = { leader: 2, officer: 1, member: 0 };
+
+/** Глава и заместители модерируют тех, кто ниже: удалить сообщение, запретить писать. */
+function ModButtons({ api, clan, target, msgId, onDone }: { api: ReturnType<typeof useClan>; clan: ClanView; target: string; msgId?: number; onDone: () => void }) {
+  const m = clan.members.find((x) => x.id === target);
+  const can = RANK[clan.myRole] >= 1 && (!m || RANK[clan.myRole] > RANK[m.role]);
+  if (!can) return null;
+  const act = (msg: Parameters<typeof api.send>[0]) => {
+    api.send(msg);
+    onDone();
+  };
+  const muted = (m?.mutedUntil ?? 0) > Date.now();
+  return (
+    <div className="mod-row">
+      {msgId != null && (
+        <button className="small-btn ghost" onClick={() => act({ type: 'chatDelete', id: msgId })}>
+          Удалить сообщение
+        </button>
+      )}
+      {m &&
+        (muted ? (
+          <button className="small-btn ghost" onClick={() => act({ type: 'clanMute', id: target, hours: 0 })}>
+            Разрешить писать
+          </button>
+        ) : (
+          <>
+            <button className="small-btn ghost" onClick={() => act({ type: 'clanMute', id: target, hours: 1 })}>
+              Молчать 1 ч
+            </button>
+            <button className="small-btn ghost" onClick={() => act({ type: 'clanMute', id: target, hours: 24 })}>
+              Молчать 24 ч
+            </button>
+          </>
+        ))}
+    </div>
+  );
+}
+
 function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: ClanView; onClose: () => void }) {
   const [text, setText] = useState('');
+  const [menu, setMenu] = useState<PlayerMenuTarget | null>(null);
+  const hidden = new Set(clan.hidden ?? []);
+  const mutedUntil = (clan.mutedUntil ?? 0) > Date.now() ? clan.mutedUntil! : 0;
   const list = useRef<HTMLDivElement>(null);
   const vp = useVisibleViewport();
   const meId = clan.members.find((m) => m.me)?.id;
@@ -480,13 +524,19 @@ function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: C
       </div>
       <div className="chat-list" ref={list}>
         {api.chat.length === 0 && <div className="muted">Пока тихо. Напиши первым!</div>}
-        {api.chat.map((m) =>
+        {api.chat.filter((m) => !hidden.has(m.from)).map((m) =>
           m.system ? (
             <div key={m.id} className="chat-system">
               {m.text}
             </div>
           ) : (
-            <div key={m.id} className={`chat-msg ${m.from === meId ? 'mine' : ''}`}>
+            <div
+              key={m.id}
+              className={`chat-msg ${m.from === meId ? 'mine' : ''}`}
+              role="button"
+              onClick={() => (m.from === meId ? null : setMenu({ id: m.from, name: m.name, where: 'chat', msg: { id: m.id, text: m.text } }))}
+              onContextMenu={(e) => e.preventDefault()}
+            >
               <span className={`chat-name ${m.pro ? 'pro-name' : ''}`} style={m.pro ? undefined : { color: nameColor(m.name || '?') }}>
                 {m.name}
               </span>
@@ -503,17 +553,23 @@ function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: C
           sendIt();
         }}
       >
-        <input value={text} maxLength={CHAT_MAX} onChange={(e) => setText(e.target.value)} onFocus={() => setTimeout(toBottom, 300)} placeholder="Сообщение клану" enterKeyHint="send" />
-        <button type="submit" aria-label="Отправить" disabled={!text.trim()} onPointerDown={(e) => e.preventDefault()}>
+        <input value={text} maxLength={CHAT_MAX} disabled={!!mutedUntil} onChange={(e) => setText(e.target.value)} onFocus={() => setTimeout(toBottom, 300)} placeholder={mutedUntil ? muteText(mutedUntil) : 'Сообщение клану'} enterKeyHint="send" />
+        <button type="submit" aria-label="Отправить" disabled={!text.trim() || !!mutedUntil} onPointerDown={(e) => e.preventDefault()}>
           <Send />
         </button>
       </form>
+      {menu && (
+        <PlayerMenu target={menu} onBlocked={api.hide} onClose={() => setMenu(null)}>
+          <ModButtons api={api} clan={clan} target={menu.id} msgId={menu.msg?.id} onDone={() => setMenu(null)} />
+        </PlayerMenu>
+      )}
     </div>
   );
 }
 
 function Members({ clan, api }: { clan: ClanView; api: ReturnType<typeof useClan> }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [menu, setMenu] = useState<PlayerMenuTarget | null>(null);
   const rank = { leader: 2, officer: 1, member: 0 };
   return (
     <div className="members">
@@ -558,23 +614,38 @@ function Members({ clan, api }: { clan: ClanView; api: ReturnType<typeof useClan
                     Исключить
                   </button>
                 )}
+                {(m.mutedUntil ?? 0) > Date.now() && <span className="muted">Молчит до {new Date(m.mutedUntil!).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>}
+                {!m.me && (
+                  <button className="small-btn ghost" onClick={() => setMenu({ id: m.id, name: m.name, where: 'clan' })}>
+                    Ещё…
+                  </button>
+                )}
               </div>
             )}
           </div>
         );
       })}
+      {menu && (
+        <PlayerMenu target={menu} onBlocked={api.hide} onClose={() => setMenu(null)}>
+          <ModButtons api={api} clan={clan} target={menu.id} onDone={() => setMenu(null)} />
+        </PlayerMenu>
+      )}
     </div>
   );
 }
 
 function SettingsForm({ initial, submit, onSubmit }: { initial: ClanSettings; submit: string; onSubmit: (s: ClanSettings) => void }) {
   const [s, setS] = useState(initial);
+  const [bad, setBad] = useState<string | null>(null);
   return (
     <form
       className="clan-form"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(s);
+        // Сервер проверит и сам, здесь — чтобы сразу подсказать.
+        const why = badName(s.name) || badName(s.tag) || badName(s.city) ? BAD_NAME : hasProfanity(s.description) ? 'Выбери другие слова для описания' : null;
+        setBad(why);
+        if (!why) onSubmit(s);
       }}
     >
       <label>
@@ -619,6 +690,7 @@ function SettingsForm({ initial, submit, onSubmit }: { initial: ClanSettings; su
         С какого уровня героя
         <input type="number" min={1} max={99} value={s.minLevel} onChange={(e) => setS({ ...s, minLevel: Number(e.target.value) })} />
       </label>
+      {bad && <div className="muted center warn">{bad}</div>}
       <button className="primary" type="submit">
         {submit}
       </button>

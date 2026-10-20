@@ -6,6 +6,7 @@ import { Check, Cross, Flame, Swords, UserPlus, Users } from '../icons';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { friendInviteCode, friendInviteLink, share } from '../telegram';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
+import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 
 const NOTE_TEXT = {
   app: 'Друг в игре — ему пришло приглашение. Ждём его на арене!',
@@ -23,6 +24,7 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
   const [note, setNote] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [menu, setMenu] = useState<PlayerMenuTarget | null>(null);
 
   const apply = (r: FriendsReply) => {
     setData(r);
@@ -144,7 +146,7 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
       ) : (
         <div className="friend-list">
           {data.friends.map((f) => (
-            <FriendRow key={f.id} f={f} exercise={exercise} busy={busy === f.id} onChallenge={() => challenge(f)} onRemove={() => run(`rm${f.id}`, friendsApi.remove(f.id))} />
+            <FriendRow key={f.id} f={f} exercise={exercise} busy={busy === f.id} onChallenge={() => challenge(f)} onRemove={() => run(`rm${f.id}`, friendsApi.remove(f.id))} onMenu={() => setMenu({ id: f.id, name: f.name, where: 'friend' })} />
           ))}
         </div>
       )}
@@ -172,12 +174,13 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
         <input type="checkbox" className="switch" checked={data.notify} disabled={busy === 'notify'} onChange={(e) => run('notify', friendsApi.notify(e.target.checked))} />
       </label>
 
+      {menu && <PlayerMenu target={menu} onBlocked={() => void run('state', friendsApi.state())} onClose={() => setMenu(null)} />}
       {adding && <AddFriendSheet data={data} busy={busy === 'add'} onAdd={(code) => run('add', friendsApi.add({ code })).then((r) => r && !r.error && setAdding(false))} onClose={() => setAdding(false)} />}
     </>
   );
 }
 
-function FriendRow({ f, exercise, busy, onChallenge, onRemove }: { f: FriendView; exercise: Exercise; busy: boolean; onChallenge: () => void; onRemove: () => void }) {
+function FriendRow({ f, exercise, busy, onChallenge, onRemove, onMenu }: { f: FriendView; exercise: Exercise; busy: boolean; onChallenge: () => void; onRemove: () => void; onMenu: () => void }) {
   const [open, setOpen] = useState(false);
   const [sure, setSure] = useState(false);
   const league = leagueOf(f.cups);
@@ -218,6 +221,9 @@ function FriendRow({ f, exercise, busy, onChallenge, onRemove }: { f: FriendView
           <span className="muted">Вызов: {EXERCISE_LABELS[exercise].toLowerCase()} — упражнение выбирается вверху</span>
           <button className="small-btn danger" onClick={() => (sure ? onRemove() : setSure(true))}>
             {sure ? 'Точно удалить?' : 'Удалить из друзей'}
+          </button>
+          <button className="small-btn ghost" onClick={onMenu}>
+            Пожаловаться или заблокировать
           </button>
         </div>
       )}

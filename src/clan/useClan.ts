@@ -53,6 +53,9 @@ export function useClan(level: number) {
         case 'chatMsg':
           setChat((c) => (c.some((m) => m.id === msg.message.id) ? c : [...c, msg.message].slice(-100)));
           break;
+        case 'chatDel':
+          setChat((c) => c.filter((m) => m.id !== msg.id));
+          break;
         case 'raid':
           setClan((c) => (c ? { ...c, raid: msg.raid as RaidView } : c));
           break;
@@ -80,7 +83,10 @@ export function useClan(level: number) {
     if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify(msg));
   };
 
-  return { status, clan, list, chat, error, attack, setAttack, bot, telegram, pro, send, claimed, setClaimed, reconnect: () => setSeq((n) => n + 1) };
+  // Игрок кого-то заблокировал: его сообщения прячем сразу, не дожидаясь сервера.
+  const hide = (id: string) => setClan((c) => (c ? { ...c, hidden: [...(c.hidden ?? []), id] } : c));
+
+  return { status, clan, list, chat, error, attack, setAttack, bot, telegram, pro, send, hide, claimed, setClaimed, reconnect: () => setSeq((n) => n + 1) };
 }
 
 export type ClanApi = ReturnType<typeof useClan>;

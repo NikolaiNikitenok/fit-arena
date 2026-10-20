@@ -6,6 +6,7 @@ import { EXERCISE_LABELS, Exercise } from './repCounter';
 import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
 import { AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
+import { BlackListRow } from './moderation/BlackList';
 
 const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -38,6 +39,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         <RecalibrateRow />
         <RemindRow />
         <RaidNotifyRow />
+        <BlackListRow />
         <button className="secondary" onClick={onIntro}>
           Посмотреть знакомство заново
         </button>

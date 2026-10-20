@@ -10,6 +10,9 @@ import { paceLimit, repMinMs, robotic } from '../shared/fairPlay';
 import { warReward, type WarHistoryItem } from '../shared/war';
 import { Guard } from './guard';
 import { warAdopt, warReps, warView, type ClanWar } from './wars';
+import { BAD_NAME, badName, censor, hasProfanity } from '../shared/profanity';
+import { muteText } from '../shared/moderation';
+import { SpamGuard } from './moderation';
 
 interface Member {
   id: string;
@@ -63,6 +66,8 @@ export interface Clan {
   war?: ClanWar | null;
   warRecord?: { w: number; l: number; d: number };
   warHistory?: WarHistoryItem[];
+  // Глава или заместитель запретил участнику писать в чат: id → до какого времени.
+  mutes?: Record<string, number>;
 }
 
 export interface Who {
@@ -100,6 +105,10 @@ export class ClanStore {
   guard = new Guard(null);
   // Наибольший честный урон за повтор по силе героя из его копии прогресса; null — копии нет.
   maxDamage: (id: string, clan: Clan) => number | null = () => null;
+  // Запрет модератора писать в чат (server/moderation.ts) и чёрный список игрока: задаёт сервер.
+  mutedUntil: (id: string) => number = () => 0;
+  hiddenFor: (id: string) => string[] = () => [];
+  private spam = new SpamGuard();
   private clans = new Map<string, Clan>();
   private byPlayer = new Map<string, string>();
   private attacks = new Map<string, Attack>();
@@ -156,6 +165,8 @@ export class ClanStore {
     const tag = clean(s?.tag, 4).toUpperCase().replace(/[^A-ZА-ЯЁ0-9]/g, '');
     if (name.length < 3) return 'Название клана — хотя бы 3 буквы';
     if (tag.length < 2) return 'Тег клана — 2–4 буквы или цифры';
+    if (badName(name) || badName(tag) || badName(clean(s?.city, 30))) return BAD_NAME;
+    if (hasProfanity(clean(s?.description, 200))) return 'Выбери другие слова для описания';
     const taken = [...this.clans.values()].find((c) => c.name.toLowerCase() === name.toLowerCase() || c.tag === tag);
     const flag = typeof s?.flag === 'string' && parseFlag(s.flag) ? s.flag : defaultFlag(tag);
     const country = typeof s?.country === 'string' && s.country in COUNTRIES ? s.country : '';
@@ -403,9 +414,61 @@ export class ClanStore {
     if (!c || !m) return 'Ты не в клане';
     const body = clean(text, CHAT_MAX);
     if (!body) return 'Пустое сообщение';
+    const muted = this.chatMutedUntil(c, playerId, now);
+    if (muted) return muteText(muted);
     if (now - (this.lastChat.get(playerId) ?? 0) < CHAT_GAP_MS) return 'Не так быстро';
+    const spam = this.spam.check(playerId, body, now);
+    if (spam) return spam;
     this.lastChat.set(playerId, now);
-    return this.push(c, { id: c.nextMsg++, from: playerId, name: m.name, text: body, at: now });
+    // Мат не блокирует сообщение: слова заменяются на «***».
+    return this.push(c, { id: c.nextMsg++, from: playerId, name: m.name, text: censor(body), at: now });
+  }
+
+  /** До какого времени игроку нельзя писать в чат клана: запрет модератора или главы. 0 — можно. */
+  chatMutedUntil(c: Clan, playerId: string, now: number): number {
+    const own = c.mutes?.[playerId] ?? 0;
+    if (own && own <= now) {
+      delete c.mutes![playerId];
+      this.save();
+    }
+    return Math.max(own > now ? own : 0, this.mutedUntil(playerId));
+  }
+
+  /** Глава или заместитель запрещает писать в чат тому, кто ниже: на час или сутки; 0 — снять запрет. */
+  mute(actor: string, target: string, hours: number, now: number): Clan | string {
+    const c = this.clanOf(actor);
+    const a = c && this.member(c, actor);
+    const t = c && this.member(c, target);
+    if (!c || !a || !t || actor === target) return 'Участник не найден';
+    const rank = { leader: 2, officer: 1, member: 0 };
+    if (rank[a.role] < 1 || rank[a.role] <= rank[t.role]) return 'Запрещать писать могут глава и заместители, и только тем, кто ниже';
+    if (![0, 1, 24].includes(hours)) return 'Можно на 1 час или на сутки';
+    const mutes = (c.mutes ??= {});
+    if (hours) {
+      mutes[target] = now + hours * 3_600_000;
+      this.system(c, `${a.name} запретил ${t.name} писать в чат на ${hours === 1 ? 'час' : 'сутки'}`, now);
+    } else {
+      delete mutes[target];
+      this.system(c, `${t.name} снова может писать в чат`, now);
+    }
+    this.save();
+    return c;
+  }
+
+  /** Удалить сообщение: своё — любой, чужое — глава и заместители (у тех, кто ниже). */
+  deleteMessage(actor: string, msgId: number): Clan | string {
+    const c = this.clanOf(actor);
+    const a = c && this.member(c, actor);
+    const msg = c?.chat.find((x) => x.id === msgId);
+    if (!c || !a || !msg || msg.system) return 'Сообщение не найдено';
+    if (msg.from !== actor) {
+      const rank = { leader: 2, officer: 1, member: 0 };
+      const author = this.member(c, msg.from);
+      if (rank[a.role] < 1 || (author && rank[a.role] <= rank[author.role])) return 'Удалять чужие сообщения могут глава и заместители';
+    }
+    c.chat = c.chat.filter((x) => x !== msg);
+    this.save();
+    return c;
   }
 
   system(c: Clan, text: string, now: number): ChatMessage {
@@ -612,12 +675,14 @@ export class ClanStore {
       myRole: this.member(c, playerId)?.role ?? 'member',
       members: [...c.members]
         .sort((a, b) => order[a.role] - order[b.role] || (r?.damage[b.id] ?? 0) - (r?.damage[a.id] ?? 0) || b.level - a.level)
-        .map((m) => ({ id: m.id, name: m.name, role: m.role, level: m.level, xp: Math.floor(m.xp ?? 0), raidDamage: r?.damage[m.id] ?? 0, online: online(m.id), me: m.id === playerId, pro: this.isPro(m.id) })),
+        .map((m) => ({ id: m.id, name: m.name, role: m.role, level: m.level, xp: Math.floor(m.xp ?? 0), raidDamage: r?.damage[m.id] ?? 0, online: online(m.id), me: m.id === playerId, pro: this.isPro(m.id), ...((c.mutes?.[m.id] ?? 0) > now ? { mutedUntil: c.mutes![m.id] } : {}) })),
       raid: this.raidView(c, playerId, now),
       raidWins: c.raidWins,
       reward: this.reward(c, playerId, now),
       giftFrom: this.member(c, playerId)?.gift,
       war: this.warViewClaimed(c, playerId, now),
+      mutedUntil: this.chatMutedUntil(c, playerId, now) || undefined,
+      hidden: this.hiddenFor(playerId),
     };
   }
 

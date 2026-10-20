@@ -229,8 +229,8 @@ async function sendWelcomePhoto(token: string, chat_id: number, url: string, cap
   }
 }
 
-/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
-export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void): void {
+/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). onCommand — свои команды (модерация): вернуть ответ или null. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
+export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void, onCommand?: (chatId: number, text: string) => string | null): void {
   const api = botApi(token);
   let offset = 0;
   const loop = async () => {
@@ -260,6 +260,12 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           if (!msg?.text || msg.chat.type !== 'private') continue;
           // Игрок написал боту: значит, снова можно ему писать.
           onChat?.(msg.chat.id);
+          const own = onCommand?.(msg.chat.id, msg.text);
+          if (own) {
+            botStatus.handled++;
+            await api('sendMessage', { chat_id: msg.chat.id, text: own });
+            continue;
+          }
           const reply = startReply(msg.text, appUrl, clanByCode);
           // Не команда: это сообщение разработчику.
           if (!reply) {

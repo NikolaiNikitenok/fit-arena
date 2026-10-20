@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { BAD_NAME, badName } from '../../shared/profanity';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { canvasProps, getSettings } from '../settings';
@@ -208,6 +209,8 @@ export function PetScreen({ progress, setProgress, onClose }: { progress: Progre
               setEditing(true);
             }}
             onSave={() => {
+              // Кличку видит только сам игрок, но с матом всё равно не принимаем.
+              if (badName(draft)) return setMsg(BAD_NAME);
               setProgress(save(renamePet(progress, def.id, draft)));
               setEditing(false);
             }}
@@ -522,8 +525,9 @@ export function PetHatch({ onDone, onLater }: { onDone: (name: string) => void; 
             <div className="pet-hatch-card">
               <Remark line={say('grom', 'Корми его тренировками: каждый твой повтор — опыт ему, а первая тренировка дня — лакомство. Как назовёшь малыша?')} />
               <input className="pet-name-input" value={name} maxLength={14} onChange={(e) => setName(e.target.value)} />
+              {badName(name) && <div className="muted warn">{BAD_NAME}</div>}
               <div className="muted">Бонус дракончика: {bonusText(petBonusAt(petById('dragon')!, 1))}, к 20-му уровню до {bonusText(petBonusAt(petById('dragon')!, 20))}.</div>
-              <button className="primary" onClick={() => onDone(name)}>
+              <button className="primary" disabled={badName(name)} onClick={() => onDone(name)}>
                 Забрать домой
               </button>
             </div>

@@ -81,6 +81,8 @@ const cleanName = (s: unknown) => (typeof s === 'string' ? s.replace(/[\u0000-\u
 export const normCode = (s: unknown) => (typeof s === 'string' ? s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) : '');
 
 export class FriendStore {
+  // Чёрный список (server/moderation.ts): кто-то из двоих заблокировал другого. Задаёт сервер.
+  blocked: (a: string, b: string) => boolean = () => false;
   private players = new Map<string, FriendPlayer>();
   private codes = new Map<string, string>();
   private invites = new Map<string, string>();
@@ -168,6 +170,7 @@ export class FriendStore {
     if (!me) return 'Сначала открой экран друзей';
     if (!to) return 'Игрок с таким кодом не найден';
     if (to.id === me.id) return 'Это твой собственный код';
+    if (this.blocked(me.id, to.id)) return 'Этот игрок не принимает заявки';
     if (me.friends.includes(to.id)) return `${to.name} уже у тебя в друзьях`;
     if (me.requests.some((r) => r.from === to.id)) {
       const err = this.link(me, to);
@@ -189,6 +192,7 @@ export class FriendStore {
     if (!me) return 'Сначала открой экран друзей';
     if (!owner) return 'Приглашение устарело. Попроси друга прислать новую ссылку';
     if (owner.id === me.id) return 'Это твоя собственная ссылка — отправь её другу';
+    if (this.blocked(me.id, owner.id)) return 'Приглашение не действует';
     if (me.friends.includes(owner.id)) return `${owner.name} уже у тебя в друзьях`;
     return this.link(me, owner) ?? owner;
   }
@@ -271,6 +275,7 @@ export class FriendStore {
   /** Можно ли вызвать: друзья и прошло 10 минут с прошлого вызова. */
   canChallenge(from: string, to: string): string | null {
     if (!this.areFriends(from, to)) return 'Вызывать можно только друзей';
+    if (this.blocked(from, to)) return 'Этот игрок не принимает вызовы';
     const wait = this.waitMs(from, to);
     if (wait > 0) return `Этого друга уже вызывали. Новый вызов через ${Math.ceil(wait / 60_000)} мин.`;
     return null;
