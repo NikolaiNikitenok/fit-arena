@@ -103,6 +103,22 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .pip-angle { position: absolute; bottom: 4px; left: 6px; font-size: 12px; color: #fff; text-shadow: 0 1px 3px #000; }
 .countdown { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #fff; font-weight: 800; font-size: 16px; text-shadow: 0 2px 12px rgba(0,0,0,.6); background: radial-gradient(circle, rgba(9,10,16,.45), transparent 60%); pointer-events: none; }
 .countdown-num { font-size: 88px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+/* Калибровка камеры: карточка под HUD, чтобы не закрывать окно камеры в углу. */
+.calib { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-start; padding: 104px 14px 12px; background: linear-gradient(180deg, rgba(9,10,16,.25), rgba(9,10,16,.7)); color: #fff; }
+.calib-card { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 16px 16px; border-radius: var(--r-lg); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); text-align: center; }
+.calib-title { font-size: 22px; font-weight: 900; line-height: 1.15; }
+.calib-card .muted { font-size: 13px; line-height: 1.35; }
+.calib-reps { display: flex; gap: 8px; margin-top: 2px; }
+.calib-reps span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-variant-numeric: tabular-nums; background: var(--surface-3); color: var(--hint); transition: background .2s, color .2s; }
+.calib-reps span.on { background: var(--accent-grad); color: var(--on-accent); }
+.calib-bar { position: relative; width: 100%; height: 12px; margin-top: 4px; border-radius: 6px; background: rgba(255,255,255,.12); }
+.calib-range { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: rgba(255,138,92,.45); }
+.calib-tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--mint); }
+.calib-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px var(--accent), 0 2px 6px rgba(0,0,0,.5); transition: left .08s linear; }
+.calib-scale { width: 100%; display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 800; color: var(--hint); }
+.calib-scale span:nth-child(2) { color: #fff; font-size: 13px; font-variant-numeric: tabular-nums; }
+.calib-card .small-btn { margin-top: 4px; }
+.calib-row .small-btn { flex: none; }
 .stars { font-size: 11px; letter-spacing: 1px; color: rgba(255,255,255,.25); }
 .stars .on { color: var(--gold); }
 .hearts { font-size: 18px; color: rgba(255,255,255,.25); letter-spacing: 2px; }

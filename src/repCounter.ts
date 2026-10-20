@@ -152,7 +152,17 @@ export class RepCounter {
   // Поворот кадра, при котором поза в прошлый раз совпала.
   private rotation = 0;
 
-  constructor(readonly exercise: Exercise) {}
+  // Пороги угла: личные после калибровки или общие из RULES.
+  readonly down: number;
+  readonly up: number;
+
+  constructor(
+    readonly exercise: Exercise,
+    personal?: { down: number; up: number },
+  ) {
+    this.down = personal?.down ?? RULES[exercise].down;
+    this.up = personal?.up ?? RULES[exercise].up;
+  }
 
   get current(): RepState {
     return this.state;
@@ -206,7 +216,7 @@ export class RepCounter {
     this.failStreak = failed ? this.failStreak + 1 : 0;
     const postureBad = this.failStreak >= POSTURE_GRACE;
 
-    if (phase === 'up' && value < rule.down && !postureBad) {
+    if (phase === 'up' && value < this.down && !postureBad) {
       phase = 'down';
       this.formOk = true;
     }
@@ -214,7 +224,7 @@ export class RepCounter {
       this.formOk = false;
       this.failHint = failed.hint;
     }
-    if (phase === 'down' && value > rule.up) {
+    if (phase === 'down' && value > this.up) {
       phase = 'up';
       if (this.formOk && !postureBad && timestampMs - this.lastRepAt >= MIN_REP_MS) {
         reps += 1;

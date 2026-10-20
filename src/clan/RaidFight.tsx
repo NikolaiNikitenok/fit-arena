@@ -13,6 +13,7 @@ import { Character, CharacterProps } from '../three/Character';
 import { useRepCamera } from '../useRepCamera';
 import { useMusic } from '../audio';
 import { useRaidSounds } from '../gameSounds';
+import { useVoiceCoach } from '../voice';
 
 /** Огромный босс рейда; рядом может стоять герой игрока. */
 export function RaidScene({ raidKey, hit = 0, hero, pulse = 0, dead }: { raidKey: string; hit?: number; hero?: CharacterProps; pulse?: number; dead?: boolean }) {
@@ -122,6 +123,7 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
   const dealt = reps * power.damage;
   useMusic('castle', 1);
   useRaidSounds(phase, left, reps, raid.hp <= 0);
+  useVoiceCoach(phase === 'fight', reps, left, camera.hint, RAID_ATTACK_S);
 
   return (
     <>

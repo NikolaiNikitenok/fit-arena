@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
+import { resetCalibration, useCalibration } from './calibration';
 import { cloudState, onCloud, setRaidNotify, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
+import { EXERCISE_LABELS, Exercise } from './repCounter';
 import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
 
 const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
   { key: 'music', title: 'Музыка', text: 'Тихая фоновая мелодия: своя в каждом мире, барабаны на арене.' },
+  { key: 'voice', title: 'Голос тренера', text: 'Мастер Гром вслух считает повторы, подсказывает время и технику. Нужен русский голос в телефоне.' },
   { key: 'haptics', title: 'Вибрация', text: 'Телефон коротко вибрирует на повтор.' },
   { key: 'guide', title: 'Подсказка перед уровнем', text: '3D-схема, как поставить телефон.' },
   { key: 'story', title: 'Диалоги сюжета', text: 'Разговоры с героями перед уровнями. Без них сразу к тренировке.' },
@@ -31,6 +34,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
             <input type="checkbox" className="switch" checked={s[t.key]} onChange={(e) => setSetting(t.key, e.target.checked)} />
           </label>
         ))}
+        <RecalibrateRow />
         <RemindRow />
         <RaidNotifyRow />
         <button className="secondary" onClick={onIntro}>
@@ -68,6 +72,27 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
           Готово
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Личные пороги счёта: какие упражнения откалиброваны и кнопка начать заново. */
+function RecalibrateRow() {
+  const saved = useCalibration();
+  const done = (Object.keys(EXERCISE_LABELS) as Exercise[]).filter((e) => saved[e] && 'down' in saved[e]!);
+  return (
+    <div className="toggle-row calib-row">
+      <div>
+        <div className="toggle-title">Перекалибровать камеру</div>
+        <div className="muted">
+          {done.length
+            ? `Считаю под тебя: ${done.map((e) => EXERCISE_LABELS[e].toLowerCase()).join(', ')}. Если повторы теряются, откалибруй заново.`
+            : 'Перед первым подходом попрошу сделать 3 медленных повтора и подстрою счёт под твою амплитуду.'}
+        </div>
+      </div>
+      <button className="small-btn ghost" disabled={!Object.keys(saved).length} onClick={resetCalibration}>
+        Заново
+      </button>
     </div>
   );
 }

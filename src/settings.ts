@@ -6,6 +6,8 @@ export interface Settings {
   sound: boolean;
   // Фоновая музыка миров.
   music: boolean;
+  // «Голос Грома»: тренер вслух считает повторы и подбадривает.
+  voice: boolean;
   // Вибрация телефона на повтор (Telegram).
   haptics: boolean;
   // Скелет поверх видео с камеры.
@@ -19,7 +21,7 @@ export interface Settings {
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, music: true, haptics: true, skeleton: true, guide: true, lowPower: false, story: true };
+const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, story: true };
 
 let current: Settings = (() => {
   try {

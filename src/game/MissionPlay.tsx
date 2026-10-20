@@ -5,6 +5,9 @@ import { Heart, Swords } from '../icons';
 import { getSettings, useSettings } from '../settings';
 import { useRepCamera } from '../useRepCamera';
 import { useMissionSounds } from '../gameSounds';
+import { needsCalibration } from '../calibration';
+import { CalibrationOverlay } from '../CalibrationOverlay';
+import { unlockVoice, useVoiceCoach } from '../voice';
 import { gearIcon, gearText, itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
@@ -86,6 +89,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const exercise = useRef<Exercise>(level.exercises[0]);
   const [countdown, setCountdown] = useState(0);
   useMissionSounds(status, countdown, view, level.type === 'boss');
+  const calibrating = status === 'running' && camera.calib != null;
+  useVoiceCoach(status === 'running' && countdown <= 0 && !calibrating, view.reps, Math.ceil(view.leftMs / 1000), camera.hint, level.seconds, level.type === 'trial' ? undefined : mission.current.target);
 
   const finish = (m: Mission, now: number) => {
     camera.stop();
@@ -115,6 +120,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const start = async () => {
     if (lives.lives <= 0 && !level.daily) return;
     if (swapCount > 0 && !onSwap(swapCount)) return;
+    // Прямо из нажатия: иначе iOS в Telegram не даст Грому говорить.
+    unlockVoice();
     setAttempt((a) => a + 1);
     setError(null);
     setStatus('loading');
@@ -162,6 +169,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           }
           return true;
         },
+        // Перед первым подходом упражнения подстраиваем счёт под амплитуду игрока.
+        { calibrate: needsCalibration(level.exercises[0]) },
       );
       setStatus('running');
     } catch (e) {
@@ -230,7 +239,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           </div>
         )}
 
-        {status === 'running' && countdown > 0 && (
+        {calibrating && <CalibrationOverlay exercise={level.exercises[0]} view={camera.calib!} onSkip={camera.skipCalib} />}
+        {status === 'running' && countdown > 0 && !calibrating && (
           <div className="countdown">
             <div className="countdown-num">{countdown}</div>
             <div>Займи позицию</div>
@@ -310,12 +320,16 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           <video ref={camera.videoRef} playsInline muted />
           <canvas ref={camera.canvasRef} />
           <div className="pip-count">{view.reps}</div>
-          {camera.angle != null && <div className="pip-angle">{camera.angle}°</div>}
+          {camera.angle != null && (
+            <div className="pip-angle">
+              {camera.angle}°{camera.limits && ` · ${camera.limits.down}/${camera.limits.up}`}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="hint-line">
-        {status === 'running' && (camera.hint ?? 'Отлично, продолжай!')}
+        {status === 'running' && (camera.hint ?? (calibrating ? 'Медленно и на всю амплитуду, как можешь' : 'Отлично, продолжай!'))}
         {status === 'ready' && level.exercises.length > 1 && 'Упражнения меняются по фазам: поставь телефон так, чтобы было видно всё тело.'}
         {status === 'error' && `Не удалось запустить камеру: ${error}`}
       </div>

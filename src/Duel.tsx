@@ -9,6 +9,7 @@ import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram
 import { useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
 import { useDuelSounds } from './gameSounds';
+import { useVoiceCoach } from './voice';
 import { recordDuel, recordOutsideReps } from './game/progress';
 import { TrainerDuel } from './TrainerDuel';
 
@@ -156,6 +157,7 @@ function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () =
   // В меню спокойная тема, на арене барабаны.
   useMusic(phase === 'room' || phase === 'countdown' || phase === 'fight' || phase === 'over' ? 'arena' : 'calm');
   useDuelSounds(phase, seconds, view.me, view.opponent, result);
+  useVoiceCoach(phase === 'fight', view.me.hits, seconds, camera.hint, 60);
 
   let overlay: ReactNode = null;
   if (phase === 'countdown') overlay = <div className="result-title">{seconds || 'Бой!'}</div>;

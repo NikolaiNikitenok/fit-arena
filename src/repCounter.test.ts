@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { angle, Landmark, RepCounter } from './repCounter';
+import { Calibrator, deriveThresholds } from './calibration';
 
 type Point = [number, number];
 
@@ -172,5 +173,41 @@ describe('пресс без строгой амплитуды', () => {
       }
     }
     expect(c.current.reps).toBe(2);
+  });
+});
+
+describe('личные пороги после калибровки', () => {
+  // Пресс с малой амплитудой: лёжа 125°, сидя только 95° — общий порог 85° не достаётся.
+  const sweep = (top: number, bottom: number, reps: number) => {
+    const one: number[] = [];
+    for (let a = top; a > bottom; a -= 5) one.push(a);
+    for (let a = bottom; a < top; a += 5) one.push(a);
+    return [...Array.from({ length: reps }, () => one).flat(), top];
+  };
+
+  it('с общими порогами такой пресс не считается', () => {
+    expect(run(new RepCounter('situp'), situp, sweep(125, 95, 5))).toBe(0);
+  });
+
+  it('калибровка на тех же повторах — и все они считаются', () => {
+    const probe = new RepCounter('situp');
+    const calib = new Calibrator('situp');
+    let t = 0;
+    for (const theta of sweep(125, 95, 3).concat([125, 125, 125, 125])) {
+      for (let i = 0; i < 4; i++) {
+        const s = probe.update(situp(theta), (t += 50));
+        calib.update(s.angle, s.hint == null, t);
+      }
+    }
+    const personal = calib.view.result;
+    expect(personal).not.toBeNull();
+    expect(run(new RepCounter('situp', personal!), situp, sweep(125, 95, 5))).toBe(5);
+  });
+
+  it('и всё равно не считает мелкое дрожание', () => {
+    const jitter = Array.from({ length: 40 }, (_, i) => (i % 2 ? 114 : 104));
+    expect(run(new RepCounter('situp', deriveThresholds('situp', 95, 125)), situp, jitter)).toBe(0);
+    // Даже откалибровавшись на крошечной амплитуде, зазор между порогами не меньше 15°.
+    expect(run(new RepCounter('situp', deriveThresholds('situp', 105, 112)), situp, jitter)).toBe(0);
   });
 });
