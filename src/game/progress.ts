@@ -1,4 +1,5 @@
 // Прогресс игрока хранится в браузере и копией на сервере (src/cloud.ts), чтобы не терялся при смене телефона.
+import type { GymState } from '../gym/gym';
 import { type Exercise, type RepExercise, repsEquivalent } from '../repCounter';
 import { clanGift } from '../../shared/clanLevel';
 import { seasonAt } from '../../shared/rating';
@@ -79,6 +80,8 @@ export interface Progress {
   village?: Village;
   // Подземелье «три в ряд»: открытые этажи, звёзды, бонус дня, лучшее комбо (src/game/match3/dungeon.ts).
   dungeon?: DungeonState;
+  // Дневник зала (src/gym/gym.ts): свои тренировки, план недели, история и рекорды. На серию и рейтинг не влияет.
+  gym?: GymState;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.

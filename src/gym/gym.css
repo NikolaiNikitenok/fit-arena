@@ -1,0 +1,129 @@
+/* Дневник зала. Цвет мышцы — в --mc. */
+.gym-entry { background: linear-gradient(100deg, #1e2231 0%, #232634 55%, #182a2a 100%); }
+.gym-icon { background: linear-gradient(135deg, #8ff0c8 0%, #3cc9a0 100%); color: #06261b; box-shadow: 0 6px 16px rgba(60, 201, 160, .22); }
+
+.gym-screen { display: flex; flex-direction: column; gap: 12px; }
+.gym-screen .app-head h1 { flex: 1; text-align: center; font-size: 20px; }
+.gym-screen .app-head > span:last-child { min-width: 72px; }
+.gym-screen .remark { margin-top: 0; background: var(--surface); }
+.gym-screen .section-title .link { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); }
+.gym-note { text-align: center; font-size: 13px; }
+.gym-danger { color: var(--rose); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
+.gym-exicon { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; color: var(--mc, var(--accent)); background: color-mix(in srgb, var(--mc, var(--accent)) 16%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--mc, var(--accent)) 30%, transparent); }
+.gym-exicon.custom { width: 36px; height: 36px; --mc: #98a0b3; }
+.gym-ex-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.gym-ex-text b { font-size: 14.5px; font-weight: 900; line-height: 1.2; }
+.gym-ex-text small { font-size: 12px; font-weight: 700; color: var(--hint); line-height: 1.3; }
+.gym-x { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--hint); display: inline-flex; align-items: center; justify-content: center; }
+
+/* Неделя */
+.gym-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.gym-day { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--hint); }
+.gym-day-name { font-size: 12px; font-weight: 900; }
+.gym-day-mark { height: 22px; width: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface-3); color: var(--hint); font-weight: 900; }
+.gym-day-tpl { max-width: 100%; font-size: 9.5px; font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+.gym-day.plan { color: var(--text); }
+.gym-day.plan .gym-day-mark { background: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); color: var(--accent); }
+.gym-day.done .gym-day-mark { background: var(--mint); color: #06261b; }
+.gym-day.today { border: 2px solid var(--accent); padding: 6px 1px 5px; }
+
+/* Мои тренировки */
+.gym-tpl { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.gym-tpl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 0; border: 0; background: none; color: var(--text); text-align: left; }
+.gym-tpl-main b { font-size: 15px; font-weight: 900; }
+.gym-tpl-main small { font-size: 12px; font-weight: 700; color: var(--hint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gym-starters { display: flex; flex-direction: column; gap: 6px; }
+.gym-starters .muted { font-size: 13px; }
+.gym-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gym-chips .swap-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-2); border-color: var(--line); }
+.gym-chips.scroll { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
+.gym-chips.scroll::-webkit-scrollbar { display: none; }
+.gym-chips.scroll .swap-chip { flex: none; }
+.gym-chips .swap-chip.on { border-color: var(--mc, var(--accent)); color: var(--mc, var(--accent)); background: color-mix(in srgb, var(--mc, var(--accent)) 14%, var(--surface-2)); }
+.gym-pick-list { display: flex; flex-direction: column; gap: 6px; }
+.gym-pick { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-size: 15px; font-weight: 800; text-align: left; }
+.gym-pick.on { border-color: var(--accent); color: var(--accent); }
+
+/* Карточка итога */
+.gym-hist { padding: 0; border: 0; background: none; color: inherit; text-align: left; width: 100%; }
+.gym-hist:active { transform: scale(.99); }
+.gym-card { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-lg); border: 1px solid var(--line); background: linear-gradient(160deg, var(--surface-2) 0%, var(--surface) 60%); }
+.gym-card-head { display: flex; flex-direction: column; gap: 1px; }
+.gym-card-title { font-size: 19px; font-weight: 900; text-transform: uppercase; letter-spacing: .3px; line-height: 1.15; }
+.gym-card-date { font-size: 12.5px; font-weight: 700; color: var(--hint); }
+.gym-stats { display: grid; grid-template-columns: 1fr 1.2fr .9fr; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.gym-stats > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gym-stats span { font-size: 12px; font-weight: 800; color: var(--hint); }
+.gym-stats b { font-size: 17px; font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gym-prs { display: inline-flex; align-items: center; gap: 5px; color: var(--gold); }
+.gym-ex-list { display: flex; flex-direction: column; gap: 9px; }
+.gym-ex-row { display: flex; align-items: center; gap: 12px; }
+.gym-ex-row .gym-ex-text > span { font-size: 14.5px; font-weight: 800; line-height: 1.25; }
+.gym-more { align-self: center; font-size: 13.5px; font-weight: 800; color: var(--hint); padding: 2px 8px; cursor: pointer; }
+
+/* Тренировка */
+.gym-run { padding-bottom: 64px; }
+.gym-run-head { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 10px; margin: calc(-12px - var(--safe-top)) -16px 0; padding: calc(10px + var(--safe-top)) 16px 10px; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.gym-run-head > div { flex: 1; min-width: 0; }
+.gym-run-name { font-size: 18px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gym-run-meta { display: flex; gap: 12px; font-size: 13px; font-weight: 800; color: var(--hint); font-variant-numeric: tabular-nums; }
+.gym-run-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.gym-run-meta span:first-child { color: var(--accent); }
+.gym-run-ex { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--surface); }
+.gym-run-ex-head { display: flex; align-items: center; gap: 10px; }
+.gym-pr-chip { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 999px; background: rgba(255, 210, 122, .14); color: var(--gold); font-size: 11.5px; font-weight: 900; }
+.gym-sets { display: flex; flex-direction: column; gap: 5px; }
+.gym-set { display: grid; grid-template-columns: 28px 1fr 1fr 44px; gap: 8px; align-items: center; }
+.gym-sets.k-t .gym-set { grid-template-columns: 28px 1fr 44px; }
+.gym-set.head { font-size: 11.5px; font-weight: 900; color: var(--hint); text-transform: uppercase; letter-spacing: .5px; }
+.gym-set.head span { text-align: center; }
+.gym-set-n { text-align: center; font-weight: 900; color: var(--hint); font-variant-numeric: tabular-nums; }
+.gym-num { width: 100%; min-width: 0; height: 40px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: 900 17px var(--font); text-align: center; font-variant-numeric: tabular-nums; outline: none; }
+.gym-num:focus { border-color: var(--accent); }
+.gym-num::placeholder { color: #5d6478; font-weight: 800; }
+.gym-check { height: 40px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-3); color: var(--hint); display: flex; align-items: center; justify-content: center; transition: transform .12s ease; }
+.gym-check:active { transform: scale(.92); }
+.gym-check.on { background: var(--mint); color: #06261b; border-color: transparent; }
+.gym-set.done .gym-num { background: color-mix(in srgb, var(--mint) 12%, var(--surface-2)); border-color: color-mix(in srgb, var(--mint) 30%, transparent); }
+.gym-set.done .gym-set-n { color: var(--mint); }
+.gym-run-ex-foot { display: flex; justify-content: space-between; }
+.gym-run-ex-foot .link { display: inline-flex; align-items: center; gap: 4px; padding: 4px 2px; }
+.gym-run-ex-foot .link:first-child { color: var(--accent); }
+.gym-rest { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0, 0, 0, .4); animation: rise .25s ease-out; white-space: nowrap; }
+.gym-rest > span { font-size: 14px; font-weight: 800; color: var(--hint); margin-right: 4px; }
+.gym-rest b { color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
+.gym-rest button { height: 34px; min-width: 42px; padding: 0 10px; border-radius: 999px; border: 0; background: var(--surface-3); color: var(--text); font: 900 14px var(--font); display: inline-flex; align-items: center; justify-content: center; }
+
+/* Редактор тренировки */
+.gym-name { height: 48px; padding: 0 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 800 16px var(--font); outline: none; }
+.gym-name:focus { border-color: var(--accent); }
+.gym-daypick { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.gym-daypick button { position: relative; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--hint); font: 900 13px var(--font); }
+.gym-daypick button.on { background: var(--accent-grad); color: var(--on-accent); border-color: transparent; }
+.gym-daypick i { position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--hint); }
+.gym-plan-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 6px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); }
+.gym-order { display: flex; flex-direction: column; gap: 2px; }
+.gym-order button { width: 22px; height: 18px; padding: 0; border: 0; background: none; color: var(--hint); font-size: 10px; }
+.gym-order button:disabled { opacity: .25; }
+.gym-steppers { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.gym-steppers .muted { font-size: 12px; font-weight: 800; }
+.gym-stepper { display: inline-flex; align-items: center; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.gym-stepper button { width: 28px; height: 28px; border: 0; background: none; color: var(--text); font: 900 16px var(--font); }
+.gym-stepper button:disabled { color: #4b5163; }
+.gym-stepper b { min-width: 26px; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* Каталог */
+.gym-picker { padding-bottom: 80px; }
+.gym-search { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--hint); }
+.gym-search:focus-within { border-color: var(--accent); }
+.gym-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font: 800 15px var(--font); outline: none; }
+.gym-search button { border: 0; background: var(--surface-3); color: var(--hint); width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.gym-cat { display: flex; flex-direction: column; gap: 4px; }
+.gym-cat-row { display: flex; align-items: center; gap: 12px; padding: 7px 10px; border-radius: var(--r-md); border: 1px solid transparent; background: none; color: var(--text); text-align: left; }
+.gym-cat-row:active { background: var(--surface); }
+.gym-cat-row.on { background: var(--surface); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.gym-tick { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--surface-3); display: inline-flex; align-items: center; justify-content: center; }
+.gym-cat-row.on .gym-tick { background: var(--accent-grad); border-color: transparent; color: var(--on-accent); }
+.gym-picker-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.gym-picker-bar .primary { width: 100%; max-width: 448px; margin: 0 auto; }

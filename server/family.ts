@@ -7,7 +7,7 @@ import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 
 export type ActivityKind = 'training' | 'duel' | 'adventure';
 
-export interface FamilyActivity {
+export interface RepActivity {
   id: string;
   telegram_id: number;
   kind: ActivityKind;
@@ -17,6 +17,23 @@ export interface FamilyActivity {
   cups?: number;
   league?: string;
 }
+
+/** Тренировка в зале из дневника: время, объём, рекорды и список упражнений. */
+export interface GymReport {
+  title: string;
+  minutes: number;
+  volume_kg: number;
+  records: number;
+  exercises: { name: string; sets: number }[];
+}
+
+export interface GymActivity extends GymReport {
+  id: string;
+  telegram_id: number;
+  kind: 'gym';
+}
+
+export type FamilyActivity = RepActivity | GymActivity;
 
 export const MAX_REPS = 300;
 
@@ -33,6 +50,28 @@ export function parseClientItem(raw: unknown): { id: string; kind: ActivityKind;
   if (typeof exercise !== 'string' || !(exercise in EXERCISE_LABELS)) return null;
   if (typeof reps !== 'number' || !Number.isInteger(reps) || reps <= 0 || reps > MAX_REPS) return null;
   return { id, kind, exercise: exercise as Exercise, reps };
+}
+
+const cleanText = (x: unknown, max: number) => (typeof x === 'string' ? x.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max) : '');
+const intIn = (x: unknown, lo: number, hi: number) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
+
+/** Разбирает отчёт о тренировке в зале от клиента; null — если мусор. */
+export function parseGymItem(raw: unknown): (GymReport & { id: string }) | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== 'string' || !/^[\w-]{8,64}$/.test(r.id)) return null;
+  const title = cleanText(r.title, 40);
+  if (!title) return null;
+  if (!intIn(r.minutes, 1, 300) || !intIn(r.volume_kg, 0, 200_000) || !intIn(r.records, 0, 50) || !Array.isArray(r.exercises)) return null;
+  const exercises: GymReport['exercises'] = [];
+  for (const e of r.exercises.slice(0, 30)) {
+    const name = cleanText((e as Record<string, unknown>)?.name, 80);
+    const sets = (e as Record<string, unknown>)?.sets;
+    if (!name || !intIn(sets, 1, 50)) return null;
+    exercises.push({ name, sets: Math.round(sets as number) });
+  }
+  if (!exercises.length) return null;
+  return { id: r.id, title, minutes: Math.round(r.minutes as number), volume_kg: Math.round(r.volume_kg as number), records: Math.round(r.records as number), exercises };
 }
 
 /** Не больше `limit` отчётов от одного игрока за `windowMs`. */
@@ -66,7 +105,7 @@ export class Family {
   }
 
   /** Отправить в фоне; ошибки сайта не мешают Арене. */
-  report(activity: Omit<FamilyActivity, 'id'> & { id?: string }): void {
+  report(activity: (Omit<RepActivity, 'id'> | Omit<GymActivity, 'id'>) & { id?: string }): void {
     if (!this.enabled) return;
     const body = JSON.stringify({ ...activity, id: activity.id ?? randomUUID() });
     const ts = Math.floor(Date.now() / 1000);

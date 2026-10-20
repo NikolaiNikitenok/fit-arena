@@ -9,8 +9,9 @@ import { AchBadge } from './Achievements';
 import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
-import { heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
-import { Bag, Check, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, PassShield, Plan, Swords, Users } from '../icons';
+import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
+import { Bag, Check, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
+import { gymOf, todayTemplate } from '../gym/gym';
 import { PASS_TIERS, passTier } from './pass';
 import { passOf } from './progress';
 import { availability, programById, programsOf } from './programs';
@@ -61,6 +62,8 @@ interface Props {
   onPets: () => void;
   // Программы тренировок Мастера Грома.
   onPrograms: () => void;
+  // Дневник зала: свои тренировки с весами.
+  onGym: () => void;
   // Подземелье «три в ряд»: тратит заряд от тренировок.
   onDungeon: () => void;
   // Друзья: экран во вкладке дуэли.
@@ -95,8 +98,10 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onDungeon, onFriends } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends } = props;
+  const gym = gymOf(progress);
   const now = useNow();
+  const gymToday = todayTemplate(gym, now);
   const [heroOpen, setHeroOpen] = useState(false);
   const badges = homeBadges(progress, daily, pro, now);
   const item = itemById(progress.equipped);
@@ -281,6 +286,16 @@ export function HeroHome(props: Props) {
             <b>Сила</b>
             <small>рекорды</small>
           </span>
+        </button>
+        <button className="hb-more-item" onClick={onGym}>
+          <span className="hb-more-icon mint">
+            <Kettlebell size={18} />
+          </span>
+          <span>
+            <b>Зал</b>
+            <small>{gym.run ? 'идёт' : gymToday ? 'сегодня' : 'дневник'}</small>
+          </span>
+          <Dot n={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} />
         </button>
         <button className="hb-more-item" onClick={onFriends}>
           <span className="hb-more-icon blue">

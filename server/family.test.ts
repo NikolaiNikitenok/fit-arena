@@ -48,3 +48,16 @@ describe('Family', () => {
     expect(telegramId('guest:abc')).toBeNull();
   });
 });
+
+describe('отчёт о зале', () => {
+  const ok = { id: 'gym-1234567890', title: 'Session A', minutes: 88, volume_kg: 5455, records: 2, exercises: [{ name: 'Жим лёжа (Штанга)', sets: 3 }] };
+  it('принимает нормальный и отсеивает мусор', async () => {
+    const { parseGymItem } = await import('./family');
+    expect(parseGymItem(ok)).toEqual(ok);
+    expect(parseGymItem({ ...ok, minutes: 0 })).toBeNull();
+    expect(parseGymItem({ ...ok, volume_kg: -1 })).toBeNull();
+    expect(parseGymItem({ ...ok, exercises: [] })).toBeNull();
+    expect(parseGymItem({ ...ok, title: '' })).toBeNull();
+    expect(parseGymItem({ ...ok, exercises: [{ name: 'x', sets: 99 }] })).toBeNull();
+  });
+});

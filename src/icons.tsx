@@ -272,3 +272,22 @@ export const Bag = ({ size = 22, className }: P) =>
       <path d="M9 10.5V7a3 3 0 016 0v3.5" />
     </>,
   );
+
+/** Медаль рекорда: золотой круг на ленте. */
+export const Medal = ({ size = 18, className }: P) => (
+  <svg className={`icon ${className ?? ''}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 13.5L4.5 21l3.2-1.2L9.6 22l2-6.3M17 13.5l2.5 7.5-3.2-1.2-1.9 2.2-2-6.3" fill="#e8a33a" />
+    <circle cx="12" cy="9.5" r="6.5" fill="#ffd27a" />
+    <circle cx="12" cy="9.5" r="4.2" fill="none" stroke="#c98a1e" strokeWidth="1.4" />
+  </svg>
+);
+
+export const Trash = ({ size = 16, className }: P) => svg(size, className, <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" />);
+
+export const Pencil = ({ size = 16, className }: P) => svg(size, className, <path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 013 3L8 18.5 4 20zM13.5 7l3 3" />);
+
+export const Plus = ({ size = 16, className }: P) => svg(size, className, <path d="M12 5v14M5 12h14" />);
+
+export const Search = ({ size = 16, className }: P) => svg(size, className, <path d="M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15zM16 16l5 5" />);
+
+export const Kettlebell = ({ size = 18, className }: P) => svg(size, className, <path d="M8 9.5V8a4 4 0 018 0v1.5M12 21a6.5 6.5 0 100-13 6.5 6.5 0 000 13z" />);

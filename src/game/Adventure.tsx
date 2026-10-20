@@ -60,6 +60,7 @@ import { missionTheme, worldTheme } from '../music';
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
 const EventScreen = lazy(() => import('./EventScreen').then((m) => ({ default: m.EventScreen })));
 const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m.ProgramsScreen })));
+const GymScreen = lazy(() => import('../gym/GymScreen').then((m) => ({ default: m.GymScreen })));
 const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
 const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.PassScreen })));
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
@@ -139,6 +140,12 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const setPrograms = (v: { quick?: QuickWorkout } | null) => {
     setProgramsState(v);
     onPlaying(!!v);
+  };
+  // Дневник зала: на весь экран, без нижнего меню.
+  const [gym, setGymState] = useState(false);
+  const setGym = (open: boolean) => {
+    setGymState(open);
+    onPlaying(open);
   };
   // Подземелье «три в ряд»: на весь экран, без нижнего меню.
   const [dungeon, setDungeonState] = useState(false);
@@ -293,6 +300,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
       </Screen>
     );
 
+  if (gym) return <Screen><GymScreen progress={progress} update={update} onClose={() => setGym(false)} /></Screen>;
+
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
 
   const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
@@ -410,6 +419,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onEvent={() => setEventOpen(true)}
           onPets={() => setPetsOpen(true)}
           onPrograms={() => setPrograms({})}
+          onGym={() => setGym(true)}
           onDungeon={() => setDungeon(true)}
         />
         {sheets}

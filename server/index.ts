@@ -22,7 +22,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
 import { leagueOf } from '../shared/rating';
 import { EXERCISE_LABELS, goalText, isRepExercise, type Exercise } from '../src/repCounter';
-import { Family, parseClientItem, RateLimit, telegramId } from './family';
+import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './family';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
@@ -198,16 +198,17 @@ function reportDuel(p: Profile, reps: number, won: boolean | null, exercise: Exe
   family.report({ telegram_id: tgId, kind: 'duel', exercise, reps, won, cups: p.cups, league: leagueOf(p.cups).name });
 }
 
-/** POST /api/activity — клиент сообщает о тренировке вне дуэли: { initData, items: [{ id, kind, exercise, reps }] }. */
+/** POST /api/activity — клиент сообщает о тренировке вне дуэли: { initData, items: [{ id, kind, exercise, reps }] }
+ *  или о тренировке в зале из дневника: { initData, gym: { id, title, minutes, volume_kg, records, exercises } }. */
 function handleActivity(req: IncomingMessage, res: ServerResponse): void {
   let body = '';
   req.on('data', (chunk) => {
     body += chunk;
-    if (body.length > 8 * 1024) req.destroy();
+    if (body.length > 16 * 1024) req.destroy();
   });
   req.on('end', () => {
     const reply = (status: number) => res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: status === 200 }));
-    let msg: { initData?: unknown; items?: unknown };
+    let msg: { initData?: unknown; items?: unknown; gym?: unknown };
     try {
       msg = JSON.parse(body);
     } catch {
@@ -215,6 +216,13 @@ function handleActivity(req: IncomingMessage, res: ServerResponse): void {
     }
     const tgUser = BOT_TOKEN && typeof msg.initData === 'string' ? verifyInitData(msg.initData, BOT_TOKEN) : null;
     if (!tgUser) return reply(403);
+    if (msg.gym !== undefined) {
+      const gym = parseGymItem(msg.gym);
+      if (!gym) return reply(400);
+      if (!activityLimit.take(tgUser.id)) return reply(429);
+      family.report({ ...gym, kind: 'gym', telegram_id: tgUser.id });
+      return reply(200);
+    }
     const items = Array.isArray(msg.items) ? msg.items.slice(0, 3).map(parseClientItem) : [];
     if (!items.length || items.some((i) => !i)) return reply(400);
     if (!activityLimit.take(tgUser.id)) return reply(429);
