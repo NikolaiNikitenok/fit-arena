@@ -28,13 +28,15 @@ interface Props {
   onSwipe: (a: Pos, b: Pos) => void;
 }
 
-const GemView = memo(function GemView({ gem, x, y, drop, born, selected, hinted }: { gem: Gem; x: number; y: number; drop: number; born: boolean; selected: boolean; hinted: boolean }) {
+const GemView = memo(function GemView({ gem, x, y, drop, born, selected, hinted, lite }: { gem: Gem; x: number; y: number; drop: number; born: boolean; selected: boolean; hinted: boolean; lite: boolean }) {
   return (
     <div className="m3-gem" style={{ transform: `translate3d(${x * 100}%, ${y * 100}%, 0)` }}>
       <div className={`m3-gem-in ${drop ? 'm3-drop' : ''} ${born ? 'm3-born' : ''} ${selected ? 'm3-sel' : ''} ${hinted ? 'm3-hinted' : ''}`} style={drop ? { ['--drop' as string]: drop } : undefined}>
         {gem.special === 'rainbow' ? <div className="m3-rainbow" /> : <GemArt kind={gem.kind} />}
         {(gem.special === 'lineH' || gem.special === 'lineV') && <div className={`m3-stripe ${gem.special}`} />}
         {gem.special === 'bomb' && <div className="m3-bomb" style={{ ['--gc' as string]: GEM_COLORS[gem.kind][2] }} />}
+        {/* Особый самоцвет: искры бегут по кругу — его видно сразу. */}
+        {gem.special && !lite && <i className="m3-spark" style={{ ['--gc' as string]: GEM_COLORS[gem.kind][2] }} />}
       </div>
     </div>
   );
@@ -97,7 +99,7 @@ export function BoardView({ board, drops, born, effects, selected, hint, disable
         ))}
       </div>
       {gems.map(({ gem, x, y }) => (
-        <GemView key={gem.id} gem={gem} x={x} y={y} drop={drops.get(gem.id) ?? 0} born={born.has(gem.id)} selected={same(selected, x, y)} hinted={!!hint && (same(hint[0], x, y) || same(hint[1], x, y))} />
+        <GemView key={gem.id} gem={gem} x={x} y={y} drop={drops.get(gem.id) ?? 0} born={born.has(gem.id)} selected={same(selected, x, y)} hinted={!!hint && (same(hint[0], x, y) || same(hint[1], x, y))} lite={lite} />
       ))}
       {board.cells.map((c, i) =>
         c.block ? (
@@ -122,7 +124,12 @@ export function BoardView({ board, drops, born, effects, selected, hint, disable
                 {!lite && <i className="m3-shards" />}
               </div>
             );
-          if (f.type === 'row' || f.type === 'col') return <div key={f.key} className={`m3-beam ${f.type}`} style={f.type === 'row' ? { top: cell.top } : { left: cell.left }} />;
+          if (f.type === 'row' || f.type === 'col')
+            return (
+              <div key={f.key} className={`m3-beam ${f.type}`} style={f.type === 'row' ? { top: cell.top } : { left: cell.left }}>
+                {!lite && <i className="m3-trail" />}
+              </div>
+            );
           if (f.type === 'bomb') return <div key={f.key} className="m3-ring" style={{ ...cell, ['--r' as string]: f.r }} />;
           if (f.type === 'flash') return <div key={f.key} className="m3-flash" style={{ ...cell, ['--gc' as string]: f.kind ? GEM_COLORS[f.kind][2] : '#fff' }} />;
           return <div key={f.key} className={`m3-break ${f.block}`} style={cell} />;

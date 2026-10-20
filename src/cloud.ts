@@ -93,6 +93,13 @@ export function usePro(): boolean {
   return pro;
 }
 
+/** Админ ли игрок (по ответу сервера): до ответа — нет. */
+export function useAdmin(): boolean {
+  const [admin, setAdmin] = useState(() => !!cloud?.admin);
+  useEffect(() => onCloud((c) => setAdmin(c.admin)), []);
+  return admin;
+}
+
 /** Напоминание в боте в заданный час (null — выключить). */
 export async function setRemind(hour: number | null): Promise<Remind | null> {
   const r = (await post('/api/remind', { remind: hour == null ? null : { hour, tz: -new Date().getTimezoneOffset() } })) as { remind: Remind | null };

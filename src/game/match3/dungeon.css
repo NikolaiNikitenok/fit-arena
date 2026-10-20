@@ -104,7 +104,8 @@
 .m3-moves span { font-size: 10.5px; color: var(--hint); font-weight: 800; }
 .m3-moves.low b { color: #ff7a7a; }
 .m3-float { position: absolute; pointer-events: none; font-weight: 900; font-style: normal; animation: m3-float 1s ease-out forwards; text-shadow: 0 2px 6px rgba(0, 0, 0, .6); }
-.m3-float.dmg { top: 4px; right: 0; font-size: 26px; color: #ffd27a; }
+.m3-float.dmg { top: 6px; right: 4px; font-size: 28px; color: #ffe08a; -webkit-text-stroke: 1px rgba(60, 20, 0, .55); animation-name: m3-dmg; animation-duration: 1s; }
+.m3-float.dmg.crit { font-size: 38px; color: #ff9f43; right: -6px; }
 .m3-float.heal { right: 0; top: -18px; font-size: 14px; color: var(--mint); }
 .m3-float.hurt { right: 30px; top: -18px; font-size: 16px; color: #ff6b6b; }
 .m3-bottom { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-radius: var(--r-md); background: rgba(10, 11, 18, .5); }
@@ -112,10 +113,11 @@
 @keyframes m3-pulse { 50% { transform: scale(1.08); } }
 @keyframes m3-hit { 30% { transform: translateX(-5px) scale(.92) rotate(-6deg); } 60% { transform: translateX(4px) rotate(4deg); } }
 @keyframes m3-hurt { 30% { transform: scaleY(1.5); } }
+@keyframes m3-dmg { 0% { transform: translate(var(--dx, 0), 10px) scale(.4); opacity: 0; } 18% { transform: translate(var(--dx, 0), -8px) scale(1.35); opacity: 1; } 35% { transform: translate(var(--dx, 0), -12px) scale(1); opacity: 1; } 100% { transform: translate(var(--dx, 0), -46px) scale(.95); opacity: 0; } }
 @keyframes m3-float { from { transform: translateY(6px) scale(.8); opacity: 1; } to { transform: translateY(-26px) scale(1.15); opacity: 0; } }
 
 /* Доска */
-.m3-board-wrap { position: relative; flex: none; width: min(100%, calc(100dvh - 300px)); align-self: center; }
+.m3-board-wrap { position: relative; flex: none; width: min(100%, calc(100dvh - 290px)); align-self: center; }
 .m3-warn { position: absolute; inset: -4px; border-radius: 18px; pointer-events: none; box-shadow: inset 0 0 0 2px rgba(255, 70, 70, .7), 0 0 22px rgba(255, 70, 70, .35); animation: m3-blink .6s ease-in-out infinite; }
 @keyframes m3-blink { 50% { opacity: .35; } }
 .m3-board { position: relative; width: 100%; aspect-ratio: var(--w) / var(--h); border-radius: 16px; padding: 0; background: rgba(6, 7, 12, .55); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 14px 30px rgba(0, 0, 0, .35); touch-action: none; contain: layout paint; overflow: hidden; }
@@ -150,15 +152,18 @@
 .m3-rainbow { position: absolute; inset: 10%; border-radius: 50%; background: radial-gradient(circle at 38% 32%, rgba(255, 255, 255, .9), transparent 32%), conic-gradient(#ff6b81, #ffd54f, #9be27a, #64b5f6, #b388ff, #ff6b81); box-shadow: 0 0 14px rgba(255, 255, 255, .55); animation: m3-spin 3s linear infinite; }
 .m3-board.lite .m3-rainbow { animation: none; }
 @keyframes m3-spin { to { transform: rotate(360deg); } }
-.m3-block { z-index: 1; padding: 3%; pointer-events: none; }
+.m3-block { z-index: 1; pointer-events: none; }
+/* Отступ — масштабом: проценты padding считаются от ширины доски, а не клетки. */
+.m3-block > svg { display: block; transform: scale(.94); }
 
 /* Вспышки */
 .m3-fx { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-.m3-pop { position: absolute; width: calc(100% / var(--w)); height: calc(100% / var(--h)); padding: 6%; animation: m3-pop .32s ease-out forwards; }
-.m3-pop > svg, .m3-pop > .m3-rainbow { width: 100%; height: 100%; }
+.m3-pop { position: absolute; width: calc(100% / var(--w)); height: calc(100% / var(--h)); animation: m3-pop .32s ease-out forwards; }
+.m3-pop > svg { width: 88%; height: 88%; margin: 6%; display: block; }
+.m3-pop > .m3-rainbow { width: auto; height: auto; }
 .m3-pop::before { content: ''; position: absolute; inset: -10%; border-radius: 50%; background: radial-gradient(circle, var(--gc) 0%, transparent 65%); opacity: .8; animation: m3-burst .4s ease-out forwards; }
 .m3-shards { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: var(--gc); box-shadow: 14px -12px 0 var(--gc), -15px -9px 0 var(--gc), 12px 14px 0 var(--gc), -11px 13px 0 #fff, 2px -18px 0 #fff; animation: m3-shards .45s ease-out forwards; }
-@keyframes m3-pop { 0% { transform: scale(1); opacity: 1; } 40% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(.2); opacity: 0; } }
+@keyframes m3-pop { 0% { transform: scale(1); opacity: 1; } 22% { transform: scale(1.28, .76); opacity: 1; } 45% { transform: scale(.86, 1.2); opacity: 1; } 100% { transform: scale(.15); opacity: 0; } }
 @keyframes m3-burst { from { transform: scale(.4); } to { transform: scale(1.7); opacity: 0; } }
 @keyframes m3-shards { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
 .m3-beam { position: absolute; animation: m3-beam .4s ease-out forwards; }
@@ -179,8 +184,8 @@
 @keyframes m3-combo { 0% { transform: scale(.4); opacity: 0; } 20% { transform: scale(1.15); opacity: 1; } 70% { transform: scale(1) translateY(-6px); opacity: 1; } 100% { transform: translateY(-24px); opacity: 0; } }
 
 /* Итог */
-.m3-result { min-height: calc(100dvh - 120px); justify-content: center; }
-.m3-result-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 16px; border-radius: 22px; text-align: center; background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--la) 30%, transparent), transparent 60%), var(--surface); border: 1px solid var(--line); animation: rise .3s ease-out; }
+.m3-result { position: relative; min-height: calc(100dvh - 120px); justify-content: center; border-radius: 24px; overflow: hidden; padding: 12px; background: var(--lb); isolation: isolate; }
+.m3-result-card { position: relative; z-index: 1; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 16px; border-radius: 22px; text-align: center; background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--la) 30%, transparent), transparent 60%), var(--surface); border: 1px solid var(--line); animation: rise .3s ease-out; }
 .m3-result-card.lost { background: radial-gradient(ellipse at 50% 0%, rgba(120, 130, 160, .25), transparent 60%), var(--surface); }
 .m3-result-card h2 { margin: 0; font-size: 26px; font-weight: 900; }
 .m3-result-card .primary, .m3-result-card .secondary { align-self: stretch; }
@@ -195,6 +200,169 @@
 .m3-result-notes .m3-res { gap: 6px; font-size: 13px; }
 .m3-result-charge { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
 
+
+
+/* ---------- Оформление земель: живой фон, рамка доски, эффекты (только transform и opacity) ---------- */
+.m3-play > :not(.m3-backdrop):not(.m3-screenflash):not(.m3-boss-intro):not(.m3-howto):not(.sheet) { position: relative; z-index: 1; }
+.m3-backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; border-radius: inherit; }
+.m3-layer { position: absolute; inset: -18%; will-change: transform; }
+.m3-layer.far { animation: m3-drift-far 38s ease-in-out infinite alternate; opacity: .9; }
+.m3-layer.near { animation: m3-drift-near 22s ease-in-out infinite alternate; }
+.m3-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0, 0, 0, .55) 100%); }
+@keyframes m3-drift-far { from { transform: translate3d(-2%, 0, 0); } to { transform: translate3d(2%, -1.5%, 0); } }
+@keyframes m3-drift-near { from { transform: translate3d(3%, 1%, 0) scale(1.02); } to { transform: translate3d(-3%, -2%, 0) scale(1.05); } }
+.m3-particles { position: absolute; inset: 0; }
+.m3-particles i { position: absolute; left: var(--x); top: var(--y); width: calc(5px * var(--s)); height: calc(5px * var(--s)); border-radius: 50%; background: var(--pc, rgba(255, 255, 255, .6)); box-shadow: 0 0 6px var(--pc, rgba(255, 255, 255, .4)); opacity: 0; will-change: transform, opacity; animation: var(--pa, m3-p-drift) var(--d) linear var(--dl) infinite; }
+.m3-particles.fall i { top: -6%; --pa: m3-p-fall; }
+.m3-particles.rise i { top: 104%; --pa: m3-p-rise; }
+.m3-particles.twinkle i { --pa: m3-p-twinkle; }
+@keyframes m3-p-fall { 0% { transform: translate3d(0, 0, 0); opacity: 0; } 10% { opacity: .9; } 50% { transform: translate3d(var(--sw), 55vh, 0); } 90% { opacity: .8; } 100% { transform: translate3d(calc(var(--sw) * -0.5), 112vh, 0); opacity: 0; } }
+@keyframes m3-p-rise { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 15% { opacity: .95; } 60% { transform: translate3d(var(--sw), -60vh, 0) scale(.8); opacity: .7; } 100% { transform: translate3d(calc(var(--sw) * 1.4), -105vh, 0) scale(.3); opacity: 0; } }
+@keyframes m3-p-twinkle { 0%, 100% { transform: scale(.3); opacity: 0; } 45% { transform: scale(1.2); opacity: 1; } 60% { transform: scale(.8); opacity: .6; } }
+@keyframes m3-p-drift { 0% { transform: translate3d(0, 0, 0); opacity: 0; } 20% { opacity: .55; } 80% { opacity: .45; } 100% { transform: translate3d(var(--sw), -40px, 0); opacity: 0; } }
+
+/* Темы: слои света и цвет частиц */
+.m3-th-cellar .far { background: radial-gradient(ellipse 50% 35% at 20% 15%, rgba(255, 170, 90, .28), transparent 70%), radial-gradient(ellipse 40% 30% at 85% 70%, rgba(255, 120, 60, .16), transparent 70%); }
+.m3-th-cellar .near { background: repeating-linear-gradient(90deg, transparent 0 22%, rgba(0, 0, 0, .18) 22% 24%), radial-gradient(ellipse 30% 20% at 60% 30%, rgba(255, 200, 140, .12), transparent 70%); }
+.m3-th-cellar { --pc: rgba(255, 214, 170, .55); }
+.m3-th-forest .far { background: radial-gradient(ellipse 45% 40% at 25% 10%, rgba(160, 255, 150, .22), transparent 70%), radial-gradient(ellipse 35% 30% at 80% 60%, rgba(80, 200, 120, .18), transparent 70%); }
+.m3-th-forest .near { background: radial-gradient(circle at 10% 90%, rgba(20, 60, 25, .9) 0 18%, transparent 19%), radial-gradient(circle at 92% 95%, rgba(20, 60, 25, .85) 0 16%, transparent 17%), radial-gradient(ellipse 25% 18% at 50% 25%, rgba(200, 255, 170, .12), transparent 70%); }
+.m3-th-forest { --pc: rgba(190, 255, 140, .8); }
+.m3-th-mine .far { background: radial-gradient(ellipse 40% 30% at 70% 15%, rgba(255, 200, 80, .28), transparent 70%), radial-gradient(ellipse 30% 25% at 15% 65%, rgba(255, 170, 40, .16), transparent 70%); }
+.m3-th-mine .near { background: repeating-linear-gradient(115deg, transparent 0 14%, rgba(0, 0, 0, .14) 14% 15.5%), radial-gradient(circle at 30% 40%, rgba(255, 220, 120, .1), transparent 30%); }
+.m3-th-mine { --pc: rgba(255, 210, 110, .85); }
+.m3-th-ice .far { background: radial-gradient(ellipse 50% 35% at 50% 0%, rgba(170, 225, 255, .32), transparent 70%), radial-gradient(ellipse 35% 25% at 85% 75%, rgba(120, 190, 255, .16), transparent 70%); }
+.m3-th-ice .near { background: linear-gradient(160deg, transparent 55%, rgba(200, 235, 255, .08) 56% 70%, transparent 71%), linear-gradient(20deg, transparent 60%, rgba(200, 235, 255, .07) 61% 72%, transparent 73%); }
+.m3-th-ice { --pc: rgba(255, 255, 255, .95); }
+.m3-th-water .far { background: radial-gradient(ellipse 50% 35% at 30% 5%, rgba(110, 230, 230, .25), transparent 70%), radial-gradient(ellipse 40% 25% at 75% 85%, rgba(30, 140, 150, .25), transparent 70%); }
+.m3-th-water .near { background: repeating-radial-gradient(ellipse at 50% 120%, transparent 0 6%, rgba(140, 240, 240, .05) 6% 7%); }
+.m3-th-water { --pc: rgba(180, 255, 250, .6); }
+.m3-th-water .m3-particles i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pc); width: calc(7px * var(--s)); height: calc(7px * var(--s)); }
+.m3-th-crystal .far { background: radial-gradient(ellipse 40% 35% at 20% 20%, rgba(190, 140, 255, .3), transparent 70%), radial-gradient(ellipse 40% 30% at 85% 70%, rgba(120, 230, 255, .18), transparent 70%); }
+.m3-th-crystal .near { background: conic-gradient(from 200deg at 15% 100%, transparent 0 20deg, rgba(200, 160, 255, .14) 20deg 32deg, transparent 32deg), conic-gradient(from 130deg at 90% 100%, transparent 0 20deg, rgba(140, 230, 255, .12) 20deg 30deg, transparent 30deg); }
+.m3-th-crystal { --pc: rgba(240, 220, 255, .95); }
+.m3-th-crystal .m3-particles i { border-radius: 1px; transform: rotate(45deg); }
+.m3-th-lava .far { background: radial-gradient(ellipse 60% 35% at 50% 105%, rgba(255, 90, 30, .45), transparent 70%), radial-gradient(ellipse 30% 25% at 15% 20%, rgba(255, 140, 60, .15), transparent 70%); }
+.m3-th-lava .near { background: radial-gradient(ellipse 35% 12% at 25% 100%, rgba(255, 120, 40, .35), transparent 70%), radial-gradient(ellipse 30% 10% at 80% 100%, rgba(255, 170, 60, .3), transparent 70%); }
+.m3-th-lava { --pc: rgba(255, 150, 60, .95); }
+.m3-th-lava .m3-particles i { box-shadow: 0 0 8px 2px rgba(255, 110, 40, .65); }
+.m3-th-crypt .far { background: radial-gradient(ellipse 50% 35% at 50% 10%, rgba(160, 170, 230, .22), transparent 70%); }
+.m3-th-crypt .near { background: linear-gradient(0deg, rgba(180, 190, 240, .12), transparent 30%), radial-gradient(ellipse 40% 12% at 30% 92%, rgba(200, 210, 255, .12), transparent 70%), radial-gradient(ellipse 40% 12% at 75% 85%, rgba(200, 210, 255, .1), transparent 70%); }
+.m3-th-crypt { --pc: rgba(200, 205, 255, .5); }
+.m3-th-crypt .m3-particles i { width: calc(30px * var(--s)); height: calc(10px * var(--s)); filter: blur(4px); box-shadow: none; }
+.m3-th-space .far { background: radial-gradient(ellipse 45% 30% at 80% 15%, rgba(100, 200, 255, .22), transparent 70%), radial-gradient(ellipse 35% 25% at 15% 70%, rgba(180, 120, 255, .16), transparent 70%); }
+.m3-th-space .near { background: radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 1.5px), radial-gradient(circle at 70% 20%, #fff 0 1px, transparent 1.5px), radial-gradient(circle at 45% 70%, #cfe8ff 0 1px, transparent 1.5px), radial-gradient(circle at 85% 60%, #fff 0 .8px, transparent 1.2px), radial-gradient(circle at 10% 85%, #fff 0 .8px, transparent 1.2px); }
+.m3-th-space { --pc: rgba(220, 240, 255, 1); }
+.m3-th-throne .far { background: radial-gradient(ellipse 50% 35% at 50% 0%, rgba(255, 90, 140, .3), transparent 70%), radial-gradient(ellipse 30% 25% at 90% 80%, rgba(255, 170, 200, .14), transparent 70%); }
+.m3-th-throne .near { background: repeating-linear-gradient(90deg, transparent 0 9%, rgba(120, 10, 50, .18) 9% 10%), radial-gradient(ellipse 30% 15% at 20% 15%, rgba(255, 210, 120, .12), transparent 70%); }
+.m3-th-throne { --pc: rgba(255, 170, 200, .85); }
+.m3-th-throne .m3-particles i { border-radius: 60% 0; width: calc(7px * var(--s)); height: calc(5px * var(--s)); }
+.m3-backdrop.lite .m3-layer { animation: none; }
+
+/* Рамка доски: дерево, камень или иней — градиенты, без картинок */
+.m3-frame { position: relative; padding: 7px; border-radius: 22px; box-shadow: 0 16px 34px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 -2px 0 rgba(0, 0, 0, .35); }
+.m3-frame::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(circle at 12px 12px, var(--rivet) 0 3px, transparent 3.5px), radial-gradient(circle at calc(100% - 12px) 12px, var(--rivet) 0 3px, transparent 3.5px), radial-gradient(circle at 12px calc(100% - 12px), var(--rivet) 0 3px, transparent 3.5px), radial-gradient(circle at calc(100% - 12px) calc(100% - 12px), var(--rivet) 0 3px, transparent 3.5px); }
+.m3-frame .m3-board { border-radius: 15px; box-shadow: inset 0 3px 8px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(0, 0, 0, .5); background: rgba(6, 7, 12, .72); }
+.m3-frame .m3-tiles { border-radius: 15px; }
+.m3-frame.wood { --rivet: #d9a441; background: repeating-linear-gradient(92deg, rgba(0, 0, 0, 0) 0 5px, rgba(0, 0, 0, .12) 5px 6px, rgba(255, 255, 255, .04) 6px 9px, rgba(0, 0, 0, .08) 9px 13px), linear-gradient(180deg, #8a5a33, #5c3a1f 60%, #4a2e18); }
+.m3-frame.stone { --rivet: #b9c3cc; background: radial-gradient(circle at 20% 30%, rgba(255, 255, 255, .08) 0 6px, transparent 7px), radial-gradient(circle at 70% 80%, rgba(0, 0, 0, .14) 0 9px, transparent 10px), radial-gradient(circle at 85% 20%, rgba(255, 255, 255, .06) 0 5px, transparent 6px), repeating-linear-gradient(0deg, transparent 0 18px, rgba(0, 0, 0, .18) 18px 19.5px), linear-gradient(180deg, #6b707c, #474b55 60%, #3a3d45); }
+.m3-frame.frost { --rivet: #e3f6ff; background: linear-gradient(135deg, rgba(255, 255, 255, .25), transparent 40%, rgba(255, 255, 255, .1) 70%, transparent), linear-gradient(180deg, #7fa9c4, #4c6f88 60%, #3c5a70); }
+.m3-play.boss .m3-frame { box-shadow: 0 0 0 1px rgba(255, 210, 122, .5), 0 0 26px rgba(255, 80, 80, .25), 0 16px 34px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .18); }
+.m3-board-wrap .m3-warn { inset: -2px; border-radius: 24px; }
+
+/* Особые самоцветы: искра бежит по кругу */
+.m3-spark { position: absolute; inset: 0; pointer-events: none; animation: m3-spin 1.6s linear infinite; }
+.m3-spark::before, .m3-spark::after { content: ''; position: absolute; left: 50%; top: 2%; width: 14%; height: 14%; margin-left: -7%; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 2px var(--gc), 0 0 2px #fff; }
+.m3-spark::after { top: auto; bottom: 2%; width: 9%; height: 9%; margin-left: -4.5%; opacity: .7; }
+.m3-trail { position: absolute; inset: 0; background: radial-gradient(circle, #fff 0 1.5px, transparent 2.5px) 0 50% / 18px 100% repeat-x; opacity: .9; animation: m3-trail .4s linear forwards; }
+.m3-beam.col .m3-trail { background: radial-gradient(circle, #fff 0 1.5px, transparent 2.5px) 50% 0 / 100% 18px repeat-y; animation-name: m3-trail-col; }
+@keyframes m3-trail { from { transform: translateX(-30%); } to { transform: translateX(30%); opacity: 0; } }
+@keyframes m3-trail-col { from { transform: translateY(-30%); } to { transform: translateY(30%); opacity: 0; } }
+
+/* Вспышка экрана на бомбе, вспышка удара по чудовищу */
+.m3-screenflash { position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(circle at 50% 62%, rgba(255, 245, 210, .75), rgba(255, 180, 90, .25) 45%, transparent 75%); animation: m3-screenflash .38s ease-out forwards; }
+@keyframes m3-screenflash { from { opacity: 1; } to { opacity: 0; } }
+.m3-foe-face { position: relative; }
+.m3-foe-flash { position: absolute; inset: 8%; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, rgba(255, 255, 255, .95), rgba(255, 120, 120, .4) 45%, transparent 70%); animation: m3-foe-flash .3s ease-out forwards; }
+@keyframes m3-foe-flash { from { opacity: 1; transform: scale(.8); } to { opacity: 0; transform: scale(1.15); } }
+
+/* Заставка хранителя */
+.m3-boss-intro { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(6, 4, 10, .72); animation: m3-fade-in .25s ease-out, m3-fade-out .35s ease-in 2.25s forwards; }
+.m3-boss-band { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: linear-gradient(90deg, transparent, rgba(120, 10, 30, .92) 12%, rgba(160, 20, 40, .95) 50%, rgba(120, 10, 30, .92) 88%, transparent); box-shadow: 0 0 0 1px rgba(255, 210, 122, .4); overflow: hidden; animation: m3-band-in .5s cubic-bezier(.2, 1.3, .4, 1) both; }
+.m3-boss-band::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255, 230, 180, .35) 50%, transparent 65%); animation: m3-shine 1.4s ease-in-out .5s both; }
+.m3-boss-face { flex: none; animation: m3-boss-face .7s cubic-bezier(.2, 1.4, .4, 1) .15s both; filter: drop-shadow(0 0 16px rgba(255, 80, 80, .6)); }
+.m3-boss-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.m3-boss-text small { font-size: 12px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; color: #ffd27a; }
+.m3-boss-text b { font-size: 26px; font-weight: 900; line-height: 1.05; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, .4); }
+.m3-boss-text span { font-size: 13px; font-weight: 800; color: #ffd9d9; display: inline-flex; align-items: center; gap: 4px; }
+.m3-boss-tap { font-size: 12.5px; font-weight: 800; color: rgba(255, 255, 255, .6); animation: m3-blink 1.2s ease-in-out infinite; }
+@keyframes m3-fade-in { from { opacity: 0; } }
+@keyframes m3-fade-out { to { opacity: 0; } }
+@keyframes m3-band-in { from { transform: translateX(-110%) skewX(-12deg); } }
+@keyframes m3-shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes m3-boss-face { from { transform: scale(2.2) rotate(-12deg); opacity: 0; } }
+
+/* Итог: лучи, штампы звёзд, счётчики добычи */
+.m3-rays { position: absolute; left: 50%; top: 70px; width: 420px; height: 420px; margin: -210px 0 0 -210px; pointer-events: none; z-index: -1; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--la) 22%, transparent) 0 10deg, transparent 10deg 24deg); border-radius: 50%; -webkit-mask: radial-gradient(circle, #000 20%, transparent 68%); mask: radial-gradient(circle, #000 20%, transparent 68%); animation: m3-spin 24s linear infinite; }
+.m3-result-card { backdrop-filter: none; background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--la) 32%, transparent), transparent 60%), rgba(16, 17, 26, .88); box-shadow: 0 20px 50px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .08); }
+.m3-result-foe { animation: m3-born .5s cubic-bezier(.3, 1.6, .5, 1) both; }
+.m3-result-foe.beaten { opacity: .9; animation: m3-beaten .7s ease-out both; }
+@keyframes m3-beaten { 0% { transform: scale(1.2); } 40% { transform: scale(.9) rotate(-8deg); } 100% { transform: rotate(-4deg); } }
+.m3-stamps { display: flex; align-items: flex-end; gap: 6px; height: 64px; }
+.m3-stamp { width: 52px; height: 52px; display: block; }
+.m3-stamp.mid { width: 62px; height: 62px; transform: translateY(-6px); }
+.m3-stamp svg { width: 100%; height: 100%; display: block; }
+.m3-stamp path { fill: rgba(255, 255, 255, .08); stroke: rgba(255, 255, 255, .14); stroke-width: 1; stroke-linejoin: round; }
+.m3-stamp.on { animation: m3-stamp .42s cubic-bezier(.3, 1.5, .5, 1) both; }
+.m3-stamp.mid.on { animation-name: m3-stamp-mid; }
+.m3-stamp { position: relative; }
+.m3-stamp.on::before { content: ''; position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 210, 63, .45), transparent 65%); }
+.m3-stamp svg { position: relative; }
+.m3-stamp.on path { fill: #ffd23f; stroke: #b77d0b; stroke-width: 1.2; }
+@keyframes m3-stamp { 0% { transform: scale(2.6) rotate(-25deg); opacity: 0; } 60% { transform: scale(.88); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes m3-stamp-mid { 0% { transform: translateY(-6px) scale(2.6) rotate(20deg); opacity: 0; } 60% { transform: translateY(-6px) scale(.88); opacity: 1; } 100% { transform: translateY(-6px) scale(1); opacity: 1; } }
+.m3-count { font-variant-numeric: tabular-nums; }
+.m3-loot-item b .m3-count { font-size: inherit; color: inherit; font-weight: inherit; }
+.m3-loot-item { background: rgba(255, 255, 255, .06); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
+
+/* Список: инструменты, «перейти к этажу», земли */
+.m3-tools { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: -4px; }
+.m3-admin { color: #ffe27a; border: 1px dashed rgba(255, 226, 122, .5); display: inline-flex; align-items: center; gap: 3px; }
+.m3-empty .m3-admin { align-self: center; }
+.m3-next { position: relative; overflow: hidden; isolation: isolate; }
+.m3-next > :not(.m3-backdrop) { position: relative; z-index: 1; }
+.m3-jump { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.m3-jump input { flex: 1 1 120px; min-width: 0; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-weight: 800; font-size: 15px; }
+.m3-jump input:focus { outline: none; border-color: var(--accent, #ff9a5c); }
+.m3-more { width: 100%; padding: 9px 12px; border-radius: 12px; border: 1px dashed var(--line); background: transparent; color: var(--hint); font-weight: 800; font-size: 13px; }
+.m3-land { position: relative; overflow: hidden; }
+.m3-land.here { border-color: color-mix(in srgb, var(--la) 45%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--la) 25%, transparent); }
+.m3-land-sub { display: flex; align-items: center; gap: 6px; margin: -4px 0 8px; font-size: 11.5px; color: var(--hint); font-weight: 800; }
+.m3-endless { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--la) 22%, transparent); color: var(--la); }
+.m3-floor-num.long { font-size: 13px; }
+
+/* «Как играть» */
+.m3-howto { position: fixed; inset: 0; z-index: 30; }
+.m3-howto-dim { position: absolute; inset: 0; background: rgba(4, 5, 10, .72); }
+.m3-howto-spot { position: absolute; border-radius: 18px; box-shadow: 0 0 0 9999px rgba(4, 5, 10, .72), 0 0 0 2px rgba(255, 226, 122, .9), 0 0 24px rgba(255, 226, 122, .45); pointer-events: none; transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease; }
+.m3-howto-card { position: absolute; left: 16px; right: 16px; max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 18px; background: var(--surface); border: 1px solid rgba(255, 226, 122, .35); box-shadow: 0 18px 40px rgba(0, 0, 0, .5); animation: rise .25s ease-out; }
+.m3-howto-card.center { top: 50%; transform: translateY(-50%); }
+.m3-howto-card b { font-size: 18px; font-weight: 900; }
+.m3-howto-body { font-size: 14px; line-height: 1.45; color: #d4d9e4; }
+.m3-howto-body .icon { vertical-align: -3px; }
+.m3-howto-step { font-size: 11.5px; font-weight: 900; letter-spacing: .5px; text-transform: uppercase; color: #ffe27a; }
+.m3-howto-actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.m3-howto-actions .primary { margin: 0; padding: 9px 18px; width: auto; }
+.m3-howto-dots { flex: 1; display: flex; justify-content: center; gap: 5px; }
+.m3-howto-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .2); }
+.m3-howto-dots i.on { background: #ffe27a; }
+.m3-howto-arrow { position: absolute; left: 50%; margin-left: -17px; color: #ffe27a; filter: drop-shadow(0 0 6px rgba(255, 226, 122, .6)); }
+.m3-howto-arrow.up { top: -46px; animation: m3-bob-up .9s ease-in-out infinite; }
+.m3-howto-arrow.down { bottom: -46px; transform: rotate(180deg); animation: m3-bob-down .9s ease-in-out infinite; }
+@keyframes m3-bob-up { 50% { transform: translateY(-6px); } }
+@keyframes m3-bob-down { 0%, 100% { transform: rotate(180deg); } 50% { transform: rotate(180deg) translateY(-6px); } }
+
 @media (prefers-reduced-motion: reduce) {
-  .m3-rainbow, .m3-bomb::after, .m3-gem-in.m3-hinted, .m3-empty-bolt { animation: none; }
+  .m3-rainbow, .m3-bomb::after, .m3-gem-in.m3-hinted, .m3-empty-bolt, .m3-layer, .m3-particles i, .m3-spark, .m3-rays, .m3-howto-arrow { animation: none; }
+  .m3-particles { display: none; }
 }

@@ -6,7 +6,7 @@ import { heroLevel, heroXp, Progress } from './game/progress';
 import { EXERCISE_LABELS, REP_EXERCISES, RepExercise } from './repCounter';
 import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
-import { AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
+import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
 
 const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
@@ -53,6 +53,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         </div>
         <TelegramIdRow />
         <AdminStatsRow />
+        <AdminChargeRow />
         {confirm ? (
           <div className="danger-row">
             <span>Стереть героя, предметы и монеты?</span>

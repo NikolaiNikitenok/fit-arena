@@ -1,7 +1,7 @@
 import { CHARGE_MAX, villageOf } from '../resources';
 import type { Progress } from '../progress';
 import { Bolt, MonsterFace } from './art';
-import { dailyBonusReady, DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './dungeon';
+import { dailyBonusReady, dungeonOf, FLOOR_COST, floorDef, landDef } from './dungeon';
 import './dungeon.css';
 
 // Карточка подземелья на главном экране. Лёгкая: доска и анимации грузятся по нажатию.
@@ -11,8 +11,8 @@ export function DungeonEntry({ progress, onOpen }: { progress: Progress; onOpen:
   const d = dungeonOf(progress);
   // Незаконченный этаж важнее следующего: его можно доиграть без заряда.
   const unfinished = d.run?.floor;
-  const f = floorDef(unfinished ?? Math.min(FLOOR_COUNT, d.reached));
-  const L = DUNGEON_LANDS[f.land];
+  const f = floorDef(unfinished ?? d.reached);
+  const L = landDef(f.land);
   const ready = charge >= FLOOR_COST || !!unfinished;
   const m = f.monster ?? { shape: L.boss[1], color: L.boss[2] };
   return (

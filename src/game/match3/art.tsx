@@ -49,19 +49,50 @@ export const GEM_COLORS: Record<GemKind, [string, string, string]> = {
   heart: ['#ff9db0', '#c2185b', '#ff6b81'],
   sword: ['#9ad9ff', '#1e5fbf', '#64b5f6'],
 };
+// Середина огранки: между светлым и тёмным, чуть насыщеннее.
+const GEM_MID: Record<GemKind, string> = { wood: '#4fb544', stone: '#8fa3b0', gold: '#f7bf2a', heart: '#ec407a', sword: '#3b8fe8' };
 
-// Контур самоцвета каждого вида: разные формы, чтобы различались и без цвета.
-const SHAPES: Record<GemKind, string> = {
-  wood: 'M24 3l18 10.5v21L24 45 6 34.5v-21z',
-  stone: 'M10 5h28l5 5v28l-5 5H10l-5-5V10z',
-  gold: 'M24 2l21 22-21 22L3 24z',
-  heart: 'M24 43S5 31 5 17.5C5 10.5 10 6 16 6c3.8 0 6.6 2 8 4.6C25.4 8 28.2 6 32 6c6 0 11 4.5 11 11.5C43 31 24 43 24 43z',
-  sword: 'M24 3l20 13-7 26H11L4 16z',
+// Контур самоцвета каждого вида: разные формы, чтобы различались и без цвета
+// (шестигранник, восьмигранник, ромб, сердце, щит).
+const POLYS: Partial<Record<GemKind, [number, number][]>> = {
+  wood: [[24, 3], [42, 13.5], [42, 34.5], [24, 45], [6, 34.5], [6, 13.5]],
+  stone: [[14, 4], [34, 4], [44, 14], [44, 34], [34, 44], [14, 44], [4, 34], [4, 14]],
+  gold: [[24, 2], [46, 24], [24, 46], [2, 24]],
+  sword: [[24, 3], [44, 16], [37, 43], [11, 43], [4, 16]],
 };
+const HEART = 'M24 43S5 31 5 17.5C5 10.5 10 6 16 6c3.8 0 6.6 2 8 4.6C25.4 8 28.2 6 32 6c6 0 11 4.5 11 11.5C43 31 24 43 24 43z';
+const pts = (v: [number, number][]) => v.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+const polyPath = (v: [number, number][]) => `M${pts(v).replace(/ /g, 'L')}z`;
+const SHAPES: Record<GemKind, string> = {
+  wood: polyPath(POLYS.wood!),
+  stone: polyPath(POLYS.stone!),
+  gold: polyPath(POLYS.gold!),
+  heart: HEART,
+  sword: polyPath(POLYS.sword!),
+};
+
+// Грани: от каждого ребра контура к «площадке» в середине. Свет сверху слева: грани, смотрящие
+// к свету, светлее, от света — темнее. Считается один раз при загрузке.
+const LIGHT = [-0.6, -0.8];
+function facets(v: [number, number][]) {
+  const cx = v.reduce((s, p) => s + p[0], 0) / v.length;
+  const cy = v.reduce((s, p) => s + p[1], 0) / v.length;
+  const inner = v.map(([x, y]): [number, number] => [cx + (x - cx) * 0.5, cy + (y - cy) * 0.5]);
+  const out = v.map((p, i) => {
+    const q = v[(i + 1) % v.length];
+    const mx = (p[0] + q[0]) / 2 - cx;
+    const my = (p[1] + q[1]) / 2 - cy;
+    const len = Math.hypot(mx, my) || 1;
+    const lit = (mx / len) * LIGHT[0] + (my / len) * LIGHT[1];
+    return { d: pts([p, q, inner[(i + 1) % v.length], inner[i]]), lit };
+  });
+  return { inner: pts(inner), out };
+}
+const FACETS = Object.fromEntries((Object.keys(POLYS) as GemKind[]).map((k) => [k, facets(POLYS[k]!)])) as Partial<Record<GemKind, ReturnType<typeof facets>>>;
 
 // Знак ресурса поверх самоцвета.
 function Glyph({ kind }: { kind: GemKind }) {
-  const s = { stroke: 'rgba(20,16,10,.55)', strokeWidth: 2.4, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
+  const s = { stroke: 'rgba(20,16,10,.5)', strokeWidth: 2.4, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
   if (kind === 'wood')
     return (
       <g {...s}>
@@ -69,7 +100,7 @@ function Glyph({ kind }: { kind: GemKind }) {
         <path d="M24 26c-5 0-8-3.5-8-8 5 0 8 3 8 8zM24 23c4 0 6.5-3 6.5-6.5-4 0-6.5 2.5-6.5 6.5z" fill="rgba(20,16,10,.35)" />
       </g>
     );
-  if (kind === 'stone') return <path d="M15 31l3-9 6-4 7 3 3 7-3 4H18z" {...s} fill="rgba(20,16,10,.25)" />;
+  if (kind === 'stone') return <path d="M15 31l3-9 6-4 7 3 3 7-3 4H18z" {...s} fill="rgba(20,16,10,.22)" />;
   if (kind === 'gold')
     return (
       <g {...s}>
@@ -77,7 +108,7 @@ function Glyph({ kind }: { kind: GemKind }) {
         <path d="M24 20v8" />
       </g>
     );
-  if (kind === 'heart') return <path d="M24 30.5s-6-3.8-6-8c0-2 1.4-3.4 3.2-3.4 1.3 0 2.2.7 2.8 1.6.6-.9 1.5-1.6 2.8-1.6 1.8 0 3.2 1.4 3.2 3.4 0 4.2-6 8-6 8z" fill="rgba(255,255,255,.75)" stroke="none" />;
+  if (kind === 'heart') return <path d="M24 30.5s-6-3.8-6-8c0-2 1.4-3.4 3.2-3.4 1.3 0 2.2.7 2.8 1.6.6-.9 1.5-1.6 2.8-1.6 1.8 0 3.2 1.4 3.2 3.4 0 4.2-6 8-6 8z" fill="rgba(255,255,255,.8)" stroke="none" />;
   return (
     <g {...s}>
       <path d="M24 13v15M19.5 28h9M24 28v5" stroke="rgba(10,20,40,.6)" />
@@ -85,25 +116,52 @@ function Glyph({ kind }: { kind: GemKind }) {
   );
 }
 
-/** Определения градиентов и форм: один раз на доску, самоцветы ссылаются на них. */
+/**
+ * Определения градиентов и форм: один раз на доску, самоцветы ссылаются на них (use). Огранка:
+ * объёмный градиент, светлые и тёмные грани, площадка, блик и искра.
+ */
 export function GemDefs() {
   return (
     <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
       <defs>
         {(Object.keys(GEM_COLORS) as GemKind[]).map((k) => (
-          <linearGradient key={k} id={`m3g-${k}`} x1="0" y1="0" x2="0.3" y2="1">
+          <radialGradient key={k} id={`m3g-${k}`} cx="0.36" cy="0.3" r="0.85">
             <stop offset="0" stopColor={GEM_COLORS[k][0]} />
+            <stop offset="0.5" stopColor={GEM_MID[k]} />
             <stop offset="1" stopColor={GEM_COLORS[k][1]} />
-          </linearGradient>
+          </radialGradient>
         ))}
-        {(Object.keys(SHAPES) as GemKind[]).map((k) => (
-          <symbol key={k} id={`m3s-${k}`} viewBox="0 0 48 48">
-            <path d={SHAPES[k]} fill={`url(#m3g-${k})`} stroke="rgba(0,0,0,.35)" strokeWidth="1.5" strokeLinejoin="round" />
-            <path d={SHAPES[k]} fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="1.5" transform="translate(24 24) scale(.82) translate(-24 -24)" />
-            <ellipse cx="17" cy="14" rx="7" ry="3.2" fill="rgba(255,255,255,.45)" transform="rotate(-25 17 14)" />
-            <Glyph kind={k} />
-          </symbol>
-        ))}
+        <linearGradient id="m3-table" x1="0" y1="0" x2="0.4" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity=".45" />
+          <stop offset="1" stopColor="#fff" stopOpacity=".05" />
+        </linearGradient>
+        {(Object.keys(SHAPES) as GemKind[]).map((k) => {
+          const fc = FACETS[k];
+          return (
+            <symbol key={k} id={`m3s-${k}`} viewBox="0 0 48 48">
+              <path d={SHAPES[k]} fill={`url(#m3g-${k})`} stroke="rgba(0,0,0,.45)" strokeWidth="1.6" strokeLinejoin="round" />
+              {fc ? (
+                <>
+                  {fc.out.map((f, i) => (
+                    <polygon key={i} points={f.d} fill={f.lit > 0 ? '#fff' : '#000'} opacity={f.lit > 0 ? 0.08 + f.lit * 0.3 : 0.06 - f.lit * 0.24} />
+                  ))}
+                  <polygon points={fc.inner} fill="url(#m3-table)" stroke="rgba(255,255,255,.35)" strokeWidth=".8" strokeLinejoin="round" />
+                </>
+              ) : (
+                <>
+                  <path d={SHAPES[k]} fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.4" transform="translate(24 24) scale(.8) translate(-24 -24)" />
+                  <path d="M24 10.6L24 40M8 15l16 10 16-10" stroke="rgba(0,0,0,.12)" strokeWidth="1.2" fill="none" />
+                  <path d={SHAPES[k]} fill="url(#m3-table)" transform="translate(24 22) scale(.5) translate(-24 -24)" />
+                </>
+              )}
+              <ellipse cx="16.5" cy="13" rx="6.5" ry="2.8" fill="#fff" opacity=".55" transform="rotate(-30 16.5 13)" />
+              <path d="M33 31.5l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z" fill="#fff" opacity=".7" />
+              <g transform="translate(24 24) scale(.82) translate(-24 -24)">
+                <Glyph kind={k} />
+              </g>
+            </symbol>
+          );
+        })}
       </defs>
     </svg>
   );

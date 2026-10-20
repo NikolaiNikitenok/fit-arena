@@ -21,17 +21,31 @@
  *    стоит ставить так, чтобы улучшение уровня N стоило 2–4 дня добычи на этажах, до которых
  *    игрок доходит к этому времени (примерно этаж 3–4 в день).
  *
+ * Бесконечные этажи (101+): этаж собирается по номеру (зерно = номер, одинаково везде), земли —
+ * из частей (lands.ts), хранитель на каждом десятом. Рост за сотым этажом идёт через глубину
+ * endlessDepth = 1 − e^(−(этаж−100)/200) и упирается в потолок: здоровье чудовищ до +12%
+ * (хранитель: 446 на сотом → 458 на 150-м → 500 предел), удар до +10% (28 → 31), препятствий +1–2,
+ * цель «собери» +3. Добыча: floorMult растёт до ×8,95 (см. ниже), так что ожидаемая добыча этажа
+ * не больше ×1,5 от сотого (хранитель 100 ≈ 327 дерева, 150 ≈ 352, 1000 ≈ 483, предел ≈ 491) —
+ * цены деревни, рассчитанные на этажи до сотого, не обесцениваются. Прогон случайными ходами:
+ * обычные этажи 101–1000 ≈ 30–55% побед (51–100: 59%), хранители ≈ 5–20% (51–100: 15%);
+ * подсказками — 86–91% и 46–63%.
+ *
  * Сердца лечат героя, мечи бьют чудовище; урон меча слегка растёт с силой героя (до +60%).
  */
 import { RESOURCES, addResources, spendCharge, villageOf, type Resource, type Resources } from '../resources';
 import type { Progress } from '../progress';
 import { dayKey } from '../progress';
+import { landDef, seededRng, type MonsterShape } from './lands';
 import { createBoard, GEM_KINDS, type Board, type BlockKind, type Cell, type Counts, type GemKind, type Pos, type Special, type SwapResult, trySwap } from './engine';
 
 export const FLOOR_COST = 20;
 export const LAND_COUNT = 10;
 export const FLOORS_PER_LAND = 10;
+// Придуманных вручную этажей; дальше подземелье бесконечное (floorDef собирает этаж по номеру).
 export const FLOOR_COUNT = LAND_COUNT * FLOORS_PER_LAND;
+// Предел только для проверки сохранений: столько этажей не пройти и за всю жизнь.
+export const MAX_FLOOR = 99999;
 export const FAIL_KEEP = 0.5;
 export const HERO_HP = 100;
 // Сколько лечит одно сердце.
@@ -49,11 +63,20 @@ const AVG_COMBO = 1.21;
 // За сколько ходов в среднем выигрывается этаж (прогон: 10–17 ходов).
 const MOVES_USED = 14;
 
-export const floorMult = (floor: number) => 1 + 0.05 * (floor - 1);
+/**
+ * Множитель добычи: +5% за этаж до сотого (×5,95), дальше рост замедляется и упирается в потолок
+ * ×8,95 (+3): этаж 150 — ×6,41, 200 — ×6,80, 300 — ×7,41, 500 — ×8,16, 1000 — ×8,80. Так поздние этажи
+ * всё ещё выгоднее, но деревенские цены не обесцениваются.
+ */
+export const LOOT_TAIL = 3;
+const LOOT_TAIL_SCALE = 300;
+export const floorMult = (floor: number) =>
+  floor <= FLOOR_COUNT ? 1 + 0.05 * (floor - 1) : 1 + 0.05 * (FLOOR_COUNT - 1) + LOOT_TAIL * (1 - Math.exp(-(floor - FLOOR_COUNT) / LOOT_TAIL_SCALE));
 export const comboMult = (wave: number) => Math.min(2.5, 1 + 0.25 * (wave - 1));
 
 export type GoalKind = 'monster' | 'collect' | 'ice' | 'crates' | 'survive';
-export type MonsterShape = 'slime' | 'bat' | 'golem' | 'skull' | 'spirit';
+export type { MonsterShape, DungeonLand, LandTheme } from './lands';
+export { DUNGEON_LANDS, landDef, landTheme } from './lands';
 
 export interface Monster {
   name: string;
@@ -64,29 +87,6 @@ export interface Monster {
   color: string;
   shape: MonsterShape;
 }
-
-export interface DungeonLand {
-  name: string;
-  // Цвета фона доски и рамки.
-  bg: string;
-  accent: string;
-  monsters: [string, MonsterShape, string][];
-  boss: [string, MonsterShape, string];
-}
-
-// Земли подземелья — под нашими мирами: от погребов Атлетии до подвала Князя Дивана.
-export const DUNGEON_LANDS: DungeonLand[] = [
-  { name: 'Подземелья Атлетии', bg: '#2a1f1a', accent: '#ff9a5c', monsters: [['Сонная слизь', 'slime', '#9ccc65'], ['Мышь-соня', 'bat', '#a1887f'], ['Пыльный дух', 'spirit', '#cfd8dc']], boss: ['Диванный Голем', 'golem', '#ff8a65'] },
-  { name: 'Корни Шепчущего леса', bg: '#162a1c', accent: '#81c784', monsters: [['Мшистая слизь', 'slime', '#66bb6a'], ['Корнегрыз', 'bat', '#8d6e63'], ['Лесной морок', 'spirit', '#a5d6a7']], boss: ['Трухлявый Корень', 'golem', '#6d4c41'] },
-  { name: 'Гномьи шахты', bg: '#2b2416', accent: '#ffd54f', monsters: [['Рудная слизь', 'slime', '#ffca28'], ['Летучая кирка', 'bat', '#90a4ae'], ['Череп рудокопа', 'skull', '#e0d6c2']], boss: ['Каменный Соня', 'golem', '#9e9e9e'] },
-  { name: 'Ледяные пещеры', bg: '#14222e', accent: '#81d4fa', monsters: [['Ледяная слизь', 'slime', '#81d4fa'], ['Снежная мышь', 'bat', '#e3f2fd'], ['Дух стужи', 'spirit', '#b3e5fc']], boss: ['Йети Зевака', 'golem', '#eceff1'] },
-  { name: 'Затопленные катакомбы', bg: '#10262a', accent: '#4dd0e1', monsters: [['Тинная слизь', 'slime', '#4db6ac'], ['Утопший череп', 'skull', '#b2dfdb'], ['Болотный огонёк', 'spirit', '#80cbc4']], boss: ['Жаба Тягучка', 'slime', '#689f38'] },
-  { name: 'Кристальные копи', bg: '#1d1630', accent: '#b388ff', monsters: [['Кристальная слизь', 'slime', '#b388ff'], ['Аметистовая мышь', 'bat', '#ce93d8'], ['Осколочный дух', 'spirit', '#80deea']], boss: ['Кристальный Голем', 'golem', '#b39ddb'] },
-  { name: 'Лавовые глубины', bg: '#2e1410', accent: '#ff7043', monsters: [['Магмовая слизь', 'slime', '#ff7043'], ['Огненная мышь', 'bat', '#ffab40'], ['Пепельный череп', 'skull', '#ffccbc']], boss: ['Диванозавр', 'golem', '#e64a19'] },
-  { name: 'Склеп Лени', bg: '#1c1a24', accent: '#9fa8da', monsters: [['Зевающий череп', 'skull', '#d7ccc8'], ['Дремотный дух', 'spirit', '#9fa8da'], ['Пледовая слизь', 'slime', '#7986cb']], boss: ['Король Зевоты', 'skull', '#c5cae9'] },
-  { name: 'Обломки станции «Заря»', bg: '#0f1a26', accent: '#4fc3f7', monsters: [['Плазменная слизь', 'slime', '#4fc3f7'], ['Дрон-лежебока', 'bat', '#90a4ae'], ['Космический морок', 'spirit', '#80deea']], boss: ['Робот-Пылесос Лентяй', 'golem', '#90a4ae'] },
-  { name: 'Тронный подвал Дивана', bg: '#2a1020', accent: '#ff5c8a', monsters: [['Плюшевая слизь', 'slime', '#f48fb1'], ['Подушечный дух', 'spirit', '#f8bbd0'], ['Череп-подлокотник', 'skull', '#ffcdd2']], boss: ['Тень Князя Дивана', 'spirit', '#ff4081'] },
-];
 
 export interface FloorDef {
   id: number;
@@ -104,41 +104,56 @@ export interface FloorDef {
   seed: number;
 }
 
-// Порядок целей внутри земли: хранитель всегда на десятом.
+// Порядок целей внутри земли: хранитель всегда на десятом. За сотым этажом земля берёт один
+// из узоров по зерну — так бесконечные земли не повторяют друг друга (выживание — не чаще раза).
 const PATTERN: GoalKind[] = ['monster', 'collect', 'crates', 'monster', 'ice', 'collect', 'monster', 'survive', 'collect', 'monster'];
+export const ENDLESS_PATTERNS: GoalKind[][] = [
+  PATTERN,
+  ['collect', 'monster', 'ice', 'crates', 'monster', 'collect', 'survive', 'monster', 'ice', 'monster'],
+  ['monster', 'crates', 'collect', 'ice', 'monster', 'survive', 'crates', 'collect', 'monster', 'monster'],
+  ['ice', 'monster', 'collect', 'crates', 'survive', 'monster', 'ice', 'collect', 'crates', 'monster'],
+  ['crates', 'collect', 'monster', 'ice', 'monster', 'crates', 'collect', 'survive', 'monster', 'monster'],
+];
 const COLLECT_RES: Record<number, Resource> = { 2: 'wood', 6: 'stone', 9: 'gold' };
 
-// Свой генератор для раскладки этажа: один и тот же этаж всегда выглядит одинаково.
-function layoutRng(seed: number) {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), s | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/**
+ * Глубина за сотым этажом: 0 на сотом, плавно к 1 (200 этажей — 0,63; 400 — 0,95). Через неё растут
+ * здоровье и удар чудовищ (до +30% и +25% к сотому этажу), препятствия и добыча — с потолком,
+ * чтобы этаж оставался проходимым, а деревня не утонула в ресурсах.
+ */
+export const endlessDepth = (id: number) => (id <= FLOOR_COUNT ? 0 : 1 - Math.exp(-(id - FLOOR_COUNT) / ENDLESS_SCALE));
+const ENDLESS_SCALE = 200;
+export const ENDLESS_HP = 0.12;
+export const ENDLESS_ATK = 0.1;
 
 function makeFloor(id: number): FloorDef {
   const land = Math.floor((id - 1) / FLOORS_PER_LAND);
   const num = ((id - 1) % FLOORS_PER_LAND) + 1;
   const boss = num === FLOORS_PER_LAND;
-  const goal = PATTERN[num - 1];
-  const L = DUNGEON_LANDS[land];
-  const seed = id * 7919 + 13;
-  const rnd = layoutRng(seed);
-  const hpScale = (1 + 0.006 * (id - 1)) * (id === 1 ? 0.7 : 1);
+  const endless = id > FLOOR_COUNT;
+  // Уровень сложности препятствий: земли 1–10 как раньше, дальше — как на десятой и глубже.
+  const tier = Math.min(land, LAND_COUNT - 1);
+  const t = endlessDepth(id);
+  const pattern = endless ? ENDLESS_PATTERNS[Math.floor(seededRng(land * 31 + 5)() * ENDLESS_PATTERNS.length)] : PATTERN;
+  const goal = boss ? 'monster' : pattern[num - 1];
+  const L = landDef(land);
+  const seed = (id * 7919 + 13) >>> 0;
+  const rnd = seededRng(seed);
+  // Здоровье: +0,6% за этаж до сотого (×1,594), дальше — ещё до +30% с потолком.
+  const hpScale = (1 + 0.006 * (Math.min(id, FLOOR_COUNT) - 1)) * (id === 1 ? 0.7 : 1) * (1 + ENDLESS_HP * t);
+  const atkScale = 1 + ENDLESS_ATK * t;
+  const atkId = Math.min(id, FLOOR_COUNT);
   const [name, shape, color] = boss ? L.boss : L.monsters[(num - 1) % L.monsters.length];
   let monster: Monster | undefined;
   let moves = 22;
   if (goal === 'monster' && boss) {
     moves = 26;
-    monster = { name, shape, color, hp: Math.round(280 * hpScale), atk: Math.round(18 + id * 0.1), every: 3 };
+    monster = { name, shape, color, hp: Math.round(280 * hpScale), atk: Math.round((18 + atkId * 0.1) * atkScale), every: 3 };
   } else if (goal === 'monster') {
-    monster = { name, shape, color, hp: Math.round(220 * hpScale), atk: Math.round(14 + id * 0.08), every: 3 };
+    monster = { name, shape, color, hp: Math.round(220 * hpScale), atk: Math.round((14 + atkId * 0.08) * atkScale), every: 3 };
   } else if (goal === 'survive') {
     moves = 15;
-    monster = { name, shape, color, hp: Math.round(600 * hpScale), atk: Math.round(14 + id * 0.05), every: 2 };
+    monster = { name, shape, color, hp: Math.round(600 * hpScale), atk: Math.round(14 + atkId * 0.05), every: 2 };
   } else if (goal === 'collect') moves = 20;
   else if (goal === 'ice') moves = 28;
 
@@ -146,7 +161,7 @@ function makeFloor(id: number): FloorDef {
   const ice: FloorDef['ice'] = [];
   const taken = new Set<number>();
   const place = (minY: number, maxY: number, minX = 0, maxX = BOARD_W - 1) => {
-    for (let t = 0; t < 50; t++) {
+    for (let k = 0; k < 50; k++) {
       const x = minX + Math.floor(rnd() * (maxX - minX + 1));
       const y = minY + Math.floor(rnd() * (maxY - minY + 1));
       if (!taken.has(y * BOARD_W + x)) {
@@ -157,35 +172,49 @@ function makeFloor(id: number): FloorDef {
     return null;
   };
   if (goal === 'crates') {
-    // Ящики посередине, с третьей земли — и валуны.
-    const n = 6 + Math.min(4, Math.floor(land / 2));
+    // Ящики посередине, с третьей земли — и валуны; за сотым этажом их до 12 и валунов больше.
+    const n = 6 + Math.min(4, Math.floor(tier / 2)) + Math.round(t);
+    const every = t > 0.5 ? 2 : 3;
     for (let i = 0; i < n; i++) {
       const p = place(2, 6);
-      if (p) blocks.push({ ...p, kind: land >= 2 && i % 3 === 0 ? 'boulder' : 'crate' });
+      if (p) blocks.push({ ...p, kind: tier >= 2 && i % every === 0 ? 'boulder' : 'crate' });
     }
   }
   if (goal === 'ice') {
-    // Лёд внизу: там больше каскадов. С пятой земли часть клеток — в два слоя.
-    const n = 6 + Math.min(2, Math.floor(land / 4));
+    // Лёд внизу: там больше каскадов. С пятой земли часть клеток — в два слоя, глубже — чаще.
+    const n = 6 + Math.min(2, Math.floor(tier / 4)) + Math.round(2 * t);
+    const every = t > 0.8 ? 2 : t > 0.4 ? 3 : 4;
     for (let i = 0; i < n; i++) {
       const p = place(4, 7, 1, 6);
-      if (p) ice.push({ ...p, layers: land >= 6 && i % 4 === 0 ? 2 : 1 });
+      if (p) ice.push({ ...p, layers: tier >= 6 && i % every === 0 ? 2 : 1 });
     }
   }
   // Глубже — пара валунов и на боевых этажах.
-  if ((goal === 'monster' || goal === 'survive') && land >= 3) {
-    for (let i = 0; i < Math.min(4, land - 2); i++) {
+  if ((goal === 'monster' || goal === 'survive') && tier >= 3) {
+    for (let i = 0; i < Math.min(4, tier - 2) + (boss ? 0 : Math.round(t)); i++) {
       const p = place(3, 5);
       if (p) blocks.push({ ...p, kind: 'boulder' });
     }
   }
-  const res = COLLECT_RES[num];
-  const collect = goal === 'collect' && res ? { res, n: Math.round((res === 'gold' ? 18 : 20) + land * 1.2) } : undefined;
+  const res = endless ? RESOURCES[Math.floor(seededRng(seed ^ 0x5bd1e995)() * RESOURCES.length)] : COLLECT_RES[num];
+  const collect = goal === 'collect' && res ? { res, n: Math.round((res === 'gold' ? 18 : 20) + tier * 1.2 + 3 * t) } : undefined;
   return { id, land, num, boss, goal, moves, monster, collect, blocks, ice, seed };
 }
 
 export const FLOORS: FloorDef[] = Array.from({ length: FLOOR_COUNT }, (_, i) => makeFloor(i + 1));
-export const floorDef = (id: number): FloorDef => FLOORS[Math.max(1, Math.min(FLOOR_COUNT, id)) - 1];
+// Этажи за сотым собираются по запросу: список показывает не больше трёх земель сразу.
+const endlessCache = new Map<number, FloorDef>();
+export const floorDef = (id: number): FloorDef => {
+  const n = Math.max(1, Math.min(MAX_FLOOR, Math.floor(id) || 1));
+  if (n <= FLOOR_COUNT) return FLOORS[n - 1];
+  let f = endlessCache.get(n);
+  if (!f) {
+    if (endlessCache.size > 200) endlessCache.clear();
+    f = makeFloor(n);
+    endlessCache.set(n, f);
+  }
+  return f;
+};
 
 export const GOAL_TEXT: Record<GoalKind, string> = {
   monster: 'Победи чудовище',
@@ -359,7 +388,7 @@ export interface DungeonState {
 type WithDungeon = Progress;
 
 export const dungeonOf = (p: { dungeon?: DungeonState }): DungeonState => ({ reached: 1, stars: {}, bestCombo: 0, wins: 0, plays: 0, bosses: [], ...p.dungeon });
-export const floorOpen = (p: { dungeon?: DungeonState }, id: number) => id >= 1 && id <= Math.min(FLOOR_COUNT, dungeonOf(p).reached);
+export const floorOpen = (p: { dungeon?: DungeonState }, id: number) => id >= 1 && id <= Math.min(MAX_FLOOR, dungeonOf(p).reached);
 export const dailyBonusReady = (p: { dungeon?: DungeonState }, now: number) => dungeonOf(p).bonusDate !== dayKey(now);
 /** Сколько повторов не хватает до этажа. */
 export const repsToFloor = (p: Progress) => Math.max(0, FLOOR_COST - villageOf(p).charge);
@@ -400,7 +429,7 @@ export function finishFloor(p: WithDungeon, run: Run, now: number): { progress: 
   const next: DungeonState = {
     ...d,
     stars: won ? { ...d.stars, [id]: Math.max(d.stars[id] ?? 0, stars) } : d.stars,
-    reached: won ? Math.max(d.reached, Math.min(FLOOR_COUNT, id + 1)) : d.reached,
+    reached: won ? Math.max(d.reached, Math.min(MAX_FLOOR, id + 1)) : d.reached,
     bestCombo: Math.max(d.bestCombo, run.maxCombo),
     wins: d.wins + Number(won),
     bonusDate: daily ? dayKey(now) : d.bonusDate,
@@ -508,7 +537,7 @@ export function serializeRun(run: Run, seed: number, startedAt: number): SavedRu
 
 /** Партия из сохранения. null — сохранение битое. */
 export function restoreRun(s: SavedRun): Run | null {
-  if (!s || s.v !== 1 || !(s.floor >= 1 && s.floor <= FLOOR_COUNT) || !s.board) return null;
+  if (!s || s.v !== 1 || !(s.floor >= 1 && s.floor <= MAX_FLOOR) || !s.board) return null;
   const board = decodeBoard(s.board);
   if (!board) return null;
   return {

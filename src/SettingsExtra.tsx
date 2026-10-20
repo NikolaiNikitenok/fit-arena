@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { adminStatsUrl, cloudState, deleteMyData, onCloud } from './cloud';
 import { openPrivacy } from './privacy';
+import { addCharge, CHARGE_MAX } from './game/resources';
+import { loadProgress, saveProgress } from './game/progress';
 
 /** Ссылка на политику конфиденциальности. */
 export function PrivacyLink() {
@@ -45,6 +47,28 @@ export function AdminStatsRow() {
           document.body,
         )}
     </>
+  );
+}
+
+/**
+ * «Админ: заряд подземелья до максимума» — чтобы проверять «три в ряд», не тренируясь между этажами.
+ * Только в этом телефоне (облако подхватит при следующем сохранении); приложение перезапускается,
+ * чтобы экран не затёр заряд старым прогрессом.
+ */
+export function AdminChargeRow() {
+  const [admin, setAdmin] = useState(() => !!cloudState()?.admin);
+  useEffect(() => onCloud((c) => setAdmin(c.admin)), []);
+  if (!admin) return null;
+  return (
+    <button
+      className="secondary"
+      onClick={() => {
+        saveProgress(addCharge(loadProgress(), CHARGE_MAX));
+        location.reload();
+      }}
+    >
+      Админ: заряд подземелья до {CHARGE_MAX} ⚡
+    </button>
   );
 }
 
