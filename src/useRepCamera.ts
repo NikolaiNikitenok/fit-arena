@@ -7,6 +7,7 @@ import { getSettings } from './settings';
 import { Calibrator, CalibrationView, personalThresholds, saveCalibration, skipCalibration } from './calibration';
 import { repSound } from './audio';
 import { hapticRep } from './telegram';
+import { reportCameraFailure, trackOnce } from './telemetry';
 
 // Модель общая на всё приложение: грузится один раз.
 let landmarker: Promise<PoseLandmarker> | null = null;
@@ -48,13 +49,23 @@ export function useRepCamera() {
     enableOrientation();
     landmarker ??= createPoseLandmarker().catch((e) => {
       landmarker = null;
+      reportCameraFailure(e, 'model');
       throw e;
     });
     const model = await landmarker;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false,
-    });
+    // Без mediaDevices (старый WebView) ошибка тоже попадает в отчёт.
+    const stream = await Promise.resolve()
+      .then(() =>
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        }),
+      )
+      .catch((e) => {
+        reportCameraFailure(e, 'camera');
+        throw e;
+      });
+    trackOnce('camera_granted');
     streamRef.current = stream;
     const video = videoRef.current!;
     video.srcObject = stream;

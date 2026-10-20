@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CameraGuide } from '../CameraGuide';
 import { Banner, MapIcon, Shield, Swords } from '../icons';
 import { Portrait } from './Dialog';
 import { NPCS } from './npcs';
+import { track } from '../telemetry';
+import { openPrivacy } from '../privacy';
 
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
 
@@ -17,7 +19,14 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
     {
       title: 'Камера считает сама',
       text: 'Поставь телефон сбоку на уровне пояса, чтобы в кадр попадало всё тело. Видео никуда не уходит: распознавание работает прямо на телефоне.',
-      extra: <CameraGuide exercise="squat" compact />,
+      extra: (
+        <>
+          <CameraGuide exercise="squat" compact />
+          <button className="link inline onb-privacy" onClick={openPrivacy}>
+            Политика конфиденциальности
+          </button>
+        </>
+      ),
     },
     {
       title: 'Четыре раздела',
@@ -43,6 +52,14 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
       text: 'Минута приседаний, сколько сможешь. Так я пойму твою форму и подберу врагов по силе: дальше они будут расти вместе с тобой.',
     },
   ];
+  // Статистика: до какого шага доходят новички (повтор из настроек не считаем).
+  useEffect(() => {
+    if (!replay) track('onb_step', step);
+  }, [step, replay]);
+  const done = (start: boolean) => {
+    if (!replay) track('onb_done', start ? 1 : 0);
+    onDone(start);
+  };
   const s = steps[step];
   const last = step === steps.length - 1;
   return (
@@ -59,10 +76,10 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
         </div>
         {s.text && <div className="onb-text">{s.text}</div>}
         {s.extra}
-        <button className="primary" onClick={() => (last ? onDone(true) : setStep(step + 1))}>
+        <button className="primary" onClick={() => (last ? done(true) : setStep(step + 1))}>
           {last ? (replay ? 'Понятно' : 'Начать испытание') : 'Дальше'}
         </button>
-        <button className="link" onClick={() => onDone(false)}>
+        <button className="link" onClick={() => done(false)}>
           {last ? (replay ? 'Закрыть' : 'Сначала осмотрюсь') : 'Пропустить'}
         </button>
       </div>

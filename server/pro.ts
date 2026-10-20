@@ -36,6 +36,12 @@ export class ProList {
     return this.fileIds.has(id);
   }
 
+  /** Все id из переменной и файла (для рассылки админам). */
+  ids(): string[] {
+    this.refresh();
+    return [...new Set([...this.envIds, ...this.fileIds])];
+  }
+
   private refresh(): void {
     const t = this.now();
     // Не дёргаем диск на каждое сообщение чата: изменения файла видны через пару секунд.

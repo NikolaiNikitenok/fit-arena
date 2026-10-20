@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Конфиденциальность NikitenokArena</title>
+    <meta name="description" content="Как NikitenokArena обращается с камерой и данными игроков." />
+    <style>
+      :root {
+        --bg: #0d0f17;
+        --surface: #161925;
+        --surface-2: #1e2231;
+        --line: rgba(255, 255, 255, 0.07);
+        --text: #f5f2ec;
+        --hint: #98a0b3;
+        --accent: #ff8a5c;
+        --mint: #6ee7b7;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: radial-gradient(circle at 50% 0%, #2a2140, var(--bg) 420px) var(--bg); color: var(--text); font: 15.5px/1.55 Nunito, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      main { max-width: 680px; margin: 0 auto; padding: 28px 16px 48px; }
+      h1 { font-size: 26px; line-height: 1.2; margin: 0 0 6px; font-weight: 900; }
+      h2 { font-size: 17px; margin: 0 0 8px; font-weight: 900; }
+      p { margin: 0 0 8px; }
+      ul { margin: 0; padding-left: 20px; }
+      li { margin: 4px 0; }
+      .muted { color: var(--hint); font-size: 13.5px; }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin-top: 12px; }
+      .hero { border-color: rgba(110, 231, 183, 0.35); background: linear-gradient(160deg, rgba(110, 231, 183, 0.1), var(--surface) 60%); }
+      .hero h2 { color: var(--mint); font-size: 19px; }
+      b { color: #fff; }
+      a { color: var(--accent); font-weight: 800; }
+      .back { display: inline-block; margin-top: 20px; padding: 12px 18px; border-radius: 14px; background: linear-gradient(135deg, #ffb46b, #ff7a59); color: #2b1206; text-decoration: none; font-weight: 900; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Конфиденциальность</h1>
+      <div class="muted">NikitenokArena · обновлено 20 октября 2026</div>
+
+      <div class="card hero">
+        <h2>Видео с камеры не покидает телефон</h2>
+        <p>Повторы считает модель MediaPipe прямо на твоём телефоне. Кадры с камеры нигде не сохраняются, не записываются и <b>никогда не отправляются</b> на сервер или кому-то ещё. Наружу уходит только итог: сколько повторов ты сделал.</p>
+      </div>
+
+      <div class="card">
+        <h2>Что хранится на сервере</h2>
+        <ul>
+          <li><b>Id и имя в Telegram</b>, чтобы узнавать тебя на любом телефоне и показывать имя в дуэлях, клане и у друзей.</li>
+          <li><b>Прогресс игры</b>: уровни, герой, монеты, предметы, кубки и результаты дуэлей, время напоминания от бота.</li>
+          <li><b>Клан и друзья</b>: в каком ты клане, сообщения в чате клана, список друзей и вызовов.</li>
+          <li><b>Анонимная статистика</b>: какие экраны открывают и где бросают, ошибки приложения (версия, модель телефона и браузер, размер экрана). Вместо id тут хеш, по которому тебя не узнать, а имени нет совсем.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Зачем</h2>
+        <p>Чтобы прогресс не терялся, работали дуэли, кланы, друзья и напоминания, а ещё чтобы находить и чинить ошибки и понимать, что в игре неудобно. Данные не продаются и не передаются рекламным сетям. Итоги тренировок (без видео) ещё уходят на семейный сайт nikitenok.ru: он сохраняет их, только если ты сам привязал там свой Telegram.</p>
+      </div>
+
+      <div class="card">
+        <h2>Как удалить свои данные</h2>
+        <p>В игре открой <b>Настройки → «Удалить мои данные»</b> и подтверди. Сервер сотрёт прогресс, кубки, участие в клане (сообщения в чате останутся без имени), друзей и твои следы в статистике, а телефон очистит сохранения. Если продолжишь играть, начнёшь с нуля.</p>
+      </div>
+
+      <div class="card">
+        <h2>Кто отвечает и как связаться</h2>
+        <p>Игру делает и данные хранит разработчик NikitenokArena. Вопрос, просьба или ошибка — напиши боту <a href="https://t.me/ArenaNikitenokBot">@ArenaNikitenokBot</a> обычным сообщением, его прочитает разработчик.</p>
+      </div>
+
+      <a class="back" href="/">Вернуться в игру</a>
+    </main>
+  </body>
+</html>

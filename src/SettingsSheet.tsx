@@ -5,6 +5,7 @@ import { heroLevel, heroXp, Progress } from './game/progress';
 import { EXERCISE_LABELS, Exercise } from './repCounter';
 import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
+import { AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 
 const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -41,12 +42,14 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
           Посмотреть знакомство заново
         </button>
         <div className="settings-note">
-          <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.
+          <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.{' '}
+          <PrivacyLink />
         </div>
         <div className="settings-note">
           <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
         </div>
         <TelegramIdRow />
+        <AdminStatsRow />
         {confirm ? (
           <div className="danger-row">
             <span>Стереть героя, предметы и монеты?</span>
@@ -68,6 +71,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
             Начать игру заново
           </button>
         )}
+        <DeleteDataRow />
         <button className="secondary" onClick={onClose}>
           Готово
         </button>

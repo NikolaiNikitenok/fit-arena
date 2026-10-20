@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
@@ -190,13 +191,20 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         progress={progress}
         onExit={() => setPlaying(null)}
         onWin={(stars, record) => {
+          track('mission_win', playing.daily ? 'daily' : playing.id);
           if (playing.daily) return { coins: 0, firstTime: false };
           const r = recordWin(latest.current, playing, stars, record);
           setProgress(r.progress);
           return r.reward;
         }}
-        onLose={() => !playing.daily && update((p) => recordLoss(spendLife(p, Date.now()), playing))}
-        onStart={() => update(spendMight)}
+        onLose={() => {
+          track('mission_lose', playing.daily ? 'daily' : playing.id);
+          if (!playing.daily) update((p) => recordLoss(spendLife(p, Date.now()), playing));
+        }}
+        onStart={() => {
+          track('mission_start', playing.daily ? 'daily' : playing.id);
+          update(spendMight);
+        }}
         onActivity={(ex, reps) => update((p) => addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now()))}
         lives={lives}
         swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
@@ -213,7 +221,10 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     return (
       <EventScreen
         progress={progress}
-        onStart={() => update(spendMight)}
+        onStart={() => {
+          track('event_start');
+          update(spendMight);
+        }}
         onFinish={(dealt, reps, ex) => {
           const now = Date.now();
           update((p) => addClanPending(recordActivity(p, ex, reps, now), reps, now));

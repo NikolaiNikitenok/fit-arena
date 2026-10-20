@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, goalText, isTimed, type RepExercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
 import { CalibrationOverlay } from '../CalibrationOverlay';
@@ -155,6 +156,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     st.idx = 0;
     try {
       await camera.start(sets[0].exercise, onRep, undefined, { calibrate: needsCalibration(sets[0].exercise) });
+      track('program_start');
     } catch (e) {
       // В DEV можно тренироваться и без камеры: повторы приходят из __workoutRep.
       if (!import.meta.env.DEV) {

@@ -10,6 +10,8 @@
 //   FAMILY_WEBHOOK_URL, FAMILY_WEBHOOK_SECRET — отчёты о тренировках на семейный сайт (server/family.ts)
 //   PRO_IDS — id в Telegram с Pro Pass через запятую; ещё можно файлом .pro-ids рядом с сервером (PRO_FILE)
 //   GUARD_FILE — защита от читов: забранные награды и подозрения (по умолчанию guard.json рядом с DATA_FILE, server/guard.ts)
+//   ADMIN_IDS — id админов (статистика, сводка и тревоги в боте); ещё файлом .admin-ids (ADMIN_FILE)
+//   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -38,6 +40,11 @@ import { Guard } from './guard';
 import { clanPerks } from '../shared/clanLevel';
 import { heroPower } from '../src/game/power';
 import type { Progress } from '../src/game/progress';
+import { handleTelemetry, Telemetry } from './telemetry';
+import { AdminList, adminToken, checkAdminToken } from './admin';
+import { statsHtml } from './statsPage';
+import { deletePlayer } from './deleteMe';
+import { alertText, FEEDBACK_THANKS, feedbackText } from './adminBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -62,6 +69,8 @@ const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.D
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 const isPro = (id: string) => pro.has(id);
+const telemetry = new Telemetry(process.env.TELEMETRY_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'telemetry.json'));
+const admins = new AdminList(process.env.ADMIN_FILE ?? join(__dirname, '.admin-ids'), process.env.ADMIN_IDS);
 clans.isPro = isPro;
 // Защита от читов (server/guard.ts): забранные награды, атаки по игроку, темп, подозрения.
 const guard = new Guard(process.env.GUARD_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'guard.json'));
@@ -258,7 +267,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   if (path === '/api/progress/load') {
     if (who.guest) saves.adopt(who.id, who.guest);
     const s = saves.get(who.id);
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id), raidNotify: !s?.raidOff });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id), raidNotify: !s?.raidOff, admin: admins.has(who.id) });
   }
   if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
   if (path === '/api/remind') {
@@ -321,6 +330,73 @@ async function onFriendsApi(path: string, req: IncomingMessage, res: ServerRespo
   reply(r.status, r.body);
 }
 
+/** Страница статистики: GET по подписанной ссылке (?t=…) или POST с initData. Ссылка — POST /api/admin/link. */
+async function onAdminApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const now = Date.now();
+  const sign = (t: string) => telemetry.sign(t);
+  const deny = () => res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Доступ только для админов NikitenokArena');
+  let adminId: string | null = null;
+  let inApp = false;
+  if (req.method === 'GET') {
+    const url = new URL(req.url ?? '/', 'http://x');
+    adminId = checkAdminToken(sign, url.searchParams.get('t'), now, (id) => admins.has(id));
+    inApp = url.searchParams.get('app') === '1';
+  } else if (req.method === 'POST') {
+    const body = await readJson(req).catch(() => null);
+    const tgUser = BOT_TOKEN && typeof body?.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
+    adminId = tgUser && admins.has(`tg:${tgUser.id}`) ? String(tgUser.id) : null;
+    if (adminId && path === '/api/admin/link') {
+      return res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ url: `/api/admin/stats?t=${adminToken(sign, adminId, now)}&app=1` }));
+    }
+    inApp = true;
+  }
+  if (!adminId || path !== '/api/admin/stats') return deny();
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+    'X-Robots-Tag': 'noindex',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'",
+  });
+  res.end(statsHtml(telemetry.stats(30), { inApp }));
+}
+
+/** POST /api/delete-me: игрок стирает свои данные (кнопка в настройках). */
+async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
+  const now = Date.now();
+  for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry }, id, now);
+    if (clan) {
+      sendClan(clan);
+      toClan(clan, { type: 'chat', messages: chatOf(clan) });
+    }
+    for (const s of clanSockets.get(id) ?? []) s({ type: 'clan', clan: null });
+  }
+  reply(200, { ok: true });
+}
+
+/** Сообщение админам от бота. Токен бота в логи не пишем. */
+const toAdmins = (text: string, link = false) => {
+  if (!BOT_TOKEN) return;
+  for (const id of admins.ids()) {
+    const reply_markup = link ? { inline_keyboard: [[{ text: 'Открыть статистику', url: `${APP_URL.replace(/\/$/, '')}/api/admin/stats?t=${adminToken((t) => telemetry.sign(t), id, Date.now())}` }]] } : undefined;
+    botApi(BOT_TOKEN)('sendMessage', { chat_id: Number(id), text, reply_markup }, 15_000).catch(() => null);
+  }
+};
+/** Игрок написал боту не команду: пересылаем разработчику. */
+const onPlayerText = (msg: NonNullable<Update['message']>): Record<string, unknown> | null => {
+  if (!msg.text || msg.text.startsWith('/') || !admins.ids().length || admins.has(`tg:${msg.chat.id}`)) return null;
+  const text = feedbackText(msg, Date.now());
+  if (!text) return null;
+  toAdmins(text);
+  return { method: 'sendMessage', chat_id: msg.chat.id, text: FEEDBACK_THANKS };
+};
+
 const http = createServer((req, res) => {
   if (req.url === '/api/activity' && req.method === 'POST') {
     handleActivity(req, res);
@@ -335,7 +411,8 @@ const http = createServer((req, res) => {
         botStatus.webhookAt = Date.now();
         const chat = (update as unknown as Update).message?.chat;
         if (chat?.type === 'private') saves.setBlocked(`tg:${chat.id}`, false);
-        const answer = webhookReply(update as unknown as Update, APP_URL, clanInfo);
+        const msg = (update as unknown as Update).message;
+        const answer = webhookReply(update as unknown as Update, APP_URL, clanInfo) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null);
         if (answer) botStatus.handled++;
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
       })
@@ -344,6 +421,15 @@ const http = createServer((req, res) => {
   }
   if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/telemetry') return handleTelemetry(telemetry, req, res);
+  if (path === '/api/admin/stats' || path === '/api/admin/link') {
+    onAdminApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/delete-me') {
+    onDeleteMe(req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/friends' || path.startsWith('/api/friends/')) {
@@ -727,7 +813,22 @@ if (BOT_TOKEN)
     for (const n of friends.takeNotices()) if (!saves.get(n.to)?.blocked) sendFriendBot(n.to, n.text, n.button, n.query);
   }, 60_000);
 if (BOT_TOKEN)
-  runBot(BOT_TOKEN, APP_URL, clanInfo, (chatId) => saves.setBlocked(`tg:${chatId}`, false));
+  runBot(
+    BOT_TOKEN,
+    APP_URL,
+    clanInfo,
+    (chatId) => saves.setBlocked(`tg:${chatId}`, false),
+    (msg) => {
+      const thanks = onPlayerText(msg);
+      if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
+    },
+  );
+// Админам: тревога о новой частой ошибке (раз в минуту) и сводка в 9:00 по Москве.
+if (BOT_TOKEN)
+  setInterval(() => {
+    for (const a of telemetry.takeAlerts()) toAdmins(alertText(a), true);
+    if (admins.ids().length && telemetry.summaryDue()) toAdmins(telemetry.summaryText(), true);
+  }, 60_000);
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
@@ -737,5 +838,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     saves.flush();
     friends.flush();
     guard.flush();
+    telemetry.flush();
     process.exit(0);
   });

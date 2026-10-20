@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { track } from '../telemetry';
 import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
 import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
@@ -180,7 +181,10 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
       </>
     );
 
-  const startAttack = () => send({ type: 'raidStart', exercise });
+  const startAttack = () => {
+    track('raid_start');
+    send({ type: 'raidStart', exercise });
+  };
   const lv = cl!;
   const perks = clanPerks(lv.level);
   // С какого уровня дарить, помнит сервер; телефонная отметка — чтобы не показать уже забранное.

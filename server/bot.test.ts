@@ -42,3 +42,12 @@ describe('прокси до Telegram', () => {
     expect(err.message).toMatch(/403/);
   });
 });
+
+describe('бот /help', () => {
+  it('рассказывает о приватности и как удалить данные', () => {
+    const r = startReply('/help', 'https://arena.example/', clans)!;
+    expect(r.text).toContain('https://arena.example/privacy.html');
+    expect(r.text).toMatch(/Удалить мои данные/);
+    expect(r.photo).toBeUndefined();
+  });
+});

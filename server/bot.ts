@@ -27,16 +27,25 @@ export const WELCOME_TEXT = `Привет! Это NikitenokArena, игра, в �
 
 Нажми «Играть», и Мастер Гром проведёт тебя через первое испытание. Поставь телефон сбоку, чтобы камера видела тебя целиком.`;
 
+/** Ответ на /help: как играть, приватность и связь с разработчиком. */
+export const helpText = (base: string) => `NikitenokArena: камера телефона считает отжимания, приседания, пресс и планку, а каждый повтор бьёт врага.
+
+📷 Видео с камеры обрабатывается только на телефоне и никуда не отправляется.
+🔒 Политика конфиденциальности: ${base}/privacy.html
+🗑 Удалить свои данные: в игре «Настройки» → «Удалить мои данные».
+✉️ Вопрос или ошибка — просто напиши сюда сообщением, его прочитает разработчик NikitenokArena.`;
+
 // «Что умеет этот бот?» до нажатия «Старт» и короткое описание в профиле бота.
 export const BOT_DESCRIPTION = 'NikitenokArena: отжимания, приседания и пресс под камеру телефона. Каждый повтор бьёт врага: приключение на 300 уровней, дуэли, кланы и рейд-боссы. Нажми «Старт», чтобы начать.';
 export const BOT_SHORT_DESCRIPTION = 'Тренировка-приключение: камера считает повторы, а каждый повтор бьёт врага.';
 
 /** Ответ на «/start [параметр]»: clan-КОД — клан, friend-ТОКЕН — друг, иначе код дуэли или просто вход. */
 export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined): StartReply | null {
-  const m = /^\/(?:start|help)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
+  const m = /^\/(start|help)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
   if (!m) return null;
-  const param = (m[1] ?? '').replace(/[^\w-]/g, '').slice(0, 40);
+  const param = (m[2] ?? '').replace(/[^\w-]/g, '').slice(0, 40);
   const base = appUrl.replace(/\/$/, '');
+  if (m[1] === 'help') return { text: helpText(base), button: 'Играть', url: `${base}/` };
   if (param.startsWith('clan-')) {
     const code = param.slice(5).toUpperCase();
     const clan = clanByCode(code);
@@ -63,7 +72,7 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
 
 export interface Update {
   update_id: number;
-  message?: { chat: { id: number; type: string }; text?: string };
+  message?: { message_id?: number; chat: { id: number; type: string }; from?: { first_name?: string; username?: string }; text?: string };
 }
 
 type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number } };
@@ -221,13 +230,17 @@ async function sendWelcomePhoto(token: string, chat_id: number, url: string, cap
 }
 
 /** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
-export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void): void {
+export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void): void {
   const api = botApi(token);
   let offset = 0;
   const loop = async () => {
     await api('setMyDescription', { description: BOT_DESCRIPTION }).catch(() => null);
     await api('setMyShortDescription', { short_description: BOT_SHORT_DESCRIPTION }).catch(() => null);
-    await api('setMyCommands', { commands: [{ command: 'start', description: 'Начать игру' }] }).catch(() => null);
+    const commands = [
+      { command: 'start', description: 'Начать игру' },
+      { command: 'help', description: 'Помощь и приватность' },
+    ];
+    await api('setMyCommands', { commands }).catch(() => null);
     await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Играть', web_app: { url: `${appUrl.replace(/\/$/, '')}/` } } }).catch(() => null);
     for (;;) {
       try {
@@ -248,7 +261,11 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           // Игрок написал боту: значит, снова можно ему писать.
           onChat?.(msg.chat.id);
           const reply = startReply(msg.text, appUrl, clanByCode);
-          if (!reply) continue;
+          // Не команда: это сообщение разработчику.
+          if (!reply) {
+            onText?.(msg);
+            continue;
+          }
           const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
           const sent = reply.photo ? await sendWelcomePhoto(token, msg.chat.id, reply.photo, reply.text, reply_markup) : null;
           // Картинка не ушла — шлём просто текст.

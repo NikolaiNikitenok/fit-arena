@@ -93,6 +93,11 @@ export class Store {
     return i < 0 ? null : i + 1;
   }
 
+  /** Игрок попросил удалить свои данные: профиль и кубки пропадают. */
+  forget(id: string): void {
+    if (this.profiles.delete(id)) this.scheduleSave();
+  }
+
   /** Сохраняет сразу, если есть несохранённые изменения (перед остановкой сервера). */
   flush(): void {
     if (!this.file || !this.saveTimer) return;

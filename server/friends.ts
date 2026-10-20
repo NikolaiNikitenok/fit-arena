@@ -221,6 +221,24 @@ export class FriendStore {
     this.save();
   }
 
+  /** Игрок попросил удалить свои данные: профиль, связи у друзей, вызовы и сообщения бота. */
+  forget(id: string): void {
+    const me = this.players.get(id);
+    if (me) {
+      this.codes.delete(me.code);
+      this.invites.delete(me.invite);
+      this.players.delete(id);
+    }
+    for (const p of this.players.values()) {
+      p.friends = p.friends.filter((f) => f !== id);
+      p.requests = p.requests.filter((r) => r.from !== id);
+    }
+    for (const [k, c] of this.challenges) if (c.from === id || c.to === id) this.challenges.delete(k);
+    this.notices = this.notices.filter((n) => n.to !== id);
+    this.seen.delete(id);
+    this.save();
+  }
+
   /** Мои заявки, на которые ещё не ответили. */
   outgoing(meId: string): { to: FriendPlayer; at: number }[] {
     const out: { to: FriendPlayer; at: number }[] = [];

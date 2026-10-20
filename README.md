@@ -29,6 +29,11 @@ npm run build   # сборка в dist/
    `BOT_TOKEN` необязателен: с ним скрипт сразу добавит кнопку «Арена» в меню бота. Токен никуда не сохраняется.
 2. Добавить в GitHub → Settings → Secrets and variables → Actions секреты `DEPLOY_HOST` (IP сервера), `DEPLOY_USER` (`deploy`) и `DEPLOY_KEY` (приватный ключ из вывода скрипта).
 3. Дальше каждый push в `main` проходит тесты, собирается и выкладывается на сервер (`.github/workflows/deploy.yml`).
+4. Админ (статистика в настройках, сводка от бота в 9:00 по Москве, тревоги о новых ошибках, письма игроков боту): свой id из «Настроек» добавить в файл, сервер перечитает его сам.
+   ```bash
+   echo 123456789 >> /opt/arena-server/.admin-ids && chown deploy: /opt/arena-server/.admin-ids
+   ```
+   Статистика и ошибки копятся в `/opt/arena-server/data/telemetry.json`, политика конфиденциальности — `/privacy.html`.
 
 ## Как считаются повторы
 

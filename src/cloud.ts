@@ -18,7 +18,8 @@ export interface Remind {
 
 // pro — Pro Pass: решает только сервер по id в Telegram.
 // raidNotify — бот пишет о рейде клана (по умолчанию да).
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; raidNotify: boolean };
+// admin — видит статистику (список админов на сервере).
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; raidNotify: boolean; admin: boolean };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -30,7 +31,11 @@ export function onCloud(fn: (c: CloudState) => void): () => void {
 let pending: Progress | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
+// После «Удалить мои данные» больше ничего не отправляем, пока приложение не перезапустят.
+let stopped = false;
+
 const push = (keepalive = false) => {
+  if (stopped) return;
   if (timer) clearTimeout(timer);
   timer = null;
   const p = pending;
@@ -46,8 +51,8 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
   });
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && push(true));
   try {
-    const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean; pro?: boolean; raidNotify?: boolean };
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, raidNotify: r.raidNotify !== false };
+    const r = (await post('/api/progress/load', {})) as { progress: Progress | null; remind: Remind | null; bot: boolean; telegram: boolean; pro?: boolean; raidNotify?: boolean; admin?: boolean };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, raidNotify: r.raidNotify !== false, admin: !!r.admin };
     listeners.forEach((fn) => fn(cloud!));
     const local = loadProgress();
     // Новый телефон: своего прогресса нет, берём серверный, даже если игра уже успела что-то сохранить.
@@ -87,3 +92,18 @@ export async function setRaidNotify(on: boolean): Promise<boolean> {
   if (cloud) cloud.raidNotify = r.raidNotify;
   return r.raidNotify;
 }
+
+/** Стереть всё о себе на сервере: прогресс, профиль, клан, друзей, следы в статистике. */
+export async function deleteMyData(): Promise<void> {
+  stopped = true;
+  pending = null;
+  if (timer) clearTimeout(timer);
+  timer = null;
+  await post('/api/delete-me', {}).catch((e) => {
+    stopped = false;
+    throw e;
+  });
+}
+
+/** Ссылка на страницу статистики для админа (подписана сервером, живёт неделю). */
+export const adminStatsUrl = (): Promise<string> => post('/api/admin/link', {}).then((r: { url: string }) => r.url);

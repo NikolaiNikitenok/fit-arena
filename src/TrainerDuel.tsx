@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { track } from './telemetry';
 import { ArenaStage } from './ArenaStage';
 import { type Battle, MAX_HP, newBattle, type Side, strike, winner } from '../shared/battle';
 import type { FighterView } from '../shared/protocol';
@@ -173,6 +174,7 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
     setError(null);
     try {
       if (!camera.active) await camera.start(exercise, onRep);
+      track('duel_start', 'trainer');
     } catch (e) {
       // В DEV можно драться и без камеры: повторы приходят из __trainerRep.
       if (!import.meta.env.DEV) {

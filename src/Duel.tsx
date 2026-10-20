@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { track } from './telemetry';
 import { ArenaStage } from './ArenaStage';
 import { MAX_HP } from '../shared/battle';
 import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
@@ -183,6 +184,7 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
     try {
       if (!camera.active) await camera.start(room?.exercise ?? exercise, () => send({ type: 'rep' }));
       send({ type: 'ready' });
+      track('duel_start', 'live');
     } catch (e) {
       setError(`Не удалось запустить камеру: ${e instanceof Error ? e.message : 'ошибка модели'}`);
     }

@@ -4,6 +4,8 @@ import { App } from './App';
 import { initTelegram } from './telegram';
 import { initAudio } from './audio';
 import { initVoice } from './voice';
+import { initTelemetry } from './telemetry';
+import { ErrorBoundary } from './ErrorBoundary';
 import '@fontsource/nunito/600.css';
 import '@fontsource/nunito/700.css';
 import '@fontsource/nunito/800.css';
@@ -11,6 +13,7 @@ import '@fontsource/nunito/900.css';
 import './styles.css';
 
 initTelegram();
+initTelemetry();
 initAudio();
 initVoice();
 
@@ -20,7 +23,9 @@ const fontReady = Promise.race([document.fonts?.load('900 44px Nunito'), new Pro
 fontReady.then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   );
   // Заставка из index.html уходит, когда первый кадр игры уже нарисован.

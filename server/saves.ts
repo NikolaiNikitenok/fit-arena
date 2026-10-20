@@ -170,6 +170,11 @@ export class SaveStore {
     return !!(s?.raidOff || s?.blocked);
   }
 
+  /** Игрок попросил удалить свои данные: прогресс и настройки бота пропадают. */
+  forget(id: string): void {
+    if (this.saves.delete(id)) this.save();
+  }
+
   markReminded(id: string, date: string): void {
     this.touch(id).remindedOn = date;
     this.save();
