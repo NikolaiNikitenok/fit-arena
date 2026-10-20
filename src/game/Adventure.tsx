@@ -90,9 +90,11 @@ interface Props {
   onTab: (tab: AdventureTab) => void;
   // Во время миссии нижнее меню прячется.
   onPlaying: (playing: boolean) => void;
+  // Друзья с главного экрана: они живут во вкладке дуэли.
+  onFriends: () => void;
 }
 
-export function Adventure({ tab, onTab, onPlaying }: Props) {
+export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const [progress, setProgressState] = useState(loadProgress);
   // Последний прогресс: победа и запись подхода приходят подряд в одном кадре.
   const latest = useRef(progress);
@@ -390,7 +392,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
             sfx('coin');
             showToast(`Задание выполнено! +${daily.coins} монет${daily.potion ? ' и зелье' : ''}`);
           }}
-          onMap={() => onTab('map')}
+          onFriends={onFriends}
           onShop={(t) => setShop(t ?? 'weapon')}
           onStrength={() => setStrength(true)}
           onEquip={(id) => setProgress(equip(progress, id))}

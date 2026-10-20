@@ -252,3 +252,23 @@ export const Moon = ({ size = 18, className }: P) => svg(size, className, <path 
 export const Pause = ({ size = 16, className }: P) => svg(size, className, <path d="M8 5v14M16 5v14" />);
 
 export const Play = ({ size = 16, className }: P) => svg(size, className, <path d="M7 4.5v15l12-7.5z" />, true);
+
+// Главный экран: сила (гантель) и лавка (сумка).
+export const Dumbbell = ({ size = 22, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M6.5 7.5v9M17.5 7.5v9M3.5 10v4M20.5 10v4M6.5 12h11" />
+    </>,
+  );
+
+export const Bag = ({ size = 22, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M5 8.5h14l-1.2 11.2a1.5 1.5 0 01-1.5 1.3H7.7a1.5 1.5 0 01-1.5-1.3L5 8.5z" />
+      <path d="M9 10.5V7a3 3 0 016 0v3.5" />
+    </>,
+  );

@@ -51,7 +51,16 @@ export function App() {
           </Suspense>
         </>
       ) : (
-        <Adventure tab={tab} onTab={setTab} onPlaying={setPlaying} />
+        <Adventure
+          tab={tab}
+          onTab={setTab}
+          onPlaying={setPlaying}
+          onFriends={() => {
+            setFriendsFirst(true);
+            setJoin(undefined);
+            setTab('duel');
+          }}
+        />
       )}
 
       <FriendInbox

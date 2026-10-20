@@ -1,0 +1,98 @@
+/* Главное меню (HeroHome): всё нужное на одном экране телефона.
+   Одна система карточек: поверхность, тонкая рамка, радиус --r-lg, мягкая тень; отступы 8 / 10 / 12. */
+.hb { --hb-card: var(--surface); --hb-shadow: 0 4px 14px rgba(0, 0, 0, .22); --hb-red: #ff4d5e; gap: 10px; }
+.hb button { font-family: inherit; }
+
+/* Верхняя строка: кнопки по 36px, область нажатия — 44px. */
+.hb-head { min-height: 36px; }
+.hb-head .stats { gap: 5px; }
+.hb-head .pill { height: 36px; padding: 0 10px; gap: 4px; }
+.hb-head .pill.icon-only { width: 36px; padding: 0; }
+.hb-hit { position: relative; }
+.hb-hit::after { content: ''; position: absolute; inset: -4px -2px; }
+.hb-bolt { color: #ffd23f; }
+
+/* Герой: сцена на всю карточку, подпись поверх снизу. Высота подстраивается под экран, чтобы меню влезало целиком. */
+.hb-hero { position: relative; flex: none; display: flex; flex-direction: column; height: clamp(170px, calc(100dvh - 600px - var(--safe-top)), 300px); cursor: pointer; transition: transform .15s ease; box-shadow: var(--hb-shadow); }
+.hb-hero:active { transform: scale(.985); }
+.hb-stage { position: relative; flex: 1; min-height: 0; height: auto; }
+.hb-hero-bar { position: relative; z-index: 2; margin: 0 8px 8px; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 7px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.hb-level { width: 38px; height: 38px; border-radius: 12px; font-size: 19px; }
+.hb-hero-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.hb-hero-title { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-hero-meta .xp-bar { margin-top: 0; height: 5px; }
+.hb-hero-meta .xp-bar > span { height: 100%; border-radius: 4px; background: var(--accent-grad); }
+.hb-gear { display: flex; gap: 4px; }
+.hb-gear .inv-face, .hb-gear .gear-face { border-radius: 9px; font-size: 14px; }
+.hb-hero .chev { color: var(--hint); font-size: 22px; line-height: 1; }
+
+/* Главная кнопка: бой на текущем уровне. */
+.hb-cta { min-height: 62px; gap: 12px; justify-content: center; border-radius: var(--r-lg); }
+.hb-cta-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; font-size: 18px; }
+.hb-cta-text small { font-size: 13px; font-weight: 700; opacity: .72; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Общий вид карточек меню. */
+.hb-daily, .hb-tile, .hb-more-item { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--hb-card); color: var(--text); box-shadow: var(--hb-shadow); transition: transform .12s ease, border-color .2s ease, background-color .2s ease; }
+.hb-daily:active:not(:disabled), .hb-tile:active, .hb-more-item:active { transform: scale(.97); }
+
+/* Задание дня одной строкой. */
+.hb-daily { display: flex; align-items: center; gap: 10px; min-height: 62px; padding: 8px 10px 8px 10px; text-align: left; }
+.hb-daily:disabled { cursor: default; opacity: .8; }
+.hb-daily-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hb-daily-who { font-size: 11.5px; font-weight: 800; color: var(--hint); }
+.hb-daily-goal { display: flex; align-items: center; gap: 4px; font-size: 13.5px; font-weight: 700; white-space: nowrap; }
+.hb-daily-goal b { font-weight: 900; }
+.hb-daily-gift { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 900; }
+.hb-daily-gift .coin { color: var(--gold); }
+.hb-daily-bar { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.hb-daily-bar > span { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+.hb-daily-act { flex: none; min-width: 84px; height: 36px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: var(--r-sm); background: var(--surface-3); font-size: 13.5px; font-weight: 900; }
+.hb-daily.ready { border-color: rgba(255, 180, 107, .5); }
+.hb-daily.ready .hb-daily-act { background: var(--accent-grad); color: var(--on-accent); }
+.hb-daily.claimed .hb-daily-act { background: transparent; color: var(--mint); }
+
+/* Четыре быстрые плитки. */
+.hb-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.hb-tile { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; min-height: 96px; padding: 10px 4px 9px; text-align: center; }
+.hb-tile b { font-size: 12.5px; font-weight: 900; line-height: 1.15; }
+.hb-tile small { font-size: 10.5px; font-weight: 700; color: var(--hint); line-height: 1.2; }
+.hb-tile-icon { width: 44px; height: 44px; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: rgba(255, 255, 255, .05); }
+.hb-prog { color: var(--on-accent); background: var(--accent-grad); }
+.hb-dungeon .hb-tile-icon { background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--la) 40%, transparent), transparent 75%); }
+.hb-dungeon.ready { border-color: color-mix(in srgb, var(--la) 45%, transparent); }
+.hb-tile.pro { border-color: var(--pro-line); }
+.hb-event { border-color: color-mix(in srgb, var(--eg) 55%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--eg) 16%, var(--surface)), var(--surface)); }
+.hb-event .hb-tile-icon { background: transparent; }
+
+/* «Ещё»: остальное — сеткой 3 × 2, без прокрутки. */
+.hb-more-title { margin: 2px 2px -2px; font-size: 12px; font-weight: 900; color: var(--hint); text-transform: uppercase; letter-spacing: .6px; }
+.hb-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hb-more-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 64px; padding: 6px 4px; text-align: center; }
+.hb-more-item > span:not(.hb-dot):not(.hb-more-icon):not(.portrait) { max-width: 100%; min-width: 0; display: flex; flex-direction: column; }
+.hb-more-item b { font-size: 12px; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-more-item small { font-size: 10px; line-height: 1.15; font-weight: 700; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-more-icon { flex: none; width: 28px; height: 28px; margin-bottom: 1px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(255, 138, 92, .14); color: var(--accent); }
+.hb-more-icon.gold { background: rgba(255, 210, 122, .14); color: var(--gold); }
+.hb-more-icon.mint { background: rgba(110, 231, 183, .13); color: var(--mint); }
+.hb-more-icon.blue { background: rgba(125, 211, 252, .13); color: #7dd3fc; }
+.hb-more-item .pet-face, .hb-more-item .portrait, .hb-more-item .ach-badge { flex: none; }
+.hb-egg { flex: none; width: 24px !important; height: 28px !important; }
+.hb-event-soon { border-color: color-mix(in srgb, var(--eg) 30%, transparent); }
+
+/* Метка «есть что забрать»: красная точка или число в углу. */
+.hb-dot { position: absolute; top: -4px; right: -4px; z-index: 3; min-width: 12px; height: 12px; padding: 0; border-radius: 999px; background: var(--hb-red); border: 2px solid var(--bg); box-shadow: 0 0 0 0 rgba(255, 77, 94, .5); animation: hb-pulse 2.4s ease-out infinite; color: #fff; font-size: 10px; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; box-sizing: content-box; }
+.hb-dot:not(:empty) { min-width: 14px; height: 14px; padding: 1px 3px; top: -6px; right: -6px; }
+@keyframes hb-pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 77, 94, .45); } 70%, 100% { box-shadow: 0 0 0 6px rgba(255, 77, 94, 0); } }
+@media (prefers-reduced-motion: reduce) { .hb-dot { animation: none; } .hb-hero, .hb-tile, .hb-daily, .hb-more-item { transition: none; } }
+
+/* Лист героя: уровень, урон, слоты и инвентарь. */
+.hb-sheet { max-height: min(88vh, calc(100dvh - var(--safe-top) - 12px)); }
+.hb-sheet-info { padding: 4px 0 0; }
+.hb-sheet-power { padding: 4px 0 0; }
+.hb-sheet-hint { padding: 0 2px; }
+.hb-sheet .slot { background: var(--surface-2); border: 1.5px solid transparent; transition: border-color .15s ease; }
+.hb-sheet .slot.on { border-color: var(--surface-3); }
+.hb-sheet .inv-item { background: var(--surface-2); }
+.hb-sheet .section-title { margin-top: 2px; }
+.hb-tabs { background: var(--surface-2); }
+.hb-tabs button { min-height: 38px; }
