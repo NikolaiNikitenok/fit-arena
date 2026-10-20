@@ -707,3 +707,39 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .event-tries { font-size: 13px; font-weight: 700; color: #dfe3ea; }
 .event-tries b { color: var(--eg); font-size: 15px; }
 .event-lobby .remark { max-width: 360px; text-align: left; }
+
+/* Друзья (src/friends) */
+.friends-head { display: flex; align-items: center; gap: 8px; }
+.friends-head h2 { flex: 1; display: flex; align-items: center; gap: 7px; margin: 0; font-size: 19px; font-weight: 900; }
+.friends-head .back { padding: 8px 4px; }
+.friends-note { width: 100%; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--gold); font-size: 14px; font-weight: 800; text-align: left; }
+.friends-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); text-align: center; }
+.friends-empty > .icon { color: var(--accent); }
+.friends-empty .primary { align-self: stretch; margin-top: 6px; }
+.friend-list { display: flex; flex-direction: column; gap: 6px; }
+.friend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+.friend-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; font-size: 14px; }
+.friend-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.friend-name { min-width: 0; font-weight: 900; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-tag { flex: none; font-size: 12px; font-weight: 900; color: var(--accent); }
+.friend-level { flex: none; padding: 1px 6px; border-radius: 6px; background: var(--surface-3); color: var(--hint); font-size: 11.5px; font-weight: 900; }
+.friend-meta { font-size: 12.5px; font-weight: 700; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-streak .icon { color: var(--accent); vertical-align: -1px; }
+.friend-call { flex: none; min-width: 104px; }
+.friend.request .friend-main .muted { font-size: 12.5px; }
+.small-btn.icon-only { min-width: 0; width: 38px; padding: 9px 0; }
+.friend-actions { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.friend-actions .muted { font-size: 12.5px; flex: 1; min-width: 160px; }
+.friends-outgoing { font-size: 13px; }
+.link.inline { padding: 0; font-size: 13px; color: var(--accent); }
+.muted.center { text-align: center; }
+.muted.warn { color: var(--rose); }
+.add-friend h3 { margin: 0; font-size: 19px; font-weight: 900; }
+.my-code { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
+.my-code b { font-size: 24px; letter-spacing: 5px; font-variant-numeric: tabular-nums; }
+.my-code .muted { font-size: 12px; }
+.challenge-card { position: fixed; top: calc(10px + var(--safe-top)); left: 12px; right: 12px; max-width: 456px; margin: 0 auto; z-index: 13; display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; padding: 12px; border-radius: var(--r-lg); background: rgba(22, 25, 37, .97); border: 1px solid rgba(255, 138, 92, .45); box-shadow: 0 14px 36px rgba(0, 0, 0, .45); animation: rise .25s ease-out; }
+.challenge-icon { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--accent-grad); color: var(--on-accent); }
+.challenge-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 15px; }
+.challenge-text .muted { font-size: 12.5px; }
+.challenge-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

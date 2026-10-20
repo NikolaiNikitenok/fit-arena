@@ -1,4 +1,5 @@
 // Минимальная обёртка над Telegram WebApp API (скрипт подключён в index.html).
+import { friendLink, friendParam, isNamedParam } from './friends/link';
 
 interface TelegramWebApp {
   ready(): void;
@@ -71,7 +72,7 @@ const startParam = (): string | null => tg?.initDataUnsafe.start_param ?? null;
 /** Код боя из ссылки-приглашения: ?room=КОД (кнопка бота) или startapp=КОД. */
 export function inviteCode(): string | null {
   const p = startParam();
-  if (p?.startsWith('clan-')) return null;
+  if (p && isNamedParam(p)) return null;
   return p ?? new URLSearchParams(location.search).get('room');
 }
 
@@ -82,7 +83,12 @@ export function clanInviteCode(): string | null {
   return new URLSearchParams(location.search).get('clan');
 }
 
-/** Вкладка из адреса: кнопки бота о рейде открывают клан (?tab=clan). */
+/** Приглашение в друзья: startapp=friend-ТОКЕН или ?friend=ТОКЕН (кнопка бота). */
+export const friendInviteCode = (): string | null => friendParam(startParam(), location.search);
+
+export const friendInviteLink = (token: string, bot: { username: string | null; running: boolean }): string => friendLink(token, bot, BOT_USERNAME, location.origin);
+
+/** Вкладка из адреса: кнопки бота о рейде открывают клан (?tab=clan), о друзьях — друзей (?tab=friends). */
 export const startTab = (): string | null => new URLSearchParams(location.search).get('tab');
 
 // Имя бота известно и без токена на сервере: ссылки-приглашения всегда ведут в Telegram.

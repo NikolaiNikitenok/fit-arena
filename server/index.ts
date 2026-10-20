@@ -31,6 +31,8 @@ import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
 import { ProList } from './pro';
 import type { ChatMessage } from '../shared/clan';
+import { FriendStore } from './friends';
+import { type FriendsDeps, friendsApi } from './friendsApi';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -52,6 +54,7 @@ const activityLimit = new RateLimit();
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
+const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 const isPro = (id: string) => pro.has(id);
 clans.isPro = isPro;
@@ -243,6 +246,51 @@ const clanInfo = (code: string) => {
   return c && { name: c.name, tag: c.tag, members: c.members.length };
 };
 
+// Друзья (server/friendsApi.ts): только игроки Telegram; без токена бота (разработка) — и гости.
+const sendFriendBot = (to: string, text: string, button: string, query: string) => {
+  if (!BOT_TOKEN) return;
+  botApi(BOT_TOKEN)('sendMessage', { chat_id: Number(to.slice(3)), text, reply_markup: { inline_keyboard: [[{ text: button, web_app: { url: `${APP_URL.replace(/\/$/, '')}/${query}` } }]] } }, 15_000)
+    .then((r) => r.error_code === 403 && saves.setBlocked(to, true))
+    .catch(() => null);
+};
+const friendsDeps: FriendsDeps = {
+  friends,
+  now: Date.now,
+  bot: () => ({ username: botUsername, running: !!BOT_TOKEN }),
+  cups: (id) => store.cupsOf(id),
+  progress: (id) => (saves.get(id)?.progress as ReturnType<FriendsDeps['progress']>) ?? null,
+  clanTag: (id) => clans.clanOf(id)?.tag,
+  isPro,
+  connected: isOnline,
+  blocked: (id) => !!saves.get(id)?.blocked,
+  createRoom: (exercise) => {
+    const room = newRoom(exercise);
+    // Никто так и не пришёл: пустую комнату вызова убираем, когда вызов истёк.
+    setTimeout(() => {
+      if (room.empty && rooms.get(room.code) === room) {
+        room.dispose();
+        rooms.delete(room.code);
+      }
+    }, 10 * 60_000 + 5_000).unref();
+    return room.code;
+  },
+  roomAlive: (code) => !!rooms.get(code) && !rooms.get(code)!.empty,
+  sendBot: sendFriendBot,
+  tellDuel: (id, text) => online.get(id)?.send({ type: 'error', message: text }),
+};
+async function onFriendsApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  if (!body) return reply(400, { error: 'bad json' });
+  const tgUser = BOT_TOKEN && typeof body.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
+  const guest = !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
+  const me = tgUser ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) } : guest ? { id: guest, name: cleanName(body.name) } : null;
+  if (!me) return reply(401, { error: 'Друзья — только в Telegram', telegram: false });
+  const r = friendsApi(friendsDeps, path, me, body);
+  reply(r.status, r.body);
+}
+
 const http = createServer((req, res) => {
   if (req.url === '/api/activity' && req.method === 'POST') {
     handleActivity(req, res);
@@ -266,6 +314,10 @@ const http = createServer((req, res) => {
   }
   if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/friends' || path.startsWith('/api/friends/')) {
+    onFriendsApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (req.url?.startsWith('/api/top')) {
@@ -522,6 +574,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         }
         leaveRoom();
         room = target;
+        friends.roomJoined(target.code, player.id);
         break;
       }
       case 'ready':
@@ -623,6 +676,11 @@ setInterval(() => {
     toClan(c, { type: 'chat', messages: chatOf(c) });
   }
 }, 30_000);
+// Несрочные сообщения о друзьях (заявки): раз в минуту, ночью копятся до утра.
+if (BOT_TOKEN)
+  setInterval(() => {
+    for (const n of friends.takeNotices()) if (!saves.get(n.to)?.blocked) sendFriendBot(n.to, n.text, n.button, n.query);
+  }, 60_000);
 if (BOT_TOKEN)
   runBot(BOT_TOKEN, APP_URL, clanInfo, (chatId) => saves.setBlocked(`tg:${chatId}`, false));
 loadBotUsername();
@@ -632,5 +690,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     store.flush();
     clans.flush();
     saves.flush();
+    friends.flush();
     process.exit(0);
   });

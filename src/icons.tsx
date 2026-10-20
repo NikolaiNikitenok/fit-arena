@@ -200,3 +200,27 @@ export function GoldShieldArt({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export const Users = ({ size = 18, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5" />
+      <path d="M15.5 4.8a3.3 3.3 0 010 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2" />
+    </>,
+  );
+
+export const UserPlus = ({ size = 18, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5" />
+      <path d="M19 8v6M16 11h6" />
+    </>,
+  );
+
+export const Cross = ({ size = 16, className }: P) => svg(size, className, <path d="M6 6l12 12M18 6L6 18" />);

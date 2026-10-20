@@ -31,7 +31,7 @@ export const WELCOME_TEXT = `Привет! Это NikitenokArena, игра, в �
 export const BOT_DESCRIPTION = 'NikitenokArena: отжимания, приседания и пресс под камеру телефона. Каждый повтор бьёт врага: приключение на 300 уровней, дуэли, кланы и рейд-боссы. Нажми «Старт», чтобы начать.';
 export const BOT_SHORT_DESCRIPTION = 'Тренировка-приключение: камера считает повторы, а каждый повтор бьёт врага.';
 
-/** Ответ на «/start [параметр]»: clan-КОД — клан, иначе код дуэли или просто вход. */
+/** Ответ на «/start [параметр]»: clan-КОД — клан, friend-ТОКЕН — друг, иначе код дуэли или просто вход. */
 export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined): StartReply | null {
   const m = /^\/(?:start|help)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
   if (!m) return null;
@@ -47,6 +47,15 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
         url: `${base}/?clan=${code}`,
       };
     return { text: 'Это приглашение устарело или клан распущен. Открой NikitenokArena и найди клан по названию.', button: 'Открыть NikitenokArena', url: `${base}/` };
+  }
+  // Ссылка друга (friend-ТОКЕН): после «Старт» приложение само добавит его в друзья.
+  if (param.startsWith('friend-')) {
+    const token = param.slice(7).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return {
+      text: 'Тебя зовут в друзья в NikitenokArena! Друзья видят, кто тренировался сегодня, и вызывают друг друга на дуэль в один тап.\n\nНажми кнопку — и вы сразу станете друзьями.',
+      button: 'Добавить в друзья',
+      url: `${base}/?friend=${token}`,
+    };
   }
   if (/^[A-Z0-9]{4,8}$/i.test(param)) return { text: 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.', button: 'Принять вызов', url: `${base}/?room=${param.toUpperCase()}` };
   return { text: WELCOME_TEXT, button: 'Играть', url: `${base}/`, photo: `${base}/bot/welcome.jpg` };

@@ -12,6 +12,11 @@ import { useDuelSounds } from './gameSounds';
 import { useVoiceCoach } from './voice';
 import { recordDuel, recordOutsideReps } from './game/progress';
 import { TrainerDuel } from './TrainerDuel';
+import { FriendsScreen } from './friends/FriendsScreen';
+import { Users } from './icons';
+
+/** Войти в эту комнату боя: вызов друга. seq — чтобы тот же код можно было передать снова. */
+export type JoinRoom = { code: string; seq: number };
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
 
@@ -26,13 +31,41 @@ const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'с
 
 const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 
-/** Вкладка дуэлей: живой бой через сервер или бой с тренером на устройстве. */
-export function Duel({ exercise }: { exercise: Exercise }) {
+/** Вкладка дуэлей: живой бой через сервер, бой с тренером на устройстве или друзья. */
+export function Duel({ exercise, join, friends: openFriends = false }: { exercise: Exercise; join?: JoinRoom; friends?: boolean }) {
   const [trainer, setTrainer] = useState(false);
-  return trainer ? <TrainerDuel exercise={exercise} onExit={() => setTrainer(false)} /> : <LiveDuel exercise={exercise} onTrainer={() => setTrainer(true)} />;
+  const [friends, setFriends] = useState(openFriends);
+  const [room, setRoom] = useState(join);
+  const [note, setNote] = useState<string | null>(null);
+  // Приняли вызов из карточки: сразу в комнату.
+  useEffect(() => {
+    if (!join) return;
+    setTrainer(false);
+    setFriends(false);
+    setNote(null);
+    setRoom(join);
+  }, [join?.seq]);
+  if (friends)
+    return (
+      <FriendsScreen
+        exercise={exercise}
+        onBack={() => setFriends(false)}
+        onRoom={(code, n) => {
+          setRoom({ code, seq: Date.now() });
+          setNote(n ?? null);
+          setFriends(false);
+        }}
+      />
+    );
+  return trainer ? <TrainerDuel exercise={exercise} onExit={() => setTrainer(false)} /> : <LiveDuel exercise={exercise} onTrainer={() => setTrainer(true)} onFriends={() => {
+        // Старую комнату вызова не повторяем, когда вернёмся с экрана друзей.
+        setRoom(undefined);
+        setFriends(true);
+      }}
+      join={room} note={note} />;
 }
 
-function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () => void }) {
+function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Exercise; onTrainer: () => void; onFriends: () => void; join?: JoinRoom; note: string | null }) {
   const camera = useRepCamera();
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
@@ -50,6 +83,10 @@ function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () =
   const [delta, setDelta] = useState<number | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [top, setTop] = useState<TopEntry[] | null>(null);
+
+  // Комната, куда войти после подключения (вызов друга); welcomed — сервер уже ответил.
+  const joinRef = useRef(join);
+  const welcomed = useRef(false);
 
   // Свои повторы в бою: после боя засчитываем их в серию, задание дня и клан.
   const fight = useRef<{ exercise: Exercise; hits: number } | null>(null);
@@ -73,7 +110,9 @@ function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () =
         case 'welcome': {
           setMe({ id: msg.id, pro: !!msg.pro, bot: { username: msg.botUsername, running: msg.botRunning } });
           setPhase('menu');
-          const invite = inviteCode();
+          welcomed.current = true;
+          const invite = joinRef.current?.code ?? inviteCode();
+          joinRef.current = undefined;
           if (invite) socket.send(JSON.stringify({ type: 'join', code: invite }));
           break;
         }
@@ -120,9 +159,17 @@ function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () =
     };
     return () => {
       ws.current = null;
+      welcomed.current = false;
       socket.close();
     };
   }, [connectSeq]);
+
+  // Вызов друга, когда соединение уже есть.
+  useEffect(() => {
+    if (!join) return;
+    if (welcomed.current && ws.current?.readyState === WebSocket.OPEN) send({ type: 'join', code: join.code });
+    else joinRef.current = join;
+  }, [join?.seq]);
 
   // Таймер на экране: тикаем, пока идёт отсчёт или бой.
   useEffect(() => {
@@ -191,7 +238,7 @@ function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () =
           (phase === 'fight'
             ? camera.hint ?? 'Отлично, продолжай!'
             : phase === 'room' && !opponentInfo
-              ? 'Отправь другу приглашение и жди его на арене'
+              ? note ?? 'Отправь другу приглашение и жди его на арене'
               : phase === 'room' && myInfo?.ready
                 ? `Ждём, пока ${opponentInfo?.name} будет готов`
                 : phase === 'room'
@@ -221,6 +268,9 @@ function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () =
           )}
           <button className="secondary" onClick={() => send({ type: 'create', exercise })}>
             Создать бой: {EXERCISE_LABELS[exercise].toLowerCase()}
+          </button>
+          <button className="secondary" onClick={onFriends}>
+            <Users /> Друзья
           </button>
           <div className="join">
             <input

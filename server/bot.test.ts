@@ -9,6 +9,10 @@ describe('бот /start', () => {
     expect(startReply('/start clan-NOPE', 'https://arena.example', clans)?.text).toMatch(/устарело/);
   });
 
+  it('ссылка друга ведёт в приложение с токеном приглашения', () => {
+    expect(startReply('/start friend-ab3k9qx2mn', 'https://arena.example', clans)).toMatchObject({ button: 'Добавить в друзья', url: 'https://arena.example/?friend=AB3K9QX2MN' });
+  });
+
   it('дуэль и простой старт', () => {
     expect(startReply('/start K7P2', 'https://arena.example', clans)?.url).toBe('https://arena.example/?room=K7P2');
     expect(startReply('/start', 'https://arena.example', clans)?.url).toBe('https://arena.example/');

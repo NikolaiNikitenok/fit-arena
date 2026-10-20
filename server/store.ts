@@ -55,6 +55,13 @@ export class Store {
     return p;
   }
 
+  /** Кубки игрока без создания профиля (для списка друзей). Новый сезон — половина. */
+  cupsOf(id: string): number {
+    const p = this.profiles.get(id);
+    if (!p) return 0;
+    return p.season === seasonAt(this.now()) ? p.cups : Math.floor(p.cups / 2);
+  }
+
   /** Записывает исход боя и возвращает изменение кубков каждого. */
   result(a: Profile, b: Profile, outcome: 'a' | 'b' | 'draw'): { a: number; b: number } {
     if (outcome === 'draw') {
