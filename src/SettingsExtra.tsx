@@ -4,6 +4,8 @@ import { adminStatsUrl, cloudState, deleteMyData, onCloud } from './cloud';
 import { openPrivacy } from './privacy';
 import { addCharge, CHARGE_MAX } from './game/resources';
 import { loadProgress, saveProgress } from './game/progress';
+import { deviceHints, fpsCapped, sceneFps } from './devicePerf';
+import { useSettings } from './settings';
 
 /** Ссылка на политику конфиденциальности. */
 export function PrivacyLink() {
@@ -29,6 +31,7 @@ export function AdminStatsRow() {
   };
   return (
     <>
+      <FpsMeter />
       <button className="secondary" onClick={open}>
         Статистика (админ)
       </button>
@@ -69,6 +72,38 @@ export function AdminChargeRow() {
     >
       Админ: заряд подземелья до {CHARGE_MAX} ⚡
     </button>
+  );
+}
+
+/** Счётчик кадров для админа: сколько кадров даёт экран и сколько рисует 3D-сцена за листом настроек. */
+function FpsMeter() {
+  const s = useSettings();
+  const [v, setV] = useState({ screen: 0, scene: 0 });
+  useEffect(() => {
+    let raf = 0;
+    const stamps: number[] = [];
+    let shown = 0;
+    const tick = (t: number) => {
+      stamps.push(t);
+      while (t - stamps[0] > 1000) stamps.shift();
+      if (t - shown > 500) {
+        shown = t;
+        setV({ screen: stamps.length, scene: sceneFps(t) });
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const h = deviceHints();
+  return (
+    <div className="settings-note">
+      <b>FPS (админ):</b> экран {v.screen} · 3D {v.scene} · экономный {s.lowPower ? (s.lowPowerChosen ? 'вкл (сам)' : 'вкл (авто)') : 'выкл'}
+      {fpsCapped() ? ' · ограничен 30' : ''} · DPR {Math.round(devicePixelRatio * 100) / 100}
+      {h.tgClass ? ` · ${h.tgClass}` : ''}
+      {h.memory ? ` · ${h.memory} ГБ` : ''}
+      {h.cores ? ` · ${h.cores} ядер` : ''}
+    </div>
   );
 }
 

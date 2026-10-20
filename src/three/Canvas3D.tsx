@@ -1,14 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { Canvas, type CanvasProps, useThree } from '@react-three/fiber';
-import { canvasProps, LOW_POWER_FPS, useSettings } from '../settings';
-import { probeFps } from '../devicePerf';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Canvas, type CanvasProps, useFrame, useThree } from '@react-three/fiber';
+import { canvasProps, useSettings } from '../settings';
+import { CAP_FPS, fpsCapped, frameDone, probeFps, sceneStarted, subscribeCap } from '../devicePerf';
 
 // Холст 3D для всех сцен игры. Поверх обычного Canvas:
-// — тени, разрешение и сглаживание по настройке «Экономный режим», в ней же не больше 30 кадров в секунду;
+// — тени, разрешение и сглаживание по настройке «Экономный режим»; кадров — с частотой экрана,
+//   30 — только если в экономном режиме телефон всё равно не держит 25 (devicePerf.ts);
 // — не рисует, пока холст за краем экрана или приложение свёрнуто;
 // — если телефон отобрал WebGL (так бывает на слабых Android), тихо пересоздаёт сцену.
 
-/** Экономный режим: кадр по таймеру, не чаще fps раз в секунду. */
+/** Считает нарисованные кадры: для решения об ограничении и для счётчика FPS у админа. */
+function FrameMeter({ low }: { low: boolean }) {
+  useEffect(() => sceneStarted(), []);
+  useFrame(() => frameDone(performance.now(), low));
+  return null;
+}
+
+/** Ограничение: кадр по таймеру, не чаще fps раз в секунду. */
 function Throttle({ fps }: { fps: number }) {
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
@@ -95,7 +103,8 @@ export function Canvas3D({ gl, onCreated, frameloop, children, ...rest }: Canvas
     };
   }, [el]);
 
-  const low = s.lowPower && (frameloop ?? 'always') === 'always';
+  const capped = useSyncExternalStore(subscribeCap, fpsCapped);
+  const low = s.lowPower && capped && (frameloop ?? 'always') === 'always';
   return (
     <Canvas
       // Смена экономного режима или потеря WebGL — сцена собирается заново с новыми параметрами.
@@ -112,7 +121,8 @@ export function Canvas3D({ gl, onCreated, frameloop, children, ...rest }: Canvas
         onCreated?.(state);
       }}
     >
-      {low && visible && !lost && <Throttle fps={LOW_POWER_FPS} />}
+      {low && visible && !lost && <Throttle fps={CAP_FPS} />}
+      <FrameMeter low={s.lowPower} />
       {children}
     </Canvas>
   );

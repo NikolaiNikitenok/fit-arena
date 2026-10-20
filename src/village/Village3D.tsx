@@ -5,8 +5,8 @@ import { Canvas3D } from '../three/Canvas3D';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
-import { GOLD, KitPart, Look, lookOf, Prim, SIZE } from './looks';
-import { lookGroup, PrimInstances } from './looks3d';
+import { Anim, GOLD, KitPart, Look, lookOf, Prim, SIZE } from './looks';
+import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings } from '../settings';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx, UnitKind } from '../../shared/villageBattle';
@@ -52,14 +52,17 @@ export const SIN_PITCH = Math.sin(PITCH);
 function lookFor(b: ViewBld, enemy: boolean): Look {
   const s = SIZE[b.t];
   const kit = (name: string, sc: number): KitPart => ({ lib: name === 'building_dirt' ? 'village' : 'fantasy', name, s: sc, x: 0, z: 0, y: 0, ry: 0 });
-  if (b.state === 'ruin') return { kit: [b.t === 'wall' ? kit('rock_single_B', 3) : kit('building_destroyed', s / 1.6)], prim: [], top: 1.6 };
-  if (b.state === 'new') return { kit: [kit('building_dirt', s / 1.9), kit('building_scaffolding', s / 2.1)], prim: [], top: 2.2 };
+  if (b.state === 'ruin') return { kit: [b.t === 'wall' ? kit('rock_single_B', 3) : kit('building_destroyed', s / 1.6)], prim: [], anim: [], top: 1.6, blob: 0 };
+  if (b.state === 'new') return { kit: [kit('building_dirt', s / 1.9), kit('building_scaffolding', s / 2.1)], prim: [], anim: [], top: 2.2, blob: s * 0.55 };
   return lookOf(b.t, b.l, enemy);
 }
 
-function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[]>; prim: Prim[] } {
+type Moving = Anim & { ox: number; oz: number };
+function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[]>; prim: Prim[]; anim: Moving[]; blobs: [number, number, number][] } {
   const out: Record<string, Placed[]> = { fantasy: [], village: [] };
   const prim: Prim[] = [];
+  const anim: Moving[] = [];
+  const blobs: [number, number, number][] = [];
   const walls = new Set(list.filter((b) => b.t === 'wall' && b.state !== 'ruin').map((b) => `${b.x},${b.y}`));
   for (const b of list) {
     const s = SIZE[b.t];
@@ -78,8 +81,10 @@ function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[
     const look = lookFor(b, enemy);
     for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x, y: m.y, z: cz + m.z, s: m.s, ry: m.ry, tint: m.tint });
     for (const p of look.prim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
+    for (const a of look.anim) anim.push({ ...a, ox: cx, oz: cz });
+    if (look.blob) blobs.push([cx, cz, look.blob]);
   }
-  return { kit: out as Record<LibName, Placed[]>, prim };
+  return { kit: out as Record<LibName, Placed[]>, prim, anim, blobs };
 }
 
 function Rig({ ctl, sun }: { ctl: React.MutableRefObject<Ctl>; sun: React.RefObject<THREE.DirectionalLight | null> }) {
@@ -192,6 +197,7 @@ function Model({ t, x, y, enemy }: { t: BuildingType; x: number; y: number; enem
   const fantasy = useLib('fantasy');
   const village = useLib('village');
   const group = useMemo(() => lookGroup(lookOf(t, 1, !!enemy), { fantasy, village, space: undefined, city: undefined }, { shadows: true }), [t, enemy, fantasy, village]);
+  useFrame(() => animateGroup(group, performance.now() / 1000));
   const s = SIZE[t];
   return <primitive object={group} position={[W(x + s / 2), 0, W(y + s / 2)]} />;
 }
@@ -377,6 +383,8 @@ function Scene(props: SceneProps) {
       <Instanced lib="fantasy" items={items.kit.fantasy} />
       <Instanced lib="village" items={items.kit.village ?? []} />
       <PrimInstances list={items.prim} />
+      <AnimInstances list={items.anim} lite={lite} />
+      <Blobs list={items.blobs} />
       {sel && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[W(sel.x + SIZE[sel.t] / 2), 0.03, W(sel.y + SIZE[sel.t] / 2)]}>
           <ringGeometry args={[SIZE[sel.t] * 0.62, SIZE[sel.t] * 0.62 + 0.14, 40]} />

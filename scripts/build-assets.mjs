@@ -135,6 +135,8 @@ const LIBS = {
     // Мелочи для земли вокруг: пни, кусты, поддоны, вода.
     'tree_single_A_cut', 'trees_A_cut', 'bush', 'pallet', 'crate_long_A', 'bucket_arrows', 'hills_C_trees', 'hill_single_C',
     'rock_single_E', 'waterlily_B', 'waterplant_B',
+    // Мелочи у построек: ящики, вёдра, ядра катапульты, калитки.
+    'crate_A_small', 'crate_B_small', 'crate_B_big', 'crate_long_B', 'bucket_empty', 'projectile_catapult', 'fence_wood_straight_gate',
   ],
 };
 

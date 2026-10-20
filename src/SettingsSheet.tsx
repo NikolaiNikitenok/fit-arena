@@ -9,7 +9,7 @@ import { tg } from './telegram';
 import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
 
-const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
+const TOGGLES: { key: { [K in keyof Settings]-?: Settings[K] extends boolean ? K : never }[keyof Settings]; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
   { key: 'music', title: 'Музыка', text: 'Тихая фоновая мелодия: своя в каждом мире, барабаны на арене.' },
   { key: 'voice', title: 'Голос тренера', text: 'Мастер Гром вслух считает повторы, подсказывает время и технику. Нужен русский голос в телефоне.' },
@@ -17,7 +17,7 @@ const TOGGLES: { key: keyof Settings; title: string; text: string }[] = [
   { key: 'guide', title: 'Подсказка перед уровнем', text: '3D-схема, как поставить телефон.' },
   { key: 'story', title: 'Диалоги сюжета', text: 'Разговоры с героями перед уровнями. Без них сразу к тренировке.' },
   { key: 'skeleton', title: 'Скелет на видео', text: 'Линии позы поверх камеры: видно, что приложение тебя распознаёт.' },
-  { key: 'lowPower', title: 'Экономный режим', text: 'Без теней и сглаживания, 3D попроще и 30 кадров в секунду. Помогает, если телефон слабый или греется. На слабых телефонах включается сам.' },
+  { key: 'lowPower', title: 'Экономный режим', text: 'Без теней и сглаживания, 3D попроще и в меньшем разрешении. Помогает, если телефон слабый или греется. На слабых телефонах включается сам.' },
 ];
 
 /** Настройки: звуки, музыка, вибрация, подсказки, батарея, сброс прогресса. */

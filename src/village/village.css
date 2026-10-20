@@ -57,11 +57,7 @@
 .vil-shop-count { font-weight: 900; color: var(--hint); font-variant-numeric: tabular-nums; }
 .vil-shop-pic { flex: none; width: 64px; height: 64px; display: grid; place-items: center; border-radius: var(--r-sm); background: radial-gradient(circle at 50% 60%, rgba(140,193,82,.28), rgba(255,255,255,.04) 70%); }
 .vil-shop.locked .vil-shop-pic { filter: grayscale(1); opacity: .7; }
-.vil-thumb { display: block; flex: none; background-repeat: no-repeat; background-position: 0 0; }
-/* Кадры полоски листаются по кругу: постройка медленно вертится. */
-.vil-thumb.spin { animation: vil-spin 9s steps(36, jump-none) infinite; }
-@keyframes vil-spin { from { background-position: 0% 0; } to { background-position: 100% 0; } }
-@media (prefers-reduced-motion: reduce) { .vil-thumb.spin { animation: none; } }
+.vil-thumb { display: block; flex: none; }
 .vil-evo { display: flex; align-items: center; gap: 6px; }
 .vil-evo > .vil-thumb, .vil-evo > .vil-swatch { border-radius: var(--r-sm); background-color: rgba(140,193,82,.14); }
 .vil-evo > .muted { flex: 1; min-width: 0; margin-left: 4px; }

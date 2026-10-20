@@ -1,60 +1,57 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useLib } from '../three/kit';
-import { useSettings } from '../settings';
+import { getSettings, useSettings } from '../settings';
 import type { BuildingType } from '../../shared/village';
 import { lookOf } from './looks';
-import { lookGroup } from './looks3d';
+import { animateGroup, lookGroup } from './looks3d';
 
-// Мини-модели построек в меню стройки и в карточке улучшения. Один общий WebGL-рендерер вне
-// экрана снимает постройку с нескольких сторон в полоску кадров; дальше это обычная картинка,
-// которую CSS листает по кругу — постройка медленно вертится без своего холста и без кадров GPU.
-// В экономном режиме — один неподвижный кадр. Снимки кешируются по типу и уровню.
+// Мини-модели построек в меню стройки и в карточке улучшения. Один общий WebGL-рендерер вне экрана
+// рисует каждую видимую мини-модель в свой маленький 2D-холст каждый кадр: постройка вертится плавно,
+// с частотой экрана, и дымят трубы, машут флаги. Своего WebGL у карточек нет — на слабых телефонах
+// контекстов мало. Рисуются только карточки на экране; лист закрыт — рендерер ничего не делает,
+// а через несколько секунд отдаёт свой WebGL. В экономном режиме кадр меньше и без сглаживания.
 
-const PX = 128;
-const FRAMES = 36;
 const PITCH = (28 * Math.PI) / 180;
+// Один оборот за столько секунд: неспешно, но заметно.
+const TURN_S = 16;
 
+interface Stage {
+  scene: THREE.Scene;
+  spin: THREE.Group;
+  model: THREE.Group;
+  cam: THREE.OrthographicCamera;
+}
+interface Slot {
+  canvas: HTMLCanvasElement;
+  key: string;
+  make: () => THREE.Group;
+  visible: boolean;
+}
+
+const slots = new Set<Slot>();
+const stages = new Map<string, Stage>();
 let renderer: THREE.WebGLRenderer | null = null;
+let lite = false;
+let px = 0;
+let raf = 0;
 let idle = 0;
-const cache = new Map<string, Promise<string>>();
-let chain: Promise<unknown> = Promise.resolve();
+let still = false;
 
-function getRenderer(): THREE.WebGLRenderer {
-  clearTimeout(idle);
-  if (!renderer) {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'low-power' });
-    renderer.setPixelRatio(1);
-    renderer.setSize(PX, PX, false);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Как у сцены деревни (R3F по умолчанию): цвета превью совпадают с картой.
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.setClearColor(0x000000, 0);
-  }
-  return renderer;
-}
-// Когда все снимки готовы, рендерер освобождает свой WebGL: на слабых телефонах контекстов мало.
-function release() {
-  clearTimeout(idle);
-  idle = window.setTimeout(() => {
-    renderer?.dispose();
-    renderer?.forceContextLoss();
-    renderer = null;
-  }, 4000);
-}
-
-function shoot(group: THREE.Group, frames: number): Promise<string> {
-  const r = getRenderer();
+function stageOf(slot: Slot): Stage {
+  let st = stages.get(slot.key);
+  if (st) return st;
+  const model = slot.make();
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight('#ffffff', '#5a4a38', 1.6));
   const sun = new THREE.DirectionalLight('#ffffff', 2.4);
   sun.position.set(5, 9, 4);
   scene.add(sun);
   const spin = new THREE.Group();
-  spin.add(group);
+  spin.add(model);
   scene.add(spin);
   // Рамка по постройке: радиус вокруг оси вращения и высота.
-  const box = new THREE.Box3().setFromObject(group);
+  const box = new THREE.Box3().setFromObject(model);
   const rad = Math.max(Math.hypot(box.max.x, box.max.z), Math.hypot(box.min.x, box.min.z), Math.hypot(box.max.x, box.min.z), Math.hypot(box.min.x, box.max.z));
   const h = box.max.y;
   const half = Math.max(1.1, rad, (h * Math.cos(PITCH) + 2 * rad * Math.sin(PITCH)) / 2) * 1.04;
@@ -63,79 +60,111 @@ function shoot(group: THREE.Group, frames: number): Promise<string> {
   const dir = new THREE.Vector3(0, Math.sin(PITCH), Math.cos(PITCH));
   cam.position.set(0, h / 2, 0).addScaledVector(dir, 30);
   cam.lookAt(0, h / 2, 0);
-  const sheet = document.createElement('canvas');
-  sheet.width = PX * frames;
-  sheet.height = PX;
-  const g = sheet.getContext('2d')!;
-  for (let k = 0; k < frames; k++) {
-    // Начинаем с вида как в деревне (с юго-востока) и обходим по кругу.
-    spin.rotation.y = -Math.PI / 4 - (k / frames) * Math.PI * 2;
-    r.render(scene, cam);
-    g.drawImage(r.domElement, k * PX, 0);
-  }
-  release();
-  return new Promise((res) => {
-    if (sheet.toBlob) sheet.toBlob((b) => res(b ? URL.createObjectURL(b) : sheet.toDataURL()), 'image/webp', 0.9);
-    else res(sheet.toDataURL());
-  });
+  st = { scene, spin, model, cam };
+  stages.set(slot.key, st);
+  return st;
 }
 
-/** Снимок постройки: адрес картинки-полоски из frames кадров. */
-function useShot(t: BuildingType, l: number, frames: number): string | null {
+function getRenderer(): THREE.WebGLRenderer {
+  clearTimeout(idle);
+  const low = getSettings().lowPower;
+  if (renderer && low !== lite) dropRenderer();
+  if (!renderer) {
+    lite = low;
+    // Кадр в пикселях: на обычном телефоне — по плотности экрана, в экономном режиме — меньше.
+    px = low ? 96 : Math.min(192, Math.round(64 * Math.min(2.5, window.devicePixelRatio || 1)));
+    renderer = new THREE.WebGLRenderer({ antialias: !low, alpha: true, powerPreference: 'low-power' });
+    renderer.setPixelRatio(1);
+    renderer.setSize(px, px, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Как у сцены деревни (R3F по умолчанию): цвета превью совпадают с картой.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.setClearColor(0x000000, 0);
+  }
+  return renderer;
+}
+
+function dropRenderer() {
+  renderer?.dispose();
+  renderer?.forceContextLoss();
+  renderer = null;
+}
+
+function frame(nowMs: number) {
+  raf = 0;
+  if (!slots.size) {
+    // Все карточки закрыты: через несколько секунд отдаём WebGL.
+    clearTimeout(idle);
+    idle = window.setTimeout(dropRenderer, 4000);
+    return;
+  }
+  if (!document.hidden) {
+    const t = nowMs / 1000;
+    for (const slot of slots) {
+      if (!slot.visible) continue;
+      const r = getRenderer();
+      if (slot.canvas.width !== px) slot.canvas.width = slot.canvas.height = px;
+      const st = stageOf(slot);
+      st.spin.rotation.y = -Math.PI / 4 - (still ? 0 : (t / TURN_S) * Math.PI * 2);
+      animateGroup(st.model, still ? 0 : t);
+      r.render(st.scene, st.cam);
+      const g = slot.canvas.getContext('2d');
+      if (g) {
+        g.clearRect(0, 0, px, px);
+        g.drawImage(r.domElement, 0, 0);
+      }
+    }
+  }
+  // «Меньше движения» в системе: один неподвижный кадр.
+  if (!still) raf = requestAnimationFrame(frame);
+}
+
+function kick() {
+  if (!raf) raf = requestAnimationFrame(frame);
+}
+
+function useSlot(ref: React.RefObject<HTMLCanvasElement | null>, key: string, make: () => THREE.Group) {
+  const mk = useRef(make);
+  mk.current = make;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const slot: Slot = { canvas, key, make: () => mk.current(), visible: true };
+    slots.add(slot);
+    // Рисуем только то, что видно: прокрученные за край листа карточки не стоят ничего.
+    const io =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(([e]) => {
+            slot.visible = e.isIntersecting;
+            if (still) kick();
+          })
+        : null;
+    io?.observe(canvas);
+    kick();
+    return () => {
+      io?.disconnect();
+      slots.delete(slot);
+      kick();
+    };
+  }, [ref, key]);
+}
+
+function Live({ t, l, size }: { t: BuildingType; l: number; size: number }) {
   const fantasy = useLib('fantasy');
   const village = useLib('village');
-  const key = `${t}:${l}:${frames}`;
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    let p = cache.get(key);
-    if (!p) {
-      // Снимаем по очереди и между снимками отдаём кадр интерфейсу.
-      p = chain.then(
-        () =>
-          new Promise<string>((res, rej) =>
-            requestAnimationFrame(() => {
-              try {
-                res(shoot(lookGroup(lookOf(t, l), { fantasy, village, space: undefined, city: undefined }), frames));
-              } catch (e) {
-                rej(e);
-              }
-            }),
-          ),
-      );
-      chain = p.catch(() => undefined);
-      cache.set(key, p);
-      p.catch(() => cache.delete(key));
-    }
-    p.then((u) => alive && setUrl(u)).catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [key, t, l, frames, fantasy, village]);
-  return url;
-}
-
-function Shot({ t, l, size }: { t: BuildingType; l: number; size: number }) {
   const s = useSettings();
-  const still = s.lowPower;
-  const frames = still ? 1 : FRAMES;
-  const url = useShot(t, l, frames);
-  if (!url) return <span className={`vil-swatch b-${t}`} style={{ width: size, height: size }} />;
-  return (
-    <span
-      className={`vil-thumb ${still ? '' : 'spin'}`}
-      style={{ width: size, height: size, backgroundImage: `url(${url})`, backgroundSize: `${frames * 100}% 100%`, animationDuration: `${FRAMES / 4}s` }}
-      role="img"
-      aria-label="Модель постройки"
-    />
-  );
+  const ref = useRef<HTMLCanvasElement>(null);
+  // Смена экономного режима — другой рендерер и другие детали (без дыма и искр).
+  useSlot(ref, `${t}:${l}:${s.lowPower ? 1 : 0}`, () => lookGroup(lookOf(t, l), { fantasy, village, space: undefined, city: undefined }, { lite: s.lowPower }));
+  return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label="Модель постройки" />;
 }
 
 /** Мини-модель постройки t уровня l. */
 export function Preview({ t, l = 1, size = 60 }: { t: BuildingType; l?: number; size?: number }) {
   return (
     <Suspense fallback={<span className={`vil-swatch b-${t}`} style={{ width: size, height: size }} />}>
-      <Shot t={t} l={l} size={size} />
+      <Live t={t} l={l} size={size} />
     </Suspense>
   );
 }

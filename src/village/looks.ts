@@ -28,13 +28,39 @@ export interface Prim {
   sy: number;
   sz: number;
   c: string;
+  // Повороты (рад): лежащее бревно, повёрнутый ящик.
+  rx?: number;
+  ry?: number;
+  rz?: number;
+  // Светится тёплым светом сам (окна, фонари, горн): без освещения и теней.
+  glow?: boolean;
+}
+
+/**
+ * Движущаяся деталь: дым из трубы, флаг на ветру, пила лесопилки, вывеска таверны, искры кузни,
+ * вагонетка рудника. Как именно движется — src/village/anim3d.ts.
+ */
+export type AnimKind = 'smoke' | 'flag' | 'saw' | 'sign' | 'spark' | 'cart';
+export interface Anim {
+  k: AnimKind;
+  x: number;
+  y: number;
+  z: number;
+  s: number;
+  ry: number;
+  c: string;
+  // Сдвиг по фазе, чтобы соседние флаги и дымки не двигались в такт.
+  ph: number;
 }
 
 export interface Look {
   kit: KitPart[];
   prim: Prim[];
+  anim: Anim[];
   // Высота верхушки: над ней висят таймер и пузырь ресурса.
   top: number;
+  // Радиус мягкой тени под постройкой (0 — без тени).
+  blob: number;
 }
 
 export const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, quarry: 2, goldmine: 2, storage: 2, barracks: 2, forge: 2, tavern: 2, market: 2, tower: 2, catapult: 2, wall: 1 };
@@ -61,20 +87,27 @@ const ENEMY: Record<string, [LibName, string]> = {
   building_church_blue: ['village', 'building_church_red'], building_windmill_blue: ['fantasy', 'building_windmill_yellow'],
 };
 // Мелочи, которые есть только в библиотеке деревни.
-const VILLAGE_ONLY = new Set(['bush', 'pallet', 'crate_long_A', 'tree_single_A_cut', 'trees_A_cut', 'bucket_arrows', 'building_stage_B', 'building_stage_C', 'rock_single_E', 'building_dirt']);
+const VILLAGE_ONLY = new Set(['crate_A_small', 'crate_B_small', 'crate_B_big', 'crate_long_B', 'bucket_empty', 'projectile_catapult', 'fence_wood_straight_gate', 'bush', 'pallet', 'crate_long_A', 'tree_single_A_cut', 'trees_A_cut', 'bucket_arrows', 'building_stage_B', 'building_stage_C', 'rock_single_E', 'building_dirt']);
 
 export const STONE = '#a3a7ad';
 export const STONE_D = '#7f848c';
 export const GOLD = '#f4c24f';
 export const WOOD = '#9b6b3f';
 const WOOD_D = '#6f4a2a';
+const BRICK = '#8b5a44';
+const IRON = '#3b3f48';
+const HAY = '#e3c25a';
+// Тёплый свет окон и фонарей.
+export const WARM = '#ffcf6e';
 const ROOF_OWN = '#3f6fc4';
 const ROOF_ENEMY = '#c0453c';
 
 class Builder {
   kit: KitPart[] = [];
   prim: Prim[] = [];
+  anim: Anim[] = [];
   top = 2.6;
+  blob = 1.25;
   // Подъём на цоколь: всё, что ставится после цоколя, стоит на нём.
   y0 = 0;
   constructor(public enemy: boolean) {}
@@ -85,8 +118,16 @@ class Builder {
     this.kit.push({ lib, name, s, x, z, y, ry, tint });
     return this;
   }
-  p(k: PrimKind, x: number, y: number, z: number, sx: number, sy: number, sz: number, c: string) {
-    this.prim.push({ k, x, y, z, sx, sy, sz, c });
+  p(k: PrimKind, x: number, y: number, z: number, sx: number, sy: number, sz: number, c: string, r?: { rx?: number; ry?: number; rz?: number; glow?: boolean }) {
+    this.prim.push({ k, x, y, z, sx, sy, sz, c, ...r });
+    return this;
+  }
+  /** Светящаяся деталь: окно, огонёк фонаря, жерло горна. */
+  glow(k: PrimKind, x: number, y: number, z: number, sx: number, sy: number, sz: number, c = WARM, ry?: number) {
+    return this.p(k, x, y, z, sx, sy, sz, c, { glow: true, ry });
+  }
+  a(k: AnimKind, x: number, y: number, z: number, s = 1, ry = 0, c = '#ffffff') {
+    this.anim.push({ k, x, y, z, s, ry, c, ph: ((x * 7.3 + z * 3.1 + this.anim.length * 1.7) % 6.28 + 6.28) % 6.28 });
     return this;
   }
   /** Цоколь под постройкой: камень на 2-й ступени, тёмный камень с золотой каймой на 3-й. */
@@ -106,8 +147,90 @@ class Builder {
   flag(x: number, z: number, stage: number, y = this.y0, s = 1) {
     const h = 0.95 * s;
     this.p('cyl', x, y + h / 2, z, 0.06, h, 0.06, stage >= 2 ? GOLD : WOOD_D);
-    this.p('box', x + 0.2 * s, y + h - 0.15 * s, z, 0.4 * s, 0.26 * s, 0.03, this.enemy ? ROOF_ENEMY : ROOF_OWN);
+    // Полотнище машет на ветру; смотрит на камеру боком, чтобы было видно, как оно колышется.
+    this.a('flag', x, y + h - 0.15 * s, z, s, Math.PI / 4, this.enemy ? ROOF_ENEMY : ROOF_OWN);
     if (stage >= 2) this.p('cone', x, y + h + 0.06, z, 0.12, 0.14, 0.12, GOLD);
+    return this;
+  }
+  /** Кирпичная труба с дымом. */
+  chimney(x: number, z: number, y: number, h: number, smoke = true) {
+    this.p('box', x, y + h / 2, z, 0.26, h, 0.26, BRICK).p('box', x, y + h + 0.03, z, 0.32, 0.07, 0.32, STONE_D);
+    if (smoke) this.a('smoke', x, y + h + 0.08, z);
+    return this;
+  }
+  /** Фонарь на столбе: тёплый огонёк, как будто вечереет. */
+  lantern(x: number, z: number, h = 0.62) {
+    const y = this.y0;
+    this.p('cyl', x, y + h / 2, z, 0.05, h, 0.05, WOOD_D).p('box', x, y + h + 0.02, z, 0.16, 0.04, 0.16, IRON);
+    this.glow('box', x, y + h + 0.11, z, 0.11, 0.14, 0.11);
+    return this.p('cone', x, y + h + 0.24, z, 0.2, 0.12, 0.2, IRON);
+  }
+  /** Ящик с цветами у стены. */
+  flowers(x: number, z: number, ry = 0, y = this.y0) {
+    this.p('box', x, y + 0.06, z, 0.42, 0.12, 0.14, WOOD_D, { ry }).p('box', x, y + 0.14, z, 0.38, 0.05, 0.1, '#5d9b3a', { ry });
+    const cx = Math.cos(ry);
+    const sz = -Math.sin(ry);
+    ['#ff6b81', '#ffd27a', '#f48fb1'].forEach((c, k) => this.p('box', x + (k - 1) * 0.12 * cx, y + 0.19, z + (k - 1) * 0.12 * sz, 0.07, 0.06, 0.07, c, { ry }));
+    return this;
+  }
+  /** Тюк сена. */
+  hay(x: number, z: number, ry = 0, y = this.y0) {
+    return this.p('box', x, y + 0.11, z, 0.38, 0.22, 0.24, HAY, { ry }).p('box', x, y + 0.11, z, 0.06, 0.23, 0.25, '#b8913a', { ry });
+  }
+  /** Поленница из трёх брёвен; along — брёвна лежат вдоль x (иначе вдоль z). */
+  logs(x: number, z: number, along = true, y = this.y0) {
+    for (const [d, dy, c] of [[-0.07, 0.06, WOOD], [0.07, 0.06, WOOD_D], [0, 0.17, WOOD]] as const) {
+      if (along) this.p('cyl', x, y + dy, z + d, 0.12, 0.5, 0.12, c, { rz: Math.PI / 2 });
+      else this.p('cyl', x + d, y + dy, z, 0.12, 0.5, 0.12, c, { rx: Math.PI / 2 });
+    }
+    return this;
+  }
+  /** Козлы с бревном и крутящейся пилой; ry — куда смотрит диск. */
+  saw(x: number, z: number, ry = 0) {
+    const y = this.y0;
+    const cx = Math.cos(ry);
+    const sz = -Math.sin(ry);
+    // Козлы вдоль диска, бревно поперёк.
+    this.p('box', x, y + 0.11, z, 0.56, 0.22, 0.2, WOOD_D, { ry });
+    this.p('cyl', x - 0.14 * cx, y + 0.27, z - 0.14 * sz, 0.12, 0.42, 0.12, WOOD, { rz: Math.PI / 2, ry: ry + Math.PI / 2 });
+    return this.a('saw', x + 0.12 * cx, y + 0.34, z + 0.12 * sz, 1.35, ry);
+  }
+  /** Наковальня у горна и искры над ней. */
+  anvil(x: number, z: number) {
+    const y = this.y0;
+    this.p('box', x, y + 0.07, z, 0.2, 0.14, 0.16, WOOD_D).p('box', x, y + 0.17, z, 0.12, 0.08, 0.1, IRON).p('box', x, y + 0.24, z, 0.28, 0.07, 0.13, IRON);
+    return this.a('spark', x, y + 0.3, z);
+  }
+  /** Рельсы и вагонетка, которая по ним катается; along — вдоль x. */
+  rails(x: number, z: number, along = true, ore = '#7a6a58') {
+    const y = this.y0;
+    const ry = along ? 0 : Math.PI / 2;
+    for (const d of [-0.07, 0.07]) this.p('box', x + (along ? 0 : d), y + 0.015, z + (along ? d : 0), along ? 0.95 : 0.03, 0.03, along ? 0.03 : 0.95, IRON);
+    for (const d of [-0.36, -0.12, 0.12, 0.36]) this.p('box', x + (along ? d : 0), y + 0.008, z + (along ? 0 : d), along ? 0.05 : 0.24, 0.016, along ? 0.24 : 0.05, WOOD_D);
+    return this.a('cart', x, y + 0.02, z, 1, ry, ore);
+  }
+  /** Вывеска на столбе с перекладиной; качается на ветру. */
+  sign(x: number, z: number, c: string, ry = Math.PI / 4) {
+    const y = this.y0;
+    const h = 0.95;
+    // Перекладина и вывеска — вдоль оси ry: так вывеска видна с камеры плашмя.
+    const dx = 0.2 * Math.cos(ry);
+    const dz = -0.2 * Math.sin(ry);
+    this.p('cyl', x, y + h / 2, z, 0.06, h, 0.06, WOOD_D).p('box', x + dx, y + h - 0.04, z + dz, 0.44, 0.04, 0.04, WOOD_D, { ry });
+    return this.a('sign', x + dx, y + h - 0.06, z + dz, 1, ry, c);
+  }
+  /** Костёр: поленья, огонь и дымок. */
+  campfire(x: number, z: number) {
+    const y = this.y0;
+    this.p('box', x, y + 0.04, z, 0.34, 0.06, 0.08, WOOD_D, { ry: 0.5 }).p('box', x, y + 0.04, z, 0.34, 0.06, 0.08, WOOD, { ry: -0.6 });
+    this.glow('cone', x, y + 0.16, z, 0.2, 0.24, 0.2, '#ff9a3d').glow('cone', x, y + 0.2, z, 0.11, 0.2, 0.11, WARM);
+    return this.a('smoke', x, y + 0.3, z, 0.7);
+  }
+  /** Деревянная кайма вокруг двора на деревянной ступени. */
+  yard(half: number) {
+    const w = half * 2 - 0.1;
+    for (const [x, z, sx, sz] of [[0, half - 0.05, w, 0.08], [0, -half + 0.05, w, 0.08], [half - 0.05, 0, 0.08, w], [-half + 0.05, 0, 0.08, w]])
+      this.p('box', x, 0.03, z, sx, 0.06, sz, WOOD_D);
     return this;
   }
   /** Деревянный заборчик из кольев вдоль стороны. */
@@ -126,10 +249,10 @@ class Builder {
   }
   /** Факел: столб и огонёк. */
   torch(x: number, z: number) {
-    return this.p('cyl', x, this.y0 + 0.25, z, 0.06, 0.5, 0.06, WOOD_D).p('cone', x, this.y0 + 0.58, z, 0.14, 0.18, 0.14, '#ffb43d');
+    return this.p('cyl', x, this.y0 + 0.25, z, 0.06, 0.5, 0.06, WOOD_D).glow('cone', x, this.y0 + 0.58, z, 0.14, 0.18, 0.14, '#ffb43d');
   }
   done(): Look {
-    return { kit: this.kit, prim: this.prim, top: this.top };
+    return { kit: this.kit, prim: this.prim, anim: this.anim, top: this.top, blob: this.blob };
   }
 }
 
@@ -192,61 +315,83 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
     return b.done();
   }
   b.plinth(st, 1);
+  // Деревянная ступень: двор обведён брусом, у камня и крепости — цоколь.
+  if (st === 0) b.yard(1);
+  b.blob = 1.42;
   switch (t) {
     case 'lumbermill':
       b.m('building_lumbermill_blue', 1.3 * g, 0, 0);
       b.m('resource_lumber', 1.5, 0.45, 0.78, 0.2);
-      if (st === 0) b.m('tree_single_A_cut', 2.2, -0.8, 0.75).m('tree_single_A_cut', 1.8, 0.85, -0.5).stakes(-0.95, 0.95, 0.1, 0.95, 4);
-      if (st >= 1) b.m('pallet', 2.2, -0.62, 0.7).m('crate_long_A', 2, -0.62, 0.7, 0.4, b.y0 + 0.17);
+      if (st === 0) b.m('tree_single_A_cut', 2.2, -0.8, 0.75).m('tree_single_A_cut', 1.8, -0.75, -0.75).stakes(-0.95, 0.95, 0.1, 0.95, 4);
+      if (st >= 1) b.m('pallet', 2.2, -0.62, 0.7).m('crate_long_A', 2, -0.62, 0.7, 0.4, b.y0 + 0.17).lantern(0.92, 0.92);
       if (l >= 5) b.m('resource_lumber', 1.3, 0.8, -0.2, 1.4);
+      // Пила крутится на козлах у правого края двора.
+      b.saw(0.86, l >= 5 ? -0.75 : -0.35, Math.PI / 2);
+      if (st === 0) b.logs(0.15, 0.55);
       break;
     case 'quarry':
       b.m('resource_stone', 2.6 * g, -0.1, 0.2).m('rock_single_C', 3.2 * g, 0.5, -0.4).m('rock_single_A', 3, -0.5, -0.5).m('wheelbarrow', 1.6, 0.5, 0.55, 0.6);
-      if (st >= 1) b.m('building_stage_B', 1.05, -0.35, -0.45, Math.PI / 3).m('crate_A_big', 2, 0.85, 0.15);
-      if (st === 0) b.m('rock_single_E', 2.2, -0.75, 0.75);
+      if (st >= 1) b.m('building_stage_B', 1.05, -0.35, -0.45, Math.PI / 3).m('crate_A_big', 2, 0.85, 0.15).lantern(-0.9, 0.9);
+      if (st === 0) b.m('rock_single_E', 2.2, -0.75, 0.75).m('bucket_empty', 2.2, 0.85, -0.2);
       if (st >= 2) b.m('building_tower_base_blue', 0.62, -0.7, -0.65).m('resource_stone', 1.8, 0.85, 0.85);
+      // Вагонетка с камнем возит его вдоль переднего края.
+      b.rails(-0.05, 0.86, true, STONE);
       break;
     case 'goldmine':
       b.m('building_mine_blue', 1.1 * g, 0, 0);
       if (st === 0) b.m('bucket_water', 2.2, 0.85, 0.85).stakes(0.95, 0.95, 0.95, -0.2, 4);
-      if (st >= 1) b.m('wheelbarrow', 1.7, 0.8, 0.75, -0.5).m('crate_A_big', 2.2, -0.85, 0.8);
+      if (st >= 1) b.m('wheelbarrow', 1.7, 0.8, 0.75, -0.5).m('crate_A_big', 2.2, -0.85, 0.8).lantern(0.9, -0.55);
       if (st >= 2) b.m('coin_stack_large', 0.3, 0.2, 0.92).m('chest_gold', 0.24, 0.92, -0.35, -Math.PI / 2);
+      // Вагонетка с рудой выкатывается из штольни.
+      b.rails(-0.1, st >= 2 ? 0.62 : 0.86, true, '#6b5a48');
       break;
     case 'storage':
       b.m('building_grain', 0.95 * g, 0, 0).m('crates_stacked', 0.38, -0.35, -0.3).m('barrel', 2.2, 0.45, 0.35).m('sack', 3, 0.1, 0.55);
-      if (st >= 1) b.m('barrel_small_stack', 0.32, 0.35, -0.55).m('crate_A_big', 2.4, -0.55, 0.5);
+      if (st === 0) b.hay(0.82, -0.3, 0.3).hay(0.84, 0.15, -0.2).hay(0.83, -0.08, 0, b.y0 + 0.22).m('crate_A_small', 2.4, -0.8, 0.82);
+      if (st >= 1) b.m('barrel_small_stack', 0.32, 0.35, -0.55).m('crate_A_big', 2.4, -0.55, 0.5).flowers(0.85, 0.85, Math.PI / 4).lantern(-0.9, 0.9);
       if (l >= 5) b.m('barrel_large', 0.3, -0.62, 0.05);
       if (st >= 2) b.m('chest_gold', 0.26, 0.55, 0.62, Math.PI / 4).m('coin_stack_large', 0.22, 0.05, 0.75);
       break;
     case 'barracks':
       if (st === 0) {
-        // Лагерь из палаток: настоящие казармы — с камня.
+        // Лагерь из палаток с костром: настоящие казармы — с камня.
         b.m('tent', 1.9, -0.45, -0.35, 0.3).m('tent', 1.6, 0.5, -0.5, -0.4).m('weaponrack', 2.6, 0.6, 0.55, -Math.PI / 4).m('target', 2.6, -0.55, 0.65, Math.PI / 5);
         if (l === 2) b.m('tent', 1.5, -0.6, 0.5, 1.2).flag(0.85, 0.9, 0);
+        b.campfire(0.05, 0.25);
         b.top = 2;
       } else {
-        b.m('building_barracks_blue', 1.3 * g, 0, 0).m('weaponrack', 2.4, 0.85, 0.7, -Math.PI / 4);
+        b.m('building_barracks_blue', 1.3 * g, 0, 0).m('weaponrack', 2.4, 0.85, 0.7, -Math.PI / 4).lantern(-0.9, 0.9);
         if (l >= 5) b.m('target', 2.4, -0.82, 0.78, Math.PI / 5);
+        b.chimney(-0.55, -0.6, b.y0, 1.75);
       }
       break;
     case 'forge':
       b.m('building_blacksmith_blue', 1.4 * g, 0, 0);
       b.m('barrel', 2.2, 0.85, 0.75);
       if (st >= 1) b.m('weaponrack', 2.3, -0.82, 0.78, Math.PI / 4).m('resource_stone', 1.2, 0.85, -0.75);
-      // Кирпичная труба с дымоходом растёт на крепостной ступени.
-      if (st >= 2) b.p('box', -0.55, b.y0 + 0.9, -0.55, 0.32, 1.8, 0.32, '#8b5a44').p('box', -0.55, b.y0 + 1.83, -0.55, 0.4, 0.08, 0.4, GOLD);
+      // Наковальня с искрами у входа; труба горна дымит — на крепостной ступени она кирпичная и выше.
+      b.anvil(0.3, 0.86);
+      if (st >= 2) b.chimney(-0.55, -0.55, b.y0, 1.8).p('box', -0.55, b.y0 + 1.83, -0.55, 0.4, 0.08, 0.4, GOLD);
+      else b.a('smoke', 0.3, b.y0 + 1.75 * g, 0.12);
       break;
     case 'tavern':
       b.m('building_tavern_blue', 1.5 * g, 0, 0);
       b.m('barrel', 2.3, 0.85, 0.7);
       if (st >= 1) b.m('barrel_small_stack', 0.3, -0.75, 0.75, 0.6);
       if (st >= 2) b.m('building_well_blue', 0.75, 0.8, -0.75);
+      // Вывеска с кружкой качается, из трубы идёт дым, у входа цветы и фонарь.
+      b.sign(0.35, 0.95, st >= 2 ? GOLD : '#c98a4b', 0);
+      b.chimney(-0.6, -0.45, b.y0, 2.1);
+      b.flowers(-0.2, 0.9, 0);
+      if (st >= 1) b.lantern(-0.92, 0.25);
       break;
     case 'market':
       b.m('building_market_blue', 1.05 * g, 0, 0);
       b.m('sack', 3, 0.8, 0.85);
-      if (st >= 1) b.m('crate_open', 2.3, -0.85, 0.75).m('barrel', 2.1, 0.9, -0.1);
+      if (st === 0) b.m('crate_B_small', 2.4, -0.85, 0.82).hay(0.86, 0.2, 0.4);
+      if (st >= 1) b.m('crate_open', 2.3, -0.85, 0.75).m('barrel', 2.1, 0.9, -0.1).m('crate_B_big', 2, 0.85, -0.75).lantern(0.25, 0.92);
       if (st >= 2) b.m('chest_gold', 0.22, 0.1, 0.9).m('coin_stack_large', 0.2, -0.45, 0.9);
+      b.flowers(-0.35, 0.9, 0);
       break;
     case 'tower':
       // Ступени башни: низкая каменная, высокая, большая крепостная.
@@ -254,12 +399,18 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
       else if (st === 1) b.m('building_tower_A_blue', 1.5 * g, 0, 0);
       else b.m('building_tower_B_blue', 1.3 * g, 0, 0).flag(0, 0, 2, b.y0 + 2.49 * 1.3 * g - 0.05, 0.9);
       if (l >= 4) b.m('bucket_arrows', 2.2, 0.82, 0.75);
+      // Факелы у входа светятся тёплым; на деревянной ступени — ящик стрел.
+      if (st === 0) b.m('crate_A_small', 2.2, 0.82, -0.6);
+      else b.torch(0.88, -0.2).torch(-0.2, 0.88);
       b.top = st === 0 ? 2.4 : st === 1 ? 3.6 : 4.4;
       break;
     case 'catapult':
       b.m('building_tower_catapult_blue', 1.4 * g, 0, 0);
       if (st === 0) b.stakes(-0.95, 0.95, 0.95, 0.95, 6);
-      if (st >= 1) b.m('resource_stone', 1.4, 0.8, 0.75);
+      if (st >= 1) b.m('resource_stone', 1.4, 0.8, 0.75).lantern(-0.9, 0.9);
+      // Запас ядер у подножия.
+      b.m('projectile_catapult', 1.6, 0.86, -0.45).m('projectile_catapult', 1.6, 0.7, -0.62);
+      if (l >= 5) b.m('projectile_catapult', 1.6, 0.78, -0.53, 0, b.y0 + 0.14);
       b.top = 3.6;
       break;
   }

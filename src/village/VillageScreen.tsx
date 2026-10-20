@@ -245,7 +245,9 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const shieldLeft = Math.max(0, (pvp.shieldUntil ?? 0) - now);
 
   const views = useMemo<ViewBld[]>(() => town.b.map((b) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l, state: b.l === 0 ? 'new' : b.u != null ? 'up' : 'ok' })), [town.b]);
-  const shown = placing?.id != null ? views.filter((b) => b.i !== placing.id) : views;
+  // Без useMemo при переносе постройки сцена собиралась бы заново каждую секунду (тикает таймер).
+  const movingId = placing?.id;
+  const shown = useMemo(() => (movingId != null ? views.filter((b) => b.i !== movingId) : views), [views, movingId]);
   const bubbles = town.b
     .filter((b) => BUILDINGS[b.t].collector && b.l >= 1 && accrued(b, now) >= Math.max(5, BUILDINGS[b.t].collector!.perHour[b.l - 1] * 0.5))
     .map((b) => ({ i: b.i, res: BUILDINGS[b.t].collector!.res }));

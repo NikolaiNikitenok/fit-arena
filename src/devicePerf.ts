@@ -33,21 +33,27 @@ export function deviceHints(nav: Navigator = navigator): DeviceHints {
   };
 }
 
-/** Решение по характеристикам: true — слабый, false — сильный, null — не ясно, решит замер FPS. */
+/**
+ * Решение по характеристикам: true — слабый, false — сильный, null — не ясно, решит замер FPS.
+ * Число ядер не смотрим: Android отдаёт только ядра, которые сейчас не спят, и средний телефон
+ * в режиме экономии батареи показывает 4 — из-за этого экономный режим включался зря.
+ */
 export function weakByHints(h: DeviceHints): boolean | null {
   if (h.tgClass === 'LOW') return true;
   if (h.tgClass === 'HIGH') return false;
-  if (h.memory != null && h.memory <= 3) return true;
-  // Четыре ядра — это дешёвый Android; у iPhone ядер мало, но они быстрые, поэтому только Android.
-  if (h.cores != null && h.cores <= 4 && h.android) return true;
+  if (h.memory != null && h.memory <= 2) return true;
   return null;
 }
 
-// Ниже этого FPS 3D-сцены экономный режим включается сам.
-export const MIN_FPS = 30;
+// Ниже этого FPS 3D-сцены в полном качестве экономный режим включается сам. Не 30: экран на 30 Гц
+// (режим экономии батареи в Android и Telegram) даёт ровно 30 кадров, и это не слабый телефон.
+export const MIN_FPS = 24;
 // Первые секунды сцена грузит модели и собирает шейдеры: их не считаем.
 const WARMUP_MS = 3000;
 const SAMPLE_MS = 4000;
+// Версия правил автоматики. Если экономный режим включила автоматика по старым правилам,
+// после обновления решаем заново.
+export const POWER_RULES = 2;
 
 const toastListeners = new Set<() => void>();
 let toastPending = false;
@@ -76,7 +82,12 @@ const undecided = () => {
 
 /** При запуске: явно слабый телефон сразу получает экономный режим, ещё до первой 3D-сцены. */
 export function initPowerAuto(): void {
-  if (!undecided()) return;
+  const s = getSettings();
+  if ((s.powerRules ?? 1) < POWER_RULES) {
+    // Выбор игрока не трогаем; решение автоматики по старым правилам сбрасываем и принимаем заново.
+    setAuto(s.lowPowerChosen ? { powerRules: POWER_RULES } : { powerRules: POWER_RULES, lowPower: false, powerChecked: false });
+  }
+  if (!undecided() || getSettings().powerChecked) return;
   const weak = weakByHints(deviceHints());
   if (weak) enableAuto();
   else if (weak === false) setAuto({ powerChecked: true });
@@ -105,4 +116,50 @@ export function probeFps(): void {
     };
     requestAnimationFrame(tick);
   }, WARMUP_MS);
+}
+
+// ——— Ограничение кадров в экономном режиме ———
+// Экономный режим снижает разрешение и убирает тени, но рисует с частотой экрана. Только если и так
+// сцена держит меньше CAP_BELOW кадров, ограничиваем её ровными 30: рывки 20–28 заметнее ровных 30,
+// а процессору остаётся время на распознавание позы.
+export const CAP_BELOW = 25;
+export const CAP_FPS = 30;
+let capped = false;
+const capListeners = new Set<() => void>();
+export const fpsCapped = () => capped;
+export function subscribeCap(l: () => void): () => void {
+  capListeners.add(l);
+  return () => capListeners.delete(l);
+}
+function setCapped(v: boolean) {
+  if (capped === v) return;
+  capped = v;
+  capListeners.forEach((l) => l());
+}
+
+// Кадры 3D за последние секунды: для решения об ограничении и для счётчика FPS у админа.
+const stamps: number[] = [];
+let lowSince = 0;
+
+/** Кадр 3D-сцены нарисован (зовёт Canvas3D). lowPower — сцена в экономном режиме. */
+export function frameDone(now: number, lowPower: boolean): void {
+  stamps.push(now);
+  while (stamps.length && now - stamps[0] > 1000) stamps.shift();
+  if (!lowPower || capped) return;
+  // Решаем по трём секундам подряд ниже порога, не раньше чем сцена прогреется.
+  const fps = stamps.length;
+  if (fps >= CAP_BELOW || now - (stamps[0] ?? now) < 900) lowSince = 0;
+  else if (!lowSince) lowSince = now;
+  else if (now - lowSince > 3000) setCapped(true);
+}
+
+/** Сколько кадров 3D нарисовано за последнюю секунду. */
+export function sceneFps(now = performance.now()): number {
+  return stamps.filter((t) => now - t <= 1000).length;
+}
+
+/** Новая сцена: прогрев не считаем. */
+export function sceneStarted(): void {
+  stamps.length = 0;
+  lowSince = 0;
 }

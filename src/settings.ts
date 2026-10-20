@@ -14,13 +14,16 @@ export interface Settings {
   skeleton: boolean;
   // 3D-подсказка «как встать к камере» перед уровнем.
   guide: boolean;
-  // Экономия батареи: без теней и сглаживания, с меньшим разрешением 3D и 30 кадрами в секунду.
+  // Экономия батареи: без теней, сглаживания и мелких украшений, с меньшим разрешением 3D. Кадров —
+  // сколько даёт экран; 30 — только если телефон и так не тянет (devicePerf.ts).
   // На слабых телефонах включается сам (devicePerf.ts), пока игрок не выбрал сам.
   lowPower: boolean;
   // Игрок сам переключал экономию: автоматика её больше не трогает.
   lowPowerChosen: boolean;
   // Замер FPS на первом запуске уже прошёл.
   powerChecked: boolean;
+  // По какой версии правил автоматика решала про экономный режим (devicePerf.ts, POWER_RULES).
+  powerRules?: number;
   // Сюжетные диалоги перед уровнями.
   story: boolean;
 }
@@ -74,10 +77,6 @@ export const canvasProps = (s: Settings) =>
   s.lowPower
     ? { shadows: false, dpr: 1 as const, gl: { antialias: false, powerPreference: 'default' as const } }
     : { shadows: true, dpr: [1, 1.6] as [number, number], gl: {} };
-
-// Сколько кадров в секунду рисуют 3D-сцены в экономном режиме: вдвое меньше работы для видеокарты,
-// и процессору остаётся время на распознавание позы.
-export const LOW_POWER_FPS = 30;
 
 /** Сигнал на повтор теперь живёт в звуковом движке. */
 export { repSound } from './audio';
