@@ -7,6 +7,7 @@ import type { DailyTask } from './daily';
 import type { EventState } from './event';
 import type { ProgramsState } from './programs';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
+import { addCharge, type Village } from './resources';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
 export interface Progress {
@@ -72,6 +73,8 @@ export interface Progress {
   pets?: PetState;
   // Программы тренировок Мастера Грома (src/game/programs.ts): идущая, пройденные и опыт за дни.
   programs?: ProgramsState;
+  // Заряд подземелья и ресурсы деревни (src/game/resources.ts).
+  village?: Village;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
@@ -401,7 +404,8 @@ export function recordActivity(p: Progress, exercise: Exercise | null, amount: n
     if (!p.first[exercise]) next.first = { ...p.first, [exercise]: { reps, date } };
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
-  return save(feedPet(next, total, now));
+  // Каждый повтор заряжает подземелье «три в ряд».
+  return save(addCharge(feedPet(next, total, now), total));
 }
 
 // В неделю можно отдохнуть два дня, и серия не прервётся: мышцам нужен отдых.
