@@ -68,6 +68,7 @@ const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetH
 const Onboarding = lazy(() => import('./Onboarding').then((m) => ({ default: m.Onboarding })));
 const SettingsSheet = lazy(() => import('../SettingsSheet').then((m) => ({ default: m.SettingsSheet })));
 const WorldMap3D = lazy(() => import('./WorldMap3D').then((m) => ({ default: m.WorldMap3D })));
+const VillageScreen = lazy(() => import('../village/VillageScreen').then((m) => ({ default: m.VillageScreen })));
 
 /** Пока экран докачивается. */
 const Loading = () => <div className="lazy-loading muted">Загружаем…</div>;
@@ -82,7 +83,7 @@ const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp', 'plank'];
 const fmtMin = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 
-export type AdventureTab = 'hero' | 'map' | 'clan';
+export type AdventureTab = 'hero' | 'map' | 'clan' | 'village';
 
 interface Props {
   tab: AdventureTab;
@@ -348,6 +349,16 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
       <>
         <Screen>
           <ClanScreen progress={progress} setProgress={setProgress} onPlaying={onPlaying} landNow={currentDef.land} onSpendMight={() => update(spendMight)} />
+        </Screen>
+        {sheets}
+      </>
+    );
+
+  if (tab === 'village')
+    return (
+      <>
+        <Screen>
+          <VillageScreen progress={progress} setProgress={setProgress} onPlaying={onPlaying} onDungeon={() => setDungeon(true)} />
         </Screen>
         {sheets}
       </>

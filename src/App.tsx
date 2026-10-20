@@ -5,6 +5,7 @@ import { PowerToast } from './PowerToast';
 import { FriendInbox } from './friends/FriendInbox';
 import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './repCounter';
 import { Banner, MapIcon, Shield, Swords } from './icons';
+import { House } from './village/icons';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 
 // Дуэль с 3D-ареной и камерой грузится, когда её открыли.
@@ -15,6 +16,7 @@ type Tab = AdventureTab | 'duel';
 const NAV: { tab: Tab; Icon: typeof Shield; label: string }[] = [
   { tab: 'hero', Icon: Shield, label: 'Герой' },
   { tab: 'map', Icon: MapIcon, label: 'Карта' },
+  { tab: 'village', Icon: House, label: 'Деревня' },
   { tab: 'clan', Icon: Banner, label: 'Клан' },
   { tab: 'duel', Icon: Swords, label: 'Дуэль' },
 ];
@@ -26,7 +28,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>(inviteCode() || friendsFirst ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : 'hero');
   const [exercise, setExercise] = useState<RepExercise>('pushup');
   const [playing, setPlaying] = useState(false);
-  const full = tab === 'map' && !playing;
+  const full = (tab === 'map' || tab === 'village') && !playing;
 
   return (
     <div className={`app ${full ? 'full' : ''} ${playing ? '' : 'with-nav'}`}>

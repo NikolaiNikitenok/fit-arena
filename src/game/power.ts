@@ -6,6 +6,7 @@ import { gearById } from './items';
 import { LevelDef } from './levels';
 import { petBonus } from './pets';
 import { heroLevel, heroXp, Progress } from './progress';
+import { villageBonus } from '../../shared/village';
 
 export const BASE_DAMAGE = 10;
 export const BOSS_HEARTS = 3;
@@ -36,7 +37,9 @@ export function heroPower(p: Progress, might = false, now = Date.now()): Power {
   const atk = (weapon?.atk ?? 0) + (usable?.atk ?? 0);
   // Питомец добавляет пару процентов: прибавка к проценту, а не к базе, чтобы не раздувать урон.
   const pet = petBonus(p, now).damage;
-  const pct = (usable?.pct ?? 0) + (weapon?.pct ?? 0) + (might ? MIGHT_BONUS : 0) + pet;
+  // Кузница деревни: +1% за уровень (src/village).
+  const forge = villageBonus(p.village?.b).damage;
+  const pct = (usable?.pct ?? 0) + (weapon?.pct ?? 0) + (might ? MIGHT_BONUS : 0) + pet + forge;
   const damage = Math.round((BASE_DAMAGE + level + atk) * (1 + pct));
   return { damage, level, atk, pct, hearts: BOSS_HEARTS + (usable?.hearts ?? 0), offhandOff, pet };
 }

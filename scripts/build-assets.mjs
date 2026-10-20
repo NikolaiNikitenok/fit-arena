@@ -1,7 +1,7 @@
 // Собирает 3D-модели KayKit (CC0) из исходников в лёгкие файлы для приложения:
 //   персонажи — каждый в свой .glb, только нужные анимации;
 //   окружение — по библиотеке на мир (fantasy, space, city), предмет = узел с именем файла.
-// Запуск: node scripts/build-assets.mjs <папка assets-src/kaykit>
+// Запуск: node scripts/build-assets.mjs <папка assets-src/kaykit> [библиотека — собрать только её, без персонажей]
 import { readdirSync, statSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
@@ -11,6 +11,7 @@ import { dedup, mergeDocuments, meshopt, prune, quantize, resample, unpartition,
 import { MeshoptEncoder } from 'meshoptimizer';
 
 const SRC = process.argv[2];
+const ONLY = process.argv[3];
 const OUT = 'public/models';
 await MeshoptEncoder.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
@@ -73,6 +74,7 @@ function dropStill(a) {
 const CHARACTERS = ['Knight', 'Mage', 'Barbarian', 'Rogue', 'Skeleton_Minion', 'Skeleton_Warrior', 'Skeleton_Mage', 'Skeleton_Rogue'];
 
 // У всех персонажей KayKit один скелет, поэтому анимации храним в одном файле и делим между всеми.
+if (!ONLY) {
 mkdirSync(`${OUT}/chars`, { recursive: true });
 for (const name of CHARACTERS) {
   const doc = await io.read(find(name));
@@ -90,6 +92,7 @@ for (const name of CHARACTERS) {
   await doc.transform(dedup(), prune({ keepLeaves: true }), squeeze());
   await io.write(`${OUT}/chars/animations.glb`, doc);
   console.log('anims', doc.getRoot().listAnimations().length, Math.round(statSync(`${OUT}/chars/animations.glb`).size / 1024), 'KB');
+}
 }
 
 const LIBS = {
@@ -121,10 +124,17 @@ const LIBS = {
     'road_straight', 'road_corner_curved', 'road_junction', 'road_straight_crossing', 'streetlight', 'trafficlight_A', 'trash_A', 'trash_B',
     'watertower',
   ],
+  // Деревня игрока и лагеря Князя Дивана: синие постройки — свои, красные — чужие.
+  village: [
+    'building_barracks_blue', 'building_barracks_red', 'building_tower_A_blue', 'building_tower_catapult_blue',
+    'building_tower_catapult_red', 'building_archeryrange_blue', 'building_mine_blue', 'building_lumbermill_blue',
+    'building_market_blue', 'building_blacksmith_blue', 'building_tavern_blue', 'building_home_A_red', 'building_dirt',
+  ],
 };
 
 mkdirSync(`${OUT}/lib`, { recursive: true });
 for (const [lib, names] of Object.entries(LIBS)) {
+  if (ONLY && lib !== ONLY) continue;
   const doc = await io.read(find(names[0]));
   const scene = doc.getRoot().listScenes()[0];
   const wrap = (d, sceneList, name) => {

@@ -4,6 +4,8 @@
  * Чистые функции без сохранения: сохраняет вызывающий (progress.ts).
  */
 
+import type { VillageExtra } from '../village/types';
+
 export type Resource = 'wood' | 'stone' | 'gold';
 export const RESOURCES: Resource[] = ['wood', 'stone', 'gold'];
 export const RESOURCE_LABELS: Record<Resource, string> = { wood: 'Дерево', stone: 'Камень', gold: 'Золото' };
@@ -14,7 +16,11 @@ export const CHARGE_MAX = 300;
 export type Resources = Record<Resource, number>;
 export const NO_RESOURCES: Resources = { wood: 0, stone: 0, gold: 0 };
 
-export interface Village {
+/**
+ * Деревня: заряд и запасы, а с первым заходом во вкладку «Деревня» — постройки, войско, задания
+ * и журнал набегов (поля VillageExtra, логика — shared/village.ts и src/village/state.ts).
+ */
+export interface Village extends VillageExtra {
   // Заряд для подземелья.
   charge: number;
   res: Resources;
@@ -22,7 +28,7 @@ export interface Village {
 
 type WithVillage = { village?: Village };
 
-export const villageOf = (p: WithVillage): Village => ({ charge: p.village?.charge ?? 0, res: { ...NO_RESOURCES, ...p.village?.res } });
+export const villageOf = (p: WithVillage): Village => ({ ...p.village, charge: p.village?.charge ?? 0, res: { ...NO_RESOURCES, ...p.village?.res } });
 
 /** Тренировка заряжает подземелье. */
 export function addCharge<P extends WithVillage>(p: P, amount: number): P {

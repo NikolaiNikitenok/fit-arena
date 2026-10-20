@@ -7,7 +7,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 
 const BASE = `${import.meta.env.BASE_URL}models`;
 
-export type LibName = 'fantasy' | 'space' | 'city';
+export type LibName = 'fantasy' | 'space' | 'city' | 'village';
 export type CharName = 'Knight' | 'Mage' | 'Barbarian' | 'Rogue' | 'Skeleton_Minion' | 'Skeleton_Warrior' | 'Skeleton_Mage' | 'Skeleton_Rogue';
 
 export const libUrl = (lib: LibName) => `${BASE}/lib/${lib}.glb`;

@@ -1,0 +1,106 @@
+/* Деревня: сцена на весь экран над нижним меню, поверх — запасы, кнопки и карточки. */
+.vil-screen { position: fixed; z-index: 9; inset: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); overflow: hidden; background: #6f9f45; user-select: none; -webkit-user-select: none; }
+.vil-screen.battle { bottom: 0; z-index: 9; }
+.vil-view { position: absolute; inset: 0; touch-action: none; }
+.vil-view canvas { display: block; }
+
+.vil-top { position: absolute; top: calc(8px + var(--safe-top)); left: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.vil-res { display: flex; gap: 5px; flex-wrap: wrap; }
+.vil-res .pill { height: 30px; padding: 0 9px; gap: 4px; font-size: 13.5px; }
+.vil-res .pill small { font-size: 11px; }
+.vil-res .pill.full small { color: var(--rose); }
+.vil-charge { color: #8be9ff; display: inline-flex; }
+.vil-res-row { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 900; font-variant-numeric: tabular-nums; }
+.vil-res-row > span { display: inline-flex; gap: 3px; align-items: center; }
+
+.vil-side { position: absolute; right: 10px; top: calc(86px + var(--safe-top)); display: flex; flex-direction: column; gap: 8px; }
+.vil-round { position: relative; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); display: grid; place-items: center; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-weight: 900; font-size: 15px; }
+.vil-round.accent { background: var(--accent-grad); color: var(--on-accent); border: 0; }
+.vil-round.danger { color: var(--rose); }
+.vil-round:active { transform: scale(.94); }
+.vil-badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--rose); color: #fff; font-size: 11px; font-style: normal; font-weight: 900; display: grid; place-items: center; }
+
+.vil-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.vil-dock { display: flex; gap: 8px; }
+.vil-dock-btn { flex: 1; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: var(--r-md); border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); font-weight: 900; font-size: 13.5px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.vil-dock-btn small { font-size: 11px; color: var(--gold); }
+.vil-dock-btn.accent { background: var(--accent-grad); color: var(--on-accent); border: 0; box-shadow: 0 8px 22px rgba(255, 122, 89, .3); }
+.vil-dock-btn:active { transform: scale(.97); }
+.vil-army-n { min-width: 26px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--surface-3); display: grid; place-items: center; font-size: 13px; }
+.vil-bonus { text-align: center; font-size: 12px; color: #eef3e2; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+
+.vil-card { padding: 12px 14px; border-radius: var(--r-lg); background: rgba(16,18,28,.93); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; box-shadow: 0 10px 30px rgba(0,0,0,.35); animation: rise .2s ease-out; }
+.vil-card.compact { gap: 6px; }
+.vil-card-head { display: flex; align-items: center; gap: 8px; }
+.vil-card-head b { font-size: 17px; font-weight: 900; }
+.vil-card-head .level-tag { flex: 1; }
+.vil-card-head .link { padding: 4px; }
+.vil-card-head .ok { margin-left: auto; color: var(--mint); font-size: 13px; font-weight: 800; }
+.vil-card-head .bad { margin-left: auto; color: var(--rose); font-size: 13px; font-weight: 800; }
+.vil-card .muted { font-size: 13px; }
+.vil-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; font-weight: 800; color: #dfe3ea; }
+.vil-stats span { display: inline-flex; align-items: center; gap: 4px; }
+.vil-next { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; }
+.vil-unlocks { font-size: 12.5px; }
+.vil-actions { display: flex; gap: 8px; align-items: center; }
+.vil-actions .primary, .vil-actions .secondary { min-height: 46px; flex: 1; font-size: 15.5px; padding: 8px 12px; }
+.vil-actions .icon-btn { flex: none; width: 46px; padding: 0; }
+.vil-timer { flex: 1; display: inline-flex; align-items: center; gap: 5px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+
+.vil-shop, .vil-camp, .vil-pvp { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-align: left; }
+.vil-shop:disabled, .vil-camp:disabled { opacity: .55; }
+.vil-shop.locked .vil-swatch { filter: grayscale(1); }
+.vil-shop-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.vil-shop-info b { font-size: 15px; font-weight: 900; }
+.vil-shop-info .muted { font-size: 12.5px; }
+.vil-shop-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 13px; color: var(--hint); }
+.vil-shop-count { font-weight: 900; color: var(--hint); font-variant-numeric: tabular-nums; }
+.vil-swatch { flex: none; width: 44px; height: 44px; border-radius: var(--r-sm); background: var(--surface-3); position: relative; }
+.vil-swatch::after { content: ''; position: absolute; inset: 9px; border-radius: 6px; background: currentColor; opacity: .9; }
+.b-lumbermill { color: #c98a4b; } .b-quarry { color: #b9c0cc; } .b-goldmine { color: #ffd27a; } .b-storage { color: #d8bf8a; }
+.b-barracks { color: #6aa6ff; } .b-forge { color: #ff8a5c; } .b-tavern { color: #f48fb1; } .b-market { color: #81c784; }
+.b-tower { color: #9575cd; } .b-catapult { color: #ff6b81; } .b-wall { color: #98a0b3; }
+.vil-pvp { background: linear-gradient(135deg, rgba(255,180,107,.18), rgba(255,122,89,.1)); border-color: rgba(255,138,92,.35); }
+.vil-pvp > .icon { color: var(--accent); }
+.vil-camp-num { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #3a2350; color: #e3c6ff; font-weight: 900; }
+.vil-stars { display: inline-flex; gap: 2px; color: rgba(255,255,255,.22); }
+.vil-stars .on { color: var(--gold); }
+.vil-stars .on.bad { color: var(--rose); }
+.vil-stars.big { gap: 6px; margin: 4px 0; }
+.vil-task { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--r-md); background: var(--surface-2); }
+.vil-task.locked { opacity: .6; }
+.vil-task .small-btn { min-width: 46px; }
+.vil-task .small-btn.ghost { background: var(--surface-3); color: var(--text); }
+.vil-note { padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); color: var(--hint); font-size: 14px; }
+
+/* Отряды: цветные точки — как фигурки в бою. */
+.vil-unit-dot, .vil-unit-big { flex: none; border-radius: 50%; background: currentColor; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+.vil-unit-dot { width: 14px; height: 14px; }
+.vil-unit-big { width: 40px; height: 40px; }
+.u-warrior { color: #e8833a; } .u-archer { color: #5fbf5a; } .u-giant { color: #c0392b; } .u-wallbreaker { color: #4a5a75; } .u-healer { color: #f6f2ff; } .u-hero { color: #ffd27a; }
+
+/* Бой */
+.vil-battle-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.vil-battle-head > div:first-child { flex: 1; min-width: 0; }
+.vil-battle-head b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vil-pct { font-size: 22px; font-weight: 900; display: flex; flex-direction: column; align-items: flex-end; line-height: 1; font-variant-numeric: tabular-nums; }
+.vil-pct small { font-size: 12px; color: var(--hint); margin-top: 3px; }
+.vil-battle-loot { align-self: flex-start; display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; background: var(--glass); font-size: 13px; }
+.vil-battle-loot .muted { font-size: 12.5px; }
+.vil-hint { padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); color: #eef1f6; font-size: 13px; text-align: center; backdrop-filter: blur(6px); }
+.vil-troops { display: flex; gap: 6px; overflow-x: auto; padding-bottom: env(safe-area-inset-bottom); scrollbar-width: none; }
+.vil-troop { flex: none; min-width: 74px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border-radius: var(--r-md); border: 2px solid transparent; background: rgba(16,18,28,.9); color: var(--text); font-size: 12px; font-weight: 800; }
+.vil-troop b { font-size: 15px; }
+.vil-troop.active { border-color: var(--accent); background: rgba(40,26,22,.95); }
+.vil-troop.empty { opacity: .4; }
+.vil-warn { top: 38%; z-index: 3; }
+.vil-result { z-index: 4; }
+.vil-loot-big { display: flex; gap: 8px; align-items: center; font-size: 17px; font-weight: 900; }
+.vil-loot-big .vil-res-row { font-size: 18px; }
+
+/* Основание деревни */
+.vil-found { position: fixed; inset: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; padding: 16px; background: radial-gradient(ellipse at 50% 30%, #2c4a2a, var(--bg) 70%); }
+.vil-found-card { max-width: 380px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.vil-found-card p { margin: 0; }
+.vil-found-card .primary { width: 100%; }
+.vil-dialog { position: absolute; inset: auto 0 0 0; height: 200px; z-index: 6; }

@@ -9,6 +9,7 @@ import type { ProgramsState } from './programs';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 import { addCharge, type Village } from './resources';
 import type { DungeonState } from './match3/dungeon';
+import { villageBonus } from '../../shared/village';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
 export interface Progress {
@@ -200,7 +201,8 @@ export interface WinReward {
 /** Победа: звёзды, монеты (полные — за первое прохождение), новая база после испытания. */
 export function recordWin(p: Progress, level: LevelDef, stars: number, record?: number): { progress: Progress; reward: WinReward } {
   const firstTime = !p.stars[level.id];
-  const bonus = itemById(p.equipped).coinBonus + petBonus(p, Date.now()).coins;
+  // Рынок деревни: +2% монет за уровень.
+  const bonus = itemById(p.equipped).coinBonus + petBonus(p, Date.now()).coins + villageBonus(p.village?.b).coins;
   const petFind = level.daily ? null : rollPetFind(p, level.land, Date.now());
   const coins = Math.round((firstTime ? level.coins : Math.round(level.coins / 4)) * (1 + bonus));
   const baseline = { ...p.baseline };
@@ -328,7 +330,8 @@ const TITLES: [number, string][] = [
 export const heroTitle = (level: number) => TITLES.find(([l]) => level >= l)![1];
 
 /** Каждые 10 уровней героя — ещё одна жизнь, до восьми. */
-export const maxLives = (p: Progress) => MAX_LIVES + Math.min(3, Math.floor(heroLevel(heroXp(p)).level / 10));
+// Таверна деревни добавляет одну-две жизни.
+export const maxLives = (p: Progress) => MAX_LIVES + Math.min(3, Math.floor(heroLevel(heroXp(p)).level / 10)) + villageBonus(p.village?.b).lives;
 export const levelReward = (level: number) => 30 * level;
 
 /** Выдать монеты за новые уровни героя. */
