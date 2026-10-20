@@ -3,10 +3,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { CHAT_MAX, COUNTRIES, defaultFlag, parseFlag, type ChatMessage, type ClanListItem, type ClanRole, type ClanSettings, type ClanView, type RaidView } from '../shared/clan';
+import { CHAT_MAX, COUNTRIES, defaultFlag, parseFlag, type ChatMessage, type ClanClaim, type ClanListItem, type ClanRole, type ClanSettings, type ClanView, type RaidView } from '../shared/clan';
 import { CLAN_REPS_PER_DAY, CLAN_XP_KILL, CLAN_XP_PER_DAMAGE, CLAN_XP_PER_REP, clanLevel, clanPerks } from '../shared/clanLevel';
 import { dayOf, RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_MIN_REP_MS, RAID_PREP_S, raidHp, raidWindow } from '../shared/raid';
-import type { WarHistoryItem } from '../shared/war';
+import { paceLimit, repMinMs, robotic } from '../shared/fairPlay';
+import { warReward, type WarHistoryItem } from '../shared/war';
+import { Guard } from './guard';
 import { warAdopt, warReps, warView, type ClanWar } from './wars';
 
 interface Member {
@@ -16,6 +18,8 @@ interface Member {
   level: number;
   joinedAt: number;
   xp?: number;
+  // До какого уровня клана подарки уже выданы: при вступлении — текущий уровень (подарки только за рост при тебе).
+  gift?: number;
 }
 
 export interface Raid {
@@ -72,10 +76,15 @@ interface Attack {
   player: string;
   name: string;
   clan: string;
+  startedAt: number;
   endsAt: number;
   lastAt: number;
   hits: number;
+  exercise?: string;
+  gaps: number[];
+  flagged: boolean;
 }
+
 
 const CHAT_KEEP = 100;
 const CHAT_GAP_MS = 700;
@@ -87,6 +96,10 @@ const newCode = () => randomBytes(4).toString('base64url').replace(/[-_]/g, 'x')
 export class ClanStore {
   // Pro Pass по id игрока: задаёт сервер (server/pro.ts).
   isPro: (id: string) => boolean = () => false;
+  // Забранные награды, атаки по игроку и подозрения (server/guard.ts). Сервер подставляет общий, с файлом.
+  guard = new Guard(null);
+  // Наибольший честный урон за повтор по силе героя из его копии прогресса; null — копии нет.
+  maxDamage: (id: string, clan: Clan) => number | null = () => null;
   private clans = new Map<string, Clan>();
   private byPlayer = new Map<string, string>();
   private attacks = new Map<string, Attack>();
@@ -176,7 +189,7 @@ export class ClanStore {
       city: ok.city,
       xp: 0,
       code: newCode(),
-      members: [{ id: who.id, name: who.name, role: 'leader', level: who.level, joinedAt: now }],
+      members: [{ id: who.id, name: who.name, role: 'leader', level: who.level, joinedAt: now, gift: 1 }],
       chat: [],
       nextMsg: 1,
       raid: null,
@@ -213,7 +226,7 @@ export class ClanStore {
     if (!code && !c.open) return 'Это закрытый клан: вступить можно только по приглашению';
     if (!code && who.level < c.minLevel) return `В этот клан берут с ${c.minLevel} уровня героя`;
     if (c.members.length >= this.perks(c).slots) return 'В клане нет мест: клану нужно подрасти в уровне';
-    c.members.push({ id: who.id, name: who.name, role: 'member', level: who.level, joinedAt: now });
+    c.members.push({ id: who.id, name: who.name, role: 'member', level: who.level, joinedAt: now, gift: this.level(c) });
     this.byPlayer.set(who.id, c.id);
     this.system(c, `${who.name} вступил в клан`, now);
     this.save();
@@ -424,15 +437,55 @@ export class ClanStore {
     if (!r || damage <= 0) return null;
     const w = raidWindow(now);
     const finished = !!r.killedAt || r.key !== w.key || !w.active;
-    return { key: r.key, damage, hpMax: r.hpMax, members: r.members, killed: !!r.killedAt, finished };
+    return { key: r.key, damage, hpMax: r.hpMax, members: r.members, killed: !!r.killedAt, finished, claimed: this.guard.claimed(playerId, `raid:${r.key}`) };
+  }
+
+  /** Забрать награду за рейд: сервер проверяет, что рейд окончен и награда ещё не выдана (в любом клане). */
+  claimRaid(playerId: string, now: number): ClanClaim | string {
+    const c = this.clanOf(playerId);
+    if (!c) return 'Ты не в клане';
+    const r = this.reward(c, playerId, now);
+    if (!r) return 'Награды за рейд нет';
+    if (!r.finished) return 'Рейд ещё идёт';
+    if (!this.guard.claim(playerId, `raid:${r.key}`)) return 'Награда уже забрана';
+    return { kind: 'raid', key: r.key, damage: r.damage, hpMax: r.hpMax, members: r.members, killed: r.killed, coinBonus: this.perks(c).raidCoins };
+  }
+
+  /** Забрать награду за войну: только за законченную войну и при достаточном числе очков. */
+  claimWar(playerId: string, now: number): ClanClaim | string {
+    const c = this.clanOf(playerId);
+    if (!c) return 'Ты не в клане';
+    const w = warView(this, c, playerId, now).reward;
+    if (!w || !warReward(w.result, w.points, w.mvp)) return 'Награды за войну нет';
+    if (!this.guard.claim(playerId, `war:${w.key}`)) return 'Награда уже забрана';
+    return { kind: 'war', key: w.key, result: w.result, points: w.points, mvp: w.mvp };
+  }
+
+  /**
+   * Подарки за уровни клана, выросшие при игроке. Участники, вступившие до этой проверки, ещё без отметки:
+   * для них один раз берём уровень с телефона (не ниже 1).
+   */
+  claimGift(playerId: string, clientFrom: unknown): ClanClaim | string {
+    const c = this.clanOf(playerId);
+    const m = c && this.member(c, playerId);
+    if (!c || !m) return 'Ты не в клане';
+    const level = this.level(c);
+    const from = Math.min(level, m.gift ?? Math.max(1, Math.round(Number(clientFrom) || level)));
+    if (from >= level) return 'Подарок уже забран';
+    m.gift = level;
+    this.save();
+    return { kind: 'gift', clan: c.id, from, to: level };
   }
 
   attacksLeft(c: Clan, playerId: string, now: number): number {
     const r = this.raid(c, now);
-    return r ? Math.max(0, this.perks(c).attacks - (r.attacks[playerId]?.[dayOf(now)] ?? 0)) : 0;
+    const day = dayOf(now);
+    // Атаки считаются и по игроку: переход в другой клан новых атак не даёт.
+    const used = Math.max(r?.attacks[playerId]?.[day] ?? 0, this.guard.attacks(playerId, day));
+    return r ? Math.max(0, this.perks(c).attacks - used) : 0;
   }
 
-  raidStart(playerId: string, now: number): { attackId: string; endsAt: number } | string {
+  raidStart(playerId: string, now: number, exercise?: string): { attackId: string; endsAt: number } | string {
     const c = this.clanOf(playerId);
     if (!c) return 'Ты не в клане';
     const r = this.raid(c, now);
@@ -441,27 +494,54 @@ export class ClanStore {
     if (this.attacksLeft(c, playerId, now) <= 0) return 'Атаки на сегодня закончились, завтра будут новые';
     const day = dayOf(now);
     r.attacks[playerId] = { ...r.attacks[playerId], [day]: (r.attacks[playerId]?.[day] ?? 0) + 1 };
+    this.guard.addAttack(playerId, day);
     for (const [id, a] of this.attacks) if (a.player === playerId || a.endsAt < now) this.attacks.delete(id);
     // Время атаки с запасом на подготовку и задержку сети.
     const endsAt = now + (RAID_PREP_S + RAID_ATTACK_S + 8) * 1000;
-    const attack: Attack = { id: randomUUID(), player: playerId, name: this.member(c, playerId)!.name, clan: c.id, endsAt, lastAt: 0, hits: 0 };
+    const attack: Attack = { id: randomUUID(), player: playerId, name: this.member(c, playerId)!.name, clan: c.id, startedAt: now, endsAt, lastAt: 0, hits: 0, exercise, gaps: [], flagged: false };
     this.attacks.set(attack.id, attack);
     this.save();
     return { attackId: attack.id, endsAt };
   }
 
-  /** Удар по боссу одним повтором. Темп и урон ограничены, чтобы нельзя было подделать. */
+  /** Подозрительный удар: одна запись за атаку. */
+  private flagAttack(a: Attack, kind: string, detail: string, now: number): void {
+    if (a.flagged) return;
+    a.flagged = true;
+    this.guard.flag(a.player, kind, detail, now);
+  }
+
+  /**
+   * Удар по боссу одним повтором. Проверяем всё, что можно проверить без камеры:
+   * удар не раньше конца подготовки, темп по упражнению (shared/fairPlay.ts), не больше ударов, чем влезает в минуту,
+   * и урон не больше силы героя из его копии прогресса.
+   */
   raidHit(playerId: string, attackId: string, damage: number, now: number): { clan: Clan; killed: boolean; dealt: number } | string {
     const a = this.attacks.get(attackId);
     if (!a || a.player !== playerId || now > a.endsAt) return 'Атака закончилась';
-    if (now - a.lastAt < RAID_MIN_REP_MS || a.hits >= 120) return 'Слишком быстро';
+    const fightAt = a.startedAt + RAID_PREP_S * 1000;
+    const minMs = repMinMs(a.exercise);
+    if (now < fightAt) {
+      this.flagAttack(a, 'raidEarly', `${now - a.startedAt} мс после начала`, now);
+      return 'Слишком быстро';
+    }
+    if (now - a.lastAt < RAID_MIN_REP_MS || a.hits >= Math.min(120, paceLimit(RAID_ATTACK_S * 1000, minMs))) return 'Слишком быстро';
+    if (a.hits + 1 > paceLimit(now - fightAt, minMs)) {
+      this.flagAttack(a, 'raidPace', `${a.hits + 1} за ${Math.round((now - fightAt) / 1000)} с`, now);
+      return 'Слишком быстро';
+    }
     const c = this.clans.get(a.clan);
     const r = c && this.raid(c, now);
     if (!c || !r || r.killedAt) return 'Босс уже повержен';
+    if (a.lastAt) a.gaps.push(now - a.lastAt);
+    if (robotic(a.gaps)) this.flagAttack(a, 'raidRobot', `${a.gaps.length} ударов`, now);
     a.lastAt = now;
     a.hits++;
     const hp = r.hpMax - Object.values(r.damage).reduce((x, y) => x + y, 0);
-    const dealt = Math.min(hp, Math.max(1, Math.min(RAID_MAX_DAMAGE, Math.round(Number(damage) || 1))));
+    const cap = Math.min(RAID_MAX_DAMAGE, this.maxDamage(playerId, c) ?? RAID_MAX_DAMAGE);
+    const asked = Math.round(Number(damage) || 1);
+    if (asked > cap * 1.5 + 5) this.flagAttack(a, 'raidDamage', `${asked} > ${cap}`, now);
+    const dealt = Math.min(hp, Math.max(1, Math.min(cap, asked)));
     r.damage[playerId] = (r.damage[playerId] ?? 0) + dealt;
     const last = r.recent[r.recent.length - 1];
     if (last && last.name === a.name && now - last.at < 5000) {
@@ -536,8 +616,15 @@ export class ClanStore {
       raid: this.raidView(c, playerId, now),
       raidWins: c.raidWins,
       reward: this.reward(c, playerId, now),
-      war: warView(this, c, playerId, now),
+      giftFrom: this.member(c, playerId)?.gift,
+      war: this.warViewClaimed(c, playerId, now),
     };
+  }
+
+  private warViewClaimed(c: Clan, playerId: string, now: number) {
+    const v = warView(this, c, playerId, now);
+    if (v.reward) v.reward.claimed = this.guard.claimed(playerId, `war:${v.reward.key}`);
+    return v;
   }
 
   flush(): void {

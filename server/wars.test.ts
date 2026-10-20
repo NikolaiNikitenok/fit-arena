@@ -61,8 +61,8 @@ describe('война кланов на сервере', () => {
     // Предел опыта клана уже исчерпан, а удар по боссу всё равно приносит очко... но не сверх дневного предела войны.
     s.reps(ids(a)[1], 10, SAT);
     const atk = s.raidStart(ids(a)[1], SAT) as { attackId: string };
-    s.raidHit(ids(a)[1], atk.attackId, 50, SAT + 1000);
-    s.raidHit(ids(a)[1], atk.attackId, 50, SAT + 2000);
+    s.raidHit(ids(a)[1], atk.attackId, 50, SAT + 6000);
+    s.raidHit(ids(a)[1], atk.attackId, 50, SAT + 7000);
     expect(a.war!.points[ids(a)[1]]).toBe(12);
     // В воскресенье предел новый.
     s.reps(ids(a)[0], 100, msk('2026-11-01T10:00:00'));

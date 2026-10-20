@@ -216,5 +216,6 @@ export interface WarView {
   record: { w: number; l: number; d: number };
   history: WarHistoryItem[];
   // Награда последней законченной войны.
-  reward: { key: string; result: WarResult; points: number; mvp: boolean } | null;
+  // claimed — сервер уже выдал эту награду.
+  reward: { key: string; result: WarResult; points: number; mvp: boolean; claimed?: boolean } | null;
 }

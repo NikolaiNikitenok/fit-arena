@@ -35,7 +35,8 @@ export function WarTab({ clan, level, progress, onToggle, onClaim }: Props) {
   if (!war) return <div className="muted">Войны кланов скоро откроются.</div>;
   const canToggle = clan.myRole !== 'member';
   const reward = war.reward && warReward(war.reward.result, war.reward.points, war.reward.mvp);
-  const claimed = war.reward && progress.warClaimed?.includes(war.reward.key);
+  // Забрана на этом телефоне или сервер уже выдал её (на другом).
+  const claimed = war.reward && (war.reward.claimed || progress.warClaimed?.includes(war.reward.key));
 
   return (
     <>

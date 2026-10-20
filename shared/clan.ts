@@ -1,6 +1,6 @@
 // Кланы: сообщения между приложением и сервером (тот же WebSocket, что у дуэлей).
 import type { Exercise } from '../src/repCounter';
-import type { WarView } from './war';
+import type { WarResult, WarView } from './war';
 
 export type ClanRole = 'leader' | 'officer' | 'member';
 
@@ -68,7 +68,10 @@ export interface ClanView {
   raid: RaidView;
   raidWins: number;
   // Последний рейд, в котором игрок бился: награду забирают, когда босс повержен или выходные кончились.
-  reward: { key: string; damage: number; hpMax: number; members: number; killed: boolean; finished: boolean } | null;
+  // claimed — сервер уже выдал эту награду (может быть, на другом телефоне).
+  reward: { key: string; damage: number; hpMax: number; members: number; killed: boolean; finished: boolean; claimed?: boolean } | null;
+  // С какого уровня клана считаются подарки игроку (сервер); нет — старый участник, считаем по телефону.
+  giftFrom?: number;
   // Война кланов на выходных.
   war?: WarView;
 }
@@ -115,7 +118,15 @@ export type ClanClientMessage =
   | { type: 'clanWar'; on: boolean }
   | { type: 'raidStart'; exercise: Exercise }
   | { type: 'raidHit'; attackId: string; damage: number }
-  | { type: 'raidEnd'; attackId: string };
+  | { type: 'raidEnd'; attackId: string }
+  // Забрать награду: сервер проверяет право и отмечает выданной, телефон начисляет только после ответа.
+  | { type: 'clanClaim'; kind: 'raid' | 'war' | 'gift'; from?: number };
+
+/** Награда, которую сервер разрешил забрать: по этим числам телефон выдаёт монеты и вещи. */
+export type ClanClaim =
+  | { kind: 'raid'; key: string; damage: number; hpMax: number; members: number; killed: boolean; coinBonus: number }
+  | { kind: 'war'; key: string; result: WarResult; points: number; mvp: boolean }
+  | { kind: 'gift'; clan: string; from: number; to: number };
 
 export type ClanServerMessage =
   | { type: 'clan'; clan: ClanView | null }
@@ -124,7 +135,8 @@ export type ClanServerMessage =
   | { type: 'chatMsg'; message: ChatMessage }
   | { type: 'raid'; raid: RaidView }
   | { type: 'raidAttack'; attackId: string; endsAt: number }
-  | { type: 'clanError'; message: string };
+  | { type: 'clanError'; message: string }
+  | { type: 'clanClaimed'; claim: ClanClaim };
 
 export const CLAN_MAX_MEMBERS = 30;
 

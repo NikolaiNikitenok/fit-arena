@@ -9,6 +9,7 @@
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 //   FAMILY_WEBHOOK_URL, FAMILY_WEBHOOK_SECRET — отчёты о тренировках на семейный сайт (server/family.ts)
 //   PRO_IDS — id в Telegram с Pro Pass через запятую; ещё можно файлом .pro-ids рядом с сервером (PRO_FILE)
+//   GUARD_FILE — защита от читов: забранные награды и подозрения (по умолчанию guard.json рядом с DATA_FILE, server/guard.ts)
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -33,6 +34,10 @@ import { ProList } from './pro';
 import type { ChatMessage } from '../shared/clan';
 import { FriendStore } from './friends';
 import { type FriendsDeps, friendsApi } from './friendsApi';
+import { Guard } from './guard';
+import { clanPerks } from '../shared/clanLevel';
+import { heroPower } from '../src/game/power';
+import type { Progress } from '../src/game/progress';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -58,6 +63,27 @@ const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 const isPro = (id: string) => pro.has(id);
 clans.isPro = isPro;
+// Защита от читов (server/guard.ts): забранные награды, атаки по игроку, темп, подозрения.
+const guard = new Guard(process.env.GUARD_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'guard.json'));
+clans.guard = guard;
+saves.onClip = (id, xp, cap) => guard.flag(id, 'heroXp', `${xp} > ${cap}`, Date.now());
+// Урон за повтор в рейде — не больше силы героя: уровень из проверенного опыта, вещи из копии прогресса,
+// эликсир силы считаем выпитым, плюс 10% запаса на копию, отставшую на секунду.
+clans.maxDamage = (id, c) => {
+  const p = saves.get(id)?.progress as Progress | null | undefined;
+  const xp = saves.publicXp(id);
+  if (!p || xp === null) return null;
+  const hero = heroPower({ ...p, days: { all: xp }, stars: {}, programs: undefined } as Progress, true);
+  return Math.ceil(hero.damage * (1 + clanPerks(clans.level(c)).raidDamage) * 1.1) + 2;
+};
+/** Общий топ: без игроков под подозрением (себя игрок видит) и, когда есть бот, только игроки Telegram. */
+const publicTop = (me?: string) => {
+  const now = Date.now();
+  return store
+    .top(Infinity)
+    .filter((p) => p.id === me || ((!BOT_TOKEN || p.id.startsWith('tg:')) && !guard.flagged(p.id, now)))
+    .slice(0, 50);
+};
 // Отметка Pro у автора ставится при отправке: список мог поменяться после сообщения.
 const proChat = (m: ChatMessage): ChatMessage => (m.from && isPro(m.from) ? { ...m, pro: true } : m);
 const chatOf = (c: Clan) => c.chat.map(proChat);
@@ -123,7 +149,10 @@ function onMatchEnd(end: MatchEnd): void {
   if (!a || !b) return;
   const pa = store.get(a.id, a.name);
   const pb = store.get(b.id, b.name);
-  const delta = store.result(pa, pb, end.outcome);
+  // Кубки — только за бой двух игроков Telegram (гостя можно завести сколько угодно и «сливать» ему бои)
+  // и не больше DUEL_PAIR_PER_DAY боёв одной пары в день.
+  const rated = (!BOT_TOKEN || (a.id.startsWith('tg:') && b.id.startsWith('tg:'))) && guard.ratedPair(a.id, b.id, Date.now());
+  const delta = rated ? store.result(pa, pb, end.outcome) : { a: 0, b: 0 };
   a.send({ type: 'profile', profile: profileView(pa), delta: delta.a });
   b.send({ type: 'profile', profile: profileView(pb), delta: delta.b });
   reportDuel(pa, end.reps.a, end.outcome === 'draw' ? null : end.outcome === 'a', end.exercise);
@@ -259,6 +288,7 @@ const friendsDeps: FriendsDeps = {
   bot: () => ({ username: botUsername, running: !!BOT_TOKEN }),
   cups: (id) => store.cupsOf(id),
   progress: (id) => (saves.get(id)?.progress as ReturnType<FriendsDeps['progress']>) ?? null,
+  heroLevel: (id) => saves.heroLevel(id),
   clanTag: (id) => clans.clanOf(id)?.tag,
   isPro,
   connected: isOnline,
@@ -322,7 +352,7 @@ const http = createServer((req, res) => {
   }
   if (req.url?.startsWith('/api/top')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(store.top(50).map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, pro: isPro(p.id) }))));
+    res.end(JSON.stringify(publicTop().map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, pro: isPro(p.id) }))));
     return;
   }
   if (req.url === '/api/health') {
@@ -405,7 +435,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       break;
     }
     case 'raidStart': {
-      const r = clans.raidStart(who.id, now);
+      const r = clans.raidStart(who.id, now, String(msg.exercise ?? ''));
       if (fail(r)) return;
       send({ type: 'raidAttack', ...r });
       sendRaid(mine()!);
@@ -429,7 +459,9 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const c = mine();
       const lastMsg = c?.nextMsg;
       const level = c && clans.level(c);
-      const r = clans.reps(who.id, Number(msg.reps), now, Number(msg.since) || now);
+      // Не больше, чем можно сделать с прошлого отчёта (server/guard.ts).
+      const reps = c ? guard.clanReps(who.id, Number(msg.reps), now) : 0;
+      const r = clans.reps(who.id, reps, now, Number(msg.since) || now);
       if (!r) return;
       if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: chatOf(r) });
       if (clans.level(r) !== level || r.nextMsg !== lastMsg) sendClan(r);
@@ -445,6 +477,15 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
     case 'raidEnd':
       clans.raidEnd(String(msg.attackId));
       break;
+    case 'clanClaim': {
+      // Награду выдаёт телефон, но только после того, как сервер проверил право и отметил её выданной.
+      const r = msg.kind === 'raid' ? clans.claimRaid(who.id, now) : msg.kind === 'war' ? clans.claimWar(who.id, now) : msg.kind === 'gift' ? clans.claimGift(who.id, msg.from) : 'Награда не найдена';
+      if (fail(r)) return;
+      send({ type: 'clanClaimed', claim: r });
+      const c = mine();
+      if (c) send({ type: 'clan', clan: clans.view(c, who.id, isOnline, now) });
+      break;
+    }
   }
 }
 
@@ -498,6 +539,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
       if (tgUser && /^[\w-]{8,40}$/.test(msg.guestId ?? '')) {
         store.adopt(player.id, `guest:${msg.guestId}`);
         clans.adopt(player.id, `guest:${msg.guestId}`);
+        guard.adopt(player.id, `guest:${msg.guestId}`);
       }
       send({ type: 'welcome', id: player.id, name: player.name, botUsername, botRunning: !!BOT_TOKEN, telegram: !!tgUser, pro: !!player.pro });
       if (msg.channel === 'clan') {
@@ -507,7 +549,9 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
           return;
         }
         clanChannel = true;
-        who = { id: player.id, name: player.name, level: Math.max(1, Math.min(999, Math.round(Number(msg.level) || 1))) };
+        // Уровень героя видят в клане: не выше проверенного сервером по копии прогресса (+1 на копию, отставшую на секунду).
+        const claimed = Math.max(1, Math.min(999, Math.round(Number(msg.level) || 1)));
+        who = { id: player.id, name: player.name, level: Math.min(claimed, (saves.heroLevel(player.id) ?? 1) + 1) };
         if (!clanSockets.has(player.id)) clanSockets.set(player.id, new Set());
         clanSockets.get(player.id)!.add(send);
         clans.touch(who);
@@ -557,7 +601,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         send({ type: 'queue', waiting: false });
         break;
       case 'top': {
-        const top = store.top(50);
+        const top = publicTop(player.id);
         send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id, pro: isPro(p.id) })) });
         break;
       }
@@ -692,5 +736,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     clans.flush();
     saves.flush();
     friends.flush();
+    guard.flush();
     process.exit(0);
   });

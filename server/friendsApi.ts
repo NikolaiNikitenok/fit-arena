@@ -18,6 +18,8 @@ export interface FriendsDeps {
   bot: () => { username: string | null; running: boolean };
   cups: (id: string) => number;
   progress: (id: string) => Partial<Progress> | null;
+  // Уровень героя, проверенный сервером (server/saves.ts); без него — считаем из копии прогресса как есть.
+  heroLevel?: (id: string) => number | null;
   clanTag: (id: string) => string | undefined;
   isPro: (id: string) => boolean;
   // На связи по WebSocket (дуэль или клан).
@@ -38,9 +40,10 @@ const tgOnly = (id: string) => /^tg:\d+$/.test(id);
 // Вызов только что создан: вызвавший ещё подключается к комнате, она пустая.
 const ROOM_GRACE_MS = 30_000;
 
-function heroOf(p: Partial<Progress> | null, now: number) {
+function heroOf(d: FriendsDeps, id: string, now: number) {
+  const p = d.progress(id);
   const days = p?.days ?? {};
-  const level = heroLevel(heroXp({ days, stars: p?.stars ?? {} } as Progress)).level;
+  const level = d.heroLevel?.(id) ?? heroLevel(heroXp({ days, stars: p?.stars ?? {} } as Progress)).level;
   const trained = Object.keys(days).filter((d) => days[d] > 0).sort();
   return { level, lastDay: trained[trained.length - 1] ?? null, streak: trained.length ? streak(days, now).days : 0 };
 }
@@ -63,10 +66,10 @@ export function inbox(d: FriendsDeps, id: string): ChallengeView[] {
 export function friendsState(d: FriendsDeps, id: string, name: string): FriendsState {
   const now = d.now();
   const me = d.friends.me(id, name);
-  const request = (pid: string, at: number): FriendRequestView => ({ id: pid, name: d.friends.get(pid)?.name ?? 'Боец', pro: d.isPro(pid) || undefined, level: heroOf(d.progress(pid), now).level, at });
+  const request = (pid: string, at: number): FriendRequestView => ({ id: pid, name: d.friends.get(pid)?.name ?? 'Боец', pro: d.isPro(pid) || undefined, level: heroOf(d, pid, now).level, at });
   const friends: FriendView[] = me.friends.map((fid) => {
     const f = d.friends.get(fid);
-    const hero = heroOf(d.progress(fid), now);
+    const hero = heroOf(d, fid, now);
     const wait = d.friends.waitMs(id, fid);
     const mine = d.friends.myChallenge(id, fid);
     return {

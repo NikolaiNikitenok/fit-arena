@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChatMessage, ClanClientMessage, ClanListItem, ClanView, RaidView } from '../../shared/clan';
+import type { ChatMessage, ClanClaim, ClanClientMessage, ClanListItem, ClanView, RaidView } from '../../shared/clan';
 import type { ServerMessage } from '../../shared/protocol';
 import { guestId, tg, userName } from '../telegram';
 
@@ -19,6 +19,8 @@ export function useClan(level: number) {
   // Pro Pass: сервер решает по id в Telegram.
   const [pro, setPro] = useState(false);
   const [seq, setSeq] = useState(0);
+  // Сервер разрешил забрать награду: экран клана начисляет её и сбрасывает.
+  const [claimed, setClaimed] = useState<ClanClaim | null>(null);
 
   useEffect(() => {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -57,6 +59,9 @@ export function useClan(level: number) {
         case 'raidAttack':
           setAttack({ attackId: msg.attackId, endsAt: msg.endsAt });
           break;
+        case 'clanClaimed':
+          setClaimed(msg.claim);
+          break;
         case 'clanError':
         case 'error':
           setError(msg.message);
@@ -75,7 +80,7 @@ export function useClan(level: number) {
     if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify(msg));
   };
 
-  return { status, clan, list, chat, error, attack, setAttack, bot, telegram, pro, send, reconnect: () => setSeq((n) => n + 1) };
+  return { status, clan, list, chat, error, attack, setAttack, bot, telegram, pro, send, claimed, setClaimed, reconnect: () => setSeq((n) => n + 1) };
 }
 
 export type ClanApi = ReturnType<typeof useClan>;

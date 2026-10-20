@@ -512,11 +512,21 @@ export function clanGiftsDue(p: Progress, clan: string, level: number): { coins:
 }
 
 export function claimClanGift(p: Progress, clan: string, level: number): Progress | null {
-  const due = clanGiftsDue(p, clan, level);
+  const from = p.clanGift?.clan === clan ? p.clanGift.level : level;
+  return claimClanGiftRange(p, clan, from, level);
+}
+
+/**
+ * Подарки за уровни клана from+1…to — как решил сервер (он помнит, с какого уровня игрок в клане).
+ * Повторно за те же уровни не выдаёт.
+ */
+export function claimClanGiftRange(p: Progress, clan: string, from: number, to: number): Progress | null {
+  const start = p.clanGift?.clan === clan ? Math.max(from, p.clanGift.level) : from;
+  const due = clanGiftsDue({ ...p, clanGift: { clan, level: start } }, clan, to);
   if (!due.levels) return null;
   let potions = p.potions;
   for (const [id, n] of Object.entries(due.potions) as [PotionId, number][]) potions = addPotion(potions, id, n);
-  return save({ ...p, coins: p.coins + due.coins, potions, clanGift: { clan, level } });
+  return save({ ...p, coins: p.coins + due.coins, potions, clanGift: { clan, level: to } });
 }
 
 export const clearClanPending = (p: Progress): Progress => save({ ...p, clanPending: 0, clanPendingAt: undefined });

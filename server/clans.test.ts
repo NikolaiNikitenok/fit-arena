@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clanLevel, clanPerks, clanXpNeed } from '../shared/clanLevel';
 import { ClanStore, type Clan } from './clans';
+import { Guard } from './guard';
 
 const now = Date.parse('2026-10-20T12:00:00+03:00');
 const a = { id: 'tg:1', name: 'Аня', level: 5 };
@@ -32,7 +33,9 @@ describe('кланы', () => {
     const hpMax = s.raidView(clan, a.id, now).hpMax;
     let t = now;
     const at = s.raidStart(a.id, t) as { attackId: string };
-    expect(s.raidHit(a.id, at.attackId, 9999, (t += 1000))).toMatchObject({ dealt: 120 });
+    // До конца подготовки (5 с) удар не засчитывается.
+    expect(s.raidHit(a.id, at.attackId, 50, t + 1000)).toMatch(/быстро/);
+    expect(s.raidHit(a.id, at.attackId, 9999, (t += 6000))).toMatchObject({ dealt: 120 });
     expect(s.raidHit(a.id, at.attackId, 20, (t += 100))).toMatch(/быстро/);
     s.raidStart(a.id, t);
     s.raidStart(a.id, t);
@@ -40,8 +43,9 @@ describe('кланы', () => {
     // Добиваем босса без лимитов, чтобы проверить победу.
     clan.raid!.damage[a.id] = hpMax - 10;
     clan.raid!.attacks = {};
+    s.guard = new Guard(null);
     const at2 = s.raidStart(a.id, t) as { attackId: string };
-    const hit = s.raidHit(a.id, at2.attackId, 50, (t += 1000)) as { killed: boolean; dealt: number };
+    const hit = s.raidHit(a.id, at2.attackId, 50, (t += 6000)) as { killed: boolean; dealt: number };
     expect(hit).toMatchObject({ killed: true, dealt: 10 });
     const v = s.view(clan, a.id, () => true, t);
     expect(v.raid.hp).toBe(0);

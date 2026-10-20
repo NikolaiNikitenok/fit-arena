@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
 import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
-import { claimClanGift, claimRaid, claimWar, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
+import { claimClanGiftRange, claimRaid, claimWar, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
 import { Banner, Coin, Flask, Lock, Send, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { clanInviteCode, clanInviteLink, share } from '../telegram';
@@ -83,6 +83,27 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
     setTimeout(() => setToast((x) => (x === t ? null : t)), 3000);
   };
 
+  // Сервер проверил право на награду и отметил её выданной: только теперь начисляем монеты и вещи.
+  useEffect(() => {
+    const c = api.claimed;
+    if (!c) return;
+    api.setClaimed(null);
+    if (c.kind === 'gift') {
+      const next = claimClanGiftRange(progress, c.clan, c.from, c.to);
+      if (!next) return;
+      setProgress(next);
+      show(`+${next.coins - progress.coins} монет!`);
+      return;
+    }
+    const reward = c.kind === 'raid' ? raidReward(c.damage, c.hpMax, c.members, c.killed, c.coinBonus) : warReward(c.result, c.points, c.mvp);
+    const res = reward && (c.kind === 'raid' ? claimRaid(progress, c.key, reward, landNow) : claimWar(progress, c.key, reward, landNow));
+    if (!reward || !res) return;
+    setProgress(res.progress);
+    sfx(res.gear ? 'chest' : 'coin');
+    show(`+${reward.coins} монет${res.gear ? ` и ${res.gear.name}` : ''}!`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api.claimed]);
+
   if (api.attack && clan) {
     return (
       <RaidFight
@@ -162,7 +183,10 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
   const startAttack = () => send({ type: 'raidStart', exercise });
   const lv = cl!;
   const perks = clanPerks(lv.level);
-  const gifts = clanGiftsDue(progress, clan.id, lv.level);
+  // С какого уровня дарить, помнит сервер; телефонная отметка — чтобы не показать уже забранное.
+  const localGift = progress.clanGift?.clan === clan.id ? progress.clanGift.level : lv.level;
+  const giftFrom = clan.giftFrom !== undefined ? Math.max(clan.giftFrom, progress.clanGift?.clan === clan.id ? progress.clanGift.level : 0) : localGift;
+  const gifts = clanGiftsDue({ ...progress, clanGift: { clan: clan.id, level: giftFrom } }, clan.id, lv.level);
 
   return (
     <>
@@ -206,11 +230,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           </div>
           <button
             className="small-btn"
-            onClick={() => {
-              const next = claimClanGift(progress, clan.id, lv.level);
-              if (next) setProgress(next);
-              show(`+${gifts.coins} монет!`);
-            }}
+            onClick={() => send({ type: 'clanClaim', kind: 'gift', from: localGift })}
           >
             Забрать
           </button>
@@ -255,15 +275,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           exercise={exercise}
           setExercise={setExercise}
           onAttack={startAttack}
-          onClaim={() => {
-            const r = clan.reward!;
-            const reward = raidReward(r.damage, r.hpMax, r.members, r.killed, perks.raidCoins);
-            const res = claimRaid(progress, r.key, reward, landNow);
-            if (!res) return;
-            setProgress(res.progress);
-            sfx(res.gear ? 'chest' : 'coin');
-            show(`+${reward.coins} монет${res.gear ? ` и ${res.gear.name}` : ''}!`);
-          }}
+          onClaim={() => send({ type: 'clanClaim', kind: 'raid' })}
         />
       )}
       {tab === 'war' && (
@@ -272,14 +284,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           level={lv.level}
           progress={progress}
           onToggle={(on) => send({ type: 'clanWar', on })}
-          onClaim={(war) => {
-            const r = war.reward && warReward(war.reward.result, war.reward.points, war.reward.mvp);
-            const res = r && claimWar(progress, war.reward!.key, r, landNow);
-            if (!r || !res) return;
-            setProgress(res.progress);
-            sfx(res.gear ? 'chest' : 'coin');
-            show(`+${r.coins} монет${res.gear ? ` и ${res.gear.name}` : ''}!`);
-          }}
+          onClaim={() => send({ type: 'clanClaim', kind: 'war' })}
         />
       )}
       {tab === 'chat' && <Chat api={api} clan={clan} onClose={() => setTab('raid')} />}
@@ -299,7 +304,8 @@ function RaidTab({ clan, progress, attacks, coinBonus, exercise, setExercise, on
   const next = RAID_TIERS[RAID_TIERS.indexOf(tier) + 1];
   const fair = fairShare(r.hpMax, r.members);
   const reward = clan.reward;
-  const claimed = reward && progress.raidClaimed?.includes(reward.key);
+  // Забрана на этом телефоне или сервер уже выдал её (на другом).
+  const claimed = reward && (reward.claimed || progress.raidClaimed?.includes(reward.key));
   const dead = !!r.killedAt;
   return (
     <>
