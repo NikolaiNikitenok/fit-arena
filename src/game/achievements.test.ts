@@ -21,4 +21,11 @@ describe('достижения', () => {
     expect(claimAchievement(got, 'day100', 50)).toBeNull();
     expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(ACHIEVEMENTS.length);
   });
+  it('подземелье: этажи, хранители и комбо', () => {
+    const p: Progress = { ...loadProgress(), dungeon: { reached: 31, stars: Object.fromEntries(Array.from({ length: 10 }, (_, i) => [i + 1, 2])), bestCombo: 6, wins: 12, plays: 15, bosses: [10, 20] } };
+    expect(achDone(ach('dungeon10'), p, NOW)).toBe(true);
+    expect(achDone(ach('combo6'), p, NOW)).toBe(true);
+    expect(achDone(ach('dungeonBoss'), p, NOW)).toBe(false);
+    expect(achDone(ach('dungeon10'), loadProgress(), NOW)).toBe(false);
+  });
 });

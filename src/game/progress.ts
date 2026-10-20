@@ -8,6 +8,7 @@ import type { EventState } from './event';
 import type { ProgramsState } from './programs';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 import { addCharge, type Village } from './resources';
+import type { DungeonState } from './match3/dungeon';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
 export interface Progress {
@@ -75,6 +76,8 @@ export interface Progress {
   programs?: ProgramsState;
   // Заряд подземелья и ресурсы деревни (src/game/resources.ts).
   village?: Village;
+  // Подземелье «три в ряд»: открытые этажи, звёзды, бонус дня, лучшее комбо (src/game/match3/dungeon.ts).
+  dungeon?: DungeonState;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.

@@ -7,6 +7,7 @@ import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
 import { AchBadge } from './Achievements';
 import { ProgramsEntry } from './ProgramsEntry';
+import { DungeonEntry } from './match3/DungeonEntry';
 import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
@@ -57,6 +58,8 @@ interface Props {
   onPets: () => void;
   // Программы тренировок Мастера Грома.
   onPrograms: () => void;
+  // Подземелье «три в ряд»: тратит заряд от тренировок.
+  onDungeon: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -73,7 +76,7 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onDungeon }: Props) {
   const passT = passTier(passOf(progress, Date.now()).xp);
   const passWaiting = passReady(progress, pro, Date.now());
   const badge = heroBadge(progress);
@@ -182,6 +185,8 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           <span className="slot-name">{offhand?.name ?? 'пусто'}</span>
         </button>
       </div>
+
+      <DungeonEntry progress={progress} onOpen={onDungeon} />
 
       <EventBanner progress={progress} onOpen={onEvent} />
 

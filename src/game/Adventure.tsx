@@ -63,6 +63,7 @@ const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m
 const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
 const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.PassScreen })));
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
+const DungeonScreen = lazy(() => import('./match3/DungeonScreen').then((m) => ({ default: m.DungeonScreen })));
 const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetHatch })));
 const Onboarding = lazy(() => import('./Onboarding').then((m) => ({ default: m.Onboarding })));
 const SettingsSheet = lazy(() => import('../SettingsSheet').then((m) => ({ default: m.SettingsSheet })));
@@ -136,6 +137,12 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     setProgramsState(v);
     onPlaying(!!v);
   };
+  // Подземелье «три в ряд»: на весь экран, без нижнего меню.
+  const [dungeon, setDungeonState] = useState(false);
+  const setDungeon = (open: boolean) => {
+    setDungeonState(open);
+    onPlaying(open);
+  };
   const pro = usePro();
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -176,13 +183,13 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
 
   // Новое достижение: короткое сообщение после миссии, награда ждёт в «Достижениях».
   useEffect(() => {
-    if (playing || programs) return;
+    if (playing || programs || dungeon) return;
     const fresh = newAchievements(latest.current, Date.now());
     if (!fresh.length) return;
     setProgress(markAchSeen(latest.current, fresh.map((a) => a.id)));
     setAchToast(fresh.length > 1 ? `Новые достижения: ${fresh.map((a) => a.title).join(', ')}` : `Новое достижение: ${fresh[0].title}! Забери награду`);
     setTimeout(() => setAchToast(null), 4000);
-  }, [playing, programs, progress.days, progress.dailyCount, progress.raidClaimed?.length, progress.programs?.done.length]);
+  }, [playing, programs, dungeon, progress.days, progress.dailyCount, progress.raidClaimed?.length, progress.programs?.done.length, progress.dungeon?.wins]);
 
   const switchWorld = (w: number) => {
     setWorld(w);
@@ -248,6 +255,29 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
             return r;
           }}
           onClose={() => setEventOpen(false)}
+        />
+      </Screen>
+    );
+
+  if (dungeon)
+    return (
+      <Screen>
+        <DungeonScreen
+          progress={progress}
+          setProgress={setProgress}
+          onClose={() => setDungeon(false)}
+          onTrain={() => {
+            setDungeonState(false);
+            setPlaying(currentDef);
+          }}
+          onDaily={() => {
+            setDungeon(false);
+            onTab('hero');
+          }}
+          onPrograms={() => {
+            setDungeonState(false);
+            setPrograms({});
+          }}
         />
       </Screen>
     );
@@ -365,6 +395,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           onEvent={() => setEventOpen(true)}
           onPets={() => setPetsOpen(true)}
           onPrograms={() => setPrograms({})}
+          onDungeon={() => setDungeon(true)}
         />
         {sheets}
       </>

@@ -4,6 +4,7 @@ import { gearById, itemById } from './items';
 import { LEVELS } from './levels';
 import { type Progress, streak } from './progress';
 import { programById, type ProgramId } from './programs';
+import { dungeonOf } from './match3/dungeon';
 
 export type AchTier = 'bronze' | 'silver' | 'gold' | 'legend';
 export type AchIcon = 'flame' | 'rep' | 'crown' | 'skull' | 'star' | 'map' | 'arm' | 'leg' | 'core' | 'banner' | 'gem' | 'scroll';
@@ -73,6 +74,10 @@ export const ACHIEVEMENTS: Achievement[] = [
   a('legendary', 'Легенда арсенала', 'Добудь легендарную вещь', 'gem', 'gold', 1, legendary),
   a('plank60', 'Несгибаемый', 'Минута в планке за один подход', 'core', 'bronze', 60, best('plank')),
   a('plank180', 'Скала', 'Три минуты в планке за один подход', 'core', 'gold', 180, best('plank')),
+  // Подземелье «три в ряд»: этажи, хранители и комбо.
+  a('dungeon10', 'Спелеолог', 'Пройди 10 этажей подземелья', 'gem', 'bronze', 10, (p) => Object.keys(dungeonOf(p).stars).length),
+  a('dungeonBoss', 'Гроза подземелий', 'Победи трёх хранителей подземелья', 'skull', 'silver', 3, (p) => dungeonOf(p).bosses.length),
+  a('combo6', 'Цепная реакция', 'Комбо ×6 в подземелье', 'flame', 'silver', 6, (p) => dungeonOf(p).bestCombo),
   // Титулы за программы тренировок Мастера Грома.
   ...PROGRAM_TITLES.map(([id, title, icon, tier]) => a(`prog-${id}`, title, `Пройди программу «${programById(id)!.title}»`, icon, tier, 1, (p) => Number(!!p.programs?.done.includes(id)))),
 ];
