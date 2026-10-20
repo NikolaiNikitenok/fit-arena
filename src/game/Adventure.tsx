@@ -12,6 +12,8 @@ import { NPCS } from './npcs';
 import { dailyTask } from './daily';
 import { startCloud, usePro } from '../cloud';
 import { PassScreen } from './PassScreen';
+import { EventScreen } from './EventScreen';
+import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
@@ -104,6 +106,11 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [replayOnb, setReplayOnb] = useState(false);
   const [achOpen, setAchOpen] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
+  const [eventOpen, setEventOpenState] = useState(false);
+  const setEventOpen = (open: boolean) => {
+    setEventOpenState(open);
+    onPlaying(open);
+  };
   const pro = usePro();
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -175,6 +182,24 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           return next != null;
         }}
         onNext={!playing.daily && playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
+      />
+    );
+
+  if (eventOpen)
+    return (
+      <EventScreen
+        progress={progress}
+        onStart={() => update(spendMight)}
+        onFinish={(dealt, reps, ex) => {
+          const now = Date.now();
+          update((p) => ({ ...recordActivity(p, ex, reps, now), clanPending: (p.clanPending ?? 0) + reps }));
+          const r = recordEventHit(latest.current, dealt, now);
+          if (!r) return null;
+          setProgress(r.progress);
+          if (r.killed) sfx('chest');
+          return r;
+        }}
+        onClose={() => setEventOpen(false)}
       />
     );
 
@@ -271,6 +296,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           onAchievements={() => setAchOpen(true)}
           pro={pro}
           onPass={() => setPassOpen(true)}
+          onEvent={() => setEventOpen(true)}
         />
         {sheets}
       </>

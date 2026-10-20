@@ -1,4 +1,4 @@
-import { ReactNode, Suspense, useRef, useState } from 'react';
+import { ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { canvasProps, getSettings } from '../settings';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -16,6 +16,7 @@ import { heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './prog
 import { Coin, Cog, Flame, Flask, GoldShieldArt, Heart, PassShield, Swords } from '../icons';
 import { PASS_TIERS, passReady, passTier } from './pass';
 import { passOf } from './progress';
+import { daysUntil, eventBoss, eventBossSay, eventHpLeft, eventOf, eventOutfit, eventWindow, fmtDays, fmtLeft, fmtWeekend, triesLeft, EVENT_TRIES_PER_DAY } from './event';
 
 // Главное меню: герой в надетом снаряжении, его уровень, инвентарь и тренировка дня.
 
@@ -82,6 +83,8 @@ interface Props {
   // Pro Pass от сервера: золотой щит за героем.
   pro: boolean;
   onPass: () => void;
+  // Событие выходных: экран босса месяца.
+  onEvent: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -98,7 +101,7 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent }: Props) {
   const passT = passTier(passOf(progress, Date.now()).xp);
   const passWaiting = passReady(progress, pro, Date.now());
   const badge = heroBadge(progress);
@@ -204,6 +207,8 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
           <span className="slot-name">{offhand?.name ?? 'пусто'}</span>
         </button>
       </div>
+
+      <EventBanner progress={progress} onOpen={onEvent} />
 
       <button className={`pass-entry ${pro ? 'pro' : ''}`} onClick={onPass}>
         <span className="pass-entry-shields">
@@ -382,5 +387,56 @@ function DailyCard({ task, done, claimed, onPlay, onClaim }: { task: DailyTask; 
         </button>
       )}
     </div>
+  );
+}
+
+/** Событие выходных: светится, пока идёт (с отсчётом до конца), а в остальные дни — анонс. */
+function EventBanner({ progress, onOpen }: { progress: Progress; onOpen: () => void }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const w = eventWindow(now);
+  const boss = eventBoss(w.key);
+  const state = eventOf(progress, now);
+  const outfit = eventOutfit(boss);
+  const face = eventBossSay(boss, '');
+  const share = state.hpMax ? eventHpLeft(state) / state.hpMax : 1;
+  if (!w.live)
+    return (
+      <button className="event-banner teaser" style={{ ['--eg' as string]: boss.glow }} onClick={onOpen}>
+        <Portrait line={face} size={44} />
+        <span className="event-banner-text">
+          <span className="event-banner-tag">{fmtDays(daysUntil(w, now)).replace(/^./, (c) => c.toUpperCase())}: событие</span>
+          <span className="event-banner-name">{boss.name}</span>
+          <small>
+            {fmtWeekend(w)} · награда: <span style={{ color: RARITY_COLORS[outfit.rarity] }}>{outfit.name}</span>
+          </small>
+        </span>
+        <span className="chev">›</span>
+      </button>
+    );
+  return (
+    <button className={`event-banner live ${state.won ? 'won' : ''}`} style={{ ['--eg' as string]: boss.glow }} onClick={onOpen}>
+      <Portrait line={face} size={52} />
+      <span className="event-banner-text">
+        <span className="event-banner-tag">Событие · ещё {fmtLeft(w.end - now)}</span>
+        <span className="event-banner-name">{boss.name}</span>
+        {state.won ? (
+          <small>Повержен! Облик «{outfit.name}» твой</small>
+        ) : (
+          <>
+            <span className="pass-bar event-banner-bar">
+              <span style={{ display: 'block', width: `${share * 100}%`, background: boss.glow }} />
+            </span>
+            <small>
+              Попытки сегодня: {triesLeft(progress, now)} из {EVENT_TRIES_PER_DAY} · награда: {outfit.name}
+            </small>
+          </>
+        )}
+      </span>
+      <span className="chev">›</span>
+    </button>
   );
 }

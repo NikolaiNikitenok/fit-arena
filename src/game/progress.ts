@@ -4,6 +4,7 @@ import { clanGift } from '../../shared/clanLevel';
 import { seasonAt } from '../../shared/rating';
 import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
 import type { DailyTask } from './daily';
+import type { EventState } from './event';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 
 export interface Progress {
@@ -57,6 +58,10 @@ export interface Progress {
   onboarded?: boolean;
   // Пропуск сезона: опыт, забранные задания и награды, счётчики по дням сезона.
   pass?: PassState;
+  // Событие выходных этого месяца: общий урон по боссу и попытки по дням.
+  event?: EventState;
+  // Месяцы (YYYY-MM), когда босс события повержен.
+  eventWins?: string[];
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.

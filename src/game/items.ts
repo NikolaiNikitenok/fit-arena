@@ -47,6 +47,8 @@ export interface Item {
   inShop: boolean;
   // Только из пропуска сезона: в сундуках не выпадает.
   pass?: boolean;
+  // Только за босса события выходных: в сундуках и в лавке его нет.
+  event?: boolean;
 }
 
 export const ITEMS: Item[] = [
@@ -62,6 +64,21 @@ export const ITEMS: Item[] = [
   { id: 'pass-silver', hero: 'Knight', name: 'Серый страж', rarity: 'epic', color: '#cfd8dc', glow: '#b0bec5', tint: 'mul:0.95,1.0,1.1', coinBonus: 0.15, price: 0, inShop: false, pass: true },
   { id: 'pass-gold', hero: 'Knight', name: 'Страж Золотого щита', rarity: 'legendary', color: '#ffd54a', glow: '#ffc400', tint: 'mul:1.5,1.2,0.5', coinBonus: 0.3, price: 0, inShop: false, pass: true },
   { id: 'gold', hero: 'Knight', name: 'Золотой чемпион', rarity: 'legendary', color: '#ffc400', glow: '#ffea00', tint: 'mul:1.45,1.15,0.45', coinBonus: 0.3, price: 5000, inShop: true },
+  // Облики боссов события выходных (src/game/event.ts): у каждого месяца свой.
+  ...([
+    ['event-ice', 'Knight', 'Ледяной доспех', '#b3e5fc', '#80deea', 'mul:0.75,1.05,1.5'],
+    ['event-remote', 'Mage', 'Мантия переключателя', '#f48fb1', '#ff4081', 'mul:1.2,0.65,1.25'],
+    ['event-pizza', 'Barbarian', 'Пиццеборец', '#ffb74d', '#ff7043', 'mul:1.45,0.95,0.5'],
+    ['event-excuse', 'Rogue', 'Плащ без отговорок', '#fff176', '#ffd54f', 'mul:1.3,1.2,0.6'],
+    ['event-grill', 'Barbarian', 'Жар мангала', '#ff8a65', '#ff5722', 'mul:1.4,0.7,0.5'],
+    ['event-lounger', 'Rogue', 'Пляжный следопыт', '#80deea', '#4dd0e1', 'mul:0.7,1.15,1.3'],
+    ['event-icecream', 'Mage', 'Пломбирный маг', '#f8bbd0', '#f48fb1', 'mul:1.4,1.1,1.25'],
+    ['event-siesta', 'Knight', 'Полуденный страж', '#ffcc80', '#ffb300', 'mul:1.35,1.05,0.55'],
+    ['event-alarm', 'Knight', 'Звонкий рыцарь', '#cfd8dc', '#eceff1', 'mul:0.85,0.9,1.0'],
+    ['event-pumpkin', 'Mage', 'Тыквенный чародей', '#ffab40', '#ff9100', 'mul:1.5,0.85,0.4'],
+    ['event-blanket', 'Rogue', 'Туманный странник', '#b39ddb', '#9575cd', 'mul:0.8,0.7,1.25'],
+    ['event-olivier', 'Barbarian', 'Праздничный богатырь', '#a5d6a7', '#66bb6a', 'mul:0.9,1.3,0.75'],
+  ] as const).map(([id, hero, name, color, glow, tint]): Item => ({ id, hero, name, rarity: 'legendary', color, glow, tint, coinBonus: 0.25, price: 0, inShop: false, event: true })),
 ];
 
 export const itemById = (id: string): Item => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
@@ -205,7 +222,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };
