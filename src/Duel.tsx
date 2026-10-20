@@ -7,7 +7,7 @@ import { LEAGUES, leagueOf, seasonEndsAt } from '../shared/rating';
 import { CameraGuide } from './CameraGuide';
 import { Exercise, EXERCISE_LABELS, RepExercise } from './repCounter';
 import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram';
-import { useRepCamera } from './useRepCamera';
+import { preloadPose, useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
 import { useDuelSounds } from './gameSounds';
 import { useVoiceCoach } from './voice';
@@ -67,9 +67,13 @@ export function Duel({ exercise, join, friends: openFriends = false }: { exercis
 }
 
 function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: RepExercise; onTrainer: () => void; onFriends: () => void; join?: JoinRoom; note: string | null }) {
-  const camera = useRepCamera();
+  // Меню дуэли без камеры: распознавание качаем, только когда игрок в комнате.
+  const camera = useRepCamera(false);
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
+  useEffect(() => {
+    if (phase === 'room' || phase === 'countdown') void preloadPose().catch(() => {});
+  }, [phase]);
   const [me, setMe] = useState<{ id: string; pro: boolean; bot: { username: string | null; running: boolean } } | null>(null);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [state, setState] = useState<{ me: FighterView; opponent: FighterView } | null>(null);

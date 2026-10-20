@@ -14,14 +14,19 @@ export interface Settings {
   skeleton: boolean;
   // 3D-подсказка «как встать к камере» перед уровнем.
   guide: boolean;
-  // Экономия батареи: без теней и с меньшим разрешением 3D.
+  // Экономия батареи: без теней и сглаживания, с меньшим разрешением 3D и 30 кадрами в секунду.
+  // На слабых телефонах включается сам (devicePerf.ts), пока игрок не выбрал сам.
   lowPower: boolean;
+  // Игрок сам переключал экономию: автоматика её больше не трогает.
+  lowPowerChosen: boolean;
+  // Замер FPS на первом запуске уже прошёл.
+  powerChecked: boolean;
   // Сюжетные диалоги перед уровнями.
   story: boolean;
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, story: true };
+const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true };
 
 let current: Settings = (() => {
   try {
@@ -36,6 +41,18 @@ export const getSettings = (): Settings => current;
 
 export function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {
   current = { ...current, [key]: value };
+  // Выбор игрока главнее автоматики.
+  if (key === 'lowPower') current.lowPowerChosen = true;
+  save();
+}
+
+/** Изменение настроек без пометки «выбрал игрок»: для автоматики. */
+export function setAuto(patch: Partial<Settings>): void {
+  current = { ...current, ...patch };
+  save();
+}
+
+function save(): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(current));
   } catch {
@@ -52,8 +69,15 @@ export const subscribeSettings = (l: () => void): (() => void) => {
 
 export const useSettings = (): Settings => useSyncExternalStore(subscribeSettings, () => current);
 
-/** Параметры 3D-сцен с учётом экономии батареи. */
-export const canvasProps = (s: Settings) => (s.lowPower ? { shadows: false, dpr: 1 as const } : { shadows: true, dpr: [1, 1.6] as [number, number] });
+/** Параметры 3D-сцен с учётом экономии батареи. На сильных телефонах всё как было. */
+export const canvasProps = (s: Settings) =>
+  s.lowPower
+    ? { shadows: false, dpr: 1 as const, gl: { antialias: false, powerPreference: 'default' as const } }
+    : { shadows: true, dpr: [1, 1.6] as [number, number], gl: {} };
+
+// Сколько кадров в секунду рисуют 3D-сцены в экономном режиме: вдвое меньше работы для видеокарты,
+// и процессору остаётся время на распознавание позы.
+export const LOW_POWER_FPS = 30;
 
 /** Сигнал на повтор теперь живёт в звуковом движке. */
 export { repSound } from './audio';

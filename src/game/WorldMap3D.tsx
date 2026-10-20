@@ -1,6 +1,5 @@
 import { Suspense, useMemo, useRef } from 'react';
-import { canvasProps, getSettings } from '../settings';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
 import { Character, CharacterProps } from '../three/Character';
@@ -14,6 +13,8 @@ import { LevelDef } from './levels';
 import { LOOK } from './look';
 import { Scenery } from './Scenery';
 import { generateWorld, levelZ, pathX, WorldLayout } from './worldgen';
+import { Canvas3D } from '../three/Canvas3D';
+import { getSettings } from '../settings';
 
 // 3D-карта мира из моделей KayKit: остров с дорогой через десять земель, деревни, леса, реки,
 // горы; закрытые земли под туманом Лени. Карту листают пальцем, камера летит вдоль дороги.
@@ -136,7 +137,7 @@ export function WorldMap3D(props: WorldMapProps) {
   const look = LOOK[layout.world];
   const sun = useRef<THREE.DirectionalLight>(null);
   return (
-    <Canvas {...canvasProps(getSettings())} camera={{ position: [0, 7.5, 8.5], fov: 48, far: 400 }} gl={{ antialias: true }}>
+    <Canvas3D camera={{ position: [0, 7.5, 8.5], fov: 48, far: 400 }} gl={{ antialias: true }}>
       <Sky top={look.top} horizon={look.horizon} stars={look.stars} planet={look.planet} />
       <fog attach="fog" args={[look.fog, 16, 42]} />
       <hemisphereLight args={['#ffffff', '#4a4038', layout.world === 0 ? 1.3 : 1.0]} />
@@ -145,24 +146,35 @@ export function WorldMap3D(props: WorldMapProps) {
       <Suspense fallback={null}>
         <MapContent key={layout.world} {...props} layout={layout} />
       </Suspense>
-    </Canvas>
+    </Canvas3D>
   );
 }
 
 function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, heroHands, pet, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
   const unlocked = (id: number) => id <= currentId;
   const heroIndex = levels.findIndex((l) => l.id === currentId);
-  const near = (land: number) => Math.abs(land - focusLand) <= 1;
+  // Жители и враги стоят только в ближних землях; в экономном режиме — только в той, что на экране.
+  const reach = getSettings().lowPower ? 0 : 1;
+  const near = (land: number) => Math.abs(land - focusLand) <= reach;
+  // Экономный режим: местность только вокруг земли на экране (дальше её всё равно скрывает туман).
+  // Окно сдвигается, когда игрок долистал до соседней земли.
+  const win = useMemo(() => {
+    const L = !reach && layout.lands.find((l) => l.land === focusLand);
+    if (!L) return undefined;
+    const z = (L.z0 + L.z1) / 2;
+    const half = (L.z0 - L.z1) / 2;
+    return { x: pathX(z, layout.world), z, ahead: half + 40, behind: half + 14, side: 30 };
+  }, [reach, layout, focusLand]);
   const space = layout.lib === 'space';
   const city = layout.lib === 'city';
 
   return (
     <>
-      <Scenery layout={layout} />
+      <Scenery layout={layout} window={win} />
 
       {levels.map((l, i) => {
         const n = layout.nodes[i];
-        if (Math.abs(i - Math.max(0, heroIndex)) > 40 && !near(l.land)) return null;
+        if (Math.abs(i - Math.max(0, heroIndex)) > (reach ? 40 : 20) && !near(l.land)) return null;
         return (
           <LevelStone
             key={l.id}

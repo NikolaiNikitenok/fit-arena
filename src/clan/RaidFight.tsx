@@ -1,5 +1,4 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
 import type { RaidView } from '../../shared/clan';
 import { RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_PREP_S, raidBoss } from '../../shared/raid';
 import { itemById } from '../game/items';
@@ -8,18 +7,18 @@ import { heroHands, heroPower } from '../game/power';
 import { Progress } from '../game/progress';
 import { Heart, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
-import { canvasProps, getSettings } from '../settings';
 import { Character, CharacterProps } from '../three/Character';
 import { useRepCamera } from '../useRepCamera';
 import { useMusic } from '../audio';
 import { useRaidSounds } from '../gameSounds';
 import { useVoiceCoach } from '../voice';
+import { Canvas3D } from '../three/Canvas3D';
 
 /** Огромный босс рейда; рядом может стоять герой игрока. */
 export function RaidScene({ raidKey, hit = 0, hero, pulse = 0, dead }: { raidKey: string; hit?: number; hero?: CharacterProps; pulse?: number; dead?: boolean }) {
   const boss = raidBoss(raidKey);
   return (
-    <Canvas {...canvasProps(getSettings())} camera={{ position: [1.2, 2.4, 8.2], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1.6, 0)}>
+    <Canvas3D camera={{ position: [1.2, 2.4, 8.2], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1.6, 0)}>
       <color attach="background" args={['#191326']} />
       <fog attach="fog" args={['#191326', 8, 18]} />
       <hemisphereLight args={['#d9ccff', '#2a2035', 1.2]} />
@@ -37,7 +36,7 @@ export function RaidScene({ raidKey, hit = 0, hero, pulse = 0, dead }: { raidKey
         <Character model={boss.model} tint={boss.tint} glow={boss.glow} anim={dead ? 'dead' : hit ? 'idle' : 'taunt'} hit={hit} scale={1.75} position={[0, 0, -1.4]} />
         {hero && <Character {...hero} pulse={pulse} pulseAnim="attack" position={[-1.15, 0, 1.6]} rotation={Math.PI - 0.4} scale={0.6} />}
       </Suspense>
-    </Canvas>
+    </Canvas3D>
   );
 }
 

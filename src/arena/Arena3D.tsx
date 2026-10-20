@@ -1,12 +1,13 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { canvasProps, getSettings } from '../settings';
+import { getSettings } from '../settings';
 import { CharAnim, Character, CharacterProps } from '../three/Character';
 import { Instanced, Placed } from '../three/Instanced';
 import { CharName } from '../three/kit';
 import { Prop } from '../three/Prop';
 import { Sky } from '../three/Sky';
+import { Canvas3D } from '../three/Canvas3D';
 
 // Дуэль на каменной арене посреди фэнтези-долины: герой игрока против соперника из KayKit.
 // Анимации запускаются сменой счётчиков: punchSeq — боец бьёт, hitSeq — по нему попали.
@@ -313,7 +314,7 @@ function Scene({ player, opponent }: Arena3DProps) {
 export function Arena3D({ player, opponent }: Arena3DProps) {
   const settings = getSettings();
   return (
-    <Canvas {...canvasProps(settings)} camera={{ position: [-1.0, 2.35, 6.6], fov: 38, far: 300 }}>
+    <Canvas3D camera={{ position: [-1.0, 2.35, 6.6], fov: 38, far: 300 }}>
       <Sky top="#3a5d9c" horizon="#ffd2a1" />
       <fog attach="fog" args={['#f0c49a', 14, 52]} />
       <hemisphereLight args={['#ffe9cc', '#5a4632', 1.25]} />
@@ -334,6 +335,6 @@ export function Arena3D({ player, opponent }: Arena3DProps) {
       <Suspense fallback={null}>
         <Scene player={player} opponent={opponent} />
       </Suspense>
-    </Canvas>
+    </Canvas3D>
   );
 }

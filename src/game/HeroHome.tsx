@@ -1,18 +1,12 @@
-import { ReactNode, Suspense, useEffect, useRef, useState } from 'react';
-import { canvasProps, getSettings } from '../settings';
-import { Canvas, useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import { lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
-import { Character } from '../three/Character';
-import { Pet } from '../three/Pet';
-import { petLook } from './pets';
-import { PetEntry } from './PetScreen';
+import { PetEntry } from './PetEntry';
 import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
-import { BASE_DAMAGE, heroHands, heroPower } from './power';
+import { BASE_DAMAGE, heroPower } from './power';
 import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
 import { AchBadge } from './Achievements';
-import { ProgramsEntry } from './Programs';
+import { ProgramsEntry } from './ProgramsEntry';
 import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
@@ -34,41 +28,8 @@ const ItemFace = ({ hero, color, glow }: { hero: string; color: string; glow?: s
   </span>
 );
 
-function Turntable({ children }: { children: ReactNode }) {
-  const g = useRef<THREE.Group>(null);
-  useFrame((_, dt) => {
-    if (g.current) g.current.rotation.y += dt * 0.35;
-  });
-  return <group ref={g}>{children}</group>;
-}
-
-function HeroStage({ progress }: { progress: Progress }) {
-  const item = itemById(progress.equipped);
-  const [pulse, setPulse] = useState(0);
-  // Питомец стоит рядом с героем и радуется вместе с ним.
-  const pet = petLook(progress, Date.now());
-  return (
-    <Canvas {...canvasProps(getSettings())} camera={{ position: [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 1.0, 0)}>
-      <hemisphereLight args={['#ffffff', '#3a3040', 1.3]} />
-      <directionalLight position={[3, 5, 3]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
-      <pointLight position={[-2.5, 1.5, -1.5]} intensity={8} color={item.glow ?? RARITY_COLORS[item.rarity]} />
-      <mesh position={[0, -0.08, 0]} receiveShadow>
-        <cylinderGeometry args={[1.05, 1.15, 0.16, 6]} />
-        <meshStandardMaterial color="#3a3f52" flatShading />
-      </mesh>
-      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.92, 1.0, 6]} />
-        <meshBasicMaterial color={RARITY_COLORS[item.rarity]} />
-      </mesh>
-      <Suspense fallback={null}>
-        <Turntable>
-          <Character model={item.hero} tint={item.tint} glow={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
-        </Turntable>
-        {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad} hop={pulse} lively position={[0.95, 0, 0.7]} rotation={-0.45} scale={1.35} onClick={() => setPulse((p) => p + 1)} />}
-      </Suspense>
-    </Canvas>
-  );
-}
+// 3D-витрина героя грузится отдельно: меню видно сразу, а three.js докачивается следом.
+const HeroStage = lazy(() => import('./HeroStage').then((m) => ({ default: m.HeroStage })));
 
 interface Props {
   progress: Progress;
@@ -149,7 +110,9 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
       <div className={`hero-card ${pro ? 'pro' : ''}`}>
         <div className="hero-stage">
           {pro && <GoldShieldArt className="gold-art" />}
-          <HeroStage progress={progress} />
+          <Suspense fallback={null}>
+            <HeroStage progress={progress} />
+          </Suspense>
         </div>
         <div className="hero-info">
           <div className="hero-level">{lvl.level}</div>

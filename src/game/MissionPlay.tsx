@@ -16,6 +16,7 @@ import { Mission, MissionView } from './mission';
 import { heroHands, heroPower } from './power';
 import { petLook } from './pets';
 import { MissionScene3D } from './MissionScene3D';
+import { Stars } from './Stars';
 import { bossCard, ShareVictory } from './ShareCard';
 import { Dialog, Remark } from './Dialog';
 import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
@@ -36,15 +37,8 @@ const TYPE_NAMES: Record<LevelDef['type'], string> = {
   boss: 'Босс',
 };
 
-export const Stars = ({ n }: { n: number }) => (
-  <span className="stars">
-    {[1, 2, 3].map((i) => (
-      <span key={i} className={i <= n ? 'on' : ''}>
-        ★
-      </span>
-    ))}
-  </span>
-);
+// Звёзды уровня: в отдельном модуле, чтобы карта не тянула за собой экран миссии.
+export { Stars };
 
 interface Props {
   level: LevelDef;

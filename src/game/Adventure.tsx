@@ -1,27 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
-import { SettingsSheet } from '../SettingsSheet';
-import { ClanScreen } from '../clan/ClanScreen';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
-import { MissionPlay, Stars } from './MissionPlay';
+import { Stars } from './Stars';
 import { NPCS } from './npcs';
 import { dailyTask } from './daily';
 import { startCloud, usePro } from '../cloud';
-import { PassScreen } from './PassScreen';
-import { EventScreen } from './EventScreen';
 import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
-import { Onboarding } from './Onboarding';
-import { PetHatch, PetScreen } from './PetScreen';
 import { canHatch, hatchEgg, petLevel, petLook, petName, petXp } from './pets';
-import { plankDailyWorkout, ProgramsScreen, type QuickWorkout } from './Programs';
+import { plankDailyWorkout } from './ProgramsEntry';
+import type { QuickWorkout } from './Programs';
 import {
   buy,
   buyGear,
@@ -56,11 +51,26 @@ import {
   swapsLeft,
   saveProgress,
 } from './progress';
-import { WorldMap3D } from './WorldMap3D';
 import { Coin, Flask, Heart, Lock, Swords } from '../icons';
 import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
+
+// Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
+const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
+const EventScreen = lazy(() => import('./EventScreen').then((m) => ({ default: m.EventScreen })));
+const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m.ProgramsScreen })));
+const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
+const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.PassScreen })));
+const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
+const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetHatch })));
+const Onboarding = lazy(() => import('./Onboarding').then((m) => ({ default: m.Onboarding })));
+const SettingsSheet = lazy(() => import('../SettingsSheet').then((m) => ({ default: m.SettingsSheet })));
+const WorldMap3D = lazy(() => import('./WorldMap3D').then((m) => ({ default: m.WorldMap3D })));
+
+/** Пока экран докачивается. */
+const Loading = () => <div className="lazy-loading muted">Загружаем…</div>;
+const Screen = ({ children }: { children: ReactNode }) => <Suspense fallback={<Loading />}>{children}</Suspense>;
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
@@ -185,64 +195,69 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
 
   if (playing)
     return (
-      <MissionPlay
-        key={playing.daily ? 'daily' : playing.id}
-        level={playing}
-        progress={progress}
-        onExit={() => setPlaying(null)}
-        onWin={(stars, record) => {
-          track('mission_win', playing.daily ? 'daily' : playing.id);
-          if (playing.daily) return { coins: 0, firstTime: false };
-          const r = recordWin(latest.current, playing, stars, record);
-          setProgress(r.progress);
-          return r.reward;
-        }}
-        onLose={() => {
-          track('mission_lose', playing.daily ? 'daily' : playing.id);
-          if (!playing.daily) update((p) => recordLoss(spendLife(p, Date.now()), playing));
-        }}
-        onStart={() => {
-          track('mission_start', playing.daily ? 'daily' : playing.id);
-          update(spendMight);
-        }}
-        onActivity={(ex, reps) => update((p) => addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now()))}
-        lives={lives}
-        swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
-        onSwap={(count) => {
-          const next = spendSwaps(latest.current, playing.id, count, Date.now());
-          if (next) update(() => next);
-          return next != null;
-        }}
-        onNext={!playing.daily && playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
-      />
+      <Screen>
+        <MissionPlay
+          key={playing.daily ? 'daily' : playing.id}
+          level={playing}
+          progress={progress}
+          onExit={() => setPlaying(null)}
+          onWin={(stars, record) => {
+            track('mission_win', playing.daily ? 'daily' : playing.id);
+            if (playing.daily) return { coins: 0, firstTime: false };
+            const r = recordWin(latest.current, playing, stars, record);
+            setProgress(r.progress);
+            return r.reward;
+          }}
+          onLose={() => {
+            track('mission_lose', playing.daily ? 'daily' : playing.id);
+            if (!playing.daily) update((p) => recordLoss(spendLife(p, Date.now()), playing));
+          }}
+          onStart={() => {
+            track('mission_start', playing.daily ? 'daily' : playing.id);
+            update(spendMight);
+          }}
+          onActivity={(ex, reps) => update((p) => addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now()))}
+          lives={lives}
+          swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
+          onSwap={(count) => {
+            const next = spendSwaps(latest.current, playing.id, count, Date.now());
+            if (next) update(() => next);
+            return next != null;
+          }}
+          onNext={!playing.daily && playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
+        />
+      </Screen>
     );
 
   if (eventOpen)
     return (
-      <EventScreen
-        progress={progress}
-        onStart={() => {
-          track('event_start');
-          update(spendMight);
-        }}
-        onFinish={(dealt, reps, ex) => {
-          const now = Date.now();
-          update((p) => addClanPending(recordActivity(p, ex, reps, now), reps, now));
-          const r = recordEventHit(latest.current, dealt, now);
-          if (!r) return null;
-          setProgress(r.progress);
-          if (r.killed) sfx('chest');
-          return r;
-        }}
-        onClose={() => setEventOpen(false)}
-      />
+      <Screen>
+        <EventScreen
+          progress={progress}
+          onStart={() => {
+            track('event_start');
+            update(spendMight);
+          }}
+          onFinish={(dealt, reps, ex) => {
+            const now = Date.now();
+            update((p) => addClanPending(recordActivity(p, ex, reps, now), reps, now));
+            const r = recordEventHit(latest.current, dealt, now);
+            if (!r) return null;
+            setProgress(r.progress);
+            if (r.killed) sfx('chest');
+            return r;
+          }}
+          onClose={() => setEventOpen(false)}
+        />
+      </Screen>
     );
 
-  if (programs) return <ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} />;
+  if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
 
   const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
+  // Листы докачиваются тихо, поверх уже видного экрана.
   const sheets = (
-    <>
+    <Suspense fallback={null}>
       {(newcomer || replayOnb) && (
         <Onboarding
           replay={replayOnb}
@@ -295,13 +310,15 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         />}
       {levelUp && <div className="toast global">{levelUp}</div>}
       {toast && tab === 'hero' && <div className="toast global">{toast}</div>}
-    </>
+    </Suspense>
   );
 
   if (tab === 'clan')
     return (
       <>
-        <ClanScreen progress={progress} setProgress={setProgress} onPlaying={onPlaying} landNow={currentDef.land} onSpendMight={() => update(spendMight)} />
+        <Screen>
+          <ClanScreen progress={progress} setProgress={setProgress} onPlaying={onPlaying} landNow={currentDef.land} onSpendMight={() => update(spendMight)} />
+        </Screen>
         {sheets}
       </>
     );
@@ -380,30 +397,32 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     <>
       <div className="map-screen">
         <div className="arena map3d" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setTimeout(() => (drag.current = null))}>
-          <WorldMap3D
-            levels={levels}
-            stars={progress.stars}
-            currentId={current}
-            hero={item.hero}
-            heroTint={item.tint}
-            heroGlow={item.glow}
-            heroHands={heroHands(progress)}
-            pet={petLook(progress, now)}
-            focus={focus}
-            focusLand={focusLand}
-            openedChests={progress.chests}
-            onSelect={(l) => tap(() => setSelected(l))()}
-            onMerchant={tap(() => setShop('weapon'))}
-            onChest={(land) =>
-              tap(() => {
-                const r = claimChest(progress, land);
-                if (!r) return showToast('Этот сундук уже пуст.');
-                setProgress(r.progress);
-                sfx('chest');
-                showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
-              })()
-            }
-          />
+          <Suspense fallback={null}>
+            <WorldMap3D
+              levels={levels}
+              stars={progress.stars}
+              currentId={current}
+              hero={item.hero}
+              heroTint={item.tint}
+              heroGlow={item.glow}
+              heroHands={heroHands(progress)}
+              pet={petLook(progress, now)}
+              focus={focus}
+              focusLand={focusLand}
+              openedChests={progress.chests}
+              onSelect={(l) => tap(() => setSelected(l))()}
+              onMerchant={tap(() => setShop('weapon'))}
+              onChest={(land) =>
+                tap(() => {
+                  const r = claimChest(progress, land);
+                  if (!r) return showToast('Этот сундук уже пуст.');
+                  setProgress(r.progress);
+                  sfx('chest');
+                  showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
+                })()
+              }
+            />
+          </Suspense>
           <div className="map-top">
             <div className="world-tabs">
               {TABS.map((w, i) => (

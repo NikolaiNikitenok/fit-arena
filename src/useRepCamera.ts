@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { DrawingUtils, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { createPoseLandmarker } from './pose';
+import type { PoseLandmarker } from '@mediapipe/tasks-vision';
+import { createPoseLandmarker, loadVision } from './pose';
 import { frameRotations, enableOrientation } from './orientation';
 import { Counter, Exercise, PlankTimer, RepCounter } from './repCounter';
 import { getSettings } from './settings';
@@ -12,6 +12,19 @@ import { reportCameraFailure, trackOnce } from './telemetry';
 // Модель общая на всё приложение: грузится один раз.
 let landmarker: Promise<PoseLandmarker> | null = null;
 
+/** Начать загрузку распознавания заранее (на брифинге, в комнате дуэли), чтобы к старту всё было готово. */
+export function preloadPose(): Promise<PoseLandmarker> {
+  landmarker ??= createPoseLandmarker().catch((e) => {
+    landmarker = null;
+    throw e;
+  });
+  return landmarker;
+}
+
+// В экономном режиме распознаём не чаще 15 раз в секунду: счёт от этого не страдает (repCounter
+// сглаживает по времени), а 3D-сцене и телефону остаётся запас.
+const LOW_POWER_DETECT_MS = 1000 / 15;
+
 // Сколько показываем «Готово» после калибровки, прежде чем пойдёт отсчёт.
 const CALIB_DONE_MS = 1600;
 
@@ -19,7 +32,7 @@ const CALIB_DONE_MS = 1600;
 const counterFor = (exercise: Exercise): Counter => (exercise === 'plank' ? new PlankTimer() : new RepCounter(exercise, personalThresholds(exercise)));
 
 /** Камера с распознаванием позы: рисует скелет и вызывает onRep на каждый засчитанный повтор (у планки — на каждую секунду). */
-export function useRepCamera() {
+export function useRepCamera(preload = true) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -43,16 +56,24 @@ export function useRepCamera() {
 
   useEffect(() => stop, []);
 
+  // Модель (≈19 МБ с WASM) качаем, пока игрок читает брифинг, но не мешая первому кадру экрана.
+  useEffect(() => {
+    if (!preload) return;
+    const t = setTimeout(() => void preloadPose().catch(() => {}), 1200);
+    return () => clearTimeout(t);
+  }, [preload]);
+
   /** onFrame вызывается каждый кадр; вернёт false — камера остановится. */
   const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean } = {}) => {
     // До первого await: на iPhone разрешение на датчик можно спросить только прямо из нажатия.
     enableOrientation();
-    landmarker ??= createPoseLandmarker().catch((e) => {
-      landmarker = null;
-      reportCameraFailure(e, 'model');
-      throw e;
-    });
-    const model = await landmarker;
+    const [model, vision] = await Promise.all([
+      preloadPose().catch((e) => {
+        reportCameraFailure(e, 'model');
+        throw e;
+      }),
+      loadVision(),
+    ]);
     // Без mediaDevices (старый WebView) ошибка тоже попадает в отчёт.
     const stream = await Promise.resolve()
       .then(() =>
@@ -78,8 +99,19 @@ export function useRepCamera() {
     setCalib(calibRef.current?.c.view ?? null);
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const drawing = new DrawingUtils(ctx);
+    const drawing = new vision.DrawingUtils(ctx);
     let lastReps = 0;
+    // Новый кадр камеры: видео обычно идёт 30 кадров в секунду, а экран 60 — один кадр дважды не распознаём.
+    let lastVideoTime = -1;
+    let lastDetect = -Infinity;
+    const due = (now: number) => {
+      // Часть WebView не двигает currentTime у живого видео: тогда всё равно распознаём 30 раз в секунду.
+      if (video.currentTime === lastVideoTime && now - lastDetect < 33) return false;
+      if (getSettings().lowPower && now - lastDetect < LOW_POWER_DETECT_MS - 2) return false;
+      lastVideoTime = video.currentTime;
+      lastDetect = now;
+      return true;
+    };
     setHint(null);
     setActive(true);
 
@@ -91,14 +123,15 @@ export function useRepCamera() {
         setCalib(null);
       }
       if (!calibRef.current && onFrame && !onFrame()) return stop();
-      if (video.readyState >= 2) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const now = performance.now();
+      const now = performance.now();
+      if (video.readyState >= 2 && due(now)) {
+        // Смена размера холста стирает его и выделяет память заново: только когда размер поменялся.
+        if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+        if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
         const lm = model.detectForVideo(video, now).landmarks[0];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (lm && getSettings().skeleton) {
-          drawing.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
+          drawing.drawConnectors(lm, vision.PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
           drawing.drawLandmarks(lm, { color: '#ffffff', radius: 3 });
         }
         const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight, frameRotations());

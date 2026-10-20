@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Instanced, Placed } from '../three/Instanced';
 import { ribbonGeometry } from '../three/Prop';
 import { LOOK } from './look';
+import { getSettings } from '../settings';
 import { WorldLayout } from './worldgen';
 
 // Местность мира: вода, плитки, декор и дорога. На карте рисуется целиком, в миссии — кусок
@@ -26,10 +27,19 @@ const inside = (w: Window | undefined, p: Placed, clear = false) => {
   return !(clear && w.clear && Math.hypot(p.x - w.x, p.z - w.z) < w.clear && !/cloud/.test(p.name));
 };
 
+// Экономный режим: без облаков и вдвое меньше мелкого декора (деревья, кусты, камни); дома и ориентиры на месте.
+const KEEP = /building|castle|market|tent|bridge|lander|landingpad|cargodepot|basemodule|watertower|streetlight|lights|tower|statue/;
+export const thinDecor = (items: Placed[]): Placed[] => items.filter((p, i) => !/cloud/.test(p.name) && (KEEP.test(p.name) || i % 2 === 0));
+
 export function Scenery({ layout, window: win }: { layout: WorldLayout; window?: Window }) {
   const look = LOOK[layout.world];
   const tiles = useMemo(() => layout.tiles.filter((t) => inside(win, t)), [layout, win]);
-  const props = useMemo(() => layout.props.filter((p) => inside(win, p, true)), [layout, win]);
+  // Сцена пересоздаётся при смене режима (Canvas3D), поэтому настройку читаем один раз.
+  const lite = getSettings().lowPower;
+  const props = useMemo(() => {
+    const list = layout.props.filter((p) => inside(win, p, true));
+    return lite ? thinDecor(list) : list;
+  }, [layout, win, lite]);
   const extras = useMemo(() => layout.extras.filter((p) => inside(win, p, true)), [layout, win]);
   const space = layout.lib === 'space';
   const city = layout.lib === 'city';

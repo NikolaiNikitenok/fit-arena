@@ -1,7 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
-import { canvasProps, getSettings } from '../settings';
+import { getSettings } from '../settings';
 import { Character, CharacterProps } from '../three/Character';
 import { useRepCamera } from '../useRepCamera';
 import { useMusic } from '../audio';
@@ -13,6 +12,7 @@ import { heroHands, heroPower } from './power';
 import type { Progress } from './progress';
 import { portraitUrl } from './npcs';
 import { say } from './story';
+import { Canvas3D } from '../three/Canvas3D';
 import {
   EVENT_ATTEMPT_S,
   EVENT_COINS,
@@ -41,7 +41,7 @@ import {
 /** Арена босса события: своё небо, земля и свечение у каждого месяца. */
 function EventScene({ boss, hit = 0, hero, pulse = 0, dead, angry }: { boss: EventBoss; hit?: number; hero?: CharacterProps; pulse?: number; dead?: boolean; angry?: boolean }) {
   return (
-    <Canvas {...canvasProps(getSettings())} camera={{ position: [1.2, 2.4, 8.2], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1.6, 0)}>
+    <Canvas3D camera={{ position: [1.2, 2.4, 8.2], fov: 42 }} onCreated={({ camera }) => camera.lookAt(0, 1.6, 0)}>
       <color attach="background" args={[boss.sky]} />
       <fog attach="fog" args={[boss.sky, 9, 20]} />
       <hemisphereLight args={['#ffffff', boss.ground, 1.25]} />
@@ -63,7 +63,7 @@ function EventScene({ boss, hit = 0, hero, pulse = 0, dead, angry }: { boss: Eve
         <Character model={boss.model} tint={boss.tint} glow={angry ? '#ff1744' : boss.glow} anim={dead ? 'dead' : hit ? 'idle' : 'taunt'} hit={hit} scale={1.75} position={[0, 0, -1.4]} />
         {hero && <Character {...hero} pulse={pulse} pulseAnim="attack" position={[-1.15, 0, 1.6]} rotation={Math.PI - 0.4} scale={0.6} />}
       </Suspense>
-    </Canvas>
+    </Canvas3D>
   );
 }
 

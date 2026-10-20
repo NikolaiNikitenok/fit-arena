@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Adventure, AdventureTab } from './game/Adventure';
-import { Duel, type JoinRoom } from './Duel';
+import type { JoinRoom } from './Duel';
+import { PowerToast } from './PowerToast';
 import { FriendInbox } from './friends/FriendInbox';
 import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './repCounter';
 import { Banner, MapIcon, Shield, Swords } from './icons';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
+
+// Дуэль с 3D-ареной и камерой грузится, когда её открыли.
+const Duel = lazy(() => import('./Duel').then((m) => ({ default: m.Duel })));
 
 type Tab = AdventureTab | 'duel';
 
@@ -40,7 +44,9 @@ export function App() {
               </button>
             ))}
           </div>
-          <Duel exercise={exercise} join={join} friends={friendsFirst} />
+          <Suspense fallback={<div className="lazy-loading muted">Загружаем…</div>}>
+            <Duel exercise={exercise} join={join} friends={friendsFirst} />
+          </Suspense>
         </>
       ) : (
         <Adventure tab={tab} onTab={setTab} onPlaying={setPlaying} />
@@ -54,6 +60,8 @@ export function App() {
           setTab('duel');
         }}
       />
+
+      <PowerToast />
 
       {!playing && (
         <nav className="bottom-nav">

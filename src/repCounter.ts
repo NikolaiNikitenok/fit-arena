@@ -162,9 +162,41 @@ export interface RepState {
 const MIN_VISIBILITY = 0.5;
 // Быстрее этого человек повтор честно не сделает — защита от тряски камеры и читов.
 const MIN_REP_MS = 400;
-const SMOOTHING = 0.5;
-// Сколько кадров подряд поза может «мигать»: модель иногда на кадр теряет стопу или таз.
+// Сглаживание угла по времени, а не по кадрам: за SMOOTH_HALF_MS старое значение теряет половину веса.
+// 33 мс — один кадр камеры при 30 к/с. На слабом телефоне при 10–15 к/с угол не запаздывает втрое,
+// и быстрые повторы не теряются.
+const SMOOTH_HALF_MS = 33;
+// Дольше кадра, который подвис, не сглаживаем: после паузы берём свежий угол.
+const SMOOTH_MAX_MS = 1000;
+// Поза может «мигать»: модель иногда на кадр теряет стопу или таз. Сбой считается, когда он идёт
+// POSTURE_GRACE кадров подряд или дольше POSTURE_GRACE_MS: при 30 к/с это те же три кадра,
+// а при 10 к/с одиночный сбой прощается, но двух кадров (0.1 с) уже хватает.
 const POSTURE_GRACE = 3;
+const POSTURE_GRACE_MS = 100;
+
+/**
+ * Вес прошлого значения при сглаживании за dt мс. Не больше половины: при частых кадрах всё как
+ * прежде (пополам с прошлым кадром), при редких прошлое быстро забывается.
+ */
+export const smoothKeep = (dt: number): number => (dt >= SMOOTH_MAX_MS ? 0 : Math.min(0.5, Math.pow(0.5, Math.max(0, dt) / SMOOTH_HALF_MS)));
+
+/** Поза ломается уже не мгновенно: серия сбоев по числу кадров или по времени. */
+class Grace {
+  private streak = 0;
+  private since = 0;
+  /** Отмечает кадр; true — сбой затянулся. */
+  update(failed: boolean, t: number): boolean {
+    if (!failed) {
+      this.streak = 0;
+      return false;
+    }
+    if (this.streak++ === 0) this.since = t;
+    return this.streak >= POSTURE_GRACE || (this.streak > 1 && t - this.since >= POSTURE_GRACE_MS);
+  }
+  reset(): void {
+    this.streak = 0;
+  }
+}
 
 export class RepCounter {
   private state: RepState = { reps: 0, phase: 'up', angle: null, hint: null };
@@ -172,7 +204,8 @@ export class RepCounter {
   private lastRepAt = -Infinity;
   private formOk = true;
   private failHint: string | null = null;
-  private failStreak = 0;
+  private grace = new Grace();
+  private lastT: number | null = null;
   // Поворот кадра, при котором поза в прошлый раз совпала.
   private rotation = 0;
 
@@ -198,7 +231,8 @@ export class RepCounter {
     this.lastRepAt = -Infinity;
     this.formOk = true;
     this.failHint = null;
-    this.failStreak = 0;
+    this.grace.reset();
+    this.lastT = null;
   }
 
   /**
@@ -231,14 +265,15 @@ export class RepCounter {
     }
 
     const measured = angle(a, b, c);
-    this.smoothed = this.smoothed === null ? measured : this.smoothed * SMOOTHING + measured * (1 - SMOOTHING);
+    const k = this.lastT === null ? 0 : smoothKeep(timestampMs - this.lastT);
+    this.lastT = timestampMs;
+    this.smoothed = this.smoothed === null ? measured : this.smoothed * k + measured * (1 - k);
     const value = this.smoothed;
 
     let { reps, phase } = this.state;
     const failed = rule.posture.find((check) => !check.ok(lm, side));
     let hint: string | null = failed?.hint ?? null;
-    this.failStreak = failed ? this.failStreak + 1 : 0;
-    const postureBad = this.failStreak >= POSTURE_GRACE;
+    const postureBad = this.grace.update(!!failed, timestampMs);
 
     if (phase === 'up' && value < this.down && !postureBad) {
       phase = 'down';
@@ -308,7 +343,7 @@ export interface PlankState extends RepState {
 
 /**
  * Таймер планки: копит время, пока поза верная, и ставит отсчёт на паузу, когда поза сломалась.
- * Короткие сбои модели (до POSTURE_GRACE кадров подряд) паузу не вызывают.
+ * Короткие сбои модели (одиночные кадры, до 0.1 с) паузу не вызывают.
  * Интерфейс тот же, что у RepCounter: reps — удержанные секунды.
  */
 export class PlankTimer {
@@ -318,7 +353,7 @@ export class PlankTimer {
   readonly up = 180;
   private state: PlankState = { reps: 0, phase: 'up', angle: null, hint: null, heldMs: 0, holding: false };
   private lastT: number | null = null;
-  private failStreak = 0;
+  private grace = new Grace();
   private rotation = 0;
 
   get current(): PlankState {
@@ -328,7 +363,7 @@ export class PlankTimer {
   reset(): void {
     this.state = { reps: 0, phase: 'up', angle: null, hint: null, heldMs: 0, holding: false };
     this.lastT = null;
-    this.failStreak = 0;
+    this.grace.reset();
   }
 
   update(raw: Landmark[] | undefined, timestampMs: number, aspect = 1, rotations: number[] = [0]): PlankState {
@@ -360,11 +395,11 @@ export class PlankTimer {
       if (seen(lm[SHOULDER[side]], lm[HIP[side]]) && legsSeen(lm, side)) body = Math.round(angle(lm[SHOULDER[side]], lm[HIP[side]], lowest(lm, side)));
     }
 
-    this.failStreak = fault ? this.failStreak + 1 : 0;
+    const broken = this.grace.update(!!fault, timestampMs);
     // Начать отсчёт можно только из верной позы; уже идущий не прерывается мгновенными сбоями.
     let holding = this.state.holding;
     if (!fault) holding = true;
-    else if (this.failStreak >= POSTURE_GRACE) holding = false;
+    else if (broken) holding = false;
     const heldMs = this.state.heldMs + (holding ? dt : 0);
     return (this.state = { reps: Math.floor(heldMs / 1000), phase: holding ? 'down' : 'up', angle: body, hint: holding ? null : fault, heldMs, holding });
   }

@@ -1,6 +1,5 @@
 import { Suspense, useMemo, useRef } from 'react';
-import { canvasProps, getSettings } from '../settings';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
 import { CharAnim, Character, CharacterProps } from '../three/Character';
@@ -15,6 +14,8 @@ import { LOOK } from './look';
 import type { MissionView } from './mission';
 import { Scenery, Window } from './Scenery';
 import { generateWorld, pathX, WorldLayout } from './worldgen';
+import { Canvas3D } from '../three/Canvas3D';
+import { getSettings } from '../settings';
 
 // Сцена миссии прямо в том месте карты, где стоит уровень: вокруг та же деревня, лес или база.
 // Повторы игрока видны в мире: растёт мост, герой поднимается на башню, чудище отстаёт,
@@ -86,14 +87,14 @@ export function MissionScene3D(props: Props) {
   const world = props.level.world;
   const look = LOOK[world];
   return (
-    <Canvas {...canvasProps(getSettings())} camera={{ position: [0, 3, 7], fov: 45, far: 400 }}>
+    <Canvas3D camera={{ position: [0, 3, 7], fov: 45, far: 400 }}>
       <Sky top={look.top} horizon={look.horizon} stars={look.stars} planet={look.planet} />
       <fog attach="fog" args={[look.fog, 14, 38]} />
       <hemisphereLight args={['#ffffff', '#4a4038', world === 0 ? 1.3 : 1.0]} />
       <Suspense fallback={null}>
         <Stage {...props} />
       </Suspense>
-    </Canvas>
+    </Canvas3D>
   );
 }
 
@@ -104,9 +105,11 @@ function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow
   const node = layout.nodes[Math.max(0, index)];
   const { type } = level;
   const chase = type === 'chase';
+  // В экономном режиме мир вокруг уже: дальнее всё равно тонет в тумане.
+  const lite = getSettings().lowPower;
   const win: Window = useMemo(
-    () => ({ x: node.x, z: node.z, ahead: chase ? 70 : 26, behind: 12, side: 20, clear: chase ? 0 : type === 'boss' ? 4.2 : 3.4 }),
-    [node, chase, type],
+    () => ({ x: node.x, z: node.z, ahead: chase ? (lite ? 50 : 70) : lite ? 20 : 26, behind: lite ? 8 : 12, side: lite ? 13 : 20, clear: chase ? 0 : type === 'boss' ? 4.2 : 3.4 }),
+    [node, chase, type, lite],
   );
   const look = LOOK[world];
   const sun = useRef<THREE.DirectionalLight>(null!);
