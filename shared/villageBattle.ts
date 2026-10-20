@@ -491,6 +491,9 @@ function attack(s: BattleState, u: SimUnit, k: number) {
   damageBuilding(s, k, u.damage);
 }
 
+// Целитель лечит отряды в этом радиусе (клеток); героя — вполсилы.
+export const HEAL_RADIUS = 2.5;
+
 function stepHealer(s: BattleState, u: SimUnit) {
   let best = -1;
   let bestD = Infinity;
@@ -517,7 +520,7 @@ function stepHealer(s: BattleState, u: SimUnit) {
   }
   const heal = (u.def.heal ?? 0) * troopMul(s.input.army.level) * DT;
   for (const o of s.units) {
-    if (!o.alive || o.def.prefer === 'heal' || o.hp >= o.maxHp || dist(u.x, u.y, o.x, o.y) > 2.5) continue;
+    if (!o.alive || o.def.prefer === 'heal' || o.hp >= o.maxHp || dist(u.x, u.y, o.x, o.y) > HEAL_RADIUS) continue;
     o.hp = Math.min(o.maxHp, o.hp + (o.u === 'hero' ? heal / 2 : heal));
   }
 }

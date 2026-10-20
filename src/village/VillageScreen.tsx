@@ -59,6 +59,10 @@ import { claimTask, openTasks, taskDone, taskProgress, TASKS } from './tasks';
 import type { DefenseEntry } from './types';
 import type { Ctl, ViewBld } from './Village3D';
 import { Viewport } from './Viewport';
+import { TroopSheet, TroopThumb } from './TroopInfo';
+import { preloadTroops, type HeroLook } from './troops3d';
+import { itemById } from '../game/items';
+import { heroHands } from '../game/power';
 import './village.css';
 
 interface Props {
@@ -108,6 +112,11 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const [top, setTop] = useState<PvpTopRow[] | null>(null);
   const [topErr, setTopErr] = useState<string | null>(null);
   const [notify, setNotify] = useState<boolean | null>(null);
+  // Персонажи отрядов грузятся заранее, пока игрок в деревне: бой и казармы открываются уже с ними.
+  useEffect(() => {
+    const t = setTimeout(preloadTroops, 1500);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     const on = () => setOnline(isOnline());
     window.addEventListener('online', on);
@@ -274,6 +283,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
 
   if (battle) {
     const heroLvl = heroLevel(heroXp(progress)).level;
+    const item = itemById(progress.equipped);
+    const heroLook: HeroLook = { model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(progress) };
     const army: BattleArmy =
       battle.kind === 'replay'
         ? battle.entry.army
@@ -321,7 +332,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       const c = battle.camp;
       const repeat = (v.camps?.[c.id] ?? 0) > 0;
       const loot = repeat ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot;
-      return <BattleScreen title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />;
+      return <BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />;
     }
     if (battle.kind === 'pvp') {
       const t = battle.target;
@@ -329,6 +340,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       return (
         <BattleScreen
           key={t.token ?? t.id}
+          heroLook={heroLook}
           title={`${t.name}, ратуша ${t.level}`}
           note={
             <>
@@ -1020,6 +1032,19 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
   const used = housingOf(town.army) + town.q.reduce((s, q) => s + TROOPS[q.t].housing, 0);
   const lastEnd = town.q.length ? town.q[town.q.length - 1].end : now;
   const sp = town.q.length ? Math.max(1, Math.ceil((lastEnd - now) / 60_000 / 2)) : 0;
+  // Карточка отряда поверх казарм.
+  const [info, setInfo] = useState<TroopId | null>(null);
+  if (info)
+    return (
+      <TroopSheet
+        id={info}
+        barracks={bl}
+        have={town.army[info] ?? 0}
+        queued={town.q.filter((q) => q.t === info).length}
+        onTrain={() => onTrain(info)}
+        onClose={() => setInfo(null)}
+      />
+    );
   return (
     <div className="sheet" onClick={onClose}>
       <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
@@ -1056,8 +1081,10 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
               const locked = bl < d.unlock;
               const queued = town.q.filter((q) => q.t === id).length;
               return (
-                <div key={id} className={`vil-task ${locked ? 'locked' : ''}`}>
-                  <span className={`vil-unit-big u-${id}`} />
+                <div key={id} className={`vil-task vil-troop-card ${locked ? 'locked' : ''}`} role="button" tabIndex={0} onClick={() => setInfo(id)} aria-label={`${d.name}: подробнее`}>
+                  <span className={`vil-troop-pic u-${id}`}>
+                    <TroopThumb id={id} size={52} />
+                  </span>
                   <div className="vil-shop-info">
                     <b>
                       {d.name} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
@@ -1068,14 +1095,30 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
                       <span className="muted">
                         мест {d.housing} · {fmtTime(d.train)}
                       </span>
+                      <span className="vil-more">подробнее ›</span>
                     </span>
                   </div>
                   {queued > 0 && (
-                    <button className="small-btn ghost" onClick={() => onUntrain(id)} aria-label="Убрать из очереди">
+                    <button
+                      className="small-btn ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUntrain(id);
+                      }}
+                      aria-label="Убрать из очереди"
+                    >
                       −
                     </button>
                   )}
-                  <button className="small-btn" disabled={locked} onClick={() => onTrain(id)} aria-label="Обучить">
+                  <button
+                    className="small-btn"
+                    disabled={locked}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTrain(id);
+                    }}
+                    aria-label="Обучить"
+                  >
                     {locked ? <Lock /> : '+'}
                   </button>
                 </div>

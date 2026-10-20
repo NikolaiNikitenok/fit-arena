@@ -10,7 +10,7 @@ import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
 
 export type CharAnim =
   | 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'punch' | 'cast' | 'hit' | 'death' | 'dead'
-  | 'cheer' | 'sit' | 'lie' | 'taunt' | 'awaken' | 'interact' | 'block' | 'shamble';
+  | 'cheer' | 'sit' | 'lie' | 'taunt' | 'awaken' | 'interact' | 'block' | 'shamble' | 'shoot' | 'chop2' | 'casting';
 
 const CLIPS: Record<CharAnim, string> = {
   idle: 'Idle',
@@ -31,8 +31,11 @@ const CLIPS: Record<CharAnim, string> = {
   awaken: 'Skeletons_Awaken_Standing',
   interact: 'Interact',
   block: 'Block',
+  shoot: '1H_Ranged_Shoot',
+  chop2: '2H_Melee_Attack_Chop',
+  casting: 'Spellcasting',
 };
-const ONCE: CharAnim[] = ['jump', 'attack', 'punch', 'cast', 'hit', 'death', 'awaken', 'interact', 'block'];
+const ONCE: CharAnim[] = ['jump', 'attack', 'punch', 'cast', 'hit', 'death', 'awaken', 'interact', 'block', 'shoot', 'chop2'];
 
 // Какое снаряжение из набора видно у каждого героя (остальные предметы набора прячем).
 const GEAR: Partial<Record<CharName, string[]>> = {

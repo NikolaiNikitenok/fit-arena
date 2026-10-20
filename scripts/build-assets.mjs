@@ -1,7 +1,8 @@
 // Собирает 3D-модели KayKit (CC0) из исходников в лёгкие файлы для приложения:
 //   персонажи — каждый в свой .glb, только нужные анимации;
 //   окружение — по библиотеке на мир (fantasy, space, city), предмет = узел с именем файла.
-// Запуск: node scripts/build-assets.mjs <папка assets-src/kaykit> [библиотека — собрать только её, без персонажей]
+// Запуск: node scripts/build-assets.mjs <папка assets-src/kaykit> [библиотека — собрать только её, без персонажей;
+//   anims — только общий файл анимаций, нужен лишь Skeleton_Minion.glb]
 import { readdirSync, statSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
@@ -38,6 +39,8 @@ const KEEP = new Set([
   'Idle', 'Unarmed_Idle', 'Idle_Combat', 'Running_A', 'Walking_A', 'Walking_D_Skeletons', 'Jump_Full_Short', 'Cheer',
   '1H_Melee_Attack_Chop', 'Unarmed_Melee_Attack_Punch_A', 'Spellcast_Shoot', 'Hit_A', 'Death_A', 'Death_A_Pose',
   'Sit_Floor_Idle', 'Lie_Idle', 'Taunt', 'Skeletons_Awaken_Standing', 'Interact', 'PickUp', 'Block',
+  // Отряды деревни в бою: выстрел лучника, удар великана двуручным топором, лечение целителя.
+  '1H_Ranged_Shoot', '2H_Melee_Attack_Chop', 'Spellcasting',
 ]);
 
 function dropAnimation(a) {
@@ -74,16 +77,15 @@ function dropStill(a) {
 const CHARACTERS = ['Knight', 'Mage', 'Barbarian', 'Rogue', 'Skeleton_Minion', 'Skeleton_Warrior', 'Skeleton_Mage', 'Skeleton_Rogue'];
 
 // У всех персонажей KayKit один скелет, поэтому анимации храним в одном файле и делим между всеми.
-if (!ONLY) {
 mkdirSync(`${OUT}/chars`, { recursive: true });
-for (const name of CHARACTERS) {
+if (!ONLY) for (const name of CHARACTERS) {
   const doc = await io.read(find(name));
   for (const a of doc.getRoot().listAnimations()) dropAnimation(a);
   await doc.transform(dedup(), prune({ keepLeaves: true }), squeeze());
   await io.write(`${OUT}/chars/${name}.glb`, doc);
   console.log('char', name, Math.round(statSync(`${OUT}/chars/${name}.glb`).size / 1024), 'KB');
 }
-{
+if (!ONLY || ONLY === 'anims') {
   const doc = await io.read(find('Skeleton_Minion'));
   for (const a of doc.getRoot().listAnimations()) if (!KEEP.has(a.getName())) dropAnimation(a);
   for (const m of doc.getRoot().listMeshes()) m.dispose();
@@ -92,7 +94,6 @@ for (const name of CHARACTERS) {
   await doc.transform(dedup(), prune({ keepLeaves: true }), squeeze());
   await io.write(`${OUT}/chars/animations.glb`, doc);
   console.log('anims', doc.getRoot().listAnimations().length, Math.round(statSync(`${OUT}/chars/animations.glb`).size / 1024), 'KB');
-}
 }
 
 const LIBS = {

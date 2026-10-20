@@ -136,3 +136,36 @@
 .vil-task.vil-log { flex-wrap: wrap; }
 .vil-log-actions { flex-basis: 100%; display: flex; justify-content: flex-end; gap: 8px; }
 .vil-log-actions .small-btn { min-width: 0; padding: 7px 12px; font-size: 13px; }
+
+/* Отряды в казармах: живые мини-модели и карточка с цифрами из боя. */
+.vil-troop-card { cursor: pointer; text-align: left; }
+.vil-troop-card:active { transform: scale(.99); }
+.vil-troop-pic { flex: none; width: 56px; height: 56px; display: grid; place-items: center; border-radius: var(--r-sm); background: radial-gradient(circle at 50% 65%, color-mix(in srgb, currentColor 30%, transparent), rgba(255,255,255,.03) 72%); }
+.vil-troop-card.locked .vil-troop-pic { filter: grayscale(1); }
+.vil-more { color: var(--accent); font-weight: 800; font-size: 12px; }
+.vil-ti-head { display: flex; gap: 14px; align-items: center; }
+.vil-ti-pic { flex: none; width: 112px; height: 112px; border-radius: var(--r-lg); display: grid; place-items: center; background: radial-gradient(circle at 50% 70%, color-mix(in srgb, currentColor 34%, transparent), rgba(255,255,255,.03) 70%), var(--surface-2); border: 1px solid var(--line); }
+.vil-ti-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.vil-ti-title > b { font-size: 22px; font-weight: 900; }
+.vil-ti-title .muted { font-size: 13px; }
+.vil-ti-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.vil-ti-tags span { padding: 3px 9px; border-radius: 999px; background: var(--surface-3); font-size: 12px; font-weight: 800; color: #dfe3ea; }
+.vil-ti-tags .ground { background: rgba(201,138,75,.22); color: #f0c48f; }
+.vil-ti-tags .air { background: rgba(138,255,193,.16); color: #8affc1; }
+.vil-ti-role { margin: 0; font-size: 14px; line-height: 1.4; color: #dfe3ea; }
+.vil-ti-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vil-ti-grid > div { display: flex; flex-direction: column; gap: 1px; padding: 7px 9px; border-radius: var(--r-sm); background: var(--surface-2); min-width: 0; }
+.vil-ti-grid > div.wide { grid-column: 1 / -1; }
+.vil-ti-grid small { font-size: 11.5px; color: var(--hint); font-weight: 700; }
+.vil-ti-grid b { font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.vil-ti-grid .wide b { font-size: 14.5px; }
+.vil-ti-grid em { font-style: normal; font-size: 11.5px; color: var(--gold); font-weight: 700; }
+.vil-ti-hit { display: flex; flex-direction: column; gap: 5px; }
+.vil-ti-hit small { font-size: 12px; color: var(--hint); font-weight: 800; }
+.vil-ti-hit > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.vil-ti-hit span { padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 800; }
+.vil-ti-hit .bad { background: rgba(255,107,129,.15); color: #ff8fa0; }
+.vil-ti-hit .ok { background: rgba(110,231,183,.14); color: var(--mint); }
+.vil-ti-bonus { padding: 9px 12px; border-radius: var(--r-md); background: rgba(255,210,122,.1); color: #f3e3bd; font-size: 13px; line-height: 1.35; }
+.vil-ti-bonus b { color: var(--gold); }
+.vil-ti-cost { flex: 1; font-size: 15px; }

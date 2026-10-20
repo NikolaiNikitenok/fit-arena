@@ -7,6 +7,7 @@ import { RES_COLORS, Star, Stone, Wood } from './icons';
 import { fmtNum } from './state';
 import type { BattleView, Ctl, ViewBld } from './Village3D';
 import { Viewport } from './Viewport';
+import type { HeroLook } from './troops3d';
 
 export const ResIcon = ({ r, size = 15 }: { r: keyof Res; size?: number }) => (
   <span style={{ color: RES_COLORS[r], display: 'inline-flex' }}>{r === 'wood' ? <Wood size={size} /> : r === 'stone' ? <Stone size={size} /> : <Coin size={size} />}</span>
@@ -46,11 +47,13 @@ interface Props {
   // Бой окончен: что получилось, какие были высадки и когда игрок сдался.
   onFinish?: (r: BattleResult, deploys: Deploy[], endTick?: number) => void;
   onClose: () => void;
+  // Как выглядит герой нападающего (у своего набега — твоё снаряжение).
+  heroLook?: HeroLook;
 }
 
 const ORDER: UnitKind[] = ['hero', 'warrior', 'archer', 'giant', 'wallbreaker', 'healer'];
 
-export function BattleScreen({ title, base, loot, seed, army, mode, deploys, endTick, enemy, note, resultNote, scout, onSkip, onFinish, onClose }: Props) {
+export function BattleScreen({ title, base, loot, seed, army, mode, deploys, endTick, enemy, note, resultNote, scout, onSkip, onFinish, onClose, heroLook }: Props) {
   // В бою видно всё поле с краем для высадки.
   const ctl = useRef<Ctl>({ tx: 0, tz: 0, zoom: Math.max(11, Math.min(window.innerWidth, window.innerHeight * 0.8) / 25) });
   const view = useRef<BattleView | null>(null);
@@ -153,7 +156,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
 
   return (
     <div className="vil-screen battle">
-      <Viewport ctl={ctl} buildings={buildings} enemy={enemy} battle={view} hp={hp} noDeploy={showZone || (mode === 'attack' && !started.current) ? zone : undefined} onTap={tap} />
+      <Viewport ctl={ctl} buildings={buildings} enemy={enemy} battle={view} hp={hp} heroLook={heroLook} foe={mode === 'replay'} noDeploy={showZone || (mode === 'attack' && !started.current) ? zone : undefined} onTap={tap} />
       <div className="vil-top">
         <div className="vil-battle-head">
           <div>

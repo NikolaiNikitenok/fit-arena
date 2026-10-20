@@ -9,12 +9,13 @@ import { Anim, GOLD, KitPart, Look, lookOf, Prim, SIZE } from './looks';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings } from '../settings';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
-import { BattleState, cellOf, Fx, UnitKind } from '../../shared/villageBattle';
+import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { RES_COLORS } from './icons';
+import { HealerAuras, HeroLook, HeroTroop, Troops, UnitBars } from './troops3d';
 
 // Деревня в 3D: изометрия ортогональной камерой, постройки KayKit инстансами, стены собираются
-// из секций между соседними клетками. Та же сцена показывает бой: отряды — простые фигурки
-// (инстансы), выстрелы и взрывы — из пула.
+// из секций между соседними клетками. Та же сцена показывает бой: отряды — персонажи KayKit
+// (src/village/troops3d.tsx) с полосками здоровья, выстрелы и взрывы — из пула.
 
 export type BldState = 'ok' | 'new' | 'up' | 'ruin';
 export interface ViewBld {
@@ -202,76 +203,6 @@ function Model({ t, x, y, enemy }: { t: BuildingType; x: number; y: number; enem
   return <primitive object={group} position={[W(x + s / 2), 0, W(y + s / 2)]} />;
 }
 
-const UNIT_LOOK: Record<UnitKind, { color: string; s: number; fly?: boolean }> = {
-  warrior: { color: '#e8833a', s: 1 },
-  archer: { color: '#5fbf5a', s: 0.9 },
-  giant: { color: '#c0392b', s: 1.8 },
-  wallbreaker: { color: '#4a5a75', s: 0.85 },
-  healer: { color: '#f6f2ff', s: 1, fly: true },
-  hero: { color: '#ffd27a', s: 1.35 },
-};
-const MAX_UNITS = 140;
-
-function Units({ view }: { view: React.MutableRefObject<BattleView | null> }) {
-  const body = useMemo(() => {
-    const g = new THREE.CylinderGeometry(0.16, 0.24, 0.5, 8);
-    g.translate(0, 0.25, 0);
-    const m = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ roughness: 0.7 }), MAX_UNITS);
-    m.castShadow = true;
-    m.frustumCulled = false;
-    return m;
-  }, []);
-  const head = useMemo(() => {
-    const g = new THREE.SphereGeometry(0.15, 10, 8);
-    g.translate(0, 0.62, 0);
-    const m = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ color: '#f1c9a5', roughness: 0.8 }), MAX_UNITS);
-    m.frustumCulled = false;
-    return m;
-  }, []);
-  useEffect(() => () => {
-    body.dispose();
-    head.dispose();
-  }, [body, head]);
-  const mat = useMemo(() => new THREE.Matrix4(), []);
-  const col = useMemo(() => new THREE.Color(), []);
-  useFrame(() => {
-    const v = view.current;
-    let n = 0;
-    if (v) {
-      const a = Math.min(1, (performance.now() - v.at) / v.ms);
-      for (const u of v.s.units) {
-        if (!u.alive || n >= MAX_UNITS) continue;
-        const prev = v.prev.get(u.n) ?? [u.x, u.y];
-        const x = prev[0] + (u.x - prev[0]) * a;
-        const y = prev[1] + (u.y - prev[1]) * a;
-        const look = UNIT_LOOK[u.u];
-        const lunge = v.s.tick - u.hit < 3 ? 1.12 : 1;
-        const fly = look.fly ? 0.9 + 0.1 * Math.sin(performance.now() / 200 + u.n) : 0;
-        // Фигурки крупнее настоящего масштаба: так их видно на телефоне.
-        const k = look.s * 1.7;
-        mat.makeScale(k * lunge, k, k * lunge).setPosition(W(x), fly, W(y));
-        body.setMatrixAt(n, mat);
-        head.setMatrixAt(n, mat);
-        // Раненые темнеют.
-        col.set(look.color).multiplyScalar(0.55 + 0.45 * (u.hp / u.maxHp));
-        body.setColorAt(n, col);
-        n++;
-      }
-    }
-    body.count = n;
-    head.count = n;
-    body.instanceMatrix.needsUpdate = true;
-    head.instanceMatrix.needsUpdate = true;
-    if (body.instanceColor) body.instanceColor.needsUpdate = true;
-  });
-  return (
-    <>
-      <primitive object={body} />
-      <primitive object={head} />
-    </>
-  );
-}
-
 const ARROWS = 48;
 const BOOMS = 16;
 function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) {
@@ -355,6 +286,9 @@ function NoDeploy({ cells }: { cells: number[] }) {
   return <primitive object={mesh} />;
 }
 
+// Герой чужого нападающего (повтор набега): его снаряжения мы не знаем.
+const DEFAULT_HERO: HeroLook = { model: 'Knight', glow: '#ff8a5c', tint: 'mul:0.95,0.85,0.8' };
+
 export interface SceneProps {
   buildings: ViewBld[];
   enemy?: boolean;
@@ -367,6 +301,9 @@ export interface SceneProps {
   noDeploy?: number[];
   // Здоровье повреждённых построек в бою, 0..1.
   hp?: Record<number, number>;
+  // Как выглядит герой в бою (его снаряжение) и чьи отряды на поле: в повторе набега на тебя — чужие.
+  heroLook?: HeroLook;
+  foe?: boolean;
   ctl: React.MutableRefObject<Ctl>;
 }
 
@@ -419,7 +356,19 @@ function Scene(props: SceneProps) {
           );
         })}
       {props.noDeploy && <NoDeploy cells={props.noDeploy} />}
-      {props.battle && <Units view={props.battle} />}
+      {props.battle && (
+        // Персонажи грузятся отдельно: поле боя видно сразу.
+        <>
+          <Suspense fallback={null}>
+            <Troops view={props.battle} ids={props.battle.current?.s.input.army.troops ?? {}} lite={lite} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <HeroTroop view={props.battle} look={props.heroLook ?? DEFAULT_HERO} />
+          </Suspense>
+        </>
+      )}
+      {props.battle && <HealerAuras view={props.battle} />}
+      {props.battle && <UnitBars view={props.battle} foe={!!props.foe} />}
       {props.battle && <Effects view={props.battle} />}
     </>
   );

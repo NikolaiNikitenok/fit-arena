@@ -20,6 +20,9 @@ const extend = (loader: GLTFLoader) => {
 
 export const useGltf = (url: string): GLTF => useLoader(GLTFLoader, url, extend);
 
+/** Загрузить модель заранее (в тот же кэш, что useGltf): сцена потом откроется без ожидания. */
+export const preloadGltf = (url: string) => useLoader.preload(GLTFLoader, url, extend);
+
 export interface Part {
   // Меши предмета с матрицами относительно его корня.
   meshes: { geometry: THREE.BufferGeometry; material: THREE.Material; matrix: THREE.Matrix4 }[];
