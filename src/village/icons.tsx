@@ -15,7 +15,9 @@ export const Stone = ({ size = 16, className }: P) => svg(size, className, <path
 
 export const Bolt = ({ size = 16, className }: P) => svg(size, className, <path d="M13.5 2L5 13.5h6L9.5 22 19 9.5h-6z" />, true);
 
-export const Hammer = ({ size = 16, className }: P) => svg(size, className, <><path d="M14 4l6 6-2.5 2.5-6-6z" /><path d="M12.5 8.5L4 17l3 3 8.5-8.5" /></>);
+// Молоток: боёк и рукоять. Им же подписаны «Строить», «Улучшить» и строители.
+export const Hammer = ({ size = 16, className }: P) =>
+  svg(size, className, <><path d="M12.6 5.2l2.6-2.2a2.2 2.2 0 012.9.1l3.3 3.3-3 3-1.5-1.5-1.8 1.8-3.6-3.6z" fill="currentColor" /><path d="M12.6 9.4l-8 8a1.9 1.9 0 002.7 2.7l8-8" strokeWidth="2.6" /></>);
 
 export const Plus = ({ size = 22, className }: P) => svg(size, className, <path d="M12 5v14M5 12h14" />);
 

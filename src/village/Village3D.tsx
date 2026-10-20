@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { Canvas3D } from '../three/Canvas3D';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
+import { Ground } from './Ground';
+import { GOLD, KitPart, Look, lookOf, Prim, SIZE } from './looks';
+import { lookGroup, PrimInstances } from './looks3d';
 import { getSettings } from '../settings';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx, UnitKind } from '../../shared/villageBattle';
@@ -45,85 +48,38 @@ const PITCH = (50 * Math.PI) / 180;
 const OFF = new THREE.Vector3(Math.cos(PITCH) * Math.SQRT1_2, Math.sin(PITCH), Math.cos(PITCH) * Math.SQRT1_2).multiplyScalar(60);
 export const SIN_PITCH = Math.sin(PITCH);
 
-interface Part {
-  lib: LibName;
-  name: string;
-  s: number;
-  dx?: number;
-  dz?: number;
-  ry?: number;
-}
-const p = (lib: LibName, name: string, s: number, dx = 0, dz = 0, ry = 0): Part => ({ lib, name, s, dx, dz, ry });
-// Модель каждой постройки: своя (синяя) и у Князя (красная). Где модели нет — собрана из предметов.
-const MODELS: Record<Exclude<BuildingType, 'wall'>, { own: Part[]; enemy: Part[] }> = {
-  townhall: { own: [p('fantasy', 'building_castle_blue', 1.25)], enemy: [p('fantasy', 'building_castle_red', 1.25)] },
-  lumbermill: { own: [p('village', 'building_lumbermill_blue', 1.3)], enemy: [p('fantasy', 'building_lumbermill_green', 1.3)] },
-  quarry: {
-    own: [p('fantasy', 'resource_stone', 2.6, -0.2, 0.1), p('fantasy', 'rock_single_C', 3.2, 0.45, -0.4), p('fantasy', 'rock_single_A', 3, -0.5, -0.5), p('fantasy', 'wheelbarrow', 1.6, 0.5, 0.5, 0.6)],
-    enemy: [p('fantasy', 'resource_stone', 2.6, -0.2, 0.1), p('fantasy', 'rock_single_C', 3.2, 0.45, -0.4), p('fantasy', 'rock_single_A', 3, -0.5, -0.5)],
-  },
-  goldmine: { own: [p('village', 'building_mine_blue', 1.1)], enemy: [p('fantasy', 'building_mine_yellow', 1.1)] },
-  storage: {
-    own: [p('fantasy', 'building_grain', 0.95), p('fantasy', 'crates_stacked', 0.38, -0.35, -0.3), p('fantasy', 'barrel', 2.2, 0.45, 0.35), p('fantasy', 'sack', 3, 0.1, 0.55)],
-    enemy: [p('fantasy', 'building_grain', 0.95), p('fantasy', 'crates_stacked', 0.38, -0.35, -0.3), p('fantasy', 'barrel', 2.2, 0.45, 0.35)],
-  },
-  barracks: { own: [p('village', 'building_barracks_blue', 1.3)], enemy: [p('village', 'building_barracks_red', 1.3)] },
-  forge: { own: [p('village', 'building_blacksmith_blue', 1.4)], enemy: [p('fantasy', 'building_blacksmith_red', 1.4)] },
-  tavern: { own: [p('village', 'building_tavern_blue', 1.5)], enemy: [p('fantasy', 'building_tavern_red', 1.5)] },
-  market: { own: [p('village', 'building_market_blue', 1.05)], enemy: [p('fantasy', 'building_market_green', 1.05)] },
-  tower: { own: [p('village', 'building_tower_A_blue', 1.5)], enemy: [p('fantasy', 'building_tower_A_red', 1.5)] },
-  catapult: { own: [p('village', 'building_tower_catapult_blue', 1.4)], enemy: [p('village', 'building_tower_catapult_red', 1.4)] },
-};
-const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, quarry: 2, goldmine: 2, storage: 2, barracks: 2, forge: 2, tavern: 2, market: 2, tower: 2, catapult: 2, wall: 1 };
-
-function partsOf(b: ViewBld, enemy: boolean): Part[] {
+// Вид постройки по уровню — src/village/looks.ts; стройка и руины — общие для всех.
+function lookFor(b: ViewBld, enemy: boolean): Look {
   const s = SIZE[b.t];
-  if (b.state === 'ruin') return b.t === 'wall' ? [p('fantasy', 'rock_single_B', 3)] : [p('fantasy', 'building_destroyed', s / 1.6)];
-  if (b.state === 'new') return [p('village', 'building_dirt', s / 1.9), p('fantasy', 'building_scaffolding', s / 2.1)];
-  if (b.t === 'wall') return [];
-  // Ратуша и постройки чуть растут с уровнем.
-  const grow = 1 + Math.min(0.12, 0.02 * (b.l - 1));
-  return MODELS[b.t][enemy ? 'enemy' : 'own'].map((m) => ({ ...m, s: m.s * grow }));
+  const kit = (name: string, sc: number): KitPart => ({ lib: name === 'building_dirt' ? 'village' : 'fantasy', name, s: sc, x: 0, z: 0, y: 0, ry: 0 });
+  if (b.state === 'ruin') return { kit: [b.t === 'wall' ? kit('rock_single_B', 3) : kit('building_destroyed', s / 1.6)], prim: [], top: 1.6 };
+  if (b.state === 'new') return { kit: [kit('building_dirt', s / 1.9), kit('building_scaffolding', s / 2.1)], prim: [], top: 2.2 };
+  return lookOf(b.t, b.l, enemy);
 }
 
-function placed(list: ViewBld[], enemy: boolean): Record<LibName, Placed[]> {
+function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[]>; prim: Prim[] } {
   const out: Record<string, Placed[]> = { fantasy: [], village: [] };
+  const prim: Prim[] = [];
   const walls = new Set(list.filter((b) => b.t === 'wall' && b.state !== 'ruin').map((b) => `${b.x},${b.y}`));
   for (const b of list) {
     const s = SIZE[b.t];
     const cx = W(b.x + s / 2);
     const cz = W(b.y + s / 2);
     if (b.t === 'wall' && b.state !== 'ruin') {
-      // Столб в клетке и секции к соседям справа и снизу.
+      // Столб в клетке и секции к соседям справа и снизу; с 6 уровня на столбе золотая шапка.
       const tint = b.l >= 5 ? 'mul:0.8,0.85,1' : b.l >= 3 ? undefined : 'mul:1.15,1.05,0.9';
-      out.fantasy.push({ name: 'column', x: cx, z: cz, s: 0.55 + 0.03 * b.l, tint });
+      const cs = 0.55 + 0.03 * b.l;
+      out.fantasy.push({ name: 'column', x: cx, z: cz, s: cs, tint });
+      if (b.l >= 6) prim.push({ k: 'cone', x: cx, y: 1.4 * cs + 0.12, z: cz, sx: 0.32, sy: 0.26, sz: 0.32, c: GOLD });
       if (walls.has(`${b.x + 1},${b.y}`)) out.fantasy.push({ name: 'wall_straight', x: cx + 0.5, z: cz, s: 0.5, tint });
       if (walls.has(`${b.x},${b.y + 1}`)) out.fantasy.push({ name: 'wall_straight', x: cx, z: cz + 0.5, s: 0.5, ry: Math.PI / 2, tint });
       continue;
     }
-    for (const m of partsOf(b, enemy)) (out[m.lib] ??= []).push({ name: m.name, x: cx + (m.dx ?? 0) * s * 0.5, z: cz + (m.dz ?? 0) * s * 0.5, s: m.s, ry: m.ry ?? (b.t === 'townhall' ? Math.PI / 6 : 0) });
+    const look = lookFor(b, enemy);
+    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x, y: m.y, z: cz + m.z, s: m.s, ry: m.ry, tint: m.tint });
+    for (const p of look.prim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
   }
-  return out as Record<LibName, Placed[]>;
-}
-
-// Вокруг деревни лес, холмы и горы — в стиле карты мира.
-function surroundings(lite: boolean): Placed[] {
-  const out: Placed[] = [];
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const names = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B', 'hills_A_trees', 'hills_B_trees', 'mountain_A_grass_trees', 'rock_single_C'];
-  const n = lite ? 90 : 180;
-  for (let k = 0; k < n; k++) {
-    const a = rnd() * Math.PI * 2;
-    const r = 17.5 + rnd() * 18;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    // Квадратное поле боя (±15) оставляем свободным.
-    if (Math.abs(x) < 16 && Math.abs(z) < 16) continue;
-    const name = names[Math.floor(rnd() * (r > 26 ? names.length - 1 : 6))];
-    out.push({ name, x, z, s: name.startsWith('mountain') ? 2.2 : name.startsWith('hills') ? 1.6 : 1 + rnd() * 0.5, ry: rnd() * 6.28 });
-  }
-  return out;
+  return { kit: out as Record<LibName, Placed[]>, prim };
 }
 
 function Rig({ ctl, sun }: { ctl: React.MutableRefObject<Ctl>; sun: React.RefObject<THREE.DirectionalLight | null> }) {
@@ -235,19 +191,9 @@ function Bubble({ res, x, z, h }: { res: ResKey; x: number; z: number; h: number
 function Model({ t, x, y, enemy }: { t: BuildingType; x: number; y: number; enemy?: boolean }) {
   const fantasy = useLib('fantasy');
   const village = useLib('village');
+  const group = useMemo(() => lookGroup(lookOf(t, 1, !!enemy), { fantasy, village, space: undefined, city: undefined }, { shadows: true }), [t, enemy, fantasy, village]);
   const s = SIZE[t];
-  const parts = t === 'wall' ? [p('fantasy', 'column', 0.6), p('fantasy', 'wall_straight', 0.5, 0, 0)] : partsOf({ i: 0, t, x, y, l: 1, state: 'ok' }, !!enemy);
-  return (
-    <group position={[W(x + s / 2), 0, W(y + s / 2)]}>
-      {parts.map((m, k) =>
-        ((m.lib === 'village' ? village : fantasy).get(m.name)?.meshes ?? []).map((mesh, j) => (
-          <group key={`${k}-${j}`} position={[(m.dx ?? 0) * s * 0.5, 0, (m.dz ?? 0) * s * 0.5]} rotation={[0, m.ry ?? (t === 'townhall' ? Math.PI / 6 : 0), 0]} scale={m.s}>
-            <mesh geometry={mesh.geometry} material={mesh.material} matrixAutoUpdate={false} matrix={mesh.matrix} castShadow />
-          </group>
-        )),
-      )}
-    </group>
-  );
+  return <primitive object={group} position={[W(x + s / 2), 0, W(y + s / 2)]} />;
 }
 
 const UNIT_LOOK: Record<UnitKind, { color: string; s: number; fly?: boolean }> = {
@@ -407,7 +353,7 @@ export interface SceneProps {
   buildings: ViewBld[];
   enemy?: boolean;
   selected?: number;
-  ghost?: { t: BuildingType; x: number; y: number; ok: boolean } | null;
+  ghost?: { t: BuildingType; x: number; y: number; ok: boolean; id?: number } | null;
   grid?: boolean;
   bubbles?: { i: number; res: ResKey }[];
   labels?: { i: number; text: string; color?: string }[];
@@ -422,31 +368,22 @@ function Scene(props: SceneProps) {
   const { buildings, enemy = false } = props;
   const lite = getSettings().lowPower;
   const items = useMemo(() => placed(buildings, enemy), [buildings, enemy]);
-  const decor = useMemo(() => surroundings(lite), [lite]);
   const byId = useMemo(() => new Map(buildings.map((b) => [b.i, b])), [buildings]);
   const sel = props.selected != null ? byId.get(props.selected) : undefined;
-  const top = (b: ViewBld) => (b.t === 'townhall' ? 5.6 : b.t === 'tower' || b.t === 'catapult' ? 3.8 : b.t === 'wall' ? 1.2 : 2.6);
+  const top = (b: ViewBld) => lookFor(b, enemy).top;
   return (
     <>
-      <Instanced lib="fantasy" items={decor} shadows={!lite} />
-      <Instanced lib="fantasy" items={items.fantasy} />
-      <Instanced lib="village" items={items.village ?? []} />
+      <Ground buildings={buildings} enemy={enemy} lite={lite} grid={props.grid} ghost={props.ghost} />
+      <Instanced lib="fantasy" items={items.kit.fantasy} />
+      <Instanced lib="village" items={items.kit.village ?? []} />
+      <PrimInstances list={items.prim} />
       {sel && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[W(sel.x + SIZE[sel.t] / 2), 0.03, W(sel.y + SIZE[sel.t] / 2)]}>
           <ringGeometry args={[SIZE[sel.t] * 0.62, SIZE[sel.t] * 0.62 + 0.14, 40]} />
           <meshBasicMaterial color="#ff8a5c" />
         </mesh>
       )}
-      {props.ghost && (
-        <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[W(props.ghost.x + SIZE[props.ghost.t] / 2), 0.04, W(props.ghost.y + SIZE[props.ghost.t] / 2)]}>
-            <planeGeometry args={[SIZE[props.ghost.t], SIZE[props.ghost.t]]} />
-            <meshBasicMaterial color={props.ghost.ok ? '#6ee7b7' : '#ff6b81'} transparent opacity={0.55} depthWrite={false} />
-          </mesh>
-          <Model t={props.ghost.t} x={props.ghost.x} y={props.ghost.y} />
-        </>
-      )}
-      {props.grid && <gridHelper args={[GRID, GRID, '#ffffff', '#ffffff']} position={[0, 0.02, 0]} material-transparent material-opacity={0.22} />}
+      {props.ghost && <Model t={props.ghost.t} x={props.ghost.x} y={props.ghost.y} enemy={enemy} />}
       {props.bubbles?.map((bb) => {
         const b = byId.get(bb.i);
         return b && <Bubble key={b.i} res={bb.res} x={W(b.x + SIZE[b.t] / 2)} z={W(b.y + SIZE[b.t] / 2)} h={top(b)} />;
@@ -485,18 +422,10 @@ export function Village3D(props: SceneProps) {
   const sun = useRef<THREE.DirectionalLight>(null);
   return (
     <Canvas3D orthographic camera={{ position: [OFF.x, OFF.y, OFF.z], zoom: 14, near: 1, far: 200 }} gl={{ antialias: true }}>
-      <color attach="background" args={['#6f9f45']} />
+      <color attach="background" args={['#6a9a40']} />
       <hemisphereLight args={['#ffffff', '#5a4a38', 1.25]} />
       <directionalLight ref={sun} intensity={2.3} castShadow shadow-mapSize={[1024, 1024]} shadow-camera-left={-22} shadow-camera-right={22} shadow-camera-top={22} shadow-camera-bottom={-22} shadow-bias={-0.0006} />
       <Rig ctl={props.ctl} sun={sun} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#7fb24c" roughness={1} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[GRID + 0.4, GRID + 0.4]} />
-        <meshStandardMaterial color={props.enemy ? '#a5a36a' : '#97c45f'} roughness={1} />
-      </mesh>
       <Suspense fallback={null}>
         <Scene {...props} />
       </Suspense>

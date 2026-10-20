@@ -129,6 +129,12 @@ const LIBS = {
     'building_barracks_blue', 'building_barracks_red', 'building_tower_A_blue', 'building_tower_catapult_blue',
     'building_tower_catapult_red', 'building_archeryrange_blue', 'building_mine_blue', 'building_lumbermill_blue',
     'building_market_blue', 'building_blacksmith_blue', 'building_tavern_blue', 'building_home_A_red', 'building_dirt',
+    // Ступени уровней: башни и пристройки, которые вырастают у ратуши и построек с уровнем.
+    'building_tower_B_blue', 'building_tower_B_red', 'building_tower_base_blue', 'building_tower_base_red', 'building_home_B_blue',
+    'building_windmill_blue', 'building_well_red', 'building_church_red', 'building_stage_B', 'building_stage_C',
+    // Мелочи для земли вокруг: пни, кусты, поддоны, вода.
+    'tree_single_A_cut', 'trees_A_cut', 'bush', 'pallet', 'crate_long_A', 'bucket_arrows', 'hills_C_trees', 'hill_single_C',
+    'rock_single_E', 'waterlily_B', 'waterplant_B',
   ],
 };
 

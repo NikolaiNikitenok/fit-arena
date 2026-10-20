@@ -55,6 +55,18 @@
 .vil-shop-info .muted { font-size: 12.5px; }
 .vil-shop-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 13px; color: var(--hint); }
 .vil-shop-count { font-weight: 900; color: var(--hint); font-variant-numeric: tabular-nums; }
+.vil-shop-pic { flex: none; width: 64px; height: 64px; display: grid; place-items: center; border-radius: var(--r-sm); background: radial-gradient(circle at 50% 60%, rgba(140,193,82,.28), rgba(255,255,255,.04) 70%); }
+.vil-shop.locked .vil-shop-pic { filter: grayscale(1); opacity: .7; }
+.vil-thumb { display: block; flex: none; background-repeat: no-repeat; background-position: 0 0; }
+/* Кадры полоски листаются по кругу: постройка медленно вертится. */
+.vil-thumb.spin { animation: vil-spin 9s steps(36, jump-none) infinite; }
+@keyframes vil-spin { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { .vil-thumb.spin { animation: none; } }
+.vil-evo { display: flex; align-items: center; gap: 6px; }
+.vil-evo > .vil-thumb, .vil-evo > .vil-swatch { border-radius: var(--r-sm); background-color: rgba(140,193,82,.14); }
+.vil-evo > .muted { flex: 1; min-width: 0; margin-left: 4px; }
+.vil-evo-arrow { color: var(--gold); font-weight: 900; }
+.vil-evo-note { color: var(--gold); font-weight: 800; }
 .vil-swatch { flex: none; width: 44px; height: 44px; border-radius: var(--r-sm); background: var(--surface-3); position: relative; }
 .vil-swatch::after { content: ''; position: absolute; inset: 9px; border-radius: 6px; background: currentColor; opacity: .9; }
 .b-lumbermill { color: #c98a4b; } .b-quarry { color: #b9c0cc; } .b-goldmine { color: #ffd27a; } .b-storage { color: #d8bf8a; }

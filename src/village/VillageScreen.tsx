@@ -46,7 +46,9 @@ import { NPCS } from '../game/npcs';
 import { heroLevel, heroXp, Progress, saveProgress } from '../game/progress';
 import { spendCharge, villageOf } from '../game/resources';
 import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
-import { Bolt, Dungeon, Hammer, Move, Plus, Scroll, Star, Trophy } from './icons';
+import { Bolt, Dungeon, Hammer, Move, Scroll, Star, Trophy } from './icons';
+import { Preview } from './Preview';
+import { STAGE_NAMES, stageOf } from './looks';
 import { defenseLog, fetchInbox, fetchTop, findTarget, isOnline, OFFLINE, PvpError, revengeTarget, setPvpNotify, submitAttack, TargetView } from './pvpApi';
 import { applyInbox, applyMe, applyWin, canRevenge, markRevenged } from './pvp';
 import { type PvpTopRow, SCOUT_SECONDS, VILLAGE_LEAGUES, villageLeague } from '../../shared/villagePvp';
@@ -415,7 +417,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
 
   return (
     <div className="vil-screen">
-      <Viewport ctl={ctl} buildings={shown} selected={selected ?? undefined} ghost={placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk } : null} grid={!!placing} bubbles={placing ? [] : bubbles} labels={placing ? [] : labels} onTap={tap} onGhost={(x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) })} />
+      <Viewport ctl={ctl} buildings={shown} selected={selected ?? undefined} ghost={placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null} grid={!!placing} bubbles={placing ? [] : bubbles} labels={placing ? [] : labels} onTap={tap} onGhost={(x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) })} />
 
       <div className="vil-top">
         <div className="vil-res">
@@ -526,7 +528,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         <div className="vil-bottom">
           <div className="vil-dock">
             <button className="vil-dock-btn" onClick={() => setSheet('build')}>
-              <Plus />
+              <Hammer size={22} />
               Строить
             </button>
             <button className="vil-dock-btn" onClick={() => setSheet('army')}>
@@ -572,7 +574,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               const can = !locked && !full && affordable(town.res, cost) && (timeOf(t, 1) === 0 || busy < builders);
               return (
                 <button key={t} className={`vil-shop ${locked ? 'locked' : ''}`} disabled={locked || full} onClick={() => (can ? startPlacing(t) : flash(!affordable(town.res, cost) ? BUILD_ERRORS.cost : BUILD_ERRORS.builders))}>
-                  <span className={`vil-swatch b-${t}`} />
+                  <span className="vil-shop-pic">{sheet === 'build' && <Preview t={t} l={1} size={64} />}</span>
                   <span className="vil-shop-info">
                     <b>{d.name}</b>
                     <span className="muted">{d.desc}</span>
@@ -901,7 +903,21 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
           <Cross />
         </button>
       </div>
-      <div className="muted">{d.desc}</div>
+      <div className="vil-evo">
+        {b.l >= 1 && <Preview t={b.t} l={b.l} size={58} />}
+        {!maxed && (
+          <>
+            {b.l >= 1 && <span className="vil-evo-arrow">→</span>}
+            <Preview t={b.t} l={next} size={58} />
+          </>
+        )}
+        <span className="muted">
+          {d.desc}
+          {!maxed && b.l >= 1 && (b.t === 'townhall' || stageOf(next) !== stageOf(b.l)) && (
+            <b className="vil-evo-note"> Уровень {next}: {b.t === 'townhall' ? 'ратуша станет больше' : STAGE_NAMES[stageOf(next)]}.</b>
+          )}
+        </span>
+      </div>
       <div className="vil-stats">
         <span>Прочность {d.hp[lvl - 1]}</span>
         {col && b.l >= 1 && (
