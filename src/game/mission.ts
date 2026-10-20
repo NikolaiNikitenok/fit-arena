@@ -1,6 +1,6 @@
 // Ход миссии: повторы и время превращаются в прогресс, победу или поражение.
 // Логика чистая, без React и камеры, чтобы её можно было проверить тестами.
-import type { Exercise } from '../repCounter';
+import type { RepExercise } from '../repCounter';
 import { Baseline, LevelDef, targetReps } from './levels';
 import { BOSS_HEARTS, enemyHp, repsFor } from './power';
 
@@ -8,7 +8,7 @@ export type Outcome = 'running' | 'won' | 'lost';
 
 export interface MissionView {
   outcome: Outcome;
-  exercise: Exercise;
+  exercise: RepExercise;
   reps: number;
   // 0..1 — сколько сделано (доски моста, высота подъёма, здоровье босса…).
   progress: number;
@@ -90,7 +90,7 @@ export class Mission {
     this.lastTick = now;
   }
 
-  get exercise(): Exercise {
+  get exercise(): RepExercise {
     return this.level.exercises[Math.min(this.phase, this.level.exercises.length - 1)];
   }
 

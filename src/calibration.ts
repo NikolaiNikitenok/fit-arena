@@ -1,7 +1,7 @@
 // Калибровка камеры: игрок делает несколько медленных повторов, мы запоминаем,
 // какую амплитуду угла он реально показывает, и подстраиваем пороги счёта под него.
 import { useSyncExternalStore } from 'react';
-import type { Exercise } from './repCounter';
+import type { Exercise, RepExercise } from './repCounter';
 
 export interface Thresholds {
   down: number;
@@ -18,7 +18,7 @@ interface Bounds {
 
 // Пределы подобраны так, чтобы мелкие движения не превращались в повторы,
 // но человек с небольшой амплитудой (пресс не до колен, неглубокий присед) всё же считался.
-export const BOUNDS: Record<Exercise, Bounds> = {
+export const BOUNDS: Record<RepExercise, Bounds> = {
   pushup: { down: [70, 125], up: [130, 165], gap: 20 },
   squat: { down: [70, 125], up: [140, 170], gap: 25 },
   situp: { down: [50, 100], up: [95, 150], gap: 15 },
@@ -31,7 +31,7 @@ const UP_SHARE = 0.25;
 const clamp = (v: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, v));
 
 /** Личные пороги по достигнутому диапазону угла [min, max]. */
-export function deriveThresholds(exercise: Exercise, min: number, max: number): Thresholds {
+export function deriveThresholds(exercise: RepExercise, min: number, max: number): Thresholds {
   const b = BOUNDS[exercise];
   const range = Math.max(0, max - min);
   let down = clamp(min + range * DOWN_SHARE, b.down);
@@ -43,7 +43,7 @@ export function deriveThresholds(exercise: Exercise, min: number, max: number): 
 // Распознавание повторов во время калибровки: «зигзаг» с гистерезисом, без заранее известных порогов.
 const SWING = 12;
 // Повтор калибровки — это хотя бы такой размах; меньше похоже на дрожание.
-export const MIN_SWING: Record<Exercise, number> = { pushup: 25, squat: 30, situp: 20 };
+export const MIN_SWING: Record<RepExercise, number> = { pushup: 25, squat: 30, situp: 20 };
 // После последнего повтора ждём, пока игрок вернётся наверх, но не дольше этого.
 const SETTLE_MS = 900;
 
@@ -81,7 +81,7 @@ export class Calibrator {
   private result: Thresholds | null = null;
 
   constructor(
-    readonly exercise: Exercise,
+    readonly exercise: RepExercise,
     readonly target = CALIBRATION_REPS,
   ) {}
 
@@ -159,10 +159,10 @@ export function personalThresholds(exercise: Exercise): Thresholds | undefined {
   return s && 'down' in s ? s : undefined;
 }
 
-/** Нужно ли предложить калибровку перед первым подходом. */
-export const needsCalibration = (exercise: Exercise): boolean => !saved[exercise];
+/** Нужно ли предложить калибровку перед первым подходом. Планку калибровать не нужно: там нет амплитуды. */
+export const needsCalibration = (exercise: Exercise): boolean => exercise !== 'plank' && !saved[exercise];
 
-export const saveCalibration = (exercise: Exercise, t: Thresholds): void => write({ ...saved, [exercise]: t });
+export const saveCalibration = (exercise: RepExercise, t: Thresholds): void => write({ ...saved, [exercise]: t });
 export const skipCalibration = (exercise: Exercise): void => write({ ...saved, [exercise]: saved[exercise] ?? { skipped: true } });
 /** «Перекалибровать камеру»: перед следующим подходом калибровка начнётся заново. */
 export const resetCalibration = (): void => write({});

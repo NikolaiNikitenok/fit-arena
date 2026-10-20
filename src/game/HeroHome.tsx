@@ -2,7 +2,7 @@ import { ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { canvasProps, getSettings } from '../settings';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { EXERCISE_LABELS, Exercise } from '../repCounter';
+import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Character } from '../three/Character';
 import { Pet } from '../three/Pet';
 import { petLook } from './pets';
@@ -12,6 +12,7 @@ import { BASE_DAMAGE, heroHands, heroPower } from './power';
 import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
 import { AchBadge } from './Achievements';
+import { ProgramsEntry } from './Programs';
 import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
@@ -93,6 +94,8 @@ interface Props {
   onEvent: () => void;
   // Экран питомцев.
   onPets: () => void;
+  // Программы тренировок Мастера Грома.
+  onPrograms: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -109,7 +112,7 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms }: Props) {
   const passT = passTier(passOf(progress, Date.now()).xp);
   const passWaiting = passReady(progress, pro, Date.now());
   const badge = heroBadge(progress);
@@ -255,6 +258,7 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
       </button>
 
       <PetEntry progress={progress} onOpen={onPets} />
+      <ProgramsEntry progress={progress} onOpen={onPrograms} />
 
       <DailyCard task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
 
@@ -376,7 +380,7 @@ function DailyCard({ task, done, claimed, onPlay, onClaim }: { task: DailyTask; 
       </div>
       <div className="daily-goal">
         <span>
-          {EXERCISE_LABELS[task.exercise]}: <b>{Math.min(done, task.target)}</b> / {task.target}
+          {EXERCISE_LABELS[task.exercise]}: <b>{amountText(task.exercise, Math.min(done, task.target))}</b> / {amountText(task.exercise, task.target)}
         </span>
         <span className="daily-gift">
           <Coin size={13} className="coin" /> {task.coins}
@@ -394,7 +398,7 @@ function DailyCard({ task, done, claimed, onPlay, onClaim }: { task: DailyTask; 
         </button>
       ) : (
         <button className="secondary" onClick={onPlay}>
-          {done > 0 ? `Доделать: ещё ${task.target - done}` : 'Выполнить'}
+          {done > 0 ? `Доделать: ещё ${amountText(task.exercise, task.target - done)}` : 'Выполнить'}
         </button>
       )}
     </div>

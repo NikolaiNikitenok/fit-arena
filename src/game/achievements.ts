@@ -3,6 +3,7 @@ import type { Exercise } from '../repCounter';
 import { gearById, itemById } from './items';
 import { LEVELS } from './levels';
 import { type Progress, streak } from './progress';
+import { programById, type ProgramId } from './programs';
 
 export type AchTier = 'bronze' | 'silver' | 'gold' | 'legend';
 export type AchIcon = 'flame' | 'rep' | 'crown' | 'skull' | 'star' | 'map' | 'arm' | 'leg' | 'core' | 'banner' | 'gem' | 'scroll';
@@ -28,6 +29,15 @@ const best = (ex: Exercise) => (p: Progress) => p.best[ex]?.reps ?? 0;
 // Самая длинная серия за всё время не хранится, поэтому берём текущую: её и надо удержать.
 const series = (p: Progress, now: number) => streak(p.days, now).days;
 const legendary = (p: Progress) => p.items.filter((id) => (gearById(id) ?? itemById(id))?.rarity === 'legendary').length;
+
+const PROGRAM_TITLES: [ProgramId, string, AchIcon, AchTier][] = [
+  ['newbie14', 'В форме', 'star', 'silver'],
+  ['pushup100', 'Сотник', 'arm', 'gold'],
+  ['abs21', 'Стальной пресс', 'core', 'gold'],
+  ['legs28', 'Богатырь', 'leg', 'gold'],
+  ['plank5', 'Каменная плита', 'core', 'legend'],
+  ['full4w', 'Атлет Грома', 'crown', 'legend'],
+];
 
 const TIER_COINS: Record<AchTier, number> = { bronze: 50, silver: 150, gold: 400, legend: 1000 };
 const a = (id: string, title: string, text: string, icon: AchIcon, tier: AchTier, goal: number, value: Achievement['value']): Achievement => ({ id, title, text, icon, tier, goal, value, coins: TIER_COINS[tier] });
@@ -61,6 +71,10 @@ export const ACHIEVEMENTS: Achievement[] = [
   a('raid', 'Рейдер', 'Получи награду клана за рейд-босса', 'banner', 'bronze', 1, (p) => p.raidClaimed?.length ?? 0),
   a('raid10', 'Ветеран рейдов', '10 наград за рейды', 'banner', 'gold', 10, (p) => p.raidClaimed?.length ?? 0),
   a('legendary', 'Легенда арсенала', 'Добудь легендарную вещь', 'gem', 'gold', 1, legendary),
+  a('plank60', 'Несгибаемый', 'Минута в планке за один подход', 'core', 'bronze', 60, best('plank')),
+  a('plank180', 'Скала', 'Три минуты в планке за один подход', 'core', 'gold', 180, best('plank')),
+  // Титулы за программы тренировок Мастера Грома.
+  ...PROGRAM_TITLES.map(([id, title, icon, tier]) => a(`prog-${id}`, title, `Пройди программу «${programById(id)!.title}»`, icon, tier, 1, (p) => Number(!!p.programs?.done.includes(id)))),
 ];
 
 export const achDone = (ach: Achievement, p: Progress, now: number) => ach.value(p, now) >= ach.goal;

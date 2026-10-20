@@ -110,7 +110,7 @@ export type ClanClientMessage =
   | { type: 'clanKick'; id: string }
   | { type: 'chatSend'; text: string }
   // Повторы из приключения: из них растёт опыт клана.
-  | { type: 'clanReps'; reps: number }
+  | { type: 'clanReps'; reps: number; since?: number }
   // Глава или заместитель: участвовать ли клану в войнах.
   | { type: 'clanWar'; on: boolean }
   | { type: 'raidStart'; exercise: Exercise }

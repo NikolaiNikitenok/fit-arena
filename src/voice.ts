@@ -2,7 +2,7 @@
 // Нет поддержки речи или русского голоса — тихо молчим, игра от этого не меняется.
 import { useEffect, useRef } from 'react';
 import { getSettings } from './settings';
-import { hintLine, Line, pickVoice, repLine, timeLine } from './voiceLines';
+import { hintLine, holdLine, Line, pickVoice, repLine, timeLine } from './voiceLines';
 
 const synth = (): SpeechSynthesis | null => (typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null);
 
@@ -87,8 +87,9 @@ export function hush(): void {
 /**
  * Гром ведёт подход: считает повторы, говорит вехи, время и иногда подсказку по технике.
  * on — идёт счёт; leftS — секунд до конца; total — длина подхода; target — цель, если есть.
+ * timed — планка: reps — удержанные секунды, Гром говорит время, а не номер повтора.
  */
-export function useVoiceCoach(on: boolean, reps: number, leftS: number, hint: string | null, total: number, target?: number): void {
+export function useVoiceCoach(on: boolean, reps: number, leftS: number, hint: string | null, total: number, target?: number, timed = false): void {
   const prev = useRef({ on, reps, leftS, hint, hintAt: -Infinity });
   useEffect(() => {
     const p = prev.current;
@@ -96,7 +97,9 @@ export function useVoiceCoach(on: boolean, reps: number, leftS: number, hint: st
     if (on && !p.on) say('Поехали!');
     else if (on) {
       const t = timeLine(p.leftS, leftS, total);
-      if (reps > p.reps) say(repLine(reps, target));
+      const held = timed && reps > p.reps ? holdLine(reps, target) : null;
+      if (held) say(held);
+      else if (reps > p.reps && !timed) say(repLine(reps, target));
       else if (t) say(t);
       const h = hintLine(hint, p.hint, now - p.hintAt);
       if (h) {
@@ -105,6 +108,6 @@ export function useVoiceCoach(on: boolean, reps: number, leftS: number, hint: st
       }
     }
     Object.assign(p, { on, reps, leftS, hint });
-  }, [on, reps, leftS, hint, total, target]);
+  }, [on, reps, leftS, hint, total, target, timed]);
   useEffect(() => hush, []);
 }

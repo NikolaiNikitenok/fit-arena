@@ -3,7 +3,7 @@ import { ArenaStage } from './ArenaStage';
 import { type Battle, MAX_HP, newBattle, type Side, strike, winner } from '../shared/battle';
 import type { FighterView } from '../shared/protocol';
 import { CameraGuide } from './CameraGuide';
-import { Exercise, EXERCISE_LABELS } from './repCounter';
+import { EXERCISE_LABELS, RepExercise } from './repCounter';
 import { userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
@@ -47,7 +47,7 @@ function saveBeaten(ids: TrainerId[]): void {
 }
 
 interface Fight {
-  exercise: Exercise;
+  exercise: RepExercise;
   battle: Battle;
   combo: Record<Side, boolean>;
   startAt: number;
@@ -59,7 +59,7 @@ interface Fight {
   done: boolean;
 }
 
-export function TrainerDuel({ exercise, onExit }: { exercise: Exercise; onExit: () => void }) {
+export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExit: () => void }) {
   const camera = useRepCamera();
   const [phase, setPhase] = useState<Phase>('pick');
   const [trainer, setTrainer] = useState<Trainer>(TRAINERS[0]);

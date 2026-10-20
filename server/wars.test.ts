@@ -190,3 +190,13 @@ describe('сообщения бота о войне', () => {
     expect(warNotices(s, msk('2026-11-03T09:00:00'))).toEqual([]);
   });
 });
+
+describe('повторы, накопленные до войны', () => {
+  it('не идут в очки войны', async () => {
+    const { warReps } = await import('./wars');
+    const start = Date.parse('2026-10-31T00:00:00+03:00');
+    const c = { war: { key: '2026-10-31', roster: { 'tg:1': 1 }, points: {}, days: {} } } as never;
+    expect(warReps(c, 'tg:1', 20, start + 3600_000, start - 3600_000)).toBe(0);
+    expect(warReps(c, 'tg:1', 20, start + 3600_000, start + 60_000)).toBe(20);
+  });
+});

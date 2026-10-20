@@ -4,7 +4,7 @@ import { MAX_HP } from '../shared/battle';
 import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
 import { LEAGUES, leagueOf, seasonEndsAt } from '../shared/rating';
 import { CameraGuide } from './CameraGuide';
-import { Exercise, EXERCISE_LABELS } from './repCounter';
+import { Exercise, EXERCISE_LABELS, RepExercise } from './repCounter';
 import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
@@ -32,7 +32,7 @@ const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'с
 const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 
 /** Вкладка дуэлей: живой бой через сервер, бой с тренером на устройстве или друзья. */
-export function Duel({ exercise, join, friends: openFriends = false }: { exercise: Exercise; join?: JoinRoom; friends?: boolean }) {
+export function Duel({ exercise, join, friends: openFriends = false }: { exercise: RepExercise; join?: JoinRoom; friends?: boolean }) {
   const [trainer, setTrainer] = useState(false);
   const [friends, setFriends] = useState(openFriends);
   const [room, setRoom] = useState(join);
@@ -65,7 +65,7 @@ export function Duel({ exercise, join, friends: openFriends = false }: { exercis
       join={room} note={note} />;
 }
 
-function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Exercise; onTrainer: () => void; onFriends: () => void; join?: JoinRoom; note: string | null }) {
+function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: RepExercise; onTrainer: () => void; onFriends: () => void; join?: JoinRoom; note: string | null }) {
   const camera = useRepCamera();
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');

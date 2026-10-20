@@ -8,7 +8,7 @@
 //   заявка в друзья и «заявку приняли» — несрочные: в очередь, ночные уходят в 9 утра.
 //   Переключатель «Бот пишет о друзьях» и остановленный бот (403) отключают всё.
 import type { ChallengeView, FriendRequestView, FriendsState, FriendView } from '../shared/protocol';
-import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
+import { EXERCISE_LABELS, isRepExercise, type Exercise } from '../src/repCounter';
 import { heroLevel, heroXp, streak, type Progress } from '../src/game/progress';
 import { type Challenge, CHALLENGE_TTL, type FriendStore, isQuiet } from './friends';
 
@@ -154,7 +154,7 @@ export function friendsApi(d: FriendsDeps, path: string, me: { id: string; name:
       return ok();
     case '/api/friends/challenge': {
       const exercise = String(body.exercise) as Exercise;
-      if (!(exercise in EXERCISE_LABELS)) return fail('Неизвестное упражнение');
+      if (!isRepExercise(exercise)) return fail('Неизвестное упражнение');
       const err = d.friends.canChallenge(me.id, other);
       if (err) return fail(err);
       const c = d.friends.challenge(me.id, other, d.createRoom(exercise), exercise);

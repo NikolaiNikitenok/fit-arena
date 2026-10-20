@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { EXERCISE_LABELS, Exercise } from '../repCounter';
+import { EXERCISE_LABELS, Exercise, RepExercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
 import { Heart, Swords } from '../icons';
 import { getSettings, useSettings } from '../settings';
@@ -63,12 +63,12 @@ interface Props {
   onNext?: () => void;
 }
 
-const ALL: Exercise[] = ['squat', 'pushup', 'situp'];
+const ALL: RepExercise[] = ['squat', 'pushup', 'situp'];
 
 export function MissionPlay({ level: original, progress, onExit, onWin, onLose, onActivity, lives, swaps, onSwap, onStart, onNext }: Props) {
   const camera = useRepCamera();
   // Упражнения уровня с учётом замен игрока.
-  const [exercises, setExercises] = useState<Exercise[]>(original.exercises);
+  const [exercises, setExercises] = useState<RepExercise[]>(original.exercises);
   const [picking, setPicking] = useState<number | null>(null);
   const level: LevelDef = exercises === original.exercises ? original : { ...original, exercises };
   const swapCount = exercises.filter((e, i) => e !== original.exercises[i]).length;
@@ -88,7 +88,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [elapsedShare, setElapsedShare] = useState(0);
   const [result, setResult] = useState<{ stars: number; reward: WinReward } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const exercise = useRef<Exercise>(level.exercises[0]);
+  const exercise = useRef<RepExercise>(level.exercises[0]);
   const [countdown, setCountdown] = useState(0);
   // Засчитанные повторы по упражнениям — для семейного сайта.
   const repsBy = useRef<Partial<Record<Exercise, number>>>({});
@@ -113,7 +113,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     }
   };
 
-  const choose = (slot: number, ex: Exercise) => {
+  const choose = (slot: number, ex: RepExercise) => {
     const next = exercises.map((e, i) => (i === slot ? ex : e));
     setExercises(next);
     setPicking(null);
@@ -389,7 +389,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   );
 }
 
-function SwapRow({ original, exercises, picking, free, onPick, onChoose }: { original: Exercise[]; exercises: Exercise[]; picking: number | null; free: number; onPick: (slot: number | null) => void; onChoose: (slot: number, ex: Exercise) => void }) {
+function SwapRow({ original, exercises, picking, free, onPick, onChoose }: { original: RepExercise[]; exercises: RepExercise[]; picking: number | null; free: number; onPick: (slot: number | null) => void; onChoose: (slot: number, ex: RepExercise) => void }) {
   return (
     <div className="swap">
       <div className="swap-row">

@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import type { CalibrationView } from './calibration';
-import { EXERCISE_LABELS, Exercise } from './repCounter';
+import { EXERCISE_LABELS, RepExercise } from './repCounter';
 import { say } from './voice';
 
 const COUNT = ['Раз', 'Два', 'Три', 'Четыре', 'Пять'];
-const HOW: Record<Exercise, string> = {
+const HOW: Record<RepExercise, string> = {
   pushup: 'Опускайся грудью к полу и выпрямляй руки до конца',
   squat: 'Садись поглубже и вставай в полный рост',
   situp: 'Поднимай корпус как можешь и ложись обратно',
@@ -15,7 +15,7 @@ const SCALE: [number, number] = [30, 180];
 const pos = (a: number) => `${Math.min(100, Math.max(0, ((a - SCALE[0]) / (SCALE[1] - SCALE[0])) * 100))}%`;
 
 /** Калибровка перед первым подходом: живая полоска угла, счётчик медленных повторов, пропуск. */
-export function CalibrationOverlay({ exercise, view, onSkip }: { exercise: Exercise; view: CalibrationView; onSkip: () => void }) {
+export function CalibrationOverlay({ exercise, view, onSkip }: { exercise: RepExercise; view: CalibrationView; onSkip: () => void }) {
   const { reps, target, angle, min, max, result } = view;
   useEffect(() => say(`Калибровка. Сделай ${target === 3 ? 'три' : target} медленных повтора`), [target]);
   useEffect(() => {

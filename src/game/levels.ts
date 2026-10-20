@@ -1,6 +1,6 @@
 // 300 уровней-тренировок: по 100 в каждом из трёх миров, и финальный бой с Князем. Уровни описаны правилами, а не вручную: так нагрузка растёт ровно,
 // а цели подстраиваются под результаты входных испытаний игрока.
-import type { Exercise } from '../repCounter';
+import { DEFAULT_PLANK_S, type RepExercise } from '../repCounter';
 import { LANDS } from './lands';
 import { storyFor } from './story';
 
@@ -23,7 +23,7 @@ export interface LevelDef {
   type: MissionType;
   title: string;
   // Для босса упражнения меняются по фазам.
-  exercises: Exercise[];
+  exercises: RepExercise[];
   // Доля от базы игрока: сколько повторов за минуту ждём на этом уровне.
   load: number;
   seconds: number;
@@ -39,12 +39,12 @@ export const LAND_SIZE = 10;
 // Три мира и последний уровень — Князь Диван.
 export const LEVEL_COUNT = WORLD_SIZE * 3 + 1;
 
-const ORDER: Exercise[] = ['squat', 'pushup', 'situp'];
+const ORDER: RepExercise[] = ['squat', 'pushup', 'situp'];
 
 // Миссии внутри земли: позиции 0–8, позиция 9 — босс. Позиция 4 — лёгкий уровень-передышка.
 const PATTERN: MissionType[] = ['build', 'chase', 'rescue', 'climb', 'build', 'defend', 'chase', 'rescue', 'climb'];
 
-const TITLES: Record<Exercise, Partial<Record<MissionType, string[]>>> = {
+const TITLES: Record<RepExercise, Partial<Record<MissionType, string[]>>> = {
   squat: {
     build: ['Подпорки для моста', 'Новый частокол'],
     chase: ['Бегство от сонного вепря', 'Догони вора'],
@@ -148,12 +148,15 @@ function finalLevel(id: number): LevelDef {
 
 export const LEVELS: LevelDef[] = Array.from({ length: LEVEL_COUNT }, (_, i) => makeLevel(i + 1));
 
-/** База игрока — повторов за минуту по каждому упражнению; до испытаний — средние значения. */
-export type Baseline = Record<Exercise, number>;
-export const DEFAULT_BASELINE: Baseline = { squat: 20, pushup: 10, situp: 15 };
+/**
+ * База игрока — повторов за минуту по каждому упражнению; до испытаний — средние значения.
+ * plank — сколько секунд игрок держит планку (из входного теста программы); в старых сохранениях её нет.
+ */
+export type Baseline = Record<RepExercise, number> & { plank?: number };
+export const DEFAULT_BASELINE: Baseline = { squat: 20, pushup: 10, situp: 15, plank: DEFAULT_PLANK_S };
 
 /** Сколько повторов нужно сделать на уровне. */
-export function targetReps(level: LevelDef, baseline: Baseline, exercise = level.exercises[0]): number {
+export function targetReps(level: LevelDef, baseline: Baseline, exercise: RepExercise = level.exercises[0]): number {
   const perMinute = baseline[exercise] * level.load;
   const minutes = level.type === 'build' ? 1 : level.seconds / 60;
   return Math.max(3, Math.round(perMinute * minutes));

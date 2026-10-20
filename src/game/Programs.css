@@ -1,0 +1,95 @@
+/* Программы тренировок и тренировка из подходов. Цвет программы — в --pc. */
+.prog-screen { display: flex; flex-direction: column; gap: 12px; }
+.prog-screen .app-head h1 { flex: 1; text-align: center; }
+.prog-screen .remark { margin-top: 0; background: var(--surface); }
+.prog-screen .pass-bar { height: 7px; margin-top: 4px; }
+.prog-screen .pass-bar > *, .prog-entry .pass-bar > * { animation: none; }
+
+/* Вход на главном экране и карточки списка */
+.prog-entry, .prog-card, .prog-quick { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); text-align: left; transition: transform .12s ease; }
+.prog-entry:active, .prog-card:active, .prog-quick:active, .prog-active:active { transform: scale(.98); }
+.prog-entry { background: linear-gradient(100deg, #1e2231 0%, #232634 55%, #2e2219 100%); }
+.prog-entry .pass-bar { height: 6px; margin-top: 3px; }
+.prog-icon { flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--on-accent); background: var(--accent-grad); box-shadow: 0 6px 16px rgba(255, 122, 89, .22); }
+.prog-quick .prog-icon { background: var(--pc); box-shadow: none; }
+.prog-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.prog-card-text b { font-size: 15px; font-weight: 900; line-height: 1.2; }
+.prog-card-text small { font-size: 12.5px; font-weight: 700; color: var(--hint); line-height: 1.3; }
+.prog-entry .chev, .prog-card .chev, .prog-quick .chev { color: var(--hint); font-size: 22px; }
+.prog-list { display: flex; flex-direction: column; gap: 8px; }
+.prog-card { border-left: 3px solid var(--pc); }
+.prog-card.on { border-color: var(--pc); background: var(--surface-2); background: linear-gradient(100deg, var(--surface) 55%, color-mix(in srgb, var(--pc) 14%, var(--surface))); }
+.prog-card .ach-badge, .prog-hero .ach-badge { flex: none; }
+.prog-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.prog-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; background: var(--surface-3); color: #c9cfda; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.prog-tag.gift { color: var(--gold); }
+.prog-tag.live { background: var(--accent-grad); color: var(--on-accent); }
+.prog-tag.done { color: var(--mint); }
+
+/* Идущая программа */
+.prog-active { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); background: var(--surface-2); border: 1px solid color-mix(in srgb, var(--pc) 45%, transparent); border-radius: var(--r-lg); background: linear-gradient(140deg, color-mix(in srgb, var(--pc) 16%, var(--surface)) 0%, var(--surface) 70%); color: var(--text); text-align: left; }
+.prog-active b { font-size: 17px; font-weight: 900; }
+.prog-active small { font-size: 12.5px; font-weight: 700; color: var(--hint); }
+.prog-active-top { display: flex; justify-content: space-between; align-items: center; }
+.prog-chip { padding: 2px 9px; border-radius: 999px; background: var(--surface-3); font-size: 11.5px; font-weight: 900; color: var(--hint); }
+.prog-chip.ready { background: var(--accent-grad); color: var(--on-accent); }
+.prog-chip.rest { color: #c4b5fd; }
+
+/* Страница программы */
+.prog-hero { display: flex; align-items: center; gap: 12px; }
+.prog-hero-title { font-size: 21px; font-weight: 900; line-height: 1.15; letter-spacing: -.2px; }
+.prog-hero .muted { font-size: 13px; margin-top: 2px; }
+.prog-rewards { padding: 10px 12px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+.prog-rewards-label { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); }
+.prog-rewards-row { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13.5px; font-weight: 800; }
+.prog-rewards-row > span { display: inline-flex; align-items: center; gap: 6px; }
+.prog-rewards-row .inv-face { border-radius: 8px; }
+.prog-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.prog-day { aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--hint); font-size: 13px; font-weight: 900; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.prog-day.rest { background: transparent; color: #8b84b8; border-style: dashed; }
+.prog-day.test, .prog-day.final { color: var(--gold); border-color: rgba(255, 210, 122, .35); }
+.prog-day.passed { background: var(--surface-3); background: color-mix(in srgb, var(--pc, var(--accent)) 22%, var(--surface)); color: var(--text); }
+.prog-day.passed.weak { color: var(--hint); }
+.prog-day.today { border: 2px solid var(--accent); color: var(--text); }
+.prog-day.sel { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px rgba(255, 255, 255, .35); }
+.prog-dayplan { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+.prog-dayplan-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+.prog-dayplan .muted { font-size: 13px; }
+.prog-manage { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.prog-manage .muted { font-size: 12.5px; }
+.prog-note { text-align: center; padding: 0 8px; }
+
+/* Итог дня */
+.prog-summary { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 16px 18px; border-radius: var(--r-lg); background: radial-gradient(ellipse at 50% 0%, rgba(255, 138, 92, .18), transparent 70%), var(--surface); border: 1px solid var(--line); text-align: center; }
+.prog-gains { display: flex; gap: 14px; font-size: 17px; font-weight: 900; color: var(--gold); }
+.prog-gains span { display: inline-flex; align-items: center; gap: 5px; }
+.prog-reward { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); text-align: left; }
+.prog-reward-name { font-weight: 900; font-size: 15px; }
+
+/* Тренировка из подходов */
+.ws-intro { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
+.ws-title { font-size: 21px; font-weight: 900; line-height: 1.2; }
+.ws-intro .guide { max-width: none; margin: 0; }
+.ws-arena { aspect-ratio: auto; flex: 1 1 auto; min-height: 400px; }
+.ws-arena video, .ws-arena canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.ws-setno { font-size: 13px; font-weight: 800; color: #dfe3ea; font-variant-numeric: tabular-nums; }
+.ws-count { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; flex-direction: column; align-items: center; color: #fff; text-shadow: 0 2px 14px rgba(0, 0, 0, .7); pointer-events: none; }
+.ws-num { font-size: 92px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+.ws-goal { margin-top: 2px; padding: 3px 12px; border-radius: 999px; background: var(--glass); font-size: 15px; font-weight: 800; }
+.ws-count.paused .ws-num { color: var(--hint); }
+.ws-count.paused .ws-goal { color: var(--gold); }
+.ws-rest { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #fff; background: radial-gradient(circle, rgba(13, 15, 23, .72), rgba(13, 15, 23, .9)); }
+.ws-rest .icon { color: #c4b5fd; }
+.ws-rest-num { font-size: 96px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.ws-rest-label { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; color: var(--hint); }
+.ws-next { margin-top: 14px; padding: 8px 14px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); font-size: 15px; font-weight: 800; }
+.ws-sets { display: flex; flex-wrap: wrap; gap: 5px; }
+.ws-set { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 700; color: var(--hint); font-variant-numeric: tabular-nums; }
+.ws-set b { font-weight: 900; color: #c9cfda; }
+.ws-set.done { color: var(--mint); }
+.ws-set.done b { color: var(--mint); }
+.ws-set.on { background: var(--accent-grad); color: var(--on-accent); border-color: transparent; }
+.ws-set.on b { color: var(--on-accent); }
+.ws-set.next { border-color: var(--accent); color: var(--text); }
+.ws-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.prog-screen .coin, .ws-set .coin { color: var(--gold); }

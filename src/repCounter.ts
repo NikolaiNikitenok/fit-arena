@@ -1,6 +1,29 @@
 // Подсчёт повторов по ключевым точкам MediaPipe Pose (33 точки, координаты 0..1).
+// Планка — не повторы, а секунды в правильной позе: её считает PlankTimer.
 
-export type Exercise = 'pushup' | 'squat' | 'situp';
+// Упражнения на повторы: только они годятся для дуэлей, рейда и боя с тренером.
+export type RepExercise = 'pushup' | 'squat' | 'situp';
+export type Exercise = RepExercise | 'plank';
+
+export const REP_EXERCISES: RepExercise[] = ['squat', 'pushup', 'situp'];
+export const isRepExercise = (e: unknown): e is RepExercise => REP_EXERCISES.includes(e as RepExercise);
+/** Упражнение на время: цель и результат в секундах. */
+export const isTimed = (e: Exercise): e is 'plank' => e === 'plank';
+
+// Планка идёт в опыт, серию и клан как повторы: две секунды — один повтор.
+export const PLANK_S_PER_REP = 2;
+// Сколько секунд держит планку игрок, о котором ещё ничего не известно.
+export const DEFAULT_PLANK_S = 30;
+export const repsEquivalent = (e: Exercise | null, n: number): number => (e === 'plank' ? Math.round(n / PLANK_S_PER_REP) : n);
+
+/** Сколько сделано или задано: «45 с», «2:30» или «12». */
+export function amountText(e: Exercise, n: number): string {
+  if (!isTimed(e)) return String(n);
+  return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : `${n} с`;
+}
+
+/** Цель словами: «отжимания × 20», «планка 45 с». */
+export const goalText = (e: Exercise, n: number): string => `${EXERCISE_LABELS[e].toLowerCase()}${isTimed(e) ? ' ' : ' × '}${amountText(e, n)}`;
 
 export interface Landmark {
   x: number;
@@ -49,7 +72,7 @@ function tilt(a: Landmark, b: Landmark): number {
   return (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI;
 }
 
-export const RULES: Record<Exercise, Rule> = {
+export const RULES: Record<RepExercise, Rule> = {
   pushup: {
     joint: [SHOULDER, ELBOW, WRIST],
     // Модель сбоку занижает сгиб локтя, поэтому пороги с запасом: внизу меньше 110°, вверху больше 145°.
@@ -94,6 +117,7 @@ export const EXERCISE_LABELS: Record<Exercise, string> = {
   pushup: 'Отжимания',
   squat: 'Приседания',
   situp: 'Пресс',
+  plank: 'Планка',
 };
 
 /** Угол ABC в градусах (вершина в B). */
@@ -157,7 +181,7 @@ export class RepCounter {
   readonly up: number;
 
   constructor(
-    readonly exercise: Exercise,
+    readonly exercise: RepExercise,
     personal?: { down: number; up: number },
   ) {
     this.down = personal?.down ?? RULES[exercise].down;
@@ -237,3 +261,114 @@ export class RepCounter {
     return (this.state = { reps, phase, angle: Math.round(value), hint });
   }
 }
+
+// Планка: плечо, таз и стопа на одной прямой (угол в тазу почти развёрнутый), тело почти горизонтально,
+// локти или ладони под плечами. Модель сбоку шумит на пару градусов, поэтому прямота с запасом.
+export const PLANK_STRAIGHT = 158;
+const PLANK_TILT = 35;
+// Плечо над опорой: отрезок плечо — локоть ближе к вертикали, чем к полу.
+const PLANK_ARM_TILT = 50;
+// Подвисший кадр не превращается в лишние секунды.
+const MAX_FRAME_MS = 250;
+
+export const PLANK_HINTS = {
+  frame: 'Камера должна видеть тебя целиком, хотя бы до колен',
+  pose: 'Встань в планку',
+  arms: 'Поставь локти под плечи',
+  sag: 'Подними таз',
+  pike: 'Опусти таз',
+};
+// Чем дальше от планки, тем раньше в списке: при выборе поворота кадра берём самую «близкую» ошибку.
+const FAULT_RANK = [PLANK_HINTS.frame, PLANK_HINTS.pose, PLANK_HINTS.arms, PLANK_HINTS.sag, PLANK_HINTS.pike];
+
+/** Что не так с планкой в этом кадре; null — поза верная. */
+export function plankFault(lm: Landmark[], s: number): string | null {
+  const sh = lm[SHOULDER[s]];
+  const hip = lm[HIP[s]];
+  if (!seen(sh, hip) || !legsSeen(lm, s)) return PLANK_HINTS.frame;
+  const end = lowest(lm, s);
+  if (tilt(sh, end) > PLANK_TILT) return PLANK_HINTS.pose;
+  // Опора: локоть, а если его не видно — кисть. Ниже плеча и под ним, а не вытянута вперёд или вдоль тела.
+  const support = seen(lm[ELBOW[s]]) ? lm[ELBOW[s]] : seen(lm[WRIST[s]]) ? lm[WRIST[s]] : null;
+  if (support && (support.y <= sh.y || tilt(sh, support) < PLANK_ARM_TILT)) return PLANK_HINTS.arms;
+  if (angle(sh, hip, end) < PLANK_STRAIGHT) {
+    // Где таз относительно линии плечо — стопа: ниже (y больше) — провис, выше — «домик».
+    const t = (hip.x - sh.x) / (end.x - sh.x || 1e-6);
+    const lineY = sh.y + (end.y - sh.y) * t;
+    return hip.y > lineY ? PLANK_HINTS.sag : PLANK_HINTS.pike;
+  }
+  return null;
+}
+
+export interface PlankState extends RepState {
+  // Сколько удержано в верной позе, мс; reps — то же в целых секундах.
+  heldMs: number;
+  holding: boolean;
+}
+
+/**
+ * Таймер планки: копит время, пока поза верная, и ставит отсчёт на паузу, когда поза сломалась.
+ * Короткие сбои модели (до POSTURE_GRACE кадров подряд) паузу не вызывают.
+ * Интерфейс тот же, что у RepCounter: reps — удержанные секунды.
+ */
+export class PlankTimer {
+  readonly exercise = 'plank' as const;
+  // Для отладочной подписи угла: прямота корпуса.
+  readonly down = PLANK_STRAIGHT;
+  readonly up = 180;
+  private state: PlankState = { reps: 0, phase: 'up', angle: null, hint: null, heldMs: 0, holding: false };
+  private lastT: number | null = null;
+  private failStreak = 0;
+  private rotation = 0;
+
+  get current(): PlankState {
+    return this.state;
+  }
+
+  reset(): void {
+    this.state = { reps: 0, phase: 'up', angle: null, hint: null, heldMs: 0, holding: false };
+    this.lastT = null;
+    this.failStreak = 0;
+  }
+
+  update(raw: Landmark[] | undefined, timestampMs: number, aspect = 1, rotations: number[] = [0]): PlankState {
+    const dt = this.lastT === null ? 0 : Math.max(0, Math.min(MAX_FRAME_MS, timestampMs - this.lastT));
+    this.lastT = timestampMs;
+    let fault: string | null;
+    let body: number | null = null;
+    if (!raw || raw.length < 33) fault = 'Встань в кадр целиком';
+    else {
+      const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
+      // Сторона, которую камера видит лучше: по плечу, локтю, тазу, колену и стопе.
+      const vis = (s: number) => [SHOULDER, ELBOW, HIP, KNEE, ANKLE].reduce((sum, pair) => sum + (scaled[pair[s]].visibility ?? 1), 0);
+      const side = vis(0) >= vis(1) ? 0 : 1;
+      // Как у повторов: телефон может лежать боком, ищем поворот, где тело на полу. Прошлый удачный — первым.
+      const order = [this.rotation, ...rotations.filter((r) => r !== this.rotation)].filter((r) => rotations.includes(r));
+      let best: { lm: Landmark[]; fault: string | null } | null = null;
+      for (const r of order.length ? order : [0]) {
+        const lm = rotate(scaled, r, aspect);
+        const f = plankFault(lm, side);
+        if (!f) {
+          best = { lm, fault: null };
+          this.rotation = r;
+          break;
+        }
+        if (!best || FAULT_RANK.indexOf(f) > FAULT_RANK.indexOf(best.fault!)) best = { lm, fault: f };
+      }
+      fault = best!.fault;
+      const lm = best!.lm;
+      if (seen(lm[SHOULDER[side]], lm[HIP[side]]) && legsSeen(lm, side)) body = Math.round(angle(lm[SHOULDER[side]], lm[HIP[side]], lowest(lm, side)));
+    }
+
+    this.failStreak = fault ? this.failStreak + 1 : 0;
+    // Начать отсчёт можно только из верной позы; уже идущий не прерывается мгновенными сбоями.
+    let holding = this.state.holding;
+    if (!fault) holding = true;
+    else if (this.failStreak >= POSTURE_GRACE) holding = false;
+    const heldMs = this.state.heldMs + (holding ? dt : 0);
+    return (this.state = { reps: Math.floor(heldMs / 1000), phase: holding ? 'down' : 'up', angle: body, hint: holding ? null : fault, heldMs, holding });
+  }
+}
+
+/** Счётчик под упражнение: повторы или таймер планки. */
+export type Counter = RepCounter | PlankTimer;

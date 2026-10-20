@@ -46,6 +46,26 @@ export function repLine(reps: number, target?: number): Line {
   return { text: String(reps), important: false };
 }
 
+const MINUTES = ['', 'Минута', 'Две минуты', 'Три минуты', 'Четыре минуты', 'Пять минут'];
+
+/**
+ * Планка: что сказать, когда удержано sec секунд. Каждые 10 секунд — время, на середине цели — «Половина!»,
+ * за 10 секунд до цели — предупреждение, последние три — обратный отсчёт. null — промолчать.
+ */
+export function holdLine(sec: number, target?: number): Line | null {
+  if (sec <= 0) return null;
+  if (target) {
+    const left = target - sec;
+    if (left === 0) return { text: 'Есть! Планка взята!', important: true };
+    if (left > 0 && left <= 3) return { text: String(left), important: true };
+    if (left === 10 && target >= 20) return { text: 'Последние десять секунд!', important: true };
+    if (target >= 20 && sec === Math.floor(target / 2)) return { text: 'Половина!', important: true };
+  }
+  if (sec % 60 === 0 && sec / 60 < MINUTES.length) return { text: `${MINUTES[sec / 60]}! Держи!`, important: true };
+  if (sec % 10 === 0) return { text: `${sec} секунд`, important: true };
+  return null;
+}
+
 /** Предупреждение по времени, когда секунды до конца пересекли отметку. total — длина подхода. */
 export function timeLine(prevLeft: number, left: number, total: number): Line | null {
   const crossed = (mark: number) => prevLeft > mark && left <= mark && left > 0;

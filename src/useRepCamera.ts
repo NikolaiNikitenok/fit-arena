@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DrawingUtils, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker } from './pose';
 import { frameRotations, enableOrientation } from './orientation';
-import { Exercise, RepCounter } from './repCounter';
+import { Counter, Exercise, PlankTimer, RepCounter } from './repCounter';
 import { getSettings } from './settings';
 import { Calibrator, CalibrationView, personalThresholds, saveCalibration, skipCalibration } from './calibration';
 import { repSound } from './audio';
@@ -14,15 +14,16 @@ let landmarker: Promise<PoseLandmarker> | null = null;
 // Сколько показываем «Готово» после калибровки, прежде чем пойдёт отсчёт.
 const CALIB_DONE_MS = 1600;
 
-const counterFor = (exercise: Exercise) => new RepCounter(exercise, personalThresholds(exercise));
+// Планка считается таймером: onRep приходит на каждую удержанную секунду.
+const counterFor = (exercise: Exercise): Counter => (exercise === 'plank' ? new PlankTimer() : new RepCounter(exercise, personalThresholds(exercise)));
 
-/** Камера с распознаванием позы: рисует скелет и вызывает onRep на каждый засчитанный повтор. */
+/** Камера с распознаванием позы: рисует скелет и вызывает onRep на каждый засчитанный повтор (у планки — на каждую секунду). */
 export function useRepCamera() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef(0);
-  const counterRef = useRef<RepCounter | null>(null);
+  const counterRef = useRef<Counter | null>(null);
   const lastRepsReset = useRef(false);
   const [hint, setHint] = useState<string | null>(null);
   const [active, setActive] = useState(false);
@@ -61,7 +62,8 @@ export function useRepCamera() {
 
     counterRef.current = counterFor(exercise);
     setLimits({ down: counterRef.current.down, up: counterRef.current.up });
-    calibRef.current = opts.calibrate ? { c: new Calibrator(exercise), doneAt: 0 } : null;
+    // Планке калибровка не нужна: у неё нет амплитуды.
+    calibRef.current = opts.calibrate && exercise !== 'plank' ? { c: new Calibrator(exercise), doneAt: 0 } : null;
     setCalib(calibRef.current?.c.view ?? null);
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
@@ -113,8 +115,10 @@ export function useRepCamera() {
         }
         if (state.reps > lastReps) {
           lastReps = state.reps;
-          if (getSettings().haptics) hapticRep();
-          repSound(state.reps);
+          // Планка звучит раз в 10 секунд, а не каждую секунду.
+          const quiet = counterRef.current instanceof PlankTimer && state.reps % 10 !== 0;
+          if (getSettings().haptics && !quiet) hapticRep();
+          if (!quiet) repSound(state.reps);
           onRep();
         }
         setHint(state.hint);

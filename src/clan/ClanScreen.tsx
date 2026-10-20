@@ -64,7 +64,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
   const pending = progress.clanPending ?? 0;
   useEffect(() => {
     if (status !== 'online' || clan === undefined || pending <= 0) return;
-    if (clan) send({ type: 'clanReps', reps: Math.min(pending, CLAN_REPS_PER_DAY) });
+    if (clan) send({ type: 'clanReps', reps: Math.min(pending, CLAN_REPS_PER_DAY), since: progress.clanPendingAt });
     setProgress(clearClanPending(progress));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, clan?.id, pending]);

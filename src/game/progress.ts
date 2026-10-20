@@ -1,10 +1,11 @@
 // Прогресс игрока хранится в браузере и копией на сервере (src/cloud.ts), чтобы не терялся при смене телефона.
-import type { Exercise } from '../repCounter';
+import { type Exercise, type RepExercise, repsEquivalent } from '../repCounter';
 import { clanGift } from '../../shared/clanLevel';
 import { seasonAt } from '../../shared/rating';
 import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
 import type { DailyTask } from './daily';
 import type { EventState } from './event';
+import type { ProgramsState } from './programs';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
@@ -43,6 +44,8 @@ export interface Progress {
   clanGift?: { clan: string; level: number };
   // Повторы, ещё не отправленные клану: уходят, когда открыт экран клана.
   clanPending?: number;
+  // Когда начали копиться эти повторы: накопленное до войны кланов в неё не идёт.
+  clanPendingAt?: number;
   // Повторы за сегодня по упражнениям: для задания дня.
   dayEx?: { date: string; reps: Partial<Record<Exercise, number>> };
   // День, за который награда задания уже забрана.
@@ -67,6 +70,8 @@ export interface Progress {
   eventWins?: string[];
   // Питомцы: кто открыт, кто рядом с героем, опыт и лакомство дня (src/game/pets.ts).
   pets?: PetState;
+  // Программы тренировок Мастера Грома (src/game/programs.ts): идущая, пройденные и опыт за дни.
+  programs?: ProgramsState;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
@@ -136,6 +141,8 @@ export function loadProgress(): Progress {
     // Сохранения до оружия: выдаём стартовый меч.
     if (!p.items.includes('sword')) p.items = [...p.items, 'sword'];
     p.weapon ??= 'sword';
+    // Сохранения до планки: её база — средняя.
+    p.baseline = { ...DEFAULT_BASELINE, ...p.baseline };
     return p;
   } catch {
     return fresh();
@@ -191,7 +198,7 @@ export function recordWin(p: Progress, level: LevelDef, stars: number, record?: 
   const petFind = level.daily ? null : rollPetFind(p, level.land, Date.now());
   const coins = Math.round((firstTime ? level.coins : Math.round(level.coins / 4)) * (1 + bonus));
   const baseline = { ...p.baseline };
-  if (level.type === 'trial' && record != null) baseline[level.exercises[0] as Exercise] = Math.max(3, record);
+  if (level.type === 'trial' && record != null) baseline[level.exercises[0]] = Math.max(3, record);
   // Лёгкая победа: форма выросла, враги в этом упражнении становятся крепче.
   if (level.type !== 'trial' && !level.rest && stars === 3) adapt(baseline, level.exercises, WIN_GROWTH);
   const drop = level.type === 'boss' && firstTime ? bossDrop(level.land, p.items) : undefined;
@@ -212,7 +219,7 @@ export function recordWin(p: Progress, level: LevelDef, stars: number, record?: 
 // Форма игрока между испытаниями: победа на 3 звезды поднимает базу на 3%, поражение снижает на 2%.
 export const WIN_GROWTH = 1.03;
 export const LOSS_DROP = 0.98;
-function adapt(baseline: Baseline, exercises: Exercise[], factor: number) {
+function adapt(baseline: Baseline, exercises: RepExercise[], factor: number) {
   for (const ex of new Set(exercises)) baseline[ex] = Math.max(3, Math.round(baseline[ex] * factor * 10) / 10);
 }
 
@@ -291,7 +298,7 @@ export const XP_PER_LEVEL_WON = 20;
 
 export function heroXp(p: Progress): number {
   const reps = Object.values(p.days).reduce((s, n) => s + n, 0);
-  return reps + Object.keys(p.stars).length * XP_PER_LEVEL_WON;
+  return reps + Object.keys(p.stars).length * XP_PER_LEVEL_WON + (p.programs?.xp ?? 0);
 }
 
 /** Сколько опыта нужно, чтобы перейти с уровня n на n + 1. */
@@ -351,10 +358,10 @@ export const dayKey = (t: number): string => {
 };
 
 /** Сделанный подход (победа или нет): день тренировки, повторы, рекорды. */
-/** Повторы вне карты (дуэль): в серию, задание дня и опыт клана. */
+/** Повторы вне карты (дуэль, программа): в серию, задание дня и опыт клана. У планки reps — секунды. */
 export const recordOutsideReps = (exercise: Exercise, reps: number, now: number): Progress => {
   const p = loadProgress();
-  return reps > 0 ? recordActivity({ ...p, clanPending: (p.clanPending ?? 0) + reps }, exercise, reps, now) : p;
+  return reps > 0 ? recordActivity(addClanPending(p, repsEquivalent(exercise, reps), now), exercise, reps, now) : p;
 };
 
 /** Дуэль закончилась: в пропуск идут бой и победа. */
@@ -371,11 +378,17 @@ export const recordRaidAttack = (p: Progress, now: number): Progress => save(cou
 
 export const addPotions = addPotion;
 
-export function recordActivity(p: Progress, exercise: Exercise | null, reps: number, now: number): Progress {
-  if (reps <= 0) return p;
+/**
+ * Подход сделан: повторы в серию, опыт, пропуск, задание дня и журнал. Планка приходит секундами:
+ * в журнал, рекорд и задание дня — секунды, в опыт и общий счёт повторов — по две секунды за повтор.
+ */
+export function recordActivity(p: Progress, exercise: Exercise | null, amount: number, now: number): Progress {
+  if (amount <= 0) return p;
+  const reps = amount;
+  const total = repsEquivalent(exercise, amount);
   const date = dayKey(now);
-  const counted = countPass(exercise ? countPass(p, exercise, reps, now) : p, 'reps', reps, now);
-  const next = { ...counted, days: { ...p.days, [date]: (p.days[date] ?? 0) + reps } };
+  const counted = countPass(exercise ? countPass(p, exercise, reps, now) : p, 'reps', total, now);
+  const next = { ...counted, days: { ...p.days, [date]: (p.days[date] ?? 0) + total } };
   if (exercise) {
     const ex = p.dayEx?.date === date ? p.dayEx.reps : {};
     next.dayEx = { date, reps: { ...ex, [exercise]: (ex[exercise] ?? 0) + reps } };
@@ -388,7 +401,7 @@ export function recordActivity(p: Progress, exercise: Exercise | null, reps: num
     if (!p.first[exercise]) next.first = { ...p.first, [exercise]: { reps, date } };
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
-  return save(feedPet(next, reps, now));
+  return save(feedPet(next, total, now));
 }
 
 // В неделю можно отдохнуть два дня, и серия не прервётся: мышцам нужен отдых.
@@ -506,7 +519,11 @@ export function claimClanGift(p: Progress, clan: string, level: number): Progres
   return save({ ...p, coins: p.coins + due.coins, potions, clanGift: { clan, level } });
 }
 
-export const clearClanPending = (p: Progress): Progress => save({ ...p, clanPending: 0 });
+export const clearClanPending = (p: Progress): Progress => save({ ...p, clanPending: 0, clanPendingAt: undefined });
+
+/** Повторы для клана копятся до открытия вкладки «Клан»; запоминаем, когда пришли первые. */
+export const addClanPending = (p: Progress, reps: number, now: number): Progress =>
+  reps > 0 ? { ...p, clanPending: (p.clanPending ?? 0) + reps, clanPendingAt: p.clanPending ? (p.clanPendingAt ?? now) : now } : p;
 
 /** Сколько повторов задания дня сделано сегодня. */
 export function dailyProgress(p: Progress, task: DailyTask): number {

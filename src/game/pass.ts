@@ -1,7 +1,7 @@
 // Пропуск сезона: задания дают опыт пропуска, опыт открывает ступени щита.
 // Серая дорожка бесплатная, золотая — у владельцев Pro Pass (статус приходит с сервера).
 // Сезон тот же, что у дуэлей: 4 недели. Задания одинаковые у всех и зависят только от даты.
-import { EXERCISE_LABELS, type Exercise } from '../repCounter';
+import { EXERCISE_LABELS, type Exercise, type RepExercise } from '../repCounter';
 import { seasonEndsAt } from '../../shared/rating';
 import { bossDrop, Gear, gearById, itemById, openChest, PotionId, potionById } from './items';
 import type { Baseline } from './levels';
@@ -33,7 +33,7 @@ export type PassReward =
 
 const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 2166136261);
 const round5 = (n: number) => Math.max(10, Math.round(n / 5) * 5);
-const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
+const EXERCISES: RepExercise[] = ['squat', 'pushup', 'situp'];
 const exTitle = (ex: Exercise, n: number) => `${EXERCISE_LABELS[ex]}: ${n} повторов`;
 
 // Местная дата как полдень UTC: так у даты один сезон и одна неделя в любом часовом поясе.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HINT_GAP_MS, hintLine, pickVoice, repLine, timeLine } from './voiceLines';
+import { HINT_GAP_MS, hintLine, holdLine, pickVoice, repLine, timeLine } from './voiceLines';
 
 describe('pickVoice', () => {
   it('без русского голоса молчит', () => {
@@ -59,5 +59,22 @@ describe('hintLine', () => {
     expect(hintLine('Встань прямо', 'Встань прямо', HINT_GAP_MS)).toBeNull();
     expect(hintLine('Встань прямо', null, 1000)).toBeNull();
     expect(hintLine(null, 'Встань прямо', HINT_GAP_MS)).toBeNull();
+  });
+});
+
+describe('holdLine', () => {
+  it('планка: время каждые 10 секунд, половина и последние секунды', () => {
+    expect(holdLine(7, 60)).toBeNull();
+    expect(holdLine(20, 60)).toEqual({ text: '20 секунд', important: true });
+    expect(holdLine(30, 60)?.text).toBe('Половина!');
+    expect(holdLine(50, 60)?.text).toBe('Последние десять секунд!');
+    expect(holdLine(58, 60)?.text).toBe('2');
+    expect(holdLine(60, 60)?.text).toBe('Есть! Планка взята!');
+  });
+
+  it('без цели — время и минуты', () => {
+    expect(holdLine(40)?.text).toBe('40 секунд');
+    expect(holdLine(120)?.text).toBe('Две минуты! Держи!');
+    expect(holdLine(41)).toBeNull();
   });
 });

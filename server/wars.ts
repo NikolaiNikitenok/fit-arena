@@ -53,10 +53,10 @@ export interface ClanWar {
 const look = (c: Clan) => ({ name: c.name, tag: c.tag, flag: c.flag ?? '', level: clanLevel(c.xp ?? 0).level, members: c.members.length });
 
 /** Очки повторов в войну: только участникам из пятничного состава и только пока идёт бой. */
-export function warReps(c: Clan, playerId: string, reps: number, now: number): number {
+export function warReps(c: Clan, playerId: string, reps: number, now: number, since = now): number {
   const w = c.war;
   if (!w || w.result || !(playerId in w.roster)) return 0;
-  if (now < warStartOf(w.key) || now >= warEndOf(w.key)) return 0;
+  if (now < warStartOf(w.key) || now >= warEndOf(w.key) || since < warStartOf(w.key)) return 0;
   const day = dayMsk(now);
   const today = (w.days[day] ??= {});
   const add = warAdd(today[playerId] ?? 0, reps);

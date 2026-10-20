@@ -19,6 +19,8 @@ interface Pose {
   arm?: [number, number];
   // Планка: torso — высота плеч в долях длины руки, тело прямое, ладони под плечами.
   plank?: boolean;
+  // Планка на предплечьях: локти под плечами, предплечья вперёд по полу.
+  forearm?: boolean;
 }
 
 interface Spec {
@@ -57,6 +59,18 @@ const SPECS: Record<Exercise, Spec> = {
     landscape: false,
     aim: [0, 0.5, 0],
   },
+  plank: {
+    // Поза неподвижна: планку держат, а не повторяют.
+    poses: [
+      { torso: 0, thigh: 0, shin: 0, plank: true, forearm: true },
+      { torso: 0, thigh: 0, shin: 0, plank: true, forearm: true },
+    ],
+    ankleZ: -0.45,
+    period: 3,
+    phoneY: 0,
+    landscape: true,
+    aim: [0, 0.1, 0],
+  },
   situp: {
     poses: [
       { torso: 172, thigh: 48, shin: 300, arm: [-30, 80] },
@@ -73,6 +87,7 @@ const SPECS: Record<Exercise, Spec> = {
 const TIPS: Record<Exercise, string[]> = {
   pushup: ['Телефон на полу сбоку, можно положить горизонтально', 'В кадре хотя бы до пояса', 'Опускайся, пока локти не согнутся под прямым углом'],
   squat: ['Телефон сбоку или вполоборота, на уровне пояса', 'В кадре всё тело, от головы до стоп', 'Садись, пока бёдра не станут параллельны полу'],
+  plank: ['Телефон на полу сбоку, можно положить горизонтально', 'В кадре всё тело, от плеч до стоп', 'Локти под плечами, тело — ровная линия от головы до пяток'],
   situp: ['Ляг боком к камере, колени согнуты', 'Стопы и таз на полу, всё тело в кадре', 'Поднимай корпус до коленей и плавно опускайся'],
 };
 
@@ -158,7 +173,9 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
     const [A, B] = spec.poses;
     const pose = { torso: lerp(A.torso, B.torso, t), thigh: lerp(A.thigh, B.thigh, t), shin: lerp(A.shin, B.shin, t) };
     if (A.plank) {
-      const a = Math.asin(Math.min(0.9, (pose.torso * (size.arm1 + size.arm2) + size.height * 0.03) / size.body)) / DEG;
+      // На предплечьях плечи выше пола на длину плеча, на прямых руках — на всю руку.
+      const lift = A.forearm ? size.arm1 + size.height * 0.05 : pose.torso * (size.arm1 + size.arm2) + size.height * 0.03;
+      const a = Math.asin(Math.min(0.9, lift / size.body)) / DEG;
       pose.torso = a;
       pose.thigh = pose.shin = a + 180;
     }
@@ -181,7 +198,8 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
 
     for (const s of ['l', 'r'] as const) {
       let angles: [number, number];
-      if (A.plank) {
+      if (A.forearm) angles = [270, 0];
+      else if (A.plank) {
         const shoulder = worldPos(b[`upperarm.${s}`]);
         const target = new THREE.Vector3(0, H * 0.02, shoulder.z + H * 0.02);
         angles = reach(shoulder, target, size.arm1, size.arm2);
@@ -278,7 +296,7 @@ function Rig({ exercise, model }: { exercise: Exercise; model: CharName }) {
   }, [camera, H, spec]);
   return (
     <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, spec.ankleZ * H + (exercise === 'pushup' ? 0.4 : exercise === 'situp' ? -0.3 : 0) * H]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, spec.ankleZ * H + (exercise === 'pushup' || exercise === 'plank' ? 0.4 : exercise === 'situp' ? -0.3 : 0) * H]} receiveShadow>
         <planeGeometry args={[H * 0.4, H * 1.1]} />
         <meshStandardMaterial color="#3d6b5e" />
       </mesh>

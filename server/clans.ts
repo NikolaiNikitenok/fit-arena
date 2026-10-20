@@ -315,15 +315,15 @@ export class ClanStore {
   }
 
   /** Повторы из приключения приносят клану опыт, не больше дневного предела на участника. */
-  reps(playerId: string, reps: number, now: number): Clan | null {
+  reps(playerId: string, reps: number, now: number, since = now): Clan | null {
     const c = this.clanOf(playerId);
     if (!c) return null;
     const day = dayOf(now);
     if (c.repsDay?.day !== day) c.repsDay = { day, reps: {} };
     const done = c.repsDay.reps[playerId] ?? 0;
     const add = Math.max(0, Math.min(CLAN_REPS_PER_DAY - done, Math.round(Number(reps) || 0)));
-    // Очки войны считаются отдельно: у них свой дневной предел.
-    const war = warReps(c, playerId, reps, now);
+    // Очки войны считаются отдельно: у них свой дневной предел. Повторы, накопленные до войны, в неё не идут.
+    const war = warReps(c, playerId, reps, now, Math.min(now, Number(since) || now));
     if (war) this.save();
     if (!add) return war ? c : null;
     c.repsDay.reps[playerId] = done + add;

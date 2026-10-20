@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { EXERCISE_LABELS, Exercise } from '../repCounter';
+import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { SettingsSheet } from '../SettingsSheet';
@@ -20,6 +20,7 @@ import { newAchievements } from './achievements';
 import { Onboarding } from './Onboarding';
 import { PetHatch, PetScreen } from './PetScreen';
 import { canHatch, hatchEgg, petLevel, petLook, petName, petXp } from './pets';
+import { plankDailyWorkout, ProgramsScreen, type QuickWorkout } from './Programs';
 import {
   buy,
   buyGear,
@@ -42,6 +43,7 @@ import {
   livesNow,
   loadProgress,
   Progress,
+  addClanPending,
   recordActivity,
   recordLoss,
   recordWin,
@@ -65,7 +67,7 @@ const TABS = [...WORLDS, 'castle'] as const;
 const SHORT_WORLD: Record<(typeof TABS)[number], string> = { fantasy: 'Королевство', space: 'Космос', zombie: 'Зомби', castle: 'Замок' };
 const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
 
-const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
+const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp', 'plank'];
 const fmtMin = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 
 export type AdventureTab = 'hero' | 'map' | 'clan';
@@ -117,6 +119,12 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     setEventOpenState(open);
     onPlaying(open);
   };
+  // Программы тренировок: экран на весь экран, как событие; quick — разовая тренировка (планка, задание дня).
+  const [programs, setProgramsState] = useState<{ quick?: QuickWorkout } | null>(null);
+  const setPrograms = (v: { quick?: QuickWorkout } | null) => {
+    setProgramsState(v);
+    onPlaying(!!v);
+  };
   const pro = usePro();
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -136,14 +144,14 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   // Новый уровень героя: монеты и сообщение, как только миссия закончилась.
   const [levelUp, setLevelUp] = useState<string | null>(null);
   useEffect(() => {
-    if (playing) return;
+    if (playing || programs) return;
     const r = claimHeroLevels(latest.current);
     if (!r) return;
     setProgress(r.progress);
     sfx('levelup');
     setLevelUp(`Новый уровень героя: ${r.levels[r.levels.length - 1]}! +${r.coins} монет`);
     setTimeout(() => setLevelUp(null), 3500);
-  }, [playing, progress.days]);
+  }, [playing, programs, progress.days]);
 
   // Питомец подрос: сообщение после тренировки.
   const petLvl = progress.pets?.active ? petLevel(petXp(progress, progress.pets.active)).level : 0;
@@ -157,13 +165,13 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
 
   // Новое достижение: короткое сообщение после миссии, награда ждёт в «Достижениях».
   useEffect(() => {
-    if (playing) return;
+    if (playing || programs) return;
     const fresh = newAchievements(latest.current, Date.now());
     if (!fresh.length) return;
     setProgress(markAchSeen(latest.current, fresh.map((a) => a.id)));
     setAchToast(fresh.length > 1 ? `Новые достижения: ${fresh.map((a) => a.title).join(', ')}` : `Новое достижение: ${fresh[0].title}! Забери награду`);
     setTimeout(() => setAchToast(null), 4000);
-  }, [playing, progress.days, progress.dailyCount, progress.raidClaimed?.length]);
+  }, [playing, programs, progress.days, progress.dailyCount, progress.raidClaimed?.length, progress.programs?.done.length]);
 
   const switchWorld = (w: number) => {
     setWorld(w);
@@ -189,7 +197,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         }}
         onLose={() => !playing.daily && update((p) => recordLoss(spendLife(p, Date.now()), playing))}
         onStart={() => update(spendMight)}
-        onActivity={(ex, reps) => update((p) => ({ ...recordActivity(p, ex, reps, Date.now()), clanPending: (p.clanPending ?? 0) + reps }))}
+        onActivity={(ex, reps) => update((p) => addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now()))}
         lives={lives}
         swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
         onSwap={(count) => {
@@ -208,7 +216,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         onStart={() => update(spendMight)}
         onFinish={(dealt, reps, ex) => {
           const now = Date.now();
-          update((p) => ({ ...recordActivity(p, ex, reps, now), clanPending: (p.clanPending ?? 0) + reps }));
+          update((p) => addClanPending(recordActivity(p, ex, reps, now), reps, now));
           const r = recordEventHit(latest.current, dealt, now);
           if (!r) return null;
           setProgress(r.progress);
@@ -218,6 +226,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         onClose={() => setEventOpen(false)}
       />
     );
+
+  if (programs) return <ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} />;
 
   const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
   const sheets = (
@@ -297,6 +307,8 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           dailyDone={dailyProgress(progress, daily)}
           onDaily={() => {
             const left = Math.max(5, daily.target - dailyProgress(progress, daily));
+            // Планка — на время: не миссия, а подходы с отдыхом.
+            if (daily.exercise === 'plank') return setPrograms({ quick: plankDailyWorkout(Math.max(10, left), progress.baseline.plank ?? 30, daily.ask) });
             // Миссия на месте текущего уровня: та же земля и декорации, но цель — остаток задания.
             setPlaying({ ...currentDef, daily: true, type: 'build', title: `Задание: ${NPCS[daily.npc].name}`, exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
           }}
@@ -324,6 +336,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           onPass={() => setPassOpen(true)}
           onEvent={() => setEventOpen(true)}
           onPets={() => setPetsOpen(true)}
+          onPrograms={() => setPrograms({})}
         />
         {sheets}
       </>
@@ -640,10 +653,10 @@ function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: nu
             <div key={ex} className="strength-row">
               <div className="strength-ex">
                 {EXERCISE_LABELS[ex]}
-                <div className="strength-was">{first ? `первый подход: ${first.reps}` : 'ещё не делал'}</div>
+                <div className="strength-was">{first ? `первый подход: ${amountText(ex, first.reps)}` : 'ещё не делал'}</div>
               </div>
-              {up > 0 && <span className="strength-up">+{up}</span>}
-              <span className="strength-val">{best?.reps ?? '—'}</span>
+              {up > 0 && <span className="strength-up">+{amountText(ex, up)}</span>}
+              <span className="strength-val">{best ? amountText(ex, best.reps) : '—'}</span>
             </div>
           );
         })}

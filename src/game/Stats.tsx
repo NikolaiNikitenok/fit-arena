@@ -3,7 +3,7 @@ import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { dayKey, type Progress } from './progress';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
-export const EX_COLOR: Record<Exercise, string> = { squat: '#ffb46b', pushup: '#ff7a59', situp: '#7dd3fc' };
+export const EX_COLOR: Record<Exercise, string> = { squat: '#ffb46b', pushup: '#ff7a59', situp: '#7dd3fc', plank: '#6ee7b7' };
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 const DAY = 86_400_000;
 

@@ -1,7 +1,7 @@
 // Бой с тренером: дуэль с ботом без сервера. Темп тренера подстраивается под базу игрока,
 // чтобы бой был по силам, но не даром: Лиса медленнее, Гром почти вровень, Князь Диван быстрее.
 import type { CharName } from '../three/kit';
-import type { Exercise } from '../repCounter';
+import type { RepExercise } from '../repCounter';
 import type { Baseline, Line } from './levels';
 import { NPCS, type NpcId } from './npcs';
 
@@ -76,7 +76,7 @@ export function trainerLine(t: Trainer, text: string): Line {
 }
 
 /** Сколько повторов в минуту тренер в среднем делает против этого игрока. */
-export const trainerRate = (t: Trainer, baseline: Baseline, exercise: Exercise): number => baseline[exercise] * t.pace;
+export const trainerRate = (t: Trainer, baseline: Baseline, exercise: RepExercise): number => baseline[exercise] * t.pace;
 
 /** Предсказуемый генератор случайных чисел (mulberry32): один и тот же seed — один и тот же бой. */
 export function seededRandom(seed: number): () => number {
@@ -130,7 +130,7 @@ export function botSchedule(perMinute: number, durationMs: number, burst: [numbe
 }
 
 /** Расписание тренера на бой. */
-export const trainerSchedule = (t: Trainer, baseline: Baseline, exercise: Exercise, durationMs: number, seed: number): number[] =>
+export const trainerSchedule = (t: Trainer, baseline: Baseline, exercise: RepExercise, durationMs: number, seed: number): number[] =>
   botSchedule(trainerRate(t, baseline, exercise), durationMs, t.burst, seededRandom(seed));
 
 /** Случайная реплика из списка, но предсказуемо для одного seed. */

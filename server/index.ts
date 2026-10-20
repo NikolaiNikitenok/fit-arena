@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
 import { leagueOf } from '../shared/rating';
-import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
+import { EXERCISE_LABELS, goalText, isRepExercise, type Exercise } from '../src/repCounter';
 import { Family, parseClientItem, RateLimit, telegramId } from './family';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
@@ -429,7 +429,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const c = mine();
       const lastMsg = c?.nextMsg;
       const level = c && clans.level(c);
-      const r = clans.reps(who.id, Number(msg.reps), now);
+      const r = clans.reps(who.id, Number(msg.reps), now, Number(msg.since) || now);
       if (!r) return;
       if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: chatOf(r) });
       if (clans.level(r) !== level || r.nextMsg !== lastMsg) sendClan(r);
@@ -525,14 +525,15 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
 
     switch (msg.type) {
       case 'create': {
-        if (!(msg.exercise in EXERCISE_LABELS)) return;
+        // Дуэль только на повторы: планки на время здесь нет.
+        if (!isRepExercise(msg.exercise)) return;
         leaveRoom();
         room = newRoom(msg.exercise as Exercise);
         room.join(player);
         break;
       }
       case 'quick': {
-        if (!(msg.exercise in EXERCISE_LABELS)) return;
+        if (!isRepExercise(msg.exercise)) return;
         const exercise = msg.exercise as Exercise;
         leaveRoom();
         const other = queue.get(exercise);
@@ -623,7 +624,7 @@ if (BOT_TOKEN)
       const text =
         p?.dailyDone === date
           ? 'Мастер Гром: «Сегодня ещё ни одного повтора. Пять минут — и день не потерян!»'
-          : `${npcName(task.npc)}: «${task.ask}»\n\nЗадание дня: ${EXERCISE_LABELS[task.exercise].toLowerCase()} × ${task.target}. Награда: ${task.coins} монет.`;
+          : `${npcName(task.npc)}: «${task.ask}»\n\nЗадание дня: ${goalText(task.exercise, task.target)}. Награда: ${task.coins} монет.`;
       api('sendMessage', { chat_id: Number(save.id.slice(3)), text, reply_markup: { inline_keyboard: [[{ text: 'Тренироваться', web_app: { url: `${APP_URL}/` } }]] } })
         .then((r) => {
           // Игрок остановил бота: больше не пишем.

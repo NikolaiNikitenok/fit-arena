@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Adventure, AdventureTab } from './game/Adventure';
 import { Duel, type JoinRoom } from './Duel';
 import { FriendInbox } from './friends/FriendInbox';
-import { Exercise, EXERCISE_LABELS } from './repCounter';
+import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './repCounter';
 import { Banner, MapIcon, Shield, Swords } from './icons';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 
@@ -20,7 +20,7 @@ export function App() {
   const [friendsFirst, setFriendsFirst] = useState(() => !!friendInviteCode() || startTab() === 'friends');
   const [join, setJoin] = useState<JoinRoom>();
   const [tab, setTab] = useState<Tab>(inviteCode() || friendsFirst ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : 'hero');
-  const [exercise, setExercise] = useState<Exercise>('pushup');
+  const [exercise, setExercise] = useState<RepExercise>('pushup');
   const [playing, setPlaying] = useState(false);
   const full = tab === 'map' && !playing;
 
@@ -33,7 +33,8 @@ export function App() {
             <span className="muted">кто больше за минуту</span>
           </div>
           <div className="tabs small">
-            {(Object.keys(EXERCISE_LABELS) as Exercise[]).map((ex) => (
+            {/* Планка на время в дуэли не годится: бой идёт на повторы. */}
+            {REP_EXERCISES.map((ex) => (
               <button key={ex} className={ex === exercise ? 'active' : ''} onClick={() => setExercise(ex)}>
                 {EXERCISE_LABELS[ex]}
               </button>
@@ -48,7 +49,7 @@ export function App() {
       <FriendInbox
         paused={playing}
         onAccept={(c) => {
-          if (c.exercise in EXERCISE_LABELS) setExercise(c.exercise);
+          if (isRepExercise(c.exercise)) setExercise(c.exercise);
           setJoin({ code: c.room, seq: Date.now() });
           setTab('duel');
         }}

@@ -224,3 +224,31 @@ export const UserPlus = ({ size = 18, className }: P) =>
   );
 
 export const Cross = ({ size = 16, className }: P) => svg(size, className, <path d="M6 6l12 12M18 6L6 18" />);
+
+// Программы тренировок: календарь с отметкой, секундомер, отдых, пауза и продолжение.
+export const Plan = ({ size = 22, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+      <path d="M8.5 15l2.2 2.2 4.8-4.7" />
+    </>,
+  );
+
+export const Timer = ({ size = 18, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="12" cy="13.5" r="7.5" />
+      <path d="M12 13.5V9.5M10 2.5h4M18.5 6.5l1.5-1.5" />
+    </>,
+  );
+
+export const Moon = ({ size = 18, className }: P) => svg(size, className, <path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z" />);
+
+export const Pause = ({ size = 16, className }: P) => svg(size, className, <path d="M8 5v14M16 5v14" />);
+
+export const Play = ({ size = 16, className }: P) => svg(size, className, <path d="M7 4.5v15l12-7.5z" />, true);
