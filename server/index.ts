@@ -24,6 +24,8 @@ import { type Clan, ClanStore, type Who } from './clans';
 import { botApi, botStatus, runBot, type Update, webhookReply, webhookSecret } from './bot';
 import { dueReminders, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
+import { warNotices } from './warNotices';
+import { opponent, warTick } from './wars';
 import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
@@ -64,6 +66,22 @@ const isOnline = (id: string) => (clanSockets.get(id)?.size ?? 0) > 0 || online.
 function sendClan(clan: Clan): void {
   const now = Date.now();
   for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send({ type: 'clan', clan: clans.view(clan, m.id, isOnline, now) });
+}
+// Счёт войны: свой клан и соперника обновляем не чаще раза в две секунды.
+const warPending = new Map<string, ReturnType<typeof setTimeout>>();
+function sendWar(clan: Clan): void {
+  for (const c of [clan, opponent(clans, clan)]) {
+    if (!c || warPending.has(c.id)) continue;
+    const id = c.id;
+    warPending.set(
+      id,
+      setTimeout(() => {
+        warPending.delete(id);
+        const fresh = clans.get(id);
+        if (fresh) sendClan(fresh);
+      }, 2000),
+    );
+  }
 }
 function toClan(clan: Clan, msg: ServerMessage): void {
   for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send(msg);
@@ -347,6 +365,7 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       const r = clans.raidHit(who.id, String(msg.attackId), Number(msg.damage), now);
       if (typeof r === 'string') return;
       sendRaid(r.clan);
+      if (r.clan.war) sendWar(r.clan);
       // Босс повержен или клан вырос в уровне: всем новый клан и сообщения.
       if (r.killed || r.clan.nextMsg !== lastMsg) {
         toClan(r.clan, { type: 'chat', messages: chatOf(r.clan) });
@@ -363,6 +382,12 @@ function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) =>
       if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: chatOf(r) });
       if (clans.level(r) !== level || r.nextMsg !== lastMsg) sendClan(r);
       else send({ type: 'clan', clan: clans.view(r, who.id, isOnline, now) });
+      if (r.war) sendWar(r);
+      break;
+    }
+    case 'clanWar': {
+      const r = clans.setWar(who.id, msg.on === true);
+      if (!fail(r)) sendClan(r);
       break;
     }
     case 'raidEnd':
@@ -580,7 +605,8 @@ async function sendRaidNotices(list: RaidNotice[]): Promise<void> {
 if (BOT_TOKEN)
   setInterval(() => {
     if (raidSending) return;
-    const list = raidNotices(clans.all(), Date.now(), (id) => saves.raidMuted(id));
+    const muted = (id: string) => saves.raidMuted(id);
+    const list = [...raidNotices(clans.all(), Date.now(), muted), ...warNotices(clans, Date.now(), muted)];
     if (!list.length) return;
     for (const k of new Set(list.map((n) => `${n.clanId}|${n.key}|${n.kind}`))) {
       const [clan, key, kind] = k.split('|');
@@ -589,6 +615,14 @@ if (BOT_TOKEN)
     raidSending = true;
     sendRaidNotices(list).finally(() => (raidSending = false));
   }, 60_000);
+// Войны кланов: пары в пятницу вечером и итоги в понедельник, раз в полминуты.
+setInterval(() => {
+  const changed = warTick(clans, Date.now());
+  for (const c of changed) {
+    sendClan(c);
+    toClan(c, { type: 'chat', messages: chatOf(c) });
+  }
+}, 30_000);
 if (BOT_TOKEN)
   runBot(BOT_TOKEN, APP_URL, clanInfo, (chatId) => saves.setBlocked(`tg:${chatId}`, false));
 loadBotUsername();

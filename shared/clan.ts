@@ -1,5 +1,6 @@
 // Кланы: сообщения между приложением и сервером (тот же WebSocket, что у дуэлей).
 import type { Exercise } from '../src/repCounter';
+import type { WarView } from './war';
 
 export type ClanRole = 'leader' | 'officer' | 'member';
 
@@ -68,6 +69,8 @@ export interface ClanView {
   raidWins: number;
   // Последний рейд, в котором игрок бился: награду забирают, когда босс повержен или выходные кончились.
   reward: { key: string; damage: number; hpMax: number; members: number; killed: boolean; finished: boolean } | null;
+  // Война кланов на выходных.
+  war?: WarView;
 }
 
 export interface ClanListItem {
@@ -108,6 +111,8 @@ export type ClanClientMessage =
   | { type: 'chatSend'; text: string }
   // Повторы из приключения: из них растёт опыт клана.
   | { type: 'clanReps'; reps: number }
+  // Глава или заместитель: участвовать ли клану в войнах.
+  | { type: 'clanWar'; on: boolean }
   | { type: 'raidStart'; exercise: Exercise }
   | { type: 'raidHit'; attackId: string; damage: number }
   | { type: 'raidEnd'; attackId: string };

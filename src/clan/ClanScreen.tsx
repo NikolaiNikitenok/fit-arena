@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
 import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
-import { claimClanGift, claimRaid, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
+import { claimClanGift, claimRaid, claimWar, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
 import { Banner, Coin, Flask, Lock, Send, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { clanInviteCode, clanInviteLink, share } from '../telegram';
 import { RaidFight, RaidScene } from './RaidFight';
 import { Flag, FlagPicker } from './Flag';
 import { useClan } from './useClan';
+import { WarTab } from './War';
+import { warReward } from '../../shared/war';
 import { sfx } from '../audio';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
@@ -36,7 +38,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
   const level = heroLevel(heroXp(progress)).level;
   const api = useClan(level);
   const { clan, status, error, send } = api;
-  const [tab, setTab] = useState<'raid' | 'chat' | 'members'>('raid');
+  const [tab, setTab] = useState<'raid' | 'war' | 'chat' | 'members'>('raid');
   const [exercise, setExercise] = useState<Exercise>('squat');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [levelsOpen, setLevelsOpen] = useState(false);
@@ -233,6 +235,9 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         <button className={tab === 'raid' ? 'active' : ''} onClick={() => setTab('raid')}>
           Рейд
         </button>
+        <button className={tab === 'war' ? 'active' : ''} onClick={() => setTab('war')}>
+          Война
+        </button>
         <button className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>
           Чат
         </button>
@@ -258,6 +263,22 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
             setProgress(res.progress);
             sfx(res.gear ? 'chest' : 'coin');
             show(`+${reward.coins} монет${res.gear ? ` и ${res.gear.name}` : ''}!`);
+          }}
+        />
+      )}
+      {tab === 'war' && (
+        <WarTab
+          clan={clan}
+          level={lv.level}
+          progress={progress}
+          onToggle={(on) => send({ type: 'clanWar', on })}
+          onClaim={(war) => {
+            const r = war.reward && warReward(war.reward.result, war.reward.points, war.reward.mvp);
+            const res = r && claimWar(progress, war.reward!.key, r, landNow);
+            if (!r || !res) return;
+            setProgress(res.progress);
+            sfx(res.gear ? 'chest' : 'coin');
+            show(`+${r.coins} монет${res.gear ? ` и ${res.gear.name}` : ''}!`);
           }}
         />
       )}
@@ -755,7 +776,7 @@ function LevelsSheet({ level, onClose }: { level: number; onClose: () => void })
             <b>+{Math.round(perks.raidDamage * 100)}%</b> урона в рейде
           </span>
         </div>
-        <div className="muted">Опыт клану приносят повторы участников в приключении (до {CLAN_REPS_PER_DAY} в день от каждого), урон по рейд-боссу и победа над ним. На каждом новом уровне все участники получают подарок.</div>
+        <div className="muted">Опыт клану приносят повторы участников в приключении (до {CLAN_REPS_PER_DAY} в день от каждого), урон по рейд-боссу, победа над ним и войны кланов. На каждом новом уровне все участники получают подарок.</div>
         <div className="levels-list">
           {Array.from({ length: CLAN_MAX_LEVEL - 1 }, (_, i) => i + 2).map((l) => {
             const gift = clanGift(l);

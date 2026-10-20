@@ -36,6 +36,8 @@ export interface Progress {
   might?: boolean;
   // Награды за рейды клана уже забраны: ключи недель.
   raidClaimed?: string[];
+  // Награды за войны кланов уже забраны: ключи выходных.
+  warClaimed?: string[];
   // До какого уровня клана подарки уже забраны (в каком клане).
   clanGift?: { clan: string; level: number };
   // Повторы, ещё не отправленные клану: уходят, когда открыт экран клана.
@@ -459,6 +461,16 @@ export function claimRaid(p: Progress, key: string, reward: { coins: number; pot
     items: gear ? [...p.items, gear.id] : p.items,
     raidClaimed: [...(p.raidClaimed ?? []).slice(-20), key],
   };
+  return { progress: save(next), gear };
+}
+
+/** Награда за войну кланов: как за рейд, но свой список забранных недель. */
+export function claimWar(p: Progress, key: string, reward: { coins: number; potions: Partial<Record<PotionId, number>>; chest: boolean }, land: number): { progress: Progress; gear?: Gear } | null {
+  if (p.warClaimed?.includes(key)) return null;
+  let potions = p.potions;
+  for (const [id, n] of Object.entries(reward.potions) as [PotionId, number][]) potions = addPotion(potions, id, n);
+  const gear = reward.chest ? bossDrop(land + 2, p.items) : undefined;
+  const next = { ...p, coins: p.coins + reward.coins, potions, items: gear ? [...p.items, gear.id] : p.items, warClaimed: [...(p.warClaimed ?? []).slice(-20), key] };
   return { progress: save(next), gear };
 }
 

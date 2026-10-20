@@ -6,6 +6,8 @@ import { dirname } from 'node:path';
 import { CHAT_MAX, COUNTRIES, defaultFlag, parseFlag, type ChatMessage, type ClanListItem, type ClanRole, type ClanSettings, type ClanView, type RaidView } from '../shared/clan';
 import { CLAN_REPS_PER_DAY, CLAN_XP_KILL, CLAN_XP_PER_DAMAGE, CLAN_XP_PER_REP, clanLevel, clanPerks } from '../shared/clanLevel';
 import { dayOf, RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_MIN_REP_MS, RAID_PREP_S, raidHp, raidWindow } from '../shared/raid';
+import type { WarHistoryItem } from '../shared/war';
+import { warAdopt, warReps, warView, type ClanWar } from './wars';
 
 interface Member {
   id: string;
@@ -52,6 +54,11 @@ export interface Clan {
   createdAt: number;
   // Какие сообщения бота о рейде уже ушли: по ключу рейда, чтобы после перезапуска не повторять.
   notices?: Record<string, string[]>;
+  // Клановые войны (server/wars.ts): запись, текущая или последняя война, счёт побед и история.
+  warOn?: boolean;
+  war?: ClanWar | null;
+  warRecord?: { w: number; l: number; d: number };
+  warHistory?: WarHistoryItem[];
 }
 
 export interface Who {
@@ -245,6 +252,17 @@ export class ClanStore {
     return this.leave(target, now, a.name) ?? 'Клан распущен';
   }
 
+  /** Глава или заместитель записывает клан на войны (или снимает запись со следующих). */
+  setWar(actor: string, on: boolean): Clan | string {
+    const c = this.clanOf(actor);
+    const m = c && this.member(c, actor);
+    if (!c || !m) return 'Ты не в клане';
+    if (m.role === 'member') return 'Записать клан на войну могут глава и заместители';
+    c.warOn = !!on;
+    this.save();
+    return c;
+  }
+
   setRole(actor: string, target: string, role: ClanRole, now: number): Clan | string {
     const c = this.clanOf(actor);
     const a = c && this.member(c, actor);
@@ -285,7 +303,7 @@ export class ClanStore {
   }
 
   /** Опыт клану и вкладу участника; при новом уровне — сообщение в чат. */
-  private addXp(c: Clan, playerId: string, xp: number, now: number): void {
+  addXp(c: Clan, playerId: string, xp: number, now: number): void {
     if (xp <= 0) return;
     const before = this.level(c);
     c.xp = (c.xp ?? 0) + xp;
@@ -304,7 +322,10 @@ export class ClanStore {
     if (c.repsDay?.day !== day) c.repsDay = { day, reps: {} };
     const done = c.repsDay.reps[playerId] ?? 0;
     const add = Math.max(0, Math.min(CLAN_REPS_PER_DAY - done, Math.round(Number(reps) || 0)));
-    if (!add) return null;
+    // Очки войны считаются отдельно: у них свой дневной предел.
+    const war = warReps(c, playerId, reps, now);
+    if (war) this.save();
+    if (!add) return war ? c : null;
     c.repsDay.reps[playerId] = done + add;
     this.addXp(c, playerId, add * CLAN_XP_PER_REP, now);
     return c;
@@ -347,6 +368,7 @@ export class ClanStore {
       delete c.repsDay.reps[guestId];
     }
     for (const m of c.chat) if (m.from === guestId) m.from = id;
+    warAdopt(c, id, guestId);
     this.save();
     return true;
   }
@@ -373,7 +395,7 @@ export class ClanStore {
     return this.push(c, { id: c.nextMsg++, from: playerId, name: m.name, text: body, at: now });
   }
 
-  private system(c: Clan, text: string, now: number): ChatMessage {
+  system(c: Clan, text: string, now: number): ChatMessage {
     return this.push(c, { id: c.nextMsg++, from: '', name: '', text, at: now, system: true });
   }
 
@@ -450,6 +472,8 @@ export class ClanStore {
       if (r.recent.length > RECENT_KEEP) r.recent.shift();
     }
     const killed = dealt >= hp;
+    // Каждый удар — это повтор, а значит и очко в войне кланов.
+    warReps(c, playerId, 1, now);
     this.addXp(c, playerId, dealt * CLAN_XP_PER_DAMAGE, now);
     if (killed) {
       r.killedAt = now;
@@ -512,6 +536,7 @@ export class ClanStore {
       raid: this.raidView(c, playerId, now),
       raidWins: c.raidWins,
       reward: this.reward(c, playerId, now),
+      war: warView(this, c, playerId, now),
     };
   }
 
@@ -524,7 +549,7 @@ export class ClanStore {
     renameSync(`${this.file}.tmp`, this.file);
   }
 
-  private save(): void {
+  save(): void {
     if (!this.file || this.saveTimer) return;
     this.saveTimer = setTimeout(() => this.flush(), 1000);
   }

@@ -16,7 +16,8 @@ export interface RaidNotice {
   clanId: string;
   // Ключ рейда (дата его субботы): по нему клан запоминает отправленное.
   key: string;
-  kind: RaidNoticeKind;
+  // Виды войны кланов — из server/warNotices.ts.
+  kind: RaidNoticeKind | 'warPair' | 'warRemind' | 'warResult';
   text: string;
   // Надпись на кнопке, открывающей вкладку клана в приложении.
   button: string;
