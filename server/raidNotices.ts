@@ -62,8 +62,15 @@ const sent = (c: Clan, key: string, kind: RaidNoticeKind) => !!c.notices?.[key]?
  * Кому что написать сейчас. skip — игроки, которые выключили уведомления или остановили бота.
  * Функция ничего не меняет: отправитель сам отмечает разосланное через ClanStore.markNotice.
  */
+// Тихие часы по Москве.
+const QUIET_FROM = 22;
+const QUIET_UNTIL = 9;
+
 export function raidNotices(clans: Clan[], now: number, skip: (playerId: string) => boolean = () => false): RaidNotice[] {
   const out: RaidNotice[] = [];
+  // Ночью не пишем: всё накопленное уйдёт утром (итоги ждут до 24 часов).
+  const hourMsk = new Date(now + MSK).getUTCHours();
+  if (hourMsk < QUIET_UNTIL || hourMsk >= QUIET_FROM) return out;
   const w = raidWindow(now);
   for (const c of clans) {
     const members = tgMembers(c, skip);

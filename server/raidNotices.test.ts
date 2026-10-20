@@ -64,7 +64,9 @@ describe('сообщения бота о рейде', () => {
     ]);
     expect(list[0].text).toMatch(/^⏳ До конца рейда 5 часов, у тебя ещё 2 атаки\./);
     expect(list[1].text).toContain('у тебя ещё 3 атаки');
-    expect(raidNotices(s.all(), msk('2026-11-01T22:10:00'))[0].text).toContain('До конца рейда 2 часа');
+    expect(raidNotices(s.all(), msk('2026-11-01T21:10:00'))[0].text).toContain('До конца рейда 3 часа');
+    // После 22:00 тихие часы.
+    expect(raidNotices(s.all(), msk('2026-11-01T22:10:00'))).toEqual([]);
     // Позже чем за полчаса до конца уже не пишем.
     expect(raidNotices(s.all(), msk('2026-11-01T23:40:00'))).toEqual([]);
     s.markNotice(clan.id, KEY, 'remind');
@@ -101,7 +103,9 @@ describe('сообщения бота о рейде', () => {
     r.damage = { 'tg:1': 900 };
     const end = raidWindow(msk('2026-10-31T12:00:00')).end;
     expect(raidNotices(s.all(), end - 60_000).some((n) => n.kind === 'summary')).toBe(false);
-    const list = raidNotices(s.all(), end + 60_000);
+    // Ночью тишина, итог уходит утром.
+    expect(raidNotices(s.all(), end + 60_000)).toEqual([]);
+    const list = raidNotices(s.all(), end + 9 * 3600_000 + 60_000);
     expect(kinds(list)).toEqual(['summary', 'summary', 'summary']);
     expect(list[0].text).toMatch(/^🛡 Рейд закончился\. .+ устоял: клан «Железные» снял 12% здоровья\./);
     expect(list[0].text).toContain('Весь урон: 900 из 7\u00a0200');
@@ -109,5 +113,13 @@ describe('сообщения бота о рейде', () => {
     expect(list[1].text).toContain('Ты в этот раз не бил босса');
     expect(list[1].button).toBe('Открыть клан');
     expect(raidNotices(s.all(), end + 25 * 3600_000)).toEqual([]);
+  });
+});
+
+describe('тихие часы', () => {
+  it('ночью по Москве ничего не шлём', async () => {
+    const { raidNotices } = await import('./raidNotices');
+    const night = Date.parse('2026-10-24T03:00:00+03:00');
+    expect(raidNotices([], night)).toEqual([]);
   });
 });
