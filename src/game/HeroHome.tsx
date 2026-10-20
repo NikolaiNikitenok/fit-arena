@@ -4,6 +4,9 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Character } from '../three/Character';
+import { Pet } from '../three/Pet';
+import { petLook } from './pets';
+import { PetEntry } from './PetScreen';
 import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
 import { BASE_DAMAGE, heroHands, heroPower } from './power';
 import { LevelDef } from './levels';
@@ -41,6 +44,8 @@ function Turntable({ children }: { children: ReactNode }) {
 function HeroStage({ progress }: { progress: Progress }) {
   const item = itemById(progress.equipped);
   const [pulse, setPulse] = useState(0);
+  // Питомец стоит рядом с героем и радуется вместе с ним.
+  const pet = petLook(progress, Date.now());
   return (
     <Canvas {...canvasProps(getSettings())} camera={{ position: [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 1.0, 0)}>
       <hemisphereLight args={['#ffffff', '#3a3040', 1.3]} />
@@ -58,6 +63,7 @@ function HeroStage({ progress }: { progress: Progress }) {
         <Turntable>
           <Character model={item.hero} tint={item.tint} glow={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
         </Turntable>
+        {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad} hop={pulse} lively position={[0.95, 0, 0.7]} rotation={-0.45} scale={1.35} onClick={() => setPulse((p) => p + 1)} />}
       </Suspense>
     </Canvas>
   );
@@ -85,6 +91,8 @@ interface Props {
   onPass: () => void;
   // Событие выходных: экран босса месяца.
   onEvent: () => void;
+  // Экран питомцев.
+  onPets: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -101,7 +109,7 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
   </span>
 );
 
-export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent }: Props) {
+export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onStrength, onEquip, onEquipGear, onPotion, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets }: Props) {
   const passT = passTier(passOf(progress, Date.now()).xp);
   const passWaiting = passReady(progress, pro, Date.now());
   const badge = heroBadge(progress);
@@ -185,7 +193,8 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
         </div>
         <div className="power-hint">
           Урон: база {BASE_DAMAGE} + уровень {power.level} + снаряжение {power.atk}
-          {power.pct > 0 && ` и +${Math.round(power.pct * 100)}%`}
+          {power.pct > 0 && ` и +${(Math.round(power.pct * 1000) / 10).toLocaleString('ru')}%`}
+          {power.pet > 0 && ` (питомец +${(Math.round(power.pet * 1000) / 10).toLocaleString('ru')}%)`}
           {power.offhandOff && ' · двуручное оружие: вторая рука не действует'}
         </div>
       </div>
@@ -244,6 +253,8 @@ export function HeroHome({ progress, lives, current, onTrain, onMap, onShop, onS
         {achReady > 0 && <span className="ach-entry-new">+{achReady}</span>}
         <span className="chev">›</span>
       </button>
+
+      <PetEntry progress={progress} onOpen={onPets} />
 
       <DailyCard task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
 

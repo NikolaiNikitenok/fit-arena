@@ -18,6 +18,8 @@ import { Calendar, RepsChart } from './Stats';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
 import { Onboarding } from './Onboarding';
+import { PetHatch, PetScreen } from './PetScreen';
+import { canHatch, hatchEgg, petLevel, petLook, petName, petXp } from './pets';
 import {
   buy,
   buyGear,
@@ -49,6 +51,7 @@ import {
   spendSwaps,
   streak,
   swapsLeft,
+  saveProgress,
 } from './progress';
 import { WorldMap3D } from './WorldMap3D';
 import { Coin, Flask, Heart, Lock, Swords } from '../icons';
@@ -107,6 +110,9 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [achOpen, setAchOpen] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
   const [eventOpen, setEventOpenState] = useState(false);
+  const [petsOpen, setPetsOpen] = useState(false);
+  // «Позже» на яйце: спросим снова при следующем запуске.
+  const [eggLater, setEggLater] = useState(false);
   const setEventOpen = (open: boolean) => {
     setEventOpenState(open);
     onPlaying(open);
@@ -138,6 +144,16 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
     setLevelUp(`Новый уровень героя: ${r.levels[r.levels.length - 1]}! +${r.coins} монет`);
     setTimeout(() => setLevelUp(null), 3500);
   }, [playing, progress.days]);
+
+  // Питомец подрос: сообщение после тренировки.
+  const petLvl = progress.pets?.active ? petLevel(petXp(progress, progress.pets.active)).level : 0;
+  const petSeen = useRef(petLvl);
+  useEffect(() => {
+    if (playing) return;
+    const id = latest.current.pets?.active;
+    if (id && petSeen.current && petLvl > petSeen.current) showToast(`${petName(latest.current, id)} подрос: уровень ${petLvl}!`);
+    petSeen.current = petLvl;
+  }, [playing, petLvl]);
 
   // Новое достижение: короткое сообщение после миссии, награда ждёт в «Достижениях».
   useEffect(() => {
@@ -235,6 +251,16 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
         </button>
       )}
       {passOpen && <PassScreen progress={progress} setProgress={setProgress} pro={pro} land={currentDef.land} onClose={() => setPassOpen(false)} />}
+      {petsOpen && <PetScreen progress={progress} setProgress={setProgress} onClose={() => setPetsOpen(false)} />}
+      {tab === 'hero' && !newcomer && !eggLater && canHatch(progress) && (
+        <PetHatch
+          onDone={(name) => {
+            setProgress(saveProgress(hatchEgg(latest.current, name)));
+            setPetsOpen(true);
+          }}
+          onLater={() => setEggLater(true)}
+        />
+      )}
       {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
       {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
       {settings && <SettingsSheet
@@ -297,6 +323,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
           pro={pro}
           onPass={() => setPassOpen(true)}
           onEvent={() => setEventOpen(true)}
+          onPets={() => setPetsOpen(true)}
         />
         {sheets}
       </>
@@ -337,6 +364,7 @@ export function Adventure({ tab, onTab, onPlaying }: Props) {
             heroTint={item.tint}
             heroGlow={item.glow}
             heroHands={heroHands(progress)}
+            pet={petLook(progress, now)}
             focus={focus}
             focusLand={focusLand}
             openedChests={progress.chests}

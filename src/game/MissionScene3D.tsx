@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { Actor } from '../three/Actor';
 import { CharAnim, Character, CharacterProps } from '../three/Character';
 import { CharName } from '../three/kit';
+import { Pet } from '../three/Pet';
+import type { PetLook } from './pets';
 import { Prop } from '../three/Prop';
 import { Sky } from '../three/Sky';
 import { Land } from './lands';
@@ -28,6 +30,8 @@ interface Props {
   heroTint?: string;
   heroGlow?: string;
   heroHands?: CharacterProps['hands'];
+  // Питомец рядом с героем: подпрыгивает на каждый повтор.
+  pet?: PetLook;
 }
 
 const levelsOfWorld = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
@@ -93,7 +97,7 @@ export function MissionScene3D(props: Props) {
   );
 }
 
-function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow, heroHands }: Props) {
+function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow, heroHands, pet }: Props) {
   const world = level.world;
   const layout = layoutFor(world);
   const index = layout.nodes.findIndex((n) => n.id === level.id);
@@ -109,20 +113,25 @@ function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow
 
   const running: CharAnim = chase && live ? 'run' : type === 'build' && live ? 'walk' : 'idle';
   const pulseAnim: CharAnim = type === 'climb' ? 'jump' : type === 'boss' || type === 'defend' ? 'attack' : type === 'trial' ? 'cheer' : type === 'rescue' ? 'cast' : 'attack';
+  // Питомец справа от героя и чуть впереди, в его же повороте.
+  const petAt = (rotation: number): [number, number, number] => [Math.cos(rotation) * 0.42 + Math.sin(rotation) * 0.18, 0, -Math.sin(rotation) * 0.42 + Math.cos(rotation) * 0.18];
   const heroEl = (rotation: number, extra: Partial<React.ComponentProps<typeof Character>> = {}) => (
-    <Character
-      model={hero}
-      tint={heroTint}
-      glow={heroGlow}
-      hands={heroHands}
-      anim={heroBase(view, running)}
-      pulse={chase || type === 'build' ? 0 : view.reps}
-      pulseAnim={pulseAnim}
-      speed={chase ? 1.1 : type === 'build' ? 0.7 : 1}
-      scale={0.46}
-      rotation={rotation}
-      {...extra}
-    />
+    <>
+      {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad || view.outcome === 'lost'} hop={view.reps} lively={view.outcome === 'won'} run={running === 'run'} position={petAt(rotation)} rotation={rotation} scale={0.6} />}
+      <Character
+        model={hero}
+        tint={heroTint}
+        glow={heroGlow}
+        hands={heroHands}
+        anim={heroBase(view, running)}
+        pulse={chase || type === 'build' ? 0 : view.reps}
+        pulseAnim={pulseAnim}
+        speed={chase ? 1.1 : type === 'build' ? 0.7 : 1}
+        scale={0.46}
+        rotation={rotation}
+        {...extra}
+      />
+    </>
   );
 
   // Площадка сцены — в точке уровня; в погоне герой бежит по дороге вперёд.

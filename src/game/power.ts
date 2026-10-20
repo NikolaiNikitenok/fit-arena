@@ -4,6 +4,7 @@
 import type { HandGear } from '../three/Character';
 import { gearById } from './items';
 import { LevelDef } from './levels';
+import { petBonus } from './pets';
 import { heroLevel, heroXp, Progress } from './progress';
 
 export const BASE_DAMAGE = 10;
@@ -21,9 +22,11 @@ export interface Power {
   pct: number;
   hearts: number;
   offhandOff: boolean;
+  // Сколько из pct добавил питомец.
+  pet: number;
 }
 
-export function heroPower(p: Progress, might = false): Power {
+export function heroPower(p: Progress, might = false, now = Date.now()): Power {
   const level = heroLevel(heroXp(p)).level;
   const weapon = gearById(p.weapon);
   const offhand = gearById(p.offhand);
@@ -31,9 +34,11 @@ export function heroPower(p: Progress, might = false): Power {
   const offhandOff = !!weapon?.twoHanded && !!offhand;
   const usable = offhandOff ? undefined : offhand;
   const atk = (weapon?.atk ?? 0) + (usable?.atk ?? 0);
-  const pct = (usable?.pct ?? 0) + (weapon?.pct ?? 0) + (might ? MIGHT_BONUS : 0);
+  // Питомец добавляет пару процентов: прибавка к проценту, а не к базе, чтобы не раздувать урон.
+  const pet = petBonus(p, now).damage;
+  const pct = (usable?.pct ?? 0) + (weapon?.pct ?? 0) + (might ? MIGHT_BONUS : 0) + pet;
   const damage = Math.round((BASE_DAMAGE + level + atk) * (1 + pct));
-  return { damage, level, atk, pct, hearts: BOSS_HEARTS + (usable?.hearts ?? 0), offhandOff };
+  return { damage, level, atk, pct, hearts: BOSS_HEARTS + (usable?.hearts ?? 0), offhandOff, pet };
 }
 
 // Какой урон ожидаем от героя к этому уровню игры: уровень героя по типичному опыту

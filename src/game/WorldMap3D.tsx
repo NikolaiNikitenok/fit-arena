@@ -4,6 +4,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
 import { Character, CharacterProps } from '../three/Character';
+import { Pet } from '../three/Pet';
+import type { PetLook } from './pets';
 import { CharName } from '../three/kit';
 import { Prop } from '../three/Prop';
 import { Sky } from '../three/Sky';
@@ -119,6 +121,8 @@ export interface WorldMapProps {
   heroTint?: string;
   heroGlow?: string;
   heroHands?: CharacterProps['hands'];
+  // Питомец стоит у ног героя на его уровне.
+  pet?: PetLook;
   focus: React.MutableRefObject<number>;
   focusLand: number;
   openedChests: number[];
@@ -145,7 +149,7 @@ export function WorldMap3D(props: WorldMapProps) {
   );
 }
 
-function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, heroHands, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
+function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, heroHands, pet, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
   const unlocked = (id: number) => id <= currentId;
   const heroIndex = levels.findIndex((l) => l.id === currentId);
   const near = (land: number) => Math.abs(land - focusLand) <= 1;
@@ -232,6 +236,9 @@ function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow
 
       {heroIndex >= 0 && (
         <Character model={hero} tint={heroTint} glow={heroGlow} hands={heroHands} anim="idle" position={[layout.nodes[heroIndex].x, 0.15, layout.nodes[heroIndex].z]} scale={0.42} />
+      )}
+      {heroIndex >= 0 && pet && (
+        <Pet id={pet.id} stage={pet.stage} sad={pet.sad} lively position={[layout.nodes[heroIndex].x + 0.42, 0.15, layout.nodes[heroIndex].z + 0.22]} rotation={-0.3} scale={0.65} />
       )}
     </>
   );

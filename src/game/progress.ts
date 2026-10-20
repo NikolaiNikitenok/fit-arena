@@ -6,6 +6,7 @@ import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, p
 import type { DailyTask } from './daily';
 import type { EventState } from './event';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
+import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
 export interface Progress {
   stars: Record<number, number>;
@@ -64,6 +65,8 @@ export interface Progress {
   event?: EventState;
   // Месяцы (YYYY-MM), когда босс события повержен.
   eventWins?: string[];
+  // Питомцы: кто открыт, кто рядом с героем, опыт и лакомство дня (src/game/pets.ts).
+  pets?: PetState;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
@@ -177,12 +180,15 @@ export interface WinReward {
   firstTime: boolean;
   // Трофей за первую победу над боссом.
   drop?: Gear;
+  // Сундучок, который нашёл питомец.
+  petFind?: PetFind;
 }
 
 /** Победа: звёзды, монеты (полные — за первое прохождение), новая база после испытания. */
 export function recordWin(p: Progress, level: LevelDef, stars: number, record?: number): { progress: Progress; reward: WinReward } {
   const firstTime = !p.stars[level.id];
-  const bonus = itemById(p.equipped).coinBonus;
+  const bonus = itemById(p.equipped).coinBonus + petBonus(p, Date.now()).coins;
+  const petFind = level.daily ? null : rollPetFind(p, level.land, Date.now());
   const coins = Math.round((firstTime ? level.coins : Math.round(level.coins / 4)) * (1 + bonus));
   const baseline = { ...p.baseline };
   if (level.type === 'trial' && record != null) baseline[level.exercises[0] as Exercise] = Math.max(3, record);
@@ -195,11 +201,12 @@ export function recordWin(p: Progress, level: LevelDef, stars: number, record?: 
   const next = {
     ...counted,
     stars: { ...p.stars, [level.id]: Math.max(p.stars[level.id] ?? 0, stars) },
-    coins: p.coins + coins,
+    coins: p.coins + coins + (petFind?.coins ?? 0),
     baseline,
     items: drop ? [...p.items, drop.id] : p.items,
+    potions: petFind?.potion ? addPotion(p.potions, petFind.potion, 1) : p.potions,
   };
-  return { progress: save(next), reward: { coins, firstTime, drop } };
+  return { progress: save(next), reward: { coins, firstTime, drop, petFind: petFind ?? undefined } };
 }
 
 // Форма игрока между испытаниями: победа на 3 звезды поднимает базу на 3%, поражение снижает на 2%.
@@ -381,7 +388,7 @@ export function recordActivity(p: Progress, exercise: Exercise | null, reps: num
     if (!p.first[exercise]) next.first = { ...p.first, [exercise]: { reps, date } };
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
-  return save(next);
+  return save(feedPet(next, reps, now));
 }
 
 // В неделю можно отдохнуть два дня, и серия не прервётся: мышцам нужен отдых.

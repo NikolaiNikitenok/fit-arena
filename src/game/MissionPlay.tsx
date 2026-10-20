@@ -9,11 +9,12 @@ import { useMissionSounds } from '../gameSounds';
 import { needsCalibration } from '../calibration';
 import { CalibrationOverlay } from '../CalibrationOverlay';
 import { unlockVoice, useVoiceCoach } from '../voice';
-import { gearIcon, gearText, itemById } from './items';
+import { gearIcon, gearText, itemById, potionById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
 import { heroHands, heroPower } from './power';
+import { petLook } from './pets';
 import { MissionScene3D } from './MissionScene3D';
 import { bossCard, ShareVictory } from './ShareCard';
 import { Dialog, Remark } from './Dialog';
@@ -217,6 +218,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           heroTint={item.tint}
           heroGlow={item.glow}
           heroHands={heroHands(progress)}
+          pet={petLook(progress, Date.now())}
         />
         <div className={`mhud ${busy ? '' : 'hidden'}`}>
           <div className="mhud-row">
@@ -274,6 +276,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
                   {view.hpMax} HP
                 </span>
                 {progress.might && <span className="might">эликсир силы +30%</span>}
+                {power.pet > 0 && <span>питомец +{(Math.round(power.pet * 1000) / 10).toLocaleString('ru')}%</span>}
               </div>
             )}
             {canSwap && !noLives && (
@@ -298,6 +301,12 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
               {view.reps} повторов · +{result.reward.coins} монет
               {view.record != null && ` · рекорд ${view.record}`}
             </div>
+            {result.reward.petFind && (
+              <div className="muted light">
+                {petLook(progress, Date.now())?.name ?? 'Питомец'} нашёл сундучок: +{result.reward.petFind.coins} монет
+                {result.reward.petFind.potion && ` и ${potionById(result.reward.petFind.potion).name.toLowerCase()}`}
+              </div>
+            )}
             {result.reward.drop && (
               <div className="drop">
                 <img src={gearIcon(result.reward.drop.id)} alt="" />
