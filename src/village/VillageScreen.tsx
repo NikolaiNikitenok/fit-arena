@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   accrued,
   Bld,
@@ -46,8 +46,11 @@ import { NPCS } from '../game/npcs';
 import { heroLevel, heroXp, Progress, saveProgress } from '../game/progress';
 import { spendCharge, villageOf } from '../game/resources';
 import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
-import { Bolt, Dungeon, Hammer, Move, Plus, Scroll, Star } from './icons';
-import { defenseLog, findTarget, submitAttack, TargetView } from './pvpApi';
+import { Bolt, Dungeon, Hammer, Move, Plus, Scroll, Star, Trophy } from './icons';
+import { defenseLog, fetchInbox, fetchTop, findTarget, isOnline, OFFLINE, PvpError, revengeTarget, setPvpNotify, submitAttack, TargetView } from './pvpApi';
+import { applyInbox, applyMe, applyWin, canRevenge, markRevenged } from './pvp';
+import { type PvpTopRow, SCOUT_SECONDS, VILLAGE_LEAGUES, villageLeague } from '../../shared/villagePvp';
+import { cloudState } from '../cloud';
 import { dueRaid, markRaidsSeen, troopCount, unseenRaids } from './raids';
 import { fmtNum, fmtTime, foundTown, hasTown, tickTown, townOf, unpackBase, withTown } from './state';
 import { claimTask, openTasks, taskDone, taskProgress, TASKS } from './tasks';
@@ -65,10 +68,10 @@ interface Props {
   onDungeon?: () => void;
 }
 
-type Sheet = 'build' | 'army' | 'attack' | 'tasks' | 'log' | null;
+type Sheet = 'build' | 'army' | 'attack' | 'tasks' | 'log' | 'top' | null;
 type Battle =
   | { kind: 'camp'; camp: Camp }
-  | { kind: 'pvp'; target: TargetView }
+  | { kind: 'pvp'; target: TargetView; revengeOf?: string }
   | { kind: 'replay'; entry: DefenseEntry };
 interface Placing {
   t: BuildingType;
@@ -97,6 +100,57 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const [toast, setToast] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Line[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // Набеги на игроков: есть ли сеть, что сказал сервер о последнем набеге, топ, «бот пишет о нападениях».
+  const [online, setOnline] = useState(isOnline);
+  const [pvpNote, setPvpNote] = useState<ReactNode>(null);
+  const [top, setTop] = useState<PvpTopRow[] | null>(null);
+  const [topErr, setTopErr] = useState<string | null>(null);
+  const [notify, setNotify] = useState<boolean | null>(null);
+  useEffect(() => {
+    const on = () => setOnline(isOnline());
+    window.addEventListener('online', on);
+    window.addEventListener('offline', on);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', on);
+    };
+  }, []);
+  // Набеги на деревню с сервера: при входе и раз в минуту. Каждый применяется один раз (по номеру).
+  useEffect(() => {
+    let alive = true;
+    const pull = () =>
+      fetchInbox()
+        .then((inbox) => {
+          if (!alive) return;
+          setNotify(inbox.me.notify);
+          const next = applyInbox(latest.current, inbox, Date.now());
+          if (next !== latest.current) commit(next);
+        })
+        .catch(() => null);
+    void pull();
+    const id = window.setInterval(pull, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (sheet !== 'top') return;
+    let alive = true;
+    setTopErr(null);
+    fetchTop()
+      .then((r) => {
+        if (!alive) return;
+        setTop(r.top);
+        if (r.me) commit(applyMe(latest.current, r.me, Date.now()));
+      })
+      .catch((e) => alive && setTopErr(e instanceof PvpError ? e.message : OFFLINE));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet]);
   const ctl = useRef<Ctl>({ tx: 0, tz: 0, zoom: 0 });
   // Журнал обороны: набеги Князя с телефона и (когда появится сервер) набеги игроков.
   const [log, setLog] = useState<DefenseEntry[]>([]);
@@ -139,6 +193,14 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     if (!fresh.length || dialog) return;
     const e = fresh[0];
     const lost = RES_KEYS.filter((k) => e.loot[k] > 0).map((k) => `${fmtNum(e.loot[k])} ${k === 'wood' ? 'дерева' : k === 'stone' ? 'камня' : 'золота'}`);
+    if (e.id) {
+      const cups = e.trophies ? ` Кубки: ${e.trophies > 0 ? '+' : '−'}${Math.abs(e.trophies)}.` : '';
+      setDialog([
+        say('boris', e.stars ? `На нас напал ${e.who}! ${e.stars}★, ${lost.length ? `унёс ${lost.join(', ')}` : 'но унести ничего не смог'}.${cups}` : `${e.who} пытался взять деревню, но оборона выстояла!${cups}`),
+        say('vega', canRevenge(e, Date.now()) ? 'Повтор боя — в журнале обороны. Там же можно отомстить: один раз, в течение суток.' : 'Повтор боя — в журнале обороны.'),
+      ]);
+      return;
+    }
     setDialog([
       say('knyaz', e.stars ? `Ха-ха! Мои лентяи заглянули к тебе в гости. ${lost.length ? `Унесли ${lost.join(', ')}.` : 'Унести, правда, ничего не смогли.'}` : 'Мои лентяи вернулись ни с чем… Ну ничего, я ещё вернусь!'),
       say('vega', e.stars ? 'Строй башни и стены, а склады спрячут запасы. Повтор набега — в журнале обороны.' : 'Отличная оборона! Повтор набега — в журнале.'),
@@ -159,6 +221,26 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     if (ok) flash(ok);
     return true;
   };
+
+  // Набег на игрока: поиск (или месть), бронь цели и бой. Без сети — только лагеря Князя.
+  const startPvp = async (revengeOf?: string) => {
+    if (!isOnline()) return flash(OFFLINE);
+    setSearching(true);
+    try {
+      const target = revengeOf ? await revengeTarget(revengeOf) : await findTarget();
+      setSheet(null);
+      setPvpNote(null);
+      setBattle({ kind: 'pvp', target, revengeOf });
+    } catch (e) {
+      flash(e instanceof PvpError ? e.message : 'Соперник не нашёлся. Попробуй позже.');
+    } finally {
+      setSearching(false);
+    }
+  };
+  const pvp = v.pvp ?? {};
+  const trophies = pvp.trophies ?? 0;
+  const league = villageLeague(trophies);
+  const shieldLeft = Math.max(0, (pvp.shieldUntil ?? 0) - now);
 
   const views = useMemo<ViewBld[]>(() => town.b.map((b) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l, state: b.l === 0 ? 'new' : b.u != null ? 'up' : 'ok' })), [town.b]);
   const shown = placing?.id != null ? views.filter((b) => b.i !== placing.id) : views;
@@ -188,18 +270,39 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
 
   if (battle) {
     const heroLvl = heroLevel(heroXp(progress)).level;
-    const army: BattleArmy = battle.kind === 'replay' ? battle.entry.army : { troops: town.army, level: Math.max(1, barracksLevel(town)), hero: heroLvl };
+    const army: BattleArmy =
+      battle.kind === 'replay'
+        ? battle.entry.army
+        : { troops: town.army, level: Math.max(1, barracksLevel(town)), hero: battle.kind === 'pvp' ? Math.min(heroLvl, battle.target.heroMax ?? heroLvl) : heroLvl };
     const finish = async (r: BattleResult, deploys: Deploy[], endTick?: number) => {
       if (battle.kind === 'replay') return;
-      let res = r;
       if (battle.kind === 'pvp') {
+        // Добыча и кубки — только по ответу сервера: он сам считает этот же бой.
+        const t = battle.target;
+        setPvpNote('Сервер проверяет набег…');
         try {
-          res = (await submitAttack({ targetId: battle.target.id, seed: battle.target.seed, army, deploys, endTick })).result;
-        } catch {
-          flash('Набег не засчитан.');
-          return;
+          const out = await submitAttack({ targetId: t.id, token: t.token, seed: t.seed, army, deploys, endTick });
+          let p = out.win ? applyWin(latest.current, out.win) : latest.current;
+          if (out.me) p = applyMe(p, out.me, Date.now());
+          if (battle.revengeOf) p = markRevenged(p, battle.revengeOf);
+          commit(p);
+          const cups = out.win?.trophies ?? 0;
+          const same = RES_KEYS.every((k) => out.result.loot[k] === r.loot[k]);
+          setPvpNote(
+            <>
+              <span className={cups >= 0 ? 'ok' : 'bad'}>
+                {cups >= 0 ? '+' : '−'}
+                {Math.abs(cups)} <Trophy size={14} />
+              </span>{' '}
+              · сервер подтвердил{!same && <> · добыча: <ResRow res={out.result.loot} plus /></>}
+            </>,
+          );
+        } catch (e) {
+          setPvpNote(<span className="bad">{e instanceof PvpError ? e.message : 'Набег не засчитан.'} Добыча не засчитана, войско цело.</span>);
         }
+        return;
       }
+      const res = r;
       const t = townOf(latest.current);
       const left = { ...t.army };
       for (const id of TROOP_IDS) left[id] = Math.max(0, (left[id] ?? 0) - (res.used[id] ?? 0));
@@ -218,10 +321,39 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     }
     if (battle.kind === 'pvp') {
       const t = battle.target;
-      return <BattleScreen title={`${t.name}, ратуша ${t.level}`} base={t.layout} loot={t.lootAvailable} seed={t.seed} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />;
+      const offer = t.offer;
+      return (
+        <BattleScreen
+          key={t.token ?? t.id}
+          title={`${t.name}, ратуша ${t.level}`}
+          note={
+            <>
+              {t.revenge ? 'Месть · ' : t.bot ? 'Деревня-бот · ' : ''}
+              <Trophy size={12} /> {t.trophies ?? 0}
+              {offer && (
+                <>
+                  {' '}
+                  · победа +{offer.win}, без звёзд −{offer.loss}
+                </>
+              )}
+            </>
+          }
+          resultNote={pvpNote}
+          base={t.layout}
+          loot={t.lootAvailable}
+          seed={t.seed}
+          army={army}
+          mode="attack"
+          enemy
+          scout={t.token ? SCOUT_SECONDS : undefined}
+          onSkip={battle.revengeOf || searching ? undefined : () => void startPvp()}
+          onFinish={finish}
+          onClose={() => setBattle(null)}
+        />
+      );
     }
     const e = battle.entry;
-    return <BattleScreen title={e.who} base={unpackBase(e.base ?? [])} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} enemy={false} onClose={() => setBattle(null)} />;
+    return <BattleScreen title={e.who} base={unpackBase(e.base ?? [])} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />;
   }
 
   const tap = (x: number, y: number) => {
@@ -310,6 +442,21 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             <Shield size={15} />
             Ратуша {th}
           </span>
+        </div>
+        <div className="vil-res">
+          <button className="pill vil-trophies" onClick={() => setSheet('top')} aria-label="Топ деревень">
+            <span style={{ color: league.color, display: 'inline-flex' }}>
+              <Trophy size={15} />
+            </span>
+            {trophies}
+            <small>{league.name}</small>
+          </button>
+          {shieldLeft > 0 && (
+            <span className="pill vil-shield" title="Щит: на деревню нельзя напасть">
+              <Shield size={14} />
+              {fmtTime(shieldLeft / 1000)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -488,26 +635,20 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               </span>
             </div>
             {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
-            <button
-              className="vil-pvp"
-              disabled={searching || troopCount(town.army) === 0}
-              onClick={async () => {
-                setSearching(true);
-                try {
-                  const target = await findTarget(th);
-                  setSheet(null);
-                  setBattle({ kind: 'pvp', target });
-                } catch {
-                  flash('Соперник не нашёлся. Попробуй позже.');
-                } finally {
-                  setSearching(false);
-                }
-              }}
-            >
+            <button className="vil-pvp" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp()}>
               <Swords size={26} />
               <span>
-                <b>{searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
-                <span className="muted">Деревня другого игрока твоего уровня</span>
+                <b>{!online ? OFFLINE : searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
+                <span className="muted">
+                  {online ? (
+                    <>
+                      Деревня игрока твоего уровня · <Trophy size={12} /> {trophies} {league.name}
+                      {shieldLeft > 0 && ' · набег снимет щит'}
+                    </>
+                  ) : (
+                    'Лагеря Князя Дивана работают и без сети'
+                  )}
+                </span>
               </span>
             </button>
             <div className="section-title">Лагеря Князя Дивана</div>
@@ -596,12 +737,25 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </div>
             {!log.length && <div className="vil-note">Набегов пока не было. Князь Диван присматривается…</div>}
             {log.map((e) => (
-              <div key={e.at} className="vil-task">
-                <Portrait line={say('knyaz', '')} size={42} />
+              <div key={e.id ?? e.at} className="vil-task vil-log">
+                {e.id ? (
+                  <span className="vil-foe">
+                    <Swords size={22} />
+                  </span>
+                ) : (
+                  <Portrait line={say('knyaz', '')} size={42} />
+                )}
                 <div className="vil-shop-info">
                   <b>{e.who}</b>
                   <span className="muted">
                     {new Date(e.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · разрушено {e.pct}%
+                    {e.trophies ? (
+                      <span className={e.trophies > 0 ? 'ok' : 'bad'}>
+                        {' '}
+                        · {e.trophies > 0 ? '+' : '−'}
+                        {Math.abs(e.trophies)} <Trophy size={11} />
+                      </span>
+                    ) : null}
                   </span>
                   <span className="vil-shop-meta">
                     {RES_KEYS.some((k) => e.loot[k] > 0) ? (
@@ -618,17 +772,83 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                     <Star key={s} size={13} className={s < e.stars ? 'on bad' : ''} />
                   ))}
                 </span>
-                {e.deploys && e.base && (
-                  <button
-                    className="small-btn"
-                    onClick={() => {
-                      setSheet(null);
-                      setBattle({ kind: 'replay', entry: e });
-                    }}
-                  >
-                    Смотреть
-                  </button>
+                {((e.deploys && e.base) || canRevenge(e, now)) && (
+                  <div className="vil-log-actions">
+                    {e.deploys && e.base && (
+                      <button
+                        className="small-btn ghost"
+                        onClick={() => {
+                          setSheet(null);
+                          setBattle({ kind: 'replay', entry: e });
+                        }}
+                      >
+                        Смотреть
+                      </button>
+                    )}
+                    {canRevenge(e, now) && (
+                      <button className="small-btn accent" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp(e.id)}>
+                        <Swords size={15} /> Отомстить · {fmtTime(((e.revengeUntil ?? 0) - now) / 1000)}
+                      </button>
+                    )}
+                  </div>
                 )}
+              </div>
+            ))}
+            <label className="toggle-row">
+              <div>
+                <div className="toggle-title">Бот пишет о нападениях на деревню</div>
+                <div className="muted">Кто напал, сколько унёс и кнопка «Отомстить». Ночью (22–09 по Москве) не будим — сообщение придёт утром.</div>
+              </div>
+              <input
+                type="checkbox"
+                className="switch"
+                checked={notify ?? true}
+                disabled={notify === null || !online || !cloudState()?.telegram}
+                onChange={(ev) => {
+                  const on = ev.target.checked;
+                  setNotify(on);
+                  setPvpNotify(on)
+                    .then((me) => setNotify(me.notify))
+                    .catch(() => setNotify(!on));
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {sheet === 'top' && (
+        <div className="sheet" onClick={() => setSheet(null)}>
+          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">
+              Лучшие деревни
+              <span className="muted">
+                <Trophy size={13} /> {trophies} · {league.name}
+              </span>
+            </div>
+            <div className="vil-leagues">
+              {VILLAGE_LEAGUES.map((l) => (
+                <span key={l.name} className={l.name === league.name ? 'on' : ''} style={{ color: l.color }}>
+                  {l.name}
+                  <small>{l.from}+</small>
+                </span>
+              ))}
+            </div>
+            {topErr && <div className="vil-note">{topErr}</div>}
+            {!top && !topErr && <div className="muted">Загружаем…</div>}
+            {top && !top.length && <div className="vil-note">Пока никто не взял ни одного кубка. Будь первым!</div>}
+            {top?.map((r, k) => (
+              <div key={k} className={`vil-top-row ${r.me ? 'me' : ''}`}>
+                <span className="vil-top-n">{k + 1}</span>
+                <span className="vil-shop-info">
+                  <b>{r.name}</b>
+                  <span className="muted">
+                    ратуша {r.th} · <span style={{ color: villageLeague(r.trophies).color }}>{r.league}</span>
+                  </span>
+                </span>
+                <b className="vil-top-cups">
+                  <Trophy size={14} /> {r.trophies}
+                </b>
               </div>
             ))}
           </div>

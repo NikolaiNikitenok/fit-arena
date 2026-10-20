@@ -1,74 +1,67 @@
 /**
- * Набеги на деревни других игроков. Пока без сервера: findTarget отдаёт деревню-бота той же силы,
- * submitAttack считает бой здесь же. Серверу достаточно реализовать эти три функции:
- *
- *   findTarget(th, skip)  → сервер подбирает деревню близкого уровня ратуши (раскладка из сохранения
- *                           соперника: baseOf(townOf(progress))), считает lootAvailable(town, now)
- *                           и выдаёт seed боя. Цель «бронируется» на время боя (BATTLE_SECONDS + запас).
- *   submitAttack(attack)  → сервер проверяет validateDeploys, сам вызывает simulateBattle с тем же
- *                           base/loot/seed и войском нападающего из его сохранения, списывает
- *                           result.loot у защитника (applyLoss) и пишет ему DefenseEntry в журнал.
- *   defenseLog()          → набеги на меня с сервера (вместе с локальными набегами Князя).
- *
- * Всё детерминировано: клиент и сервер получают один и тот же BattleResult.
+ * Набеги на деревни других игроков. Судья — сервер (server/villages.ts):
+ *   findTarget()       → POST /api/village/find: соперник близкого уровня ратуши и кубков (или деревня-бот,
+ *                        если живых нет), seed боя и бронь цели на время боя.
+ *   revengeTarget(id)  → POST /api/village/revenge: обидчик из журнала обороны, без поиска.
+ *   submitAttack()     → POST /api/village/attack: сервер сам проверяет войско и высадки и считает бой.
+ *                        Добычу в запасы телефон кладёт только из этого ответа (applyWin, src/village/pvp.ts).
+ *   fetchInbox()       → POST /api/village/inbox: набеги на меня (applyDefense) и мои незачтённые победы.
+ *   fetchTop()         → POST /api/village/top: топ-50 по кубкам.
+ * Без сети набеги на игроков недоступны (кнопка «Нужен интернет»), лагеря Князя работают как обычно.
  */
-import type { Res } from '../../shared/village';
-import { BattleArmy, BattleBase, BattleResult, Deploy, simulateBattle, validateDeploys } from '../../shared/villageBattle';
-import { botBase } from '../../shared/villageCamps';
+import type { AttackOutcome, AttackSubmit, PvpInbox, PvpMe, PvpTopRow, TargetView } from '../../shared/villagePvp';
+import { syncNow } from '../cloud';
+import { guestId, tg, userName } from '../telegram';
 import type { DefenseEntry } from './types';
 
-export interface TargetView {
-  id: string;
-  name: string;
-  // Уровень ратуши.
-  level: number;
-  layout: BattleBase;
-  lootAvailable: Res;
-  // Seed боя выдаёт сервер: клиент и сервер считают один и тот же бой.
-  seed: number;
+export type { AttackOutcome, AttackSubmit, TargetView } from '../../shared/villagePvp';
+
+/** Ошибка, которую можно показать игроку как есть. status 0 — нет сети. */
+export class PvpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
 }
 
-export interface AttackSubmit {
-  targetId: string;
-  seed: number;
-  army: BattleArmy;
-  deploys: Deploy[];
-  endTick?: number;
+export const OFFLINE = 'Нужен интернет';
+export const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false;
+
+async function call<T>(path: string, body: object = {}): Promise<T> {
+  if (!isOnline()) throw new PvpError(OFFLINE, 0);
+  let r: Response;
+  try {
+    r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: tg?.initData ?? '', guestId: guestId(), name: userName(), ...body }) });
+  } catch {
+    throw new PvpError(OFFLINE, 0);
+  }
+  const data = (await r.json().catch(() => ({}))) as T & { error?: string };
+  if (!r.ok) throw new PvpError(data.error ?? (r.status === 401 ? 'Набеги на игроков — только в Telegram' : 'Сервер не ответил. Попробуй позже.'), r.status);
+  return data;
 }
 
-export interface AttackOutcome {
-  result: BattleResult;
-  // Сервер подтвердил результат (у бота — всегда локально).
-  verified: boolean;
+/** Найти соперника. Перед поиском отправляем свежую копию прогресса: сервер проверяет войско по ней. */
+export async function findTarget(): Promise<TargetView> {
+  if (!isOnline()) throw new PvpError(OFFLINE, 0);
+  await syncNow().catch(() => null);
+  return call<TargetView>('/api/village/find');
 }
 
-const BOT_NAMES = ['Соня Подушкина', 'Вася Лежебоков', 'Дрёма', 'Бублик', 'Тюфяк', 'Зевака', 'Сплюшка', 'Тётя Перина'];
-// Боты, выданные в этом сеансе: чтобы submitAttack знал, по чему считать.
-const issued = new Map<string, TargetView>();
-
-/** Найти соперника примерно своего уровня; skip — кого уже пропустили. */
-export async function findTarget(th: number, skip: string[] = []): Promise<TargetView> {
-  let seed = Date.now() % 1_000_000;
-  let id = `bot:${th}:${seed}`;
-  while (skip.includes(id)) id = `bot:${th}:${++seed}`;
-  const level = Math.max(1, Math.min(8, th + ((seed % 3) - 1)));
-  const { base, loot } = botBase(level, seed);
-  const view: TargetView = { id, name: BOT_NAMES[seed % BOT_NAMES.length], level, layout: base, lootAvailable: loot, seed };
-  issued.set(id, view);
-  return view;
+export async function revengeTarget(attackId: string): Promise<TargetView> {
+  if (!isOnline()) throw new PvpError(OFFLINE, 0);
+  await syncNow().catch(() => null);
+  return call<TargetView>('/api/village/revenge', { attackId });
 }
 
-/** Отправить набег. У ботов результат считается здесь же тем же движком, что и на сервере. */
-export async function submitAttack(a: AttackSubmit): Promise<AttackOutcome> {
-  const t = issued.get(a.targetId);
-  if (!t) throw new Error('цель устарела');
-  const input = { base: t.layout, army: a.army, deploys: a.deploys, loot: t.lootAvailable, seed: a.seed, endTick: a.endTick };
-  if (validateDeploys(input)) throw new Error('набег не прошёл проверку');
-  issued.delete(a.targetId);
-  return { result: simulateBattle(input), verified: false };
-}
+/** Отправить набег: результат — только серверный. */
+export const submitAttack = (a: AttackSubmit) => call<AttackOutcome>('/api/village/attack', a);
+export const fetchInbox = () => call<PvpInbox>('/api/village/inbox');
+export const fetchTop = () => call<{ top: PvpTopRow[]; me: PvpMe | null }>('/api/village/top');
+export const setPvpNotify = (on: boolean) => call<PvpMe>('/api/village/notify', { on });
 
-/** Набеги на мою деревню. Без сервера — только набеги Князя, которые посчитаны на телефоне. */
+/** Журнал обороны: набеги Князя и игроков уже лежат в прогрессе (набеги игроков приходят через inbox). */
 export async function defenseLog(local: DefenseEntry[]): Promise<DefenseEntry[]> {
   return local;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Res, RES_KEYS } from '../../shared/village';
 import { addDeploy, BATTLE_TICKS, BattleArmy, BattleBase, BattleResult, battleResult, createBattle, Deploy, noDeployCells, stepBattle, TPS, TROOPS, UNIT_NAMES, UnitKind, unitsLeft } from '../../shared/villageBattle';
 import { sfx } from '../audio';
@@ -33,7 +33,16 @@ interface Props {
   // Набег игрока или повтор набега на его деревню.
   mode: 'attack' | 'replay';
   deploys?: Deploy[];
+  // Повтор: нападающий сдался на этом тике.
+  endTick?: number;
   enemy: boolean;
+  // Строка под названием (кубки за набег), строка на итоговой карточке (что сказал сервер).
+  note?: ReactNode;
+  resultNote?: ReactNode;
+  // Сколько секунд можно осматриваться: потом бой начнётся сам (набег на игрока — цель забронирована).
+  scout?: number;
+  // «Следующий»: пропустить соперника до первой высадки.
+  onSkip?: () => void;
   // Бой окончен: что получилось, какие были высадки и когда игрок сдался.
   onFinish?: (r: BattleResult, deploys: Deploy[], endTick?: number) => void;
   onClose: () => void;
@@ -41,12 +50,12 @@ interface Props {
 
 const ORDER: UnitKind[] = ['hero', 'warrior', 'archer', 'giant', 'wallbreaker', 'healer'];
 
-export function BattleScreen({ title, base, loot, seed, army, mode, deploys, enemy, onFinish, onClose }: Props) {
+export function BattleScreen({ title, base, loot, seed, army, mode, deploys, endTick, enemy, note, resultNote, scout, onSkip, onFinish, onClose }: Props) {
   // В бою видно всё поле с краем для высадки.
   const ctl = useRef<Ctl>({ tx: 0, tz: 0, zoom: Math.max(11, Math.min(window.innerWidth, window.innerHeight * 0.8) / 25) });
   const view = useRef<BattleView | null>(null);
   if (!view.current) {
-    const s = createBattle({ base, army, deploys: mode === 'replay' ? deploys ?? [] : [], loot, seed });
+    const s = createBattle({ base, army, deploys: mode === 'replay' ? deploys ?? [] : [], loot, seed, endTick: mode === 'replay' ? endTick : undefined });
     view.current = { s, prev: new Map(), at: performance.now(), ms: 100, fx: [] };
   }
   const [, setTick] = useState(0);
@@ -59,6 +68,8 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
   speedRef.current = speed;
   const finished = useRef(false);
   const started = useRef(mode === 'replay');
+  const scoutEnd = useRef(scout ? performance.now() + scout * 1000 : 0);
+  const scoutSec = useRef(0);
 
   const finish = (endTick?: number) => {
     if (finished.current) return;
@@ -77,8 +88,15 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
     const id = window.setInterval(() => {
       const now = performance.now();
       const v = view.current!;
-      // Бой стоит, пока не высажен первый отряд (как в CoC — можно осмотреться).
+      // Бой стоит, пока не высажен первый отряд (как в CoC — можно осмотреться, но у набега на игрока — недолго).
+      if (!started.current && scoutEnd.current && now >= scoutEnd.current) started.current = true;
       if (!started.current || finished.current) {
+        // Обратный отсчёт осмотра: перерисовка раз в секунду.
+        const sec = Math.ceil((scoutEnd.current - now) / 1000);
+        if (scoutEnd.current && !started.current && sec !== scoutSec.current) {
+          scoutSec.current = sec;
+          setTick(-sec);
+        }
         last = now;
         return;
       }
@@ -115,6 +133,8 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
   const zone = useMemo(() => noDeployCells(base), [base]);
   const live = battleResult(s);
   const secLeft = Math.max(0, Math.ceil((BATTLE_TICKS - s.tick) / TPS));
+  const scouting = mode === 'attack' && !started.current && !!scoutEnd.current;
+  const scoutLeft = scouting ? Math.max(0, Math.ceil((scoutEnd.current - performance.now()) / 1000)) : 0;
 
   const tap = (x: number, y: number) => {
     if (mode !== 'attack' || !unit || finished.current) return;
@@ -139,6 +159,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
           <div>
             <div className="level-tag">{mode === 'replay' ? 'Повтор набега' : 'Набег'}</div>
             <b>{title}</b>
+            {note && <div className="vil-battle-note">{note}</div>}
           </div>
           <div className="vil-stars">
             {[0, 1, 2].map((k) => (
@@ -146,7 +167,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
             ))}
           </div>
           <div className="vil-pct">
-            {live.destruction}%<small>{Math.floor(secLeft / 60)}:{String(secLeft % 60).padStart(2, '0')}</small>
+            {live.destruction}%<small>{scouting ? `осмотр ${scoutLeft} с` : `${Math.floor(secLeft / 60)}:${String(secLeft % 60).padStart(2, '0')}`}</small>
           </div>
         </div>
         <div className="vil-battle-loot">
@@ -167,7 +188,12 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
       {warn && <div className="toast vil-warn">{warn}</div>}
       {mode === 'attack' && !result && (
         <div className="vil-bottom">
-          {!started.current && <div className="vil-hint">Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки.</div>}
+          {!started.current && <div className="vil-hint">Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки{scouting ? ` или через ${scoutLeft} с` : ''}.</div>}
+          {!started.current && onSkip && (
+            <button className="small-btn vil-skip" onClick={onSkip}>
+              Следующий соперник
+            </button>
+          )}
           <div className="vil-troops">
             {ORDER.filter((u) => (u === 'hero' ? army.hero : army.troops[u as keyof typeof TROOPS])).map((u) => (
               <button key={u} className={`vil-troop ${unit === u ? 'active' : ''} ${(s.left[u] ?? 0) <= 0 ? 'empty' : ''}`} onClick={() => setUnit(u)} disabled={(s.left[u] ?? 0) <= 0}>
@@ -194,6 +220,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, ene
               {mode === 'replay' ? 'Унесли' : 'Добыча'}: <ResRow res={result.loot} plus={mode !== 'replay'} />
             </div>
           )}
+          {resultNote && <div className="vil-result-note">{resultNote}</div>}
           <button className="primary" onClick={onClose}>
             В деревню
           </button>

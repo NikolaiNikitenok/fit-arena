@@ -6,6 +6,8 @@ import { SaveStore } from './saves';
 import { Store } from './store';
 import { Telemetry } from './telemetry';
 import { clientAnon } from './telemetry';
+import { VillageStore } from './villages';
+import { testProgress } from './villages.fixture';
 
 describe('удалить мои данные', () => {
   it('стирает профиль, прогресс, клан, друзей и статистику', () => {
@@ -34,7 +36,12 @@ describe('удалить мои данные', () => {
     telemetry.ingest({ anon: clientAnon(other), events: [{ n: 'app_open' }] }, '1.1.1.2');
     expect(telemetry.stats(1).dau[0].users).toBe(2);
 
-    const r = deletePlayer({ store, saves, clans, friends, telemetry }, me, now);
+    const villages = new VillageStore(null, { now: () => now });
+    villages.update(me, testProgress(2), 'Аня');
+    villages.update(other, testProgress(2), 'Борис');
+    expect(villages.get(me)).toBeDefined();
+
+    const r = deletePlayer({ store, saves, clans, friends, telemetry, villages }, me, now);
 
     expect(store.cupsOf(me)).toBe(0);
     expect(saves.get(me)).toBeUndefined();
@@ -47,5 +54,7 @@ describe('удалить мои данные', () => {
     expect(friends.get(b.id)!.friends).toEqual([]);
     expect(telemetry.stats(1).dau[0].users).toBe(1);
     expect(telemetry.stats(1).totalUsers).toBe(1);
+    expect(villages.get(me)).toBeUndefined();
+    expect(villages.get(other)).toBeDefined();
   });
 });

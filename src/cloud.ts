@@ -43,6 +43,20 @@ const push = (keepalive = false) => {
   if (p) post('/api/progress/save', { progress: p }, keepalive).catch(() => (pending ??= p));
 };
 
+/** Отправить копию прогресса сейчас и дождаться ответа (перед набегом сервер должен знать войско). */
+export async function syncNow(p?: Progress): Promise<void> {
+  if (stopped) return;
+  if (timer) clearTimeout(timer);
+  timer = null;
+  const next = p ?? pending;
+  pending = null;
+  if (!next) return;
+  await post('/api/progress/save', { progress: next }).catch((e) => {
+    pending ??= next;
+    throw e;
+  });
+}
+
 /** Запуск синхронизации. onRemote — пришла более свежая копия с сервера. */
 export async function startCloud(onRemote: (p: Progress) => void): Promise<void> {
   onProgressSaved((p) => {

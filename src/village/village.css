@@ -104,3 +104,27 @@
 .vil-found-card p { margin: 0; }
 .vil-found-card .primary { width: 100%; }
 .vil-dialog { position: absolute; inset: auto 0 0 0; height: 200px; z-index: 6; }
+
+/* Набеги на игроков: кубки, щит, журнал, топ */
+.vil-res .pill.vil-trophies { border: 1px solid var(--glass-line); color: var(--text); font-weight: 900; cursor: pointer; pointer-events: auto; font: inherit; font-weight: 900; }
+.vil-res .pill.vil-trophies small { color: var(--hint); margin-left: 2px; }
+.vil-res .pill.vil-shield { color: var(--mint); }
+.vil-battle-note { font-size: 12px; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vil-battle-note .icon, .vil-shop-info .icon, .vil-top-cups .icon { vertical-align: -2px; }
+.vil-skip { align-self: center; background: var(--glass); color: var(--text); border: 1px solid var(--glass-line); }
+.vil-result-note { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
+.vil-result-note .ok, .vil-task .ok { color: var(--mint); }
+.vil-result-note .bad, .vil-task .bad { color: var(--rose); }
+.vil-foe { width: 42px; height: 42px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255,122,89,.16); color: #ff8a5c; }
+.small-btn.accent { min-width: 0; background: linear-gradient(135deg, #ff9a5c, #ff5f6d); }
+.vil-leagues { display: flex; flex: none; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.vil-leagues span { flex: none; display: flex; flex-direction: column; align-items: center; padding: 6px 9px; border-radius: var(--r-sm); background: var(--surface-2); font-size: 12px; font-weight: 900; opacity: .6; }
+.vil-leagues span.on { opacity: 1; outline: 1px solid currentColor; }
+.vil-leagues small { color: var(--hint); font-weight: 700; font-size: 10.5px; }
+.vil-top-row { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); }
+.vil-top-row.me { outline: 1px solid var(--accent, #ffb46b); }
+.vil-top-n { width: 26px; text-align: center; font-weight: 900; color: var(--hint); }
+.vil-top-cups { display: inline-flex; align-items: center; gap: 4px; color: #ffd27a; }
+.vil-task.vil-log { flex-wrap: wrap; }
+.vil-log-actions { flex-basis: 100%; display: flex; justify-content: flex-end; gap: 8px; }
+.vil-log-actions .small-btn { min-width: 0; padding: 7px 12px; font-size: 13px; }

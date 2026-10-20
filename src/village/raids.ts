@@ -59,8 +59,15 @@ export function dueRaid(p: Progress, now: number): Progress | null {
   const r = simulateBattle({ base, army, deploys, loot, seed });
   const lost = withTown(p, applyLoss(t, r.loot, at));
   const entry: DefenseEntry = { at, who: 'Лентяи Князя Дивана', stars: r.stars, pct: r.destruction, loot: r.loot, avail: loot, seed, army, deploys, base: packBase(base) };
-  const log = [entry, ...(v.log ?? [])].slice(0, LOG_MAX).map((e, k) => (k < REPLAYS ? e : { ...e, deploys: undefined, base: undefined, avail: undefined }));
-  return { ...lost, village: { ...villageOf(lost), log, raidAt: nextRaidAt(now, seed) } };
+  return { ...lost, village: { ...villageOf(lost), log: addLog(v.log, entry), raidAt: nextRaidAt(now, seed) } };
+}
+
+/** Записать набег в журнал: новые сверху, не больше LOG_MAX, повтор — только у последних REPLAYS. */
+export function addLog(log: DefenseEntry[] | undefined, entry: DefenseEntry): DefenseEntry[] {
+  return [entry, ...(log ?? [])]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, LOG_MAX)
+    .map((e, k) => (k < REPLAYS ? e : { ...e, deploys: undefined, base: undefined, avail: undefined }));
 }
 
 export const unseenRaids = (p: Progress) => (villageOf(p).log ?? []).filter((e) => e.at > (villageOf(p).seenAt ?? 0));

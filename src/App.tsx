@@ -25,7 +25,7 @@ export function App() {
   // Ссылка друга или кнопка бота «Друзья» открывают экран друзей во вкладке дуэли.
   const [friendsFirst, setFriendsFirst] = useState(() => !!friendInviteCode() || startTab() === 'friends');
   const [join, setJoin] = useState<JoinRoom>();
-  const [tab, setTab] = useState<Tab>(inviteCode() || friendsFirst ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : 'hero');
+  const [tab, setTab] = useState<Tab>(inviteCode() || friendsFirst ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : startTab() === 'village' ? 'village' : 'hero');
   const [exercise, setExercise] = useState<RepExercise>('pushup');
   const [playing, setPlaying] = useState(false);
   const full = (tab === 'map' || tab === 'village') && !playing;

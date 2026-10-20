@@ -12,6 +12,7 @@
 //   GUARD_FILE — защита от читов: забранные награды и подозрения (по умолчанию guard.json рядом с DATA_FILE, server/guard.ts)
 //   ADMIN_IDS — id админов (статистика, сводка и тревоги в боте); ещё файлом .admin-ids (ADMIN_FILE)
 //   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
+//   VILLAGES_FILE — деревни для набегов, кубки, щиты и набеги за неделю (по умолчанию villages.json рядом с DATA_FILE, server/villages.ts)
 //   MODERATION_FILE, REPORTS_FILE — чёрный список, запреты писать и жалобы (server/moderation.ts, server/reports.ts); о жалобах бот пишет ADMIN_IDS
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -50,6 +51,8 @@ import { ModerationStore } from './moderation';
 import { ReportStore } from './reports';
 import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
 import { badName } from '../shared/profanity';
+import { VillageStore } from './villages';
+import { villageApi } from './villageApi';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -104,6 +107,16 @@ const reports = new ReportStore(process.env.REPORTS_FILE ?? join(dirname(process
 clans.mutedUntil = (id) => mod.mutedUntil(id);
 clans.hiddenFor = (id) => mod.blockedBy(id).map((b) => b.id);
 friends.blocked = (a, b) => mod.either(a, b);
+// Набеги на деревни (server/villages.ts): снимки деревень из копий прогресса, поиск соперника, бой на сервере.
+const villages = new VillageStore(process.env.VILLAGES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'villages.json'), {
+  blocked: (a, b) => mod.either(a, b),
+  eligible: (id) => !BOT_TOKEN || id.startsWith('tg:'),
+  heroLevel: (id) => saves.heroLevel(id),
+  flag: (id, kind, detail) => guard.flag(id, kind, detail, Date.now()),
+  claim: (id, key) => guard.claim(id, key),
+  hidden: (id) => guard.flagged(id, Date.now()),
+  botBlocked: (id) => !!saves.get(id)?.blocked,
+});
 // Отметка Pro у автора ставится при отправке: список мог поменяться после сообщения.
 const proChat = (m: ChatMessage): ChatMessage => (m.from && isPro(m.from) ? { ...m, pro: true } : m);
 const chatOf = (c: Clan) => c.chat.map(proChat);
@@ -266,6 +279,12 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
+/** Имя деревни для соперников: из подписи Telegram, у гостя — из друзей (без него — «Соседняя деревня»). */
+function villageName(id: string, body: Record<string, unknown>): string | undefined {
+  const tgUser = BOT_TOKEN && typeof body.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
+  return tgUser ? cleanName(tgUser.first_name) : friends.get(id)?.name;
+}
+
 /** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind, /api/raid-notify. */
 async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => {
@@ -277,11 +296,20 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   const who = body && identify(body);
   if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
   if (path === '/api/progress/load') {
-    if (who.guest) saves.adopt(who.id, who.guest);
+    if (who.guest) {
+      saves.adopt(who.id, who.guest);
+      villages.adopt(who.id, who.guest);
+    }
     const s = saves.get(who.id);
+    if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
     return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id), raidNotify: !s?.raidOff, admin: admins.has(who.id) });
   }
-  if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
+  if (path === '/api/progress/save') {
+    const s = saves.put(who.id, body!.progress);
+    // Копия принята: обновляем снимок деревни для набегов (невозможный снимок отклоняется и отмечается).
+    if (s.progress === body!.progress) villages.update(who.id, s.progress, villageName(who.id, body!));
+    return reply(200, { savedAt: s.savedAt });
+  }
   if (path === '/api/remind') {
     const r = body!.remind as { hour: number; tz: number } | null;
     return reply(200, { remind: saves.setRemind(who.id, r && { hour: Number(r.hour), tz: Number(r.tz) }).remind ?? null });
@@ -391,6 +419,23 @@ async function onAdminApi(path: string, req: IncomingMessage, res: ServerRespons
   res.end(statsHtml(telemetry.stats(30), { inApp }));
 }
 
+/** Набеги на деревни: POST /api/village/… (только игроки Telegram, без токена бота — и гости), GET /api/village/top. */
+async function onVillageApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method === 'GET' && path === '/api/village/top') {
+    const r = villageApi(villages, path, null, {});
+    return reply(r.status, r.body);
+  }
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  if (!body) return reply(400, { error: 'bad json' });
+  const tgUser = BOT_TOKEN && typeof body.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
+  const guest = !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
+  const me = tgUser ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) } : guest ? { id: guest, name: cleanName(body.name) } : null;
+  const r = villageApi(villages, path, me, body);
+  reply(r.status, r.body);
+}
+
 /** POST /api/delete-me: игрок стирает свои данные (кнопка в настройках). */
 async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
@@ -400,7 +445,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
   const now = Date.now();
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
-    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry }, id, now);
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages }, id, now);
     if (clan) {
       sendClan(clan);
       toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -456,6 +501,10 @@ const http = createServer((req, res) => {
     return;
   }
   if (path === '/api/telemetry') return handleTelemetry(telemetry, req, res);
+  if (path.startsWith('/api/village/')) {
+    onVillageApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
   if (path === '/api/admin/stats' || path === '/api/admin/link') {
     onAdminApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
@@ -671,6 +720,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         store.adopt(player.id, `guest:${msg.guestId}`);
         clans.adopt(player.id, `guest:${msg.guestId}`);
         guard.adopt(player.id, `guest:${msg.guestId}`);
+        villages.adopt(player.id, `guest:${msg.guestId}`);
       }
       send({ type: 'welcome', id: player.id, name: player.name, botUsername, botRunning: !!BOT_TOKEN, telegram: !!tgUser, pro: !!player.pro });
       if (msg.channel === 'clan') {
@@ -869,6 +919,11 @@ if (BOT_TOKEN)
     },
     (chatId, text) => adminCommand(moderationDeps, chatId, text),
   );
+// Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
+if (BOT_TOKEN)
+  setInterval(() => {
+    for (const n of villages.takeNotices()) sendFriendBot(n.to, n.text, 'Отомстить', '?tab=village');
+  }, 60_000);
 // Админам: тревога о новой частой ошибке (раз в минуту) и сводка в 9:00 по Москве.
 if (BOT_TOKEN)
   setInterval(() => {
@@ -887,5 +942,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     telemetry.flush();
     mod.flush();
     reports.flush();
+    villages.flush();
     process.exit(0);
   });

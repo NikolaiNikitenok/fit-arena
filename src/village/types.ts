@@ -19,6 +19,25 @@ export interface DefenseEntry {
   army: BattleArmy;
   deploys?: Deploy[];
   base?: PackedBld[];
+  // Нападающий сдался на этом тике (для точного повтора).
+  endTick?: number;
+  // Набег живого игрока: номер набега на сервере, кубки, до какого момента можно отомстить.
+  id?: string;
+  trophies?: number;
+  revengeUntil?: number;
+  revenged?: boolean;
+}
+
+/** Набеги на других игроков: что телефон уже применил и последнее, что сказал сервер. */
+export interface PvpExtra {
+  // Набеги на меня, уже списанные с запасов (по номеру с сервера).
+  def?: string[];
+  // Мои набеги, добыча которых уже в запасах.
+  won?: string[];
+  trophies?: number;
+  league?: string;
+  // До какого момента щит (по часам телефона).
+  shieldUntil?: number;
 }
 
 export interface VillageExtra {
@@ -37,4 +56,5 @@ export interface VillageExtra {
   // Набеги на деревню, новые сверху; seenAt — до какого момента игрок их уже видел.
   log?: DefenseEntry[];
   seenAt?: number;
+  pvp?: PvpExtra;
 }

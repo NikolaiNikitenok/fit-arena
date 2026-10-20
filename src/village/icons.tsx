@@ -29,4 +29,7 @@ export const Dungeon = ({ size = 22, className }: P) => svg(size, className, <><
 
 export const Star = ({ size = 16, className }: P) => svg(size, className, <path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.9l-5.4 2.9 1.1-6.1-4.5-4.3 6.1-.8z" />, true);
 
+// Кубок: кубки набегов на деревни.
+export const Trophy = ({ size = 16, className }: P) => svg(size, className, <><path d="M7 4h10v5a5 5 0 01-10 0z" /><path d="M7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3M12 14v3M8.5 20h7M9.5 17h5" /></>);
+
 export const RES_COLORS = { wood: '#c98a4b', stone: '#b9c0cc', gold: '#ffd27a' } as const;
