@@ -2,6 +2,7 @@
 // Логика чистая, без React и камеры, чтобы её можно было проверить тестами.
 import type { Exercise } from '../repCounter';
 import { Baseline, LevelDef, targetReps } from './levels';
+import { BOSS_HEARTS, enemyHp, repsFor } from './power';
 
 export type Outcome = 'running' | 'won' | 'lost';
 
@@ -24,11 +25,20 @@ export interface MissionView {
   savedOf?: number;
   // Испытание: результат для базы игрока.
   record?: number;
+  // Здоровье врага (или объём работы) и урон одного повтора.
+  hp: number;
+  hpMax: number;
+  damage: number;
+}
+
+/** Сила героя в бою: урон за повтор и сердца против босса. */
+export interface Combat {
+  damage: number;
+  hearts: number;
 }
 
 const DEFEND_WAVES = 3;
 const RESCUE_EVERY = 5;
-const BOSS_HEARTS = 3;
 // Босс бьёт, если игрок отдыхает дольше этого.
 const BOSS_IDLE_MS = 7000;
 // Погоня: столько секунд без повторов чудище догоняет с полного отрыва;
@@ -43,23 +53,30 @@ export class Mission {
   private lastRepAt = 0;
   private outcome: Outcome = 'running';
   private gap = 1;
-  private hearts = BOSS_HEARTS;
+  private hearts: number;
   private phase = 0;
   private lastTick = 0;
   readonly target: number;
   private readonly phaseTargets: number[];
   private readonly catchS: number;
+  readonly hpMax: number;
 
   constructor(
     readonly level: LevelDef,
     baseline: Baseline,
+    combat?: Combat,
   ) {
-    this.target = targetReps(level, baseline);
+    this.hearts = combat?.hearts ?? BOSS_HEARTS;
+    // Обычная цель по форме игрока; урон героя меняет её в пределах 80–130%.
+    const fit = (base: number) => (combat && level.type !== 'trial' && !level.daily ? repsFor(base, enemyHp(level, base), combat.damage) : base);
+    const base = targetReps(level, baseline);
+    this.hpMax = level.type === 'trial' ? 0 : enemyHp(level, base);
     // У босса здоровье делится на фазы, в каждой своё упражнение и своя цель.
     this.phaseTargets =
       level.type === 'boss'
-        ? level.exercises.map((ex) => Math.max(3, Math.round(targetReps(level, baseline, ex) / level.exercises.length)))
-        : [this.target];
+        ? level.exercises.map((ex) => fit(Math.max(3, Math.round(targetReps(level, baseline, ex) / level.exercises.length))))
+        : [fit(base)];
+    this.target = level.type === 'boss' ? this.phaseTargets.reduce((a, b) => a + b, 0) : this.phaseTargets[0];
     this.catchS = Math.max(CHASE_CATCH_S, (CHASE_CATCH_REPS * level.seconds) / this.target);
   }
 
@@ -134,7 +151,10 @@ export class Mission {
     const { type, seconds } = this.level;
     const elapsed = this.startedAt === null ? 0 : now - this.startedAt;
     const leftMs = Math.max(0, seconds * 1000 - elapsed);
-    const base = { outcome: this.outcome, exercise: this.exercise, reps: this.reps, leftMs };
+    const done = type === 'boss' ? this.phaseTargets.slice(0, this.phase).reduce((a, b) => a + b, 0) + this.phaseReps : this.reps;
+    const share = Math.min(1, done / this.target);
+    const hpMax = this.hpMax;
+    const base = { outcome: this.outcome, exercise: this.exercise, reps: this.reps, leftMs, hpMax, hp: Math.round(hpMax * (1 - share)), damage: Math.round(hpMax / this.target) };
     switch (type) {
       case 'trial':
         return { ...base, progress: elapsed / (seconds * 1000), label: `${this.reps} повторов`, record: this.reps };
@@ -150,11 +170,9 @@ export class Mission {
         return { ...base, progress: this.reps / this.target, label: `Волна ${wave} из ${DEFEND_WAVES} · ${this.reps}/${this.target}` };
       }
       case 'boss': {
-        const total = this.phaseTargets.reduce((a, b) => a + b, 0);
-        const done = this.phaseTargets.slice(0, this.phase).reduce((a, b) => a + b, 0) + this.phaseReps;
         return {
           ...base,
-          progress: Math.min(1, done / total),
+          progress: share,
           label: `Фаза ${Math.min(this.phase + 1, this.phaseTargets.length)} из ${this.phaseTargets.length}`,
           hearts: this.hearts,
           phase: this.phase,

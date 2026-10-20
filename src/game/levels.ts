@@ -30,6 +30,8 @@ export interface LevelDef {
   rest: boolean;
   story: Line[];
   coins: number;
+  // Задание дня: без звёзд и без платы жизнью, награду выдаёт само задание.
+  daily?: boolean;
 }
 
 export const WORLD_SIZE = 100;

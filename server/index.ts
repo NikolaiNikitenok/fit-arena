@@ -1,11 +1,18 @@
-// Сервер матчей Fit Arena: комнаты на двоих и бой по WebSocket.
+// Сервер матчей NikitenokArena: комнаты на двоих и бой по WebSocket.
 //   PORT — порт (по умолчанию 8787)
 //   BOT_TOKEN — токен бота: проверяем подпись Telegram и узнаём имя бота для ссылок
+//   BOT_TOKEN_FILE — файл с токеном, он главнее BOT_TOKEN (по умолчанию .bot-token рядом с сервером;
+//     его кладёт автодеплой из секрета репозитория BOT_TOKEN)
+//   APP_URL — адрес мини-приложения для кнопок бота (по умолчанию https://arena.nikitenok.ru)
+//   BOT_USERNAME — имя бота для ссылок-приглашений, если Telegram недоступен с сервера
 //   ALLOW_GUESTS=1 — пускать без подписи Telegram (для разработки в браузере)
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 //   FAMILY_WEBHOOK_URL, FAMILY_WEBHOOK_SECRET — отчёты о тренировках на семейный сайт (server/family.ts)
+//   PRO_IDS — id в Telegram с Pro Pass через запятую; ещё можно файлом .pro-ids рядом с сервером (PRO_FILE)
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
 import { leagueOf } from '../shared/rating';
@@ -13,15 +20,67 @@ import { EXERCISE_LABELS, type Exercise } from '../src/repCounter';
 import { Family, parseClientItem, RateLimit, telegramId } from './family';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
+import { type Clan, ClanStore, type Who } from './clans';
+import { botApi, botStatus, runBot, type Update, webhookReply, webhookSecret } from './bot';
+import { dueReminders, SaveStore } from './saves';
+import { raidNotices, type RaidNotice } from './raidNotices';
+import { dailyTask, npcName } from '../src/game/daily';
+import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
+import { ProList } from './pro';
+import type { ChatMessage } from '../shared/clan';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
+const readToken = (file: string) => {
+  try {
+    return readFileSync(file, 'utf8').trim();
+  } catch {
+    return '';
+  }
+};
+const TOKEN_FILE = process.env.BOT_TOKEN_FILE ?? join(__dirname, '.bot-token');
+// Файл из автодеплоя свежее, чем строка в /etc/arena-server.env, поэтому он главнее.
+const FILE_TOKEN = readToken(TOKEN_FILE);
+const TOKEN_SOURCE = FILE_TOKEN ? 'file' : process.env.BOT_TOKEN ? 'env' : 'none';
+const BOT_TOKEN = FILE_TOKEN || process.env.BOT_TOKEN || '';
 const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 
 const family = new Family();
 const activityLimit = new RateLimit();
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
+const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
+const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
+const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
+const isPro = (id: string) => pro.has(id);
+clans.isPro = isPro;
+// Отметка Pro у автора ставится при отправке: список мог поменяться после сообщения.
+const proChat = (m: ChatMessage): ChatMessage => (m.from && isPro(m.from) ? { ...m, pro: true } : m);
+const chatOf = (c: Clan) => c.chat.map(proChat);
+// Соединения экрана клана: у игрока может быть открыто несколько.
+const clanSockets = new Map<string, Set<(msg: ServerMessage) => void>>();
+const isOnline = (id: string) => (clanSockets.get(id)?.size ?? 0) > 0 || online.has(id);
+
+/** Каждому участнику — его вид клана (роль, «я»). */
+function sendClan(clan: Clan): void {
+  const now = Date.now();
+  for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send({ type: 'clan', clan: clans.view(clan, m.id, isOnline, now) });
+}
+function toClan(clan: Clan, msg: ServerMessage): void {
+  for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send(msg);
+}
+// Здоровье босса рассылаем не чаще трёх раз в секунду, даже если бьют все сразу.
+const raidPending = new Map<string, ReturnType<typeof setTimeout>>();
+function sendRaid(clan: Clan): void {
+  if (raidPending.has(clan.id)) return;
+  raidPending.set(
+    clan.id,
+    setTimeout(() => {
+      raidPending.delete(clan.id);
+      const now = Date.now();
+      for (const m of clan.members) for (const send of clanSockets.get(m.id) ?? []) send({ type: 'raid', raid: clans.raidView(clan, m.id, now) });
+    }, 300),
+  );
+}
 const rooms = new Map<string, Room>();
 // Последнее соединение каждого игрока: туда шлём новые кубки после боя.
 const online = new Map<string, Player>();
@@ -88,17 +147,18 @@ function newRoom(exercise: Exercise): Room {
   rooms.set(code, room);
   return room;
 }
-let botUsername: string | null = null;
+let botUsername: string | null = process.env.BOT_USERNAME?.replace(/^@/, '') || null;
 
 async function loadBotUsername(): Promise<void> {
   if (!BOT_TOKEN) return;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
-    const body = (await res.json()) as { ok: boolean; result?: { username: string } };
-    botUsername = body.result?.username ?? null;
+    const body = (await botApi(BOT_TOKEN)('getMe', {}, 15_000)) as { ok: boolean; result?: { username: string }; description?: string };
+    if (!body.ok) botStatus.lastError = `getMe: ${body.description ?? 'ошибка'}`;
+    botUsername = body.result?.username ?? botUsername;
     console.log('bot:', botUsername);
   } catch (e) {
-    console.error('getMe failed:', e);
+    botStatus.lastError = `getMe: ${e instanceof Error ? e.message : e}`;
+    console.error('getMe failed:', botStatus.lastError);
   }
 }
 
@@ -107,28 +167,216 @@ function cleanName(name: unknown): string {
   return s.slice(0, 24) || 'Боец';
 }
 
+/** Кто прислал запрос: игрок Telegram по подписи или гость по id из браузера. */
+function identify(body: { initData?: unknown; guestId?: unknown }): { id: string; guest?: string } | null {
+  const tgUser = BOT_TOKEN && typeof body.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
+  const guest = typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : undefined;
+  if (tgUser) return { id: `tg:${tgUser.id}`, guest };
+  return ALLOW_GUESTS && guest ? { id: guest } : null;
+}
+
+function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > 300_000) req.destroy();
+      else chunks.push(c);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+/** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind, /api/raid-notify. */
+async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => {
+    res.writeHead(code, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  };
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
+  if (path === '/api/progress/load') {
+    if (who.guest) saves.adopt(who.id, who.guest);
+    const s = saves.get(who.id);
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: who.id.startsWith('tg:'), pro: isPro(who.id), raidNotify: !s?.raidOff });
+  }
+  if (path === '/api/progress/save') return reply(200, { savedAt: saves.put(who.id, body!.progress).savedAt });
+  if (path === '/api/remind') {
+    const r = body!.remind as { hour: number; tz: number } | null;
+    return reply(200, { remind: saves.setRemind(who.id, r && { hour: Number(r.hour), tz: Number(r.tz) }).remind ?? null });
+  }
+  if (path === '/api/raid-notify') return reply(200, { raidNotify: !saves.setRaidNotify(who.id, body!.on !== false).raidOff });
+  reply(404, { error: 'not found' });
+}
+
+const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
+const clanInfo = (code: string) => {
+  const c = clans.byCode(code);
+  return c && { name: c.name, tag: c.tag, members: c.members.length };
+};
+
 const http = createServer((req, res) => {
   if (req.url === '/api/activity' && req.method === 'POST') {
     handleActivity(req, res);
     return;
   }
+  const path = req.url?.split('?')[0] ?? '';
+  if (path === '/api/tg' && req.method === 'POST') {
+    if (!BOT_TOKEN || req.headers['x-telegram-bot-api-secret-token'] !== webhookSecret(BOT_TOKEN)) return void res.writeHead(403).end();
+    readJson(req)
+      .then((update) => {
+        botStatus.webhook = true;
+        botStatus.webhookAt = Date.now();
+        const chat = (update as unknown as Update).message?.chat;
+        if (chat?.type === 'private') saves.setBlocked(`tg:${chat.id}`, false);
+        const answer = webhookReply(update as unknown as Update, APP_URL, clanInfo);
+        if (answer) botStatus.handled++;
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
+      })
+      .catch(() => res.writeHead(400).end());
+    return;
+  }
+  if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
+    onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
   if (req.url?.startsWith('/api/top')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(store.top(50).map((p) => ({ name: p.name, cups: p.cups, wins: p.wins }))));
+    res.end(JSON.stringify(store.top(50).map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, pro: isPro(p.id) }))));
     return;
   }
   if (req.url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, bot: { token: TOKEN_SOURCE, username: botUsername, ...botStatus } }));
     return;
   }
   res.writeHead(404).end();
 });
 
+/** Сообщения экрана клана. Ошибки возвращаются строкой и показываются игроку. */
+function onClanMessage(msg: ClientMessage, who: Who, send: (m: ServerMessage) => void): void {
+  const now = Date.now();
+  const fail = (r: unknown): r is string => {
+    if (typeof r !== 'string') return false;
+    send({ type: 'clanError', message: r });
+    return true;
+  };
+  const mine = () => clans.clanOf(who.id);
+  switch (msg.type) {
+    case 'clanMine': {
+      const c = mine();
+      send({ type: 'clan', clan: c ? clans.view(c, who.id, isOnline, now) : null });
+      if (c) send({ type: 'chat', messages: chatOf(c) });
+      break;
+    }
+    case 'clanSearch':
+      send({ type: 'clanList', clans: clans.search(String(msg.q ?? '')) });
+      break;
+    case 'clanCreate': {
+      const r = clans.create(who, msg.clan, now);
+      if (fail(r)) return;
+      sendClan(r);
+      send({ type: 'chat', messages: chatOf(r) });
+      break;
+    }
+    case 'clanJoin': {
+      const r = clans.join(who, { id: msg.id, code: msg.code }, now);
+      if (fail(r)) return;
+      sendClan(r);
+      toClan(r, { type: 'chatMsg', message: proChat(r.chat[r.chat.length - 1]) });
+      send({ type: 'chat', messages: chatOf(r) });
+      break;
+    }
+    case 'clanLeave': {
+      const r = clans.leave(who.id, now);
+      send({ type: 'clan', clan: null });
+      if (r) {
+        sendClan(r);
+        toClan(r, { type: 'chatMsg', message: proChat(r.chat[r.chat.length - 1]) });
+      }
+      break;
+    }
+    case 'clanUpdate': {
+      const r = clans.update(who.id, msg.clan);
+      if (!fail(r)) sendClan(r);
+      break;
+    }
+    case 'clanRole': {
+      if (!['leader', 'officer', 'member'].includes(msg.role)) return;
+      const r = clans.setRole(who.id, String(msg.id), msg.role, now);
+      if (fail(r)) return;
+      sendClan(r);
+      toClan(r, { type: 'chat', messages: chatOf(r) });
+      break;
+    }
+    case 'clanKick': {
+      const target = String(msg.id);
+      const r = clans.kick(who.id, target, now);
+      if (fail(r)) return;
+      for (const s of clanSockets.get(target) ?? []) s({ type: 'clan', clan: null });
+      sendClan(r);
+      toClan(r, { type: 'chatMsg', message: proChat(r.chat[r.chat.length - 1]) });
+      break;
+    }
+    case 'chatSend': {
+      const r = clans.chat(who.id, String(msg.text ?? ''), now);
+      if (fail(r)) return;
+      toClan(mine()!, { type: 'chatMsg', message: proChat(r) });
+      break;
+    }
+    case 'raidStart': {
+      const r = clans.raidStart(who.id, now);
+      if (fail(r)) return;
+      send({ type: 'raidAttack', ...r });
+      sendRaid(mine()!);
+      break;
+    }
+    case 'raidHit': {
+      const c = mine();
+      const lastMsg = c?.nextMsg;
+      const r = clans.raidHit(who.id, String(msg.attackId), Number(msg.damage), now);
+      if (typeof r === 'string') return;
+      sendRaid(r.clan);
+      // Босс повержен или клан вырос в уровне: всем новый клан и сообщения.
+      if (r.killed || r.clan.nextMsg !== lastMsg) {
+        toClan(r.clan, { type: 'chat', messages: chatOf(r.clan) });
+        sendClan(r.clan);
+      }
+      break;
+    }
+    case 'clanReps': {
+      const c = mine();
+      const lastMsg = c?.nextMsg;
+      const level = c && clans.level(c);
+      const r = clans.reps(who.id, Number(msg.reps), now);
+      if (!r) return;
+      if (r.nextMsg !== lastMsg) toClan(r, { type: 'chat', messages: chatOf(r) });
+      if (clans.level(r) !== level || r.nextMsg !== lastMsg) sendClan(r);
+      else send({ type: 'clan', clan: clans.view(r, who.id, isOnline, now) });
+      break;
+    }
+    case 'raidEnd':
+      clans.raidEnd(String(msg.attackId));
+      break;
+  }
+}
+
 const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 16 * 1024 });
 
 wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   let player: Player | null = null;
+  let clanChannel = false;
+  let who: Who | null = null;
   let room: Room | null = null;
   const attach = (r: Room) => {
     room = r;
@@ -168,12 +416,35 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
       player = tgUser
         ? { id: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name), send, joinedRoom: attach }
         : { id: `guest:${/^[\w-]{8,40}$/.test(msg.guestId ?? '') ? msg.guestId : randomUUID()}`, name: cleanName(msg.name), send, joinedRoom: attach };
+      player.pro = isPro(player.id);
+      // Раньше на этом телефоне играли гостем: клан и кубки переходят в аккаунт Telegram.
+      if (tgUser && /^[\w-]{8,40}$/.test(msg.guestId ?? '')) {
+        store.adopt(player.id, `guest:${msg.guestId}`);
+        clans.adopt(player.id, `guest:${msg.guestId}`);
+      }
+      send({ type: 'welcome', id: player.id, name: player.name, botUsername, botRunning: !!BOT_TOKEN, telegram: !!tgUser, pro: !!player.pro });
+      if (msg.channel === 'clan') {
+        // Когда сервер знает токен бота, в кланах только настоящие игроки Telegram: гости из браузера каждый раз новые.
+        if (BOT_TOKEN && !tgUser) {
+          send({ type: 'clan', clan: null });
+          return;
+        }
+        clanChannel = true;
+        who = { id: player.id, name: player.name, level: Math.max(1, Math.min(999, Math.round(Number(msg.level) || 1))) };
+        if (!clanSockets.has(player.id)) clanSockets.set(player.id, new Set());
+        clanSockets.get(player.id)!.add(send);
+        clans.touch(who);
+        const mine = clans.clanOf(player.id);
+        send({ type: 'clan', clan: mine ? clans.view(mine, player.id, isOnline, Date.now()) : null });
+        if (mine) send({ type: 'chat', messages: chatOf(mine) });
+        return;
+      }
       online.set(player.id, player);
-      send({ type: 'welcome', id: player.id, name: player.name, botUsername });
       send({ type: 'profile', profile: profileView(store.get(player.id, player.name)) });
       return;
     }
     if (!player) return;
+    if (clanChannel && who) return onClanMessage(msg, who, send);
 
     switch (msg.type) {
       case 'create': {
@@ -209,7 +480,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         break;
       case 'top': {
         const top = store.top(50);
-        send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id })) });
+        send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id, pro: isPro(p.id) })) });
         break;
       }
       case 'join': {
@@ -243,6 +514,11 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   ws.on('close', () => {
     leaveRoom();
     if (!player) return;
+    if (clanChannel) {
+      clanSockets.get(player.id)?.delete(send);
+      if (!clanSockets.get(player.id)?.size) clanSockets.delete(player.id);
+      return;
+    }
     for (const [ex, p] of queue) if (p === player) queue.delete(ex);
     if (online.get(player.id) === player) online.delete(player.id);
   });
@@ -258,10 +534,69 @@ setInterval(() => {
 }, 30_000);
 
 http.listen(PORT, () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
+// Напоминания: раз в несколько минут ищем тех, у кого наступил их час, а тренировки сегодня ещё не было.
+if (BOT_TOKEN)
+  setInterval(() => {
+    const api = botApi(BOT_TOKEN);
+    for (const { save, date } of dueReminders(saves.all(), Date.now())) {
+      saves.markReminded(save.id, date);
+      const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
+      const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
+      const text =
+        p?.dailyDone === date
+          ? 'Мастер Гром: «Сегодня ещё ни одного повтора. Пять минут — и день не потерян!»'
+          : `${npcName(task.npc)}: «${task.ask}»\n\nЗадание дня: ${EXERCISE_LABELS[task.exercise].toLowerCase()} × ${task.target}. Награда: ${task.coins} монет.`;
+      api('sendMessage', { chat_id: Number(save.id.slice(3)), text, reply_markup: { inline_keyboard: [[{ text: 'Тренироваться', web_app: { url: `${APP_URL}/` } }]] } })
+        .then((r) => {
+          // Игрок остановил бота: больше не пишем.
+          if (r.error_code === 403) {
+            saves.setRemind(save.id, null);
+            saves.setBlocked(save.id, true);
+          }
+        })
+        .catch(() => null);
+    }
+  }, 5 * 60_000);
+// Рейд клана: раз в минуту смотрим, кому пора написать (начало, напоминание, итог).
+// Разосланное клан отмечает сразу, до отправки: после перезапуска повторов не будет.
+// Шлём по одному, не больше 20 сообщений в секунду (у Telegram предел около 30).
+let raidSending = false;
+async function sendRaidNotices(list: RaidNotice[]): Promise<void> {
+  const api = botApi(BOT_TOKEN);
+  for (const n of list) {
+    if (saves.raidMuted(n.playerId)) continue;
+    const body = { chat_id: n.chatId, text: n.text, reply_markup: { inline_keyboard: [[{ text: n.button, web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=clan` } }]] } };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const started = Date.now();
+      const r = await api('sendMessage', body, 15_000).catch(() => null);
+      if (r?.error_code === 403) saves.setBlocked(n.playerId, true);
+      // Telegram просит подождать (429): ждём столько, сколько сказал, и пробуем ещё раз.
+      const retry = r?.error_code === 429 ? (r.parameters?.retry_after ?? 1) : 0;
+      await new Promise((res) => setTimeout(res, retry ? retry * 1000 : Math.max(0, 50 - (Date.now() - started))));
+      if (!retry) break;
+    }
+  }
+}
+if (BOT_TOKEN)
+  setInterval(() => {
+    if (raidSending) return;
+    const list = raidNotices(clans.all(), Date.now(), (id) => saves.raidMuted(id));
+    if (!list.length) return;
+    for (const k of new Set(list.map((n) => `${n.clanId}|${n.key}|${n.kind}`))) {
+      const [clan, key, kind] = k.split('|');
+      clans.markNotice(clan, key, kind);
+    }
+    raidSending = true;
+    sendRaidNotices(list).finally(() => (raidSending = false));
+  }, 60_000);
+if (BOT_TOKEN)
+  runBot(BOT_TOKEN, APP_URL, clanInfo, (chatId) => saves.setBlocked(`tg:${chatId}`, false));
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
   process.on(signal, () => {
     store.flush();
+    clans.flush();
+    saves.flush();
     process.exit(0);
   });

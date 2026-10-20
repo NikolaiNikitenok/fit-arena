@@ -48,8 +48,9 @@ export interface CharacterProps {
   // Смена числа — разовое движение поверх основного (удар, прыжок).
   pulse?: number;
   pulseAnim?: CharAnim;
-  // Смена числа — по персонажу попали: вспышка.
+  // Смена числа — по персонажу попали: вспышка (и движение hitAnim, если задано).
   hit?: number;
+  hitAnim?: CharAnim;
   tint?: string;
   glow?: string;
   stone?: boolean;
@@ -58,9 +59,24 @@ export interface CharacterProps {
   position?: [number, number, number];
   rotation?: number;
   onClick?: () => void;
+  // Снаряжение героя по отдельности: оружие и вещь во второй руке. Если задано,
+  // стандартное оружие набора прячется.
+  hands?: { weapon?: HandGear; offhand?: HandGear };
 }
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick }: CharacterProps) {
+export interface HandGear {
+  mesh: string;
+  source: CharName;
+  glow?: string;
+  // Множитель цвета (mul:r,g,b), чтобы одна модель давала разные вещи.
+  tint?: string;
+  // Кость руки, если не та, что в наборе.
+  bone?: string;
+}
+
+const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
+
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
@@ -72,13 +88,15 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       if (gear && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(mesh.name)) mesh.visible = false;
+      if (hands && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && WEAPONISH.test(mesh.name)) mesh.visible = false;
       mesh.castShadow = true;
       const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
       mesh.material = mat;
       materials.push(mat);
     });
     return { root, materials, mixer: new THREE.AnimationMixer(root) };
-  }, [gltf, model]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gltf, model, !!hands]);
 
   const actions = useMemo(() => {
     const out: Partial<Record<CharAnim, THREE.AnimationAction>> = {};
@@ -118,20 +136,30 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anim, stone]);
 
-  useEffect(() => {
-    if (pulse <= 0 || stone) return;
-    play(pulseAnim, 1.6);
+  // Разовое движение, после которого возвращаемся к основному, если его не сменило другое.
+  const base = useRef(anim);
+  base.current = anim;
+  const once = (name: CharAnim) => {
+    play(name, 1.6);
     const back = (e: { action: THREE.AnimationAction }) => {
-      if (e.action === actions[pulseAnim]) play(anim);
+      if (e.action === actions[name] && current.current === e.action) play(base.current);
     };
     mixer.addEventListener('finished', back);
     return () => mixer.removeEventListener('finished', back);
+  };
+
+  useEffect(() => {
+    if (pulse <= 0 || stone) return;
+    return once(pulseAnim);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pulse]);
 
   const hitAt = useRef(-1e9);
   useEffect(() => {
-    if (hit > 0) hitAt.current = performance.now();
+    if (hit <= 0) return;
+    hitAt.current = performance.now();
+    if (hitAnim && !stone && anim === 'idle') return once(hitAnim);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hit]);
 
   const glowColor = useMemo(() => new THREE.Color(glow ?? '#000000'), [glow]);
@@ -160,6 +188,45 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       }
     >
       <primitive object={root} />
+      {hands?.weapon && <HandItem root={root} gear={hands.weapon} />}
+      {hands?.offhand && <HandItem root={root} gear={hands.offhand} />}
     </group>
   );
+}
+
+// Предмет из набора другого героя: берём меш вместе с его положением на кости руки.
+function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
+  const src = useGltf(charUrl(gear.source));
+  useEffect(() => {
+    const node = src.scene.getObjectByName(gear.mesh);
+    // Имена костей загрузчик очищает от точек: handslot.l → handslotl.
+    const boneName = gear.bone ? THREE.PropertyBinding.sanitizeNodeName(gear.bone) : node?.parent?.name;
+    const bone = node?.parent && boneName && root.getObjectByName(boneName);
+    if (!node || !bone) return;
+    const copy = node.clone();
+    copy.visible = true;
+    // На другой руке: слоты рук зеркальны, предмет разворачиваем вокруг оси кости.
+    if (boneName !== node.parent!.name) {
+      const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+      copy.position.applyQuaternion(flip);
+      copy.quaternion.premultiply(flip);
+    }
+    copy.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.castShadow = true;
+      const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      if (gear.tint) mat.color.multiply(parseTint(gear.tint));
+      if (gear.glow) {
+        mat.emissive.set(gear.glow);
+        mat.emissiveIntensity = 0.45;
+      }
+      m.material = mat;
+    });
+    bone.add(copy);
+    return () => {
+      bone.remove(copy);
+    };
+  }, [src, root, gear.mesh, gear.glow, gear.tint, gear.bone]);
+  return null;
 }

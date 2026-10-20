@@ -29,7 +29,17 @@ export class Store {
     }
   }
 
-  get(id: string, name: string): Profile {
+  /** Кубки гостя переходят в аккаунт Telegram, если там ещё не было боёв. */
+  adopt(id: string, guestId: string): void {
+    const g = this.profiles.get(guestId);
+    const t = this.profiles.get(id);
+    if (!g || (t && t.wins + t.losses + t.draws > 0)) return;
+    this.profiles.set(id, { ...g, id });
+    this.profiles.delete(guestId);
+    this.scheduleSave();
+  }
+
+    get(id: string, name: string): Profile {
     const season = seasonAt(this.now());
     let p = this.profiles.get(id);
     if (!p) {

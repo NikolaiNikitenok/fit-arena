@@ -3,9 +3,15 @@ import { ArenaStage } from './ArenaStage';
 import { MAX_HP } from '../shared/battle';
 import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
 import { LEAGUES, leagueOf, seasonEndsAt } from '../shared/rating';
+import { CameraGuide } from './CameraGuide';
 import { Exercise, EXERCISE_LABELS } from './repCounter';
-import { inviteCode, inviteLink, share, tg, userName } from './telegram';
+import { guestId, inviteCode, inviteLink, share, tg, userName } from './telegram';
 import { useRepCamera } from './useRepCamera';
+import { useMusic } from './audio';
+import { useDuelSounds } from './gameSounds';
+import { useVoiceCoach } from './voice';
+import { recordDuel, recordOutsideReps } from './game/progress';
+import { TrainerDuel } from './TrainerDuel';
 
 type Phase = 'connecting' | 'offline' | 'menu' | 'room' | 'countdown' | 'fight' | 'over';
 
@@ -18,27 +24,19 @@ interface RoomInfo {
 const RESULT_TEXT = { win: 'Победа!', lose: 'Поражение', draw: 'Ничья' };
 const REASON_TEXT = { ko: 'нокаутом', time: 'по очкам', left: 'соперник покинул бой' };
 
-// Гостям без Telegram выдаём постоянный id, чтобы кубки не терялись между заходами.
-function guestId(): string {
-  try {
-    let id = localStorage.getItem('fit-arena-guest');
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem('fit-arena-guest', id);
-    }
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
-
 const freshFighter = (name: string): FighterView => ({ name, hp: MAX_HP, maxHp: MAX_HP, hits: 0, combo: false });
 
+/** Вкладка дуэлей: живой бой через сервер или бой с тренером на устройстве. */
 export function Duel({ exercise }: { exercise: Exercise }) {
+  const [trainer, setTrainer] = useState(false);
+  return trainer ? <TrainerDuel exercise={exercise} onExit={() => setTrainer(false)} /> : <LiveDuel exercise={exercise} onTrainer={() => setTrainer(true)} />;
+}
+
+function LiveDuel({ exercise, onTrainer }: { exercise: Exercise; onTrainer: () => void }) {
   const camera = useRepCamera();
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
-  const [me, setMe] = useState<{ id: string; botUsername: string | null } | null>(null);
+  const [me, setMe] = useState<{ id: string; pro: boolean; bot: { username: string | null; running: boolean } } | null>(null);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [state, setState] = useState<{ me: FighterView; opponent: FighterView } | null>(null);
   const [endsAt, setEndsAt] = useState(0);
@@ -52,6 +50,9 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const [delta, setDelta] = useState<number | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [top, setTop] = useState<TopEntry[] | null>(null);
+
+  // Свои повторы в бою: после боя засчитываем их в серию, задание дня и клан.
+  const fight = useRef<{ exercise: Exercise; hits: number } | null>(null);
 
   const send = (msg: ClientMessage) => ws.current?.readyState === WebSocket.OPEN && ws.current.send(JSON.stringify(msg));
 
@@ -70,7 +71,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
       const msg: ServerMessage = JSON.parse(event.data);
       switch (msg.type) {
         case 'welcome': {
-          setMe({ id: msg.id, botUsername: msg.botUsername });
+          setMe({ id: msg.id, pro: !!msg.pro, bot: { username: msg.botUsername, running: msg.botRunning } });
           setPhase('menu');
           const invite = inviteCode();
           if (invite) socket.send(JSON.stringify({ type: 'join', code: invite }));
@@ -78,6 +79,7 @@ export function Duel({ exercise }: { exercise: Exercise }) {
         }
         case 'room':
           setRoom({ code: msg.code, exercise: msg.exercise, players: msg.players });
+          fight.current = { exercise: msg.exercise, hits: fight.current?.hits ?? 0 };
           setPhase((p) => (p === 'countdown' || p === 'fight' || p === 'over' ? p : 'room'));
           break;
         case 'profile':
@@ -99,10 +101,14 @@ export function Duel({ exercise }: { exercise: Exercise }) {
           break;
         case 'state':
           setState({ me: msg.me, opponent: msg.opponent });
+          if (fight.current) fight.current.hits = msg.me.hits;
           setEndsAt(Date.now() + msg.leftMs);
           setPhase('fight');
           break;
         case 'end':
+          if (fight.current?.hits) recordOutsideReps(fight.current.exercise, fight.current.hits, Date.now());
+          if (fight.current) recordDuel(msg.result, Date.now());
+          if (fight.current) fight.current.hits = 0;
           setResult(msg);
           setPhase('over');
           camera.stop();
@@ -138,8 +144,8 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const invite = async () => {
     if (!room) return;
     const how = await share(
-      inviteLink(room.code, me?.botUsername ?? null),
-      `Вызываю тебя на бой в Fit Arena: ${EXERCISE_LABELS[room.exercise].toLowerCase()}, кто больше за минуту!`,
+      inviteLink(room.code, me?.bot ?? { username: null, running: false }),
+      `Вызываю тебя на бой в NikitenokArena: ${EXERCISE_LABELS[room.exercise].toLowerCase()}, кто больше за минуту!`,
     ).catch(() => null);
     setShared(how === 'copied' ? 'Ссылка скопирована' : null);
   };
@@ -147,7 +153,11 @@ export function Duel({ exercise }: { exercise: Exercise }) {
   const seconds = Math.max(0, Math.ceil((endsAt - now) / 1000));
   const opponentInfo = room?.players.find((p) => p.id !== me?.id);
   const myInfo = room?.players.find((p) => p.id === me?.id);
-  const view = state ?? { me: freshFighter(userName()), opponent: freshFighter(opponentInfo?.name ?? 'Соперник') };
+  const view = state ?? { me: { ...freshFighter(userName()), pro: me?.pro }, opponent: freshFighter(opponentInfo?.name ?? 'Соперник') };
+  // В меню спокойная тема, на арене барабаны.
+  useMusic(phase === 'room' || phase === 'countdown' || phase === 'fight' || phase === 'over' ? 'arena' : 'calm');
+  useDuelSounds(phase, seconds, view.me, view.opponent, result);
+  useVoiceCoach(phase === 'fight', view.me.hits, seconds, camera.hint, 60);
 
   let overlay: ReactNode = null;
   if (phase === 'countdown') overlay = <div className="result-title">{seconds || 'Бой!'}</div>;
@@ -174,22 +184,29 @@ export function Duel({ exercise }: { exercise: Exercise }) {
 
   return (
     <>
-      <ArenaStage me={view.me} opponent={view.opponent} seconds={phase === 'fight' ? seconds : 60} camera={camera} overlay={overlay} />
+      <ArenaStage me={view.me} opponent={view.opponent} seconds={phase === 'fight' ? seconds : 60} camera={camera} overlay={overlay} result={phase === 'over' ? result?.result : null} />
 
       <div className="hint-line">
         {error ??
           (phase === 'fight'
             ? camera.hint ?? 'Отлично, продолжай!'
             : phase === 'room' && !opponentInfo
-              ? 'Отправь другу приглашение и жди его на ринге'
+              ? 'Отправь другу приглашение и жди его на арене'
               : phase === 'room' && myInfo?.ready
                 ? `Ждём, пока ${opponentInfo?.name} будет готов`
                 : phase === 'room'
-                  ? `${opponentInfo?.name} на ринге. Встань в кадр и жми «Я готов»`
+                  ? `${opponentInfo?.name} на арене. Встань в кадр и жми «Я готов»`
                   : '')}
       </div>
 
       {phase === 'menu' && profile && <LeagueCard profile={profile} />}
+
+      {(phase === 'connecting' || phase === 'offline') && (
+        <button className="secondary daily" onClick={onTrainer}>
+          Бой с тренером
+          <small>в любое время и без сети, кубки не меняются</small>
+        </button>
+      )}
 
       {phase === 'menu' && (
         <>
@@ -217,6 +234,10 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               Войти
             </button>
           </div>
+          <button className="secondary daily" onClick={onTrainer}>
+            Бой с тренером
+            <small>в любое время и без сети, кубки не меняются</small>
+          </button>
           <button className="link" onClick={() => (top ? setTop(null) : send({ type: 'top' }))}>
             {top ? 'Скрыть рейтинг' : 'Рейтинг сезона'}
           </button>
@@ -226,7 +247,9 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               {top.map((p, i) => (
                 <div key={i} className={`top-row ${p.me ? 'me' : ''}`}>
                   <span className="top-place">{i + 1}</span>
-                  <span className="top-name">{p.name}</span>
+                  <span className="top-name">
+                    <span className={p.pro ? 'pro-name' : ''}>{p.name}</span>
+                  </span>
                   <span style={{ color: leagueOf(p.cups).color }}>{leagueOf(p.cups).name}</span>
                   <b>{p.cups} 🏆</b>
                 </div>
@@ -243,10 +266,17 @@ export function Duel({ exercise }: { exercise: Exercise }) {
               Код боя <b>{room.code}</b> · {EXERCISE_LABELS[room.exercise]}
             </div>
             <div className="muted">
-              {room.players.map((p) => `${p.name}${p.ready ? ' ✓' : ''}`).join(' против ')}
+              {room.players.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && ' против '}
+                  <span className={p.pro ? 'pro-name' : ''}>{p.name}</span>
+                  {p.ready && ' ✓'}
+                </span>
+              ))}
               {room.players.length < 2 && ' · ждём соперника'}
             </div>
           </div>
+          {phase === 'room' && !myInfo?.ready && <CameraGuide exercise={room.exercise} />}
           {room.players.length < 2 && (
             <button className="secondary" onClick={invite}>
               {shared ?? 'Позвать друга'}

@@ -1,8 +1,9 @@
 import { Suspense, useMemo, useRef } from 'react';
+import { canvasProps, getSettings } from '../settings';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
-import { Character } from '../three/Character';
+import { Character, CharacterProps } from '../three/Character';
 import { CharName } from '../three/kit';
 import { Prop } from '../three/Prop';
 import { Sky } from '../three/Sky';
@@ -45,7 +46,7 @@ function labelTexture(text: string, color: string): THREE.Texture {
   c.width = 128;
   c.height = 64;
   const g = c.getContext('2d')!;
-  g.font = 'bold 44px system-ui, sans-serif';
+  g.font = "900 44px Nunito, system-ui, sans-serif";
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = 8;
@@ -97,12 +98,15 @@ function FogOfLaziness({ z0, z1 }: { z0: number; z1: number }) {
   const len = z0 - z1;
   return (
     <group position={[0, 0, (z0 + z1) / 2]}>
-      {[0.6, 1.4, 2.4].map((y, i) => (
-        <mesh key={y} position={[0, y, 0]}>
-          <boxGeometry args={[44, 1.2 + i * 0.4, len]} />
-          <meshStandardMaterial color="#c7c3cf" transparent opacity={0.32} depthWrite={false} />
-        </mesh>
-      ))}
+      {/* Низкая дымка над закрытыми землями: видно, что там, но земля ещё во власти Лени. */}
+      <mesh position={[0, 0.35, 0]}>
+        <boxGeometry args={[44, 0.7, len]} />
+        <meshStandardMaterial color="#b9b4c8" transparent opacity={0.2} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 1.1, 0]}>
+        <boxGeometry args={[44, 0.8, len]} />
+        <meshStandardMaterial color="#b9b4c8" transparent opacity={0.08} depthWrite={false} />
+      </mesh>
     </group>
   );
 }
@@ -114,6 +118,7 @@ export interface WorldMapProps {
   hero: CharName;
   heroTint?: string;
   heroGlow?: string;
+  heroHands?: CharacterProps['hands'];
   focus: React.MutableRefObject<number>;
   focusLand: number;
   openedChests: number[];
@@ -127,7 +132,7 @@ export function WorldMap3D(props: WorldMapProps) {
   const look = LOOK[layout.world];
   const sun = useRef<THREE.DirectionalLight>(null);
   return (
-    <Canvas shadows dpr={[1, 1.6]} camera={{ position: [0, 7.5, 8.5], fov: 48, far: 400 }} gl={{ antialias: true }}>
+    <Canvas {...canvasProps(getSettings())} camera={{ position: [0, 7.5, 8.5], fov: 48, far: 400 }} gl={{ antialias: true }}>
       <Sky top={look.top} horizon={look.horizon} stars={look.stars} planet={look.planet} />
       <fog attach="fog" args={[look.fog, 16, 42]} />
       <hemisphereLight args={['#ffffff', '#4a4038', layout.world === 0 ? 1.3 : 1.0]} />
@@ -140,7 +145,7 @@ export function WorldMap3D(props: WorldMapProps) {
   );
 }
 
-function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
+function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, heroHands, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
   const unlocked = (id: number) => id <= currentId;
   const heroIndex = levels.findIndex((l) => l.id === currentId);
   const near = (land: number) => Math.abs(land - focusLand) <= 1;
@@ -226,7 +231,7 @@ function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow
       })}
 
       {heroIndex >= 0 && (
-        <Character model={hero} tint={heroTint} glow={heroGlow} anim="idle" position={[layout.nodes[heroIndex].x, 0.15, layout.nodes[heroIndex].z]} scale={0.42} />
+        <Character model={hero} tint={heroTint} glow={heroGlow} hands={heroHands} anim="idle" position={[layout.nodes[heroIndex].x, 0.15, layout.nodes[heroIndex].z]} scale={0.42} />
       )}
     </>
   );

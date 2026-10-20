@@ -1,22 +1,80 @@
 import { useEffect, useRef, useState } from 'react';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { Portrait } from './Dialog';
-import { ITEMS, itemById, RARITY_COLORS, RARITY_NAMES } from './items';
+import { GearFace, HeroHome, ShopTab } from './HeroHome';
+import { SettingsSheet } from '../SettingsSheet';
+import { ClanScreen } from '../clan/ClanScreen';
+import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { MissionPlay, Stars } from './MissionPlay';
 import { NPCS } from './npcs';
-import { buy, claimChest, currentLevel, dayKey, equip, isUnlocked, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, recordWin, REST_PER_WEEK, spendLife, streak } from './progress';
+import { dailyTask } from './daily';
+import { startCloud, usePro } from '../cloud';
+import { PassScreen } from './PassScreen';
+import { EventScreen } from './EventScreen';
+import { recordEventHit } from './event';
+import { Calendar, RepsChart } from './Stats';
+import { AchievementsSheet } from './Achievements';
+import { newAchievements } from './achievements';
+import { Onboarding } from './Onboarding';
+import {
+  buy,
+  buyGear,
+  buyPotion,
+  equipGear,
+  resetProgress,
+  usePotion,
+  claimChest,
+  claimDaily,
+  claimAchievement,
+  markAchSeen,
+  setTitle,
+  finishOnboarding,
+  dailyProgress,
+  claimHeroLevels,
+  currentLevel,
+  dayKey,
+  equip,
+  isUnlocked,
+  livesNow,
+  loadProgress,
+  Progress,
+  recordActivity,
+  recordLoss,
+  recordWin,
+  spendMight,
+  REST_PER_WEEK,
+  spendLife,
+  spendSwaps,
+  streak,
+  swapsLeft,
+} from './progress';
 import { WorldMap3D } from './WorldMap3D';
+import { Coin, Flask, Heart, Lock, Swords } from '../icons';
+import { heroHands, heroPower } from './power';
+import { sfx, useMusic } from '../audio';
+import { missionTheme, worldTheme } from '../music';
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
+// На вкладках карты короткие названия, чтобы все четыре мира помещались в строку.
+const SHORT_WORLD: Record<(typeof TABS)[number], string> = { fantasy: 'Королевство', space: 'Космос', zombie: 'Зомби', castle: 'Замок' };
 const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const fmtMin = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 
-export function Adventure() {
+export type AdventureTab = 'hero' | 'map' | 'clan';
+
+interface Props {
+  tab: AdventureTab;
+  onTab: (tab: AdventureTab) => void;
+  // Во время миссии нижнее меню прячется.
+  onPlaying: (playing: boolean) => void;
+}
+
+export function Adventure({ tab, onTab, onPlaying }: Props) {
   const [progress, setProgressState] = useState(loadProgress);
   // Последний прогресс: победа и запись подхода приходят подряд в одном кадре.
   const latest = useRef(progress);
@@ -27,14 +85,34 @@ export function Adventure() {
   const update = (fn: (p: Progress) => Progress) => setProgress(fn(latest.current));
   const now = Date.now();
   const lives = livesNow(progress, now);
-  const series = streak(progress.days, now);
   const [strength, setStrength] = useState(false);
+  const daily = dailyTask(dayKey(now), progress.baseline);
+  // Прогресс с сервера: на новом телефоне герой подтягивается сам.
+  useEffect(() => {
+    void startCloud((p) => setProgress(p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const current = currentLevel(progress, LEVEL_COUNT);
   const currentDef = LEVELS[current - 1];
   const [world, setWorld] = useState(currentDef.world);
-  const [playing, setPlaying] = useState<LevelDef | null>(null);
+  const [playing, setPlayingState] = useState<LevelDef | null>(null);
+  const setPlaying = (l: LevelDef | null) => {
+    setPlayingState(l);
+    onPlaying(!!l);
+  };
   const [selected, setSelected] = useState<LevelDef | null>(null);
-  const [shop, setShop] = useState(false);
+  const [shop, setShop] = useState<ShopTab | null>(null);
+  const [settings, setSettings] = useState(false);
+  const [replayOnb, setReplayOnb] = useState(false);
+  const [achOpen, setAchOpen] = useState(false);
+  const [passOpen, setPassOpen] = useState(false);
+  const [eventOpen, setEventOpenState] = useState(false);
+  const setEventOpen = (open: boolean) => {
+    setEventOpenState(open);
+    onPlaying(open);
+  };
+  const pro = usePro();
+  const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const levels = levelsOf(world);
   const startIndex = () => Math.max(0, levels.findIndex((l) => l.id === current));
@@ -42,11 +120,34 @@ export function Adventure() {
   const [focusLand, setFocusLand] = useState(levels[startIndex()].land);
   const drag = useRef<{ y: number; moved: number } | null>(null);
   const item = itemById(progress.equipped);
+  useMusic(playing ? missionTheme(playing.world, playing.type === 'boss') : tab === 'map' ? worldTheme(world) : 'calm');
 
   const showToast = (text: string) => {
     setToast(text);
     setTimeout(() => setToast((t) => (t === text ? null : t)), 2600);
   };
+
+  // Новый уровень героя: монеты и сообщение, как только миссия закончилась.
+  const [levelUp, setLevelUp] = useState<string | null>(null);
+  useEffect(() => {
+    if (playing) return;
+    const r = claimHeroLevels(latest.current);
+    if (!r) return;
+    setProgress(r.progress);
+    sfx('levelup');
+    setLevelUp(`Новый уровень героя: ${r.levels[r.levels.length - 1]}! +${r.coins} монет`);
+    setTimeout(() => setLevelUp(null), 3500);
+  }, [playing, progress.days]);
+
+  // Новое достижение: короткое сообщение после миссии, награда ждёт в «Достижениях».
+  useEffect(() => {
+    if (playing) return;
+    const fresh = newAchievements(latest.current, Date.now());
+    if (!fresh.length) return;
+    setProgress(markAchSeen(latest.current, fresh.map((a) => a.id)));
+    setAchToast(fresh.length > 1 ? `Новые достижения: ${fresh.map((a) => a.title).join(', ')}` : `Новое достижение: ${fresh[0].title}! Забери награду`);
+    setTimeout(() => setAchToast(null), 4000);
+  }, [playing, progress.days, progress.dailyCount, progress.raidClaimed?.length]);
 
   const switchWorld = (w: number) => {
     setWorld(w);
@@ -60,20 +161,145 @@ export function Adventure() {
   if (playing)
     return (
       <MissionPlay
-        key={playing.id}
+        key={playing.daily ? 'daily' : playing.id}
         level={playing}
         progress={progress}
         onExit={() => setPlaying(null)}
         onWin={(stars, record) => {
+          if (playing.daily) return { coins: 0, firstTime: false };
           const r = recordWin(latest.current, playing, stars, record);
           setProgress(r.progress);
           return r.reward;
         }}
-        onLose={() => update((p) => spendLife(p, Date.now()))}
-        onActivity={(ex, reps) => update((p) => recordActivity(p, ex, reps, Date.now()))}
+        onLose={() => !playing.daily && update((p) => recordLoss(spendLife(p, Date.now()), playing))}
+        onStart={() => update(spendMight)}
+        onActivity={(ex, reps) => update((p) => ({ ...recordActivity(p, ex, reps, Date.now()), clanPending: (p.clanPending ?? 0) + reps }))}
         lives={lives}
-        onNext={playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
+        swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
+        onSwap={(count) => {
+          const next = spendSwaps(latest.current, playing.id, count, Date.now());
+          if (next) update(() => next);
+          return next != null;
+        }}
+        onNext={!playing.daily && playing.id < LEVEL_COUNT ? () => setPlaying(LEVELS[playing.id]) : undefined}
       />
+    );
+
+  if (eventOpen)
+    return (
+      <EventScreen
+        progress={progress}
+        onStart={() => update(spendMight)}
+        onFinish={(dealt, reps, ex) => {
+          const now = Date.now();
+          update((p) => ({ ...recordActivity(p, ex, reps, now), clanPending: (p.clanPending ?? 0) + reps }));
+          const r = recordEventHit(latest.current, dealt, now);
+          if (!r) return null;
+          setProgress(r.progress);
+          if (r.killed) sfx('chest');
+          return r;
+        }}
+        onClose={() => setEventOpen(false)}
+      />
+    );
+
+  const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
+  const sheets = (
+    <>
+      {(newcomer || replayOnb) && (
+        <Onboarding
+          replay={replayOnb}
+          onDone={(start) => {
+            // Повтор из настроек только показывает знакомство: испытание уже пройдено.
+            if (replayOnb) return setReplayOnb(false);
+            setProgress(finishOnboarding(latest.current));
+            if (start) setPlaying(LEVELS[0]);
+          }}
+        />
+      )}
+      {achOpen && (
+        <AchievementsSheet
+          progress={progress}
+          now={now}
+          onClaim={(a) => {
+            const next = claimAchievement(latest.current, a.id, a.coins);
+            if (next) setProgress(next);
+          }}
+          onTitle={(id) => setProgress(setTitle(latest.current, id))}
+          onClose={() => setAchOpen(false)}
+        />
+      )}
+      {achToast && (
+        <button className="toast global ach-toast" onClick={() => setAchOpen(true)}>
+          {achToast}
+        </button>
+      )}
+      {passOpen && <PassScreen progress={progress} setProgress={setProgress} pro={pro} land={currentDef.land} onClose={() => setPassOpen(false)} />}
+      {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
+      {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
+      {settings && <SettingsSheet
+          progress={progress}
+          onReset={() => setProgress(resetProgress())}
+          onIntro={() => {
+            setSettings(false);
+            setReplayOnb(true);
+          }}
+          onClose={() => setSettings(false)}
+        />}
+      {levelUp && <div className="toast global">{levelUp}</div>}
+      {toast && tab === 'hero' && <div className="toast global">{toast}</div>}
+    </>
+  );
+
+  if (tab === 'clan')
+    return (
+      <>
+        <ClanScreen progress={progress} setProgress={setProgress} onPlaying={onPlaying} landNow={currentDef.land} onSpendMight={() => update(spendMight)} />
+        {sheets}
+      </>
+    );
+
+  if (tab === 'hero')
+    return (
+      <>
+        <HeroHome
+          progress={progress}
+          lives={<LivesPill progress={progress} />}
+          current={currentDef}
+          onTrain={() => setPlaying(currentDef)}
+          daily={daily}
+          dailyDone={dailyProgress(progress, daily)}
+          onDaily={() => {
+            const left = Math.max(5, daily.target - dailyProgress(progress, daily));
+            // Миссия на месте текущего уровня: та же земля и декорации, но цель — остаток задания.
+            setPlaying({ ...currentDef, daily: true, type: 'build', title: `Задание: ${NPCS[daily.npc].name}`, exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
+          }}
+          onClaimDaily={() => {
+            const next = claimDaily(progress, daily);
+            if (!next) return;
+            setProgress(next);
+            sfx('coin');
+            showToast(`Задание выполнено! +${daily.coins} монет${daily.potion ? ' и зелье' : ''}`);
+          }}
+          onMap={() => onTab('map')}
+          onShop={(t) => setShop(t ?? 'weapon')}
+          onStrength={() => setStrength(true)}
+          onEquip={(id) => setProgress(equip(progress, id))}
+          onEquipGear={(id) => setProgress(equipGear(progress, id))}
+          onPotion={(id) => {
+            const next = usePotion(progress, id, Date.now());
+            if (!next) return showToast(id === 'vigor' ? 'Жизни и так полные.' : 'Сейчас не нужно.');
+            setProgress(next);
+            showToast(id === 'vigor' ? '+1 жизнь!' : id === 'might' ? 'Эликсир выпит: +30% урона в следующем бою.' : 'Ещё одна замена упражнения на сегодня.');
+          }}
+          onSettings={() => setSettings(true)}
+          onAchievements={() => setAchOpen(true)}
+          pro={pro}
+          onPass={() => setPassOpen(true)}
+          onEvent={() => setEventOpen(true)}
+        />
+        {sheets}
+      </>
     );
 
   // Тап по объекту на карте не должен срабатывать после перетаскивания.
@@ -96,145 +322,268 @@ export function Adventure() {
 
   const L = LANDS[focusLand];
   const worldOpen = (w: number) => isUnlocked(progress, levelsOf(w)[0].id);
+  const series = streak(progress.days, now);
 
+  // Карта на весь экран: листается только сама сцена, страница и Telegram не двигаются.
   return (
     <>
-      <div className="tabs small">
-        {TABS.map((w, i) => (
-          <button key={w} className={world === i ? 'active' : ''} disabled={!worldOpen(i)} onClick={() => switchWorld(i)}>
-            {worldOpen(i) ? WORLD_NAMES[w] : `🔒 ${WORLD_NAMES[w]}`}
-          </button>
-        ))}
-      </div>
-
-      <div className="arena map3d" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setTimeout(() => (drag.current = null))}>
-        <WorldMap3D
-          levels={levels}
-          stars={progress.stars}
-          currentId={current}
-          hero={item.hero}
-          heroTint={item.tint}
-          heroGlow={item.glow}
-          focus={focus}
-          focusLand={focusLand}
-          openedChests={progress.chests}
-          onSelect={(l) => tap(() => setSelected(l))()}
-          onMerchant={tap(() => setShop(true))}
-          onChest={(land) =>
-            tap(() => {
-              const r = claimChest(progress, land);
-              if (!r) return showToast('Этот сундук уже пуст.');
-              setProgress(r.progress);
-              showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
-            })()
-          }
-        />
-        <div className="map-hud">
-          <div>
-            <div className="map-land">{L.name}</div>
-            <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
-          </div>
-          <div className="map-stats">
-            <LivesPill progress={progress} />
-            <button className="pill btn" onClick={() => setStrength(true)}>
-              🔥 {series.days}
-            </button>
-            <span className="pill">🪙 {progress.coins}</span>
-          </div>
-        </div>
-        {toast && <div className="toast">{toast}</div>}
-        <div className="map-help">Листай карту пальцем · сундуки и купец ждут на дороге</div>
-      </div>
-
-      {selected && (
-        <div className="level-card">
-          <div className="level-tag">
-            {WORLD_NAMES[LANDS[selected.land].world]} · уровень {selected.num}
-          </div>
-          <div className="level-title">{selected.title}</div>
-          <div className="muted">
-            {selected.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
-            {selected.type !== 'trial' && ` · цель ${targetReps(selected, progress.baseline)}`} · {selected.coins} монет
-          </div>
-          <Stars n={progress.stars[selected.id] ?? 0} />
-          {isUnlocked(progress, selected.id) ? (
-            <button className="primary" onClick={() => setPlaying(selected)}>
-              {progress.stars[selected.id] ? 'Пройти ещё раз' : 'В путь'}
-            </button>
-          ) : (
-            <div className="muted">Сначала пройди предыдущие уровни.</div>
-          )}
-        </div>
-      )}
-      {!selected && (
-        <button className="primary daily" onClick={() => setPlaying(currentDef)}>
-          {series.today ? `Уровень ${currentDef.num}: ${currentDef.title}` : 'Тренировка дня'}
-          <small>{series.today ? `Сегодня уже ${progress.days[dayKey(now)]} повторов · серия ${series.days}` : `Уровень ${currentDef.num}: ${currentDef.title}`}</small>
-        </button>
-      )}
-      <button className="link" onClick={() => setStrength(true)}>
-        Твоя сила и серия
-      </button>
-
-      {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
-
-      {shop && (
-        <div className="sheet" onClick={() => setShop(false)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="remark">
-              <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
-              <div>
-                <div className="level-title">Купец Фёдор</div>
-                <div className="muted">«Смотри, герой, товар со всех трёх миров! Найденное в сундуках тоже можно надеть.»</div>
+      <div className="map-screen">
+        <div className="arena map3d" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setTimeout(() => (drag.current = null))}>
+          <WorldMap3D
+            levels={levels}
+            stars={progress.stars}
+            currentId={current}
+            hero={item.hero}
+            heroTint={item.tint}
+            heroGlow={item.glow}
+            heroHands={heroHands(progress)}
+            focus={focus}
+            focusLand={focusLand}
+            openedChests={progress.chests}
+            onSelect={(l) => tap(() => setSelected(l))()}
+            onMerchant={tap(() => setShop('weapon'))}
+            onChest={(land) =>
+              tap(() => {
+                const r = claimChest(progress, land);
+                if (!r) return showToast('Этот сундук уже пуст.');
+                setProgress(r.progress);
+                sfx('chest');
+                showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
+              })()
+            }
+          />
+          <div className="map-top">
+            <div className="world-tabs">
+              {TABS.map((w, i) => (
+                <button key={w} className={world === i ? 'active' : ''} disabled={!worldOpen(i)} onClick={() => switchWorld(i)}>
+                  {!worldOpen(i) && <Lock size={12} />}
+                  {SHORT_WORLD[w]}
+                </button>
+              ))}
+            </div>
+            <div className="map-hud">
+              <div className="map-title">
+                <div className="map-land">{L.name}</div>
+                <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
+              </div>
+              <div className="stats">
+                <LivesPill progress={progress} />
+                <span className="pill">
+                  <Coin className="coin" /> {progress.coins}
+                </span>
               </div>
             </div>
-            <div className="coins">🪙 {progress.coins}</div>
-            {ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
-              const owned = progress.items.includes(i.id);
-              return (
-                <div key={i.id} className="shop-item">
-                  <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
-                  <div className="shop-name">
-                    <div>{i.name}</div>
-                    <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
-                      {RARITY_NAMES[i.rarity]}
-                      {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
-                    </div>
-                  </div>
-                  {owned ? (
-                    <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
-                      {progress.equipped === i.id ? 'Надето' : 'Надеть'}
-                    </button>
-                  ) : (
-                    <button
-                      className="small-btn"
-                      disabled={progress.coins < i.price}
-                      onClick={() => {
-                        const next = buy(progress, i.id);
-                        if (next) setProgress(next);
-                      }}
-                    >
-                      🪙 {i.price}
-                    </button>
-                  )}
+          </div>
+          {toast && <div className="toast">{toast}</div>}
+
+          <div className="map-bottom">
+            {selected ? (
+              <div className="level-card">
+                <button className="close-x" onClick={() => setSelected(null)} aria-label="Закрыть">
+                  ×
+                </button>
+                <div className="level-tag">
+                  {WORLD_NAMES[LANDS[selected.land].world]} · уровень {selected.num}
                 </div>
-              );
-            })}
-            <button className="link" onClick={() => setShop(false)}>
-              Закрыть
-            </button>
+                <div className="level-title">{selected.title}</div>
+                <div className="muted">
+                  {selected.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
+                  {selected.type !== 'trial' && ` · цель ${targetReps(selected, progress.baseline)}`} · {selected.coins} монет
+                </div>
+                <Stars n={progress.stars[selected.id] ?? 0} />
+                {isUnlocked(progress, selected.id) ? (
+                  <button className="primary" onClick={() => setPlaying(selected)}>
+                    {progress.stars[selected.id] ? 'Пройти ещё раз' : 'В путь'}
+                  </button>
+                ) : (
+                  <div className="muted">Сначала пройди предыдущие уровни.</div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="map-help">Листай карту пальцем · нажми на камень уровня</div>
+                <button className="primary daily" onClick={() => setPlaying(currentDef)}>
+                  {series.today ? `Уровень ${currentDef.num}: ${currentDef.title}` : 'Тренировка дня'}
+                  <small>{series.today ? `Сегодня уже ${progress.days[dayKey(now)]} повторов · серия ${series.days}` : `Уровень ${currentDef.num}: ${currentDef.title}`}</small>
+                </button>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </div>
+      {/* Листы вне карты: иначе нижнее меню перекрывает их низ вместе с кнопкой «Закрыть». */}
+      {sheets}
     </>
   );
 }
+
+/** Лавка купца Фёдора: облики, оружие, щиты и зелья. Новое оружие появляется по мере продвижения. */
+function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (t: ShopTab) => void; reachedLand: number; onClose: () => void }) {
+  const price = (cost: number, buyIt: () => Progress | null) => (
+    <button
+      className="small-btn"
+      disabled={progress.coins < cost}
+      onClick={() => {
+        const next = buyIt();
+        if (next) setProgress(next);
+        if (next) sfx('coin');
+      }}
+    >
+      <Coin size={14} /> {cost}
+    </button>
+  );
+  const [rarity, setRarity] = useState<Rarity | 'all'>('all');
+  // Товар этой вкладки: что продаётся рядом по карте и что уже есть у героя.
+  const stock = GEAR.filter((g) => g.slot === tab && (g.inShop || progress.items.includes(g.id)));
+  const near = stock.filter((g) => progress.items.includes(g.id) || g.minLand <= reachedLand + 6);
+  const gear = near.filter((g) => rarity === 'all' || g.rarity === rarity).sort((a, b) => a.price - b.price || RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
+  // Когда купец привезёт вещи выбранной редкости, которых пока не видно.
+  const later = stock.filter((g) => !near.includes(g) && (rarity === 'all' || g.rarity === rarity)).sort((a, b) => a.minLand - b.minLand)[0];
+  const damageNow = heroPower(progress).damage;
+  return (
+    <div className="sheet" onClick={onClose}>
+      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+        <div className="remark">
+          <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
+          <div>
+            <div className="level-title">Купец Фёдор</div>
+            <div className="muted">«Оружие бьёт сильнее, щит бережёт сердца в бою с боссом. Лучшее привожу, когда ты уходишь дальше.»</div>
+          </div>
+        </div>
+        <div className="shop-head">
+          <div className="coins">
+            <Coin className="coin" /> {progress.coins}
+          </div>
+          <div className="muted">
+            <Swords size={13} /> урон {heroPower(progress).damage}
+          </div>
+        </div>
+        <div className="tabs">
+          {SHOP_TABS.map((t) => (
+            <button key={t.tab} className={tab === t.tab ? 'active' : ''} onClick={() => setTab(t.tab)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {tab === 'potion' &&
+          POTIONS.map((pt) => (
+            <div key={pt.id} className="shop-item">
+              <Flask color={pt.color} scroll={pt.id === 'swap'} />
+              <div className="shop-name">
+                <div>
+                  {pt.name} <span className="potion-count">×{progress.potions?.[pt.id] ?? 0}</span>
+                </div>
+                <div className="shop-meta muted">{pt.text}</div>
+              </div>
+              {price(pt.price, () => buyPotion(progress, pt.id))}
+            </div>
+          ))}
+        {(tab === 'weapon' || tab === 'offhand') && (
+          <div className="rarity-chips">
+            {(['all', ...RARITY_ORDER] as const).map((r) => {
+              const n = r === 'all' ? near.length : near.filter((g) => g.rarity === r).length;
+              return (
+                <button
+                  key={r}
+                  className={`rarity-chip ${rarity === r ? 'on' : ''}`}
+                  style={r !== 'all' ? { ['--rc' as string]: RARITY_COLORS[r] } : undefined}
+                  onClick={(e) => {
+                    setRarity(r);
+                    e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                  }}
+                >
+                  {r !== 'all' && <i />}
+                  {r === 'all' ? 'Все' : RARITY_SHORT[r]} <small>{n}</small>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {(tab === 'weapon' || tab === 'offhand') &&
+          gear.map((g) => {
+            const owned = progress.items.includes(g.id);
+            const on = progress.weapon === g.id || progress.offhand === g.id;
+            const locked = !owned && g.minLand > reachedLand;
+            const damage = heroPower({ ...progress, [g.slot]: g.id }).damage;
+            const blocked = g.slot === 'offhand' && !!gearById(progress.weapon)?.twoHanded;
+            return (
+              <div key={g.id} className={`shop-item gear-row ${locked ? 'locked' : ''}`} style={{ ['--rc' as string]: RARITY_COLORS[g.rarity] }}>
+                <GearFace g={g} size={44} />
+                <div className="shop-name">
+                  <div>{g.name}</div>
+                  <div className="shop-meta" style={{ color: RARITY_COLORS[g.rarity] }}>
+                    {RARITY_NAMES[g.rarity]} · {gearText(g)}
+                  </div>
+                  {!on && damage > damageNow && (
+                    <div className="shop-delta up">
+                      <Swords size={11} /> урон {damageNow} → {damage}
+                    </div>
+                  )}
+                  {!on && blocked && <div className="shop-delta">не действует с двуручным оружием</div>}
+                </div>
+                {owned ? (
+                  <button className="small-btn" disabled={on && g.slot === 'weapon'} onClick={() => setProgress(equipGear(progress, g.id))}>
+                    {on ? (g.slot === 'weapon' ? 'Надето' : 'Снять') : 'Надеть'}
+                  </button>
+                ) : locked ? (
+                  <span className="shop-lock">
+                    <Lock size={12} /> с {LANDS[g.minLand].name}
+                  </span>
+                ) : (
+                  price(g.price, () => buyGear(progress, g.id))
+                )}
+              </div>
+            );
+          })}
+        {(tab === 'weapon' || tab === 'offhand') && later && (
+          <div className="shop-later muted">
+            <Lock size={12} /> {gear.length ? 'Ещё товар' : 'Такого пока нет'}: Фёдор привезёт его с земли «{LANDS[later.minLand].name}».
+          </div>
+        )}
+        {tab === 'outfit' &&
+          ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
+            const owned = progress.items.includes(i.id);
+            return (
+              <div key={i.id} className="shop-item">
+                <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
+                <div className="shop-name">
+                  <div>{i.name}</div>
+                  <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
+                    {RARITY_NAMES[i.rarity]}
+                    {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
+                  </div>
+                </div>
+                {owned ? (
+                  <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
+                    {progress.equipped === i.id ? 'Надето' : 'Надеть'}
+                  </button>
+                ) : (
+                  price(i.price, () => buy(progress, i.id))
+                )}
+              </div>
+            );
+          })}
+        <button className="link" onClick={onClose}>
+          Закрыть
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const SHOP_TABS: { tab: ShopTab; label: string }[] = [
+  { tab: 'weapon', label: 'Оружие' },
+  { tab: 'offhand', label: 'Щиты' },
+  { tab: 'outfit', label: 'Облик' },
+  { tab: 'potion', label: 'Зелья' },
+];
 
 const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
 /** «Твоя сила»: рост по упражнениям, серия и повторы за две недели. */
 function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: number; onClose: () => void }) {
   const series = streak(progress.days, now);
+  const [view, setView] = useState<'week' | 'month' | 'chart'>('week');
   const last = Array.from({ length: 14 }, (_, i) => {
     const t = now - (13 - i) * 86400000;
     return { day: WEEKDAY[new Date(t).getDay()], reps: progress.days[dayKey(t)] ?? 0 };
@@ -271,16 +620,33 @@ function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: nu
           );
         })}
         <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
-        <div className="week-bars">
-          {last.map((d, i) => (
-            <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
-          ))}
+        <div className="tabs">
+          <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>
+            2 недели
+          </button>
+          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>
+            Календарь
+          </button>
+          <button className={view === 'chart' ? 'active' : ''} onClick={() => setView('chart')}>
+            График
+          </button>
         </div>
-        <div className="week-days">
-          {last.map((d, i) => (
-            <span key={i}>{d.day}</span>
-          ))}
-        </div>
+        {view === 'week' && (
+          <>
+            <div className="week-bars">
+              {last.map((d, i) => (
+                <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
+              ))}
+            </div>
+            <div className="week-days">
+              {last.map((d, i) => (
+                <span key={i}>{d.day}</span>
+              ))}
+            </div>
+          </>
+        )}
+        {view === 'month' && <Calendar progress={progress} now={now} />}
+        {view === 'chart' && <RepsChart progress={progress} now={now} />}
         <button className="link" onClick={onClose}>
           Закрыть
         </button>
@@ -299,7 +665,7 @@ function LivesPill({ progress }: { progress: Progress }) {
   const lives = livesNow(progress, now);
   return (
     <span className={`pill ${lives.lives ? '' : 'empty'}`}>
-      ♥ {lives.lives}/{MAX_LIVES}
+      <Heart className="heart" /> {lives.lives}/{lives.max}
       {lives.nextMs > 0 && <small>{fmtMin(lives.nextMs)}</small>}
     </span>
   );

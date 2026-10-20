@@ -6,9 +6,9 @@ export default defineConfig({
   server: {
     host: true,
     // Сервер матчей в разработке: npm run dev:server
-    proxy: { '/ws': { target: 'ws://localhost:8787', ws: true } },
+    proxy: { '/ws': { target: 'ws://localhost:8787', ws: true }, '/api': 'http://localhost:8787' },
   },
   preview: {
-    proxy: { '/ws': { target: 'ws://localhost:8787', ws: true } },
+    proxy: { '/ws': { target: 'ws://localhost:8787', ws: true }, '/api': 'http://localhost:8787' },
   },
 });

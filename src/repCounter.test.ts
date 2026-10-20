@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { angle, Landmark, RepCounter } from './repCounter';
+import { Calibrator, deriveThresholds } from './calibration';
 
 type Point = [number, number];
 
@@ -79,13 +80,44 @@ describe('RepCounter', () => {
     expect(run(new RepCounter('pushup'), noFeet, FULL)).toBe(2);
   });
 
-  it('не считает отжимания, если не видно ни стоп, ни колен', () => {
-    const hidden = (t: number) => {
+  it('считает отжимания, если ноги за кадром, но виден таз', () => {
+    const noLegs = (t: number) => {
       const lm = pushup(t);
       for (const i of [25, 26, 27, 28]) lm[i].visibility = 0.1;
       return lm;
     };
+    expect(run(new RepCounter('pushup'), noLegs, FULL)).toBe(2);
+  });
+
+  it('не считает отжимания, если не видно и таза', () => {
+    const hidden = (t: number) => {
+      const lm = pushup(t);
+      for (const i of [23, 24, 25, 26, 27, 28]) lm[i].visibility = 0.1;
+      return lm;
+    };
     expect(run(new RepCounter('pushup'), hidden, FULL)).toBe(0);
+  });
+
+  it('не считает неполные отжимания', () => {
+    expect(run(new RepCounter('pushup'), pushup, [170, 125, 170, 125, 170])).toBe(0);
+  });
+
+  // Телефон положен боком, интерфейс вертикальный: в кадре человек повёрнут на 90°.
+  const turn = (lm: Landmark[]) => lm.map((p) => ({ ...p, x: 0.5 + (p.y - 0.5), y: 0.5 - (p.x - 0.5) }));
+  const runRotated = (make: (t: number) => Landmark[], rotations: number[]) => {
+    const c = new RepCounter('pushup');
+    let time = 0;
+    for (const theta of FULL) for (let i = 0; i < 4; i++) c.update(turn(make(theta)), (time += 50), 1, rotations);
+    return c.current.reps;
+  };
+
+  it('считает отжимания, когда телефон лежит боком', () => {
+    expect(runRotated(pushup, [0])).toBe(0);
+    expect(runRotated(pushup, [90, 270])).toBe(2);
+  });
+
+  it('и боком не считает сгибание рук стоя', () => {
+    expect(runRotated(standingCurl, [90, 270])).toBe(0);
   });
 
   it('учитывает вертикальный кадр телефона', () => {
@@ -123,5 +155,59 @@ describe('RepCounter', () => {
 
   it('просит встать в кадр, если точек нет', () => {
     expect(new RepCounter('squat').update(undefined, 0).hint).toBe('Встань в кадр целиком');
+  });
+});
+
+describe('пресс без строгой амплитуды', () => {
+  it('засчитывает подъём корпуса до 80°', () => {
+    expect(run(new RepCounter('situp'), situp, [150, 78, 150, 78, 150])).toBe(2);
+  });
+  it('прощает кадр, где модель потеряла стопу', () => {
+    const c = new RepCounter('situp');
+    let t = 0;
+    for (const theta of [150, 60, 60, 150, 60, 150]) {
+      for (let i = 0; i < 4; i++) {
+        const lm = situp(theta);
+        if (theta === 60 && i === 1) for (const k of [27, 28]) lm[k] = { ...lm[k], visibility: 0.1 };
+        c.update(lm, (t += 50));
+      }
+    }
+    expect(c.current.reps).toBe(2);
+  });
+});
+
+describe('личные пороги после калибровки', () => {
+  // Пресс с малой амплитудой: лёжа 125°, сидя только 95° — общий порог 85° не достаётся.
+  const sweep = (top: number, bottom: number, reps: number) => {
+    const one: number[] = [];
+    for (let a = top; a > bottom; a -= 5) one.push(a);
+    for (let a = bottom; a < top; a += 5) one.push(a);
+    return [...Array.from({ length: reps }, () => one).flat(), top];
+  };
+
+  it('с общими порогами такой пресс не считается', () => {
+    expect(run(new RepCounter('situp'), situp, sweep(125, 95, 5))).toBe(0);
+  });
+
+  it('калибровка на тех же повторах — и все они считаются', () => {
+    const probe = new RepCounter('situp');
+    const calib = new Calibrator('situp');
+    let t = 0;
+    for (const theta of sweep(125, 95, 3).concat([125, 125, 125, 125])) {
+      for (let i = 0; i < 4; i++) {
+        const s = probe.update(situp(theta), (t += 50));
+        calib.update(s.angle, s.hint == null, t);
+      }
+    }
+    const personal = calib.view.result;
+    expect(personal).not.toBeNull();
+    expect(run(new RepCounter('situp', personal!), situp, sweep(125, 95, 5))).toBe(5);
+  });
+
+  it('и всё равно не считает мелкое дрожание', () => {
+    const jitter = Array.from({ length: 40 }, (_, i) => (i % 2 ? 114 : 104));
+    expect(run(new RepCounter('situp', deriveThresholds('situp', 95, 125)), situp, jitter)).toBe(0);
+    // Даже откалибровавшись на крошечной амплитуде, зазор между порогами не меньше 15°.
+    expect(run(new RepCounter('situp', deriveThresholds('situp', 105, 112)), situp, jitter)).toBe(0);
   });
 });

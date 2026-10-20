@@ -53,6 +53,7 @@ caddy validate --config "$CADDYFILE" --adapter caddyfile
 # Сервер матчей: Node.js, каталог для выкладки и сервис, который deploy может перезапускать.
 command -v node >/dev/null || { curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs; }
 mkdir -p /opt/arena-server && chown "$DEPLOY_USER:$DEPLOY_USER" /opt/arena-server
+# Токен бота можно не указывать здесь: автодеплой кладёт его из секрета BOT_TOKEN в /opt/arena-server/.bot-token.
 [ -f /etc/arena-server.env ] || { printf 'ALLOW_GUESTS=1\nBOT_TOKEN=%s\n' "${BOT_TOKEN:-}" > /etc/arena-server.env; chmod 600 /etc/arena-server.env; }
 cat > /etc/systemd/system/arena-server.service <<'UNIT'
 # /etc/systemd/system/arena-server.service — сервер матчей Fit Arena.

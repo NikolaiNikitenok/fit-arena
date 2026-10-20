@@ -10,6 +10,7 @@ export const MIN_REP_INTERVAL_MS = 400;
 export interface Player {
   id: string;
   name: string;
+  pro?: boolean;
   send: (msg: ServerMessage) => void;
   // Сервер сообщает соединению, что игрока посадили в комнату (быстрый бой).
   joinedRoom?: (room: Room) => void;
@@ -166,7 +167,7 @@ export class Room {
 
   private view(seat: Seat | undefined, side: Side): FighterView {
     const f = this.battle[side];
-    return { name: seat?.player.name ?? '…', hp: f.hp, maxHp: f.maxHp, hits: f.hits, combo: seat?.lastCombo ?? false };
+    return { name: seat?.player.name ?? '…', pro: seat?.player.pro, hp: f.hp, maxHp: f.maxHp, hits: f.hits, combo: seat?.lastCombo ?? false };
   }
 
   private broadcastState(): void {
@@ -179,7 +180,7 @@ export class Room {
   }
 
   private broadcastRoom(): void {
-    const players: PlayerInfo[] = this.seats.map((s) => ({ id: s.player.id, name: s.player.name, ready: s.ready }));
+    const players: PlayerInfo[] = this.seats.map((s) => ({ id: s.player.id, name: s.player.name, ready: s.ready, pro: s.player.pro }));
     for (const s of this.seats) s.player.send({ type: 'room', code: this.code, exercise: this.exercise, players });
   }
 }

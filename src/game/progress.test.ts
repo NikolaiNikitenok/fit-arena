@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { dayKey, LIFE_MS, livesNow, loadProgress, MAX_LIVES, recordActivity, spendLife, streak } from './progress';
+import { claimChest, dailyProgress, dayKey, equipGear, LIFE_MS, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, recordOutsideReps, spendLife, spendMight, spendSwaps, streak, swapsLeft, usePotion } from './progress';
 
 const DAY = 86400000;
 const NOW = new Date(2026, 9, 19, 12).getTime();
@@ -45,5 +45,67 @@ describe('рекорды', () => {
     expect(p.first.pushup?.reps).toBe(8);
     expect(p.best.pushup?.reps).toBe(15);
     expect(p.days[dayKey(NOW)]).toBe(26);
+  });
+});
+
+describe('уровень героя', () => {
+  it('растёт от повторов и пройденных уровней', async () => {
+    const { heroLevel, heroXp, xpToNext, claimHeroLevels, maxLives } = await import('./progress');
+    expect(heroLevel(0).level).toBe(1);
+    expect(heroLevel(xpToNext(1)).level).toBe(2);
+    let p = loadProgress();
+    p = recordActivity(p, 'squat', 200, NOW);
+    expect(heroXp(p)).toBe(200);
+    const r = claimHeroLevels(p)!;
+    expect(r.levels.length).toBeGreaterThan(0);
+    expect(claimHeroLevels(r.progress)).toBeNull();
+    expect(maxLives(p)).toBe(MAX_LIVES);
+  });
+});
+
+describe('замены упражнений', () => {
+  const day = new Date(2026, 9, 19, 12).getTime();
+  it('три в день, переигрывать с уже оплаченной заменой бесплатно', () => {
+    let p = loadProgress();
+    expect(swapsLeft(p, 5, day)).toEqual({ left: 3, paid: 0 });
+    p = spendSwaps(p, 5, 1, day)!;
+    expect(swapsLeft(p, 5, day)).toEqual({ left: 2, paid: 1 });
+    expect(spendSwaps(p, 5, 1, day)).toBe(p);
+    p = spendSwaps(p, 7, 2, day)!;
+    expect(swapsLeft(p, 8, day).left).toBe(0);
+    expect(spendSwaps(p, 8, 1, day)).toBeNull();
+    expect(swapsLeft(p, 8, day + 86_400_000)).toEqual({ left: 3, paid: 0 });
+  });
+});
+
+describe('инвентарь', () => {
+  it('зелье бодрости даёт жизнь, эликсир действует до начала боя, свиток добавляет замену', () => {
+    let p: Progress = { ...loadProgress(), lives: 2, livesAt: NOW, potions: { vigor: 1, might: 1, swap: 1 } };
+    p = usePotion(p, 'vigor', NOW)!;
+    expect(livesNow(p, NOW).lives).toBe(3);
+    expect(usePotion(p, 'vigor', NOW)).toBeNull();
+    p = usePotion(p, 'might', NOW)!;
+    expect(p.might).toBe(true);
+    expect(spendMight(p).might).toBe(false);
+    p = usePotion(p, 'swap', NOW)!;
+    expect(swapsLeft(p, 1, NOW).left).toBe(4);
+  });
+  it('сундуки дают добычу, двуручное оружие и щиты надеваются по слотам', () => {
+    const kinds = new Set(Array.from({ length: 30 }, (_, land) => claimChest(loadProgress(), land)!).map((r) => (r.itemName ? 'item' : 'coins')));
+    expect(kinds.size).toBe(2);
+    let p: Progress = { ...loadProgress(), items: ['starter', 'sword', 'round-shield'] };
+    p = equipGear(p, 'round-shield');
+    expect(p.offhand).toBe('round-shield');
+    expect(equipGear(p, 'round-shield').offhand).toBeUndefined();
+  });
+});
+
+describe('повторы вне карты', () => {
+  it('дуэль идёт в серию, задание дня и клан', () => {
+    const p = recordOutsideReps('pushup', 25, NOW);
+    expect(streak(p.days, NOW).today).toBe(true);
+    expect(dailyProgress(p, { date: dayKey(NOW), exercise: 'pushup', target: 40 } as Parameters<typeof dailyProgress>[1])).toBe(25);
+    expect(p.clanPending).toBe(25);
+    expect(loadProgress().days[dayKey(NOW)]).toBe(25);
   });
 });
