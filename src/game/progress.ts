@@ -11,6 +11,7 @@ import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 import { addCharge, type Village } from './resources';
 import type { DungeonState } from './match3/dungeon';
 import { villageBonus } from '../../shared/village';
+import { boostLab } from '../village/state';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
 export interface Progress {
@@ -413,8 +414,8 @@ export function recordActivity(p: Progress, exercise: Exercise | null, amount: n
     if (!p.first[exercise]) next.first = { ...p.first, [exercise]: { reps, date } };
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
-  // Каждый повтор заряжает подземелье «три в ряд».
-  return save(addCharge(feedPet(next, total, now), total));
+  // Каждый повтор заряжает подземелье «три в ряд» и ускоряет исследование в лаборатории.
+  return save(boostLab(addCharge(feedPet(next, total, now), total), total));
 }
 
 // В неделю можно отдохнуть два дня, и серия не прервётся: мышцам нужен отдых.

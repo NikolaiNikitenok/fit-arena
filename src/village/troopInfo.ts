@@ -1,5 +1,5 @@
 import { BUILDINGS, BUILDING_TYPES, Res } from '../../shared/village';
-import { HEAL_RADIUS, TROOPS, TroopId, troopMul } from '../../shared/villageBattle';
+import { HEAL_RADIUS, LEVEL_BONUS, levelMul, TROOPS, TroopId, troopMul } from '../../shared/villageBattle';
 import { fmtTime } from './state';
 
 // Описание отряда для казарм: всё считается из shared/villageBattle.ts, поэтому цифры в карточке
@@ -56,12 +56,17 @@ export interface TroopInfo {
   bonus: number;
   bonusWhat: string;
   perLevel: number;
+  // Уровень отряда из лаборатории и его бонус, %.
+  level: number;
+  levelBonus: number;
+  perTroopLevel: number;
 }
 
-/** Всё об отряде при казармах уровня barracks. */
-export function troopInfo(id: TroopId, barracks: number): TroopInfo {
+/** Всё об отряде при казармах уровня barracks и уровне отряда level (лаборатория). */
+export function troopInfo(id: TroopId, barracks: number, level = 1): TroopInfo {
   const d = TROOPS[id];
-  const mul = troopMul(barracks);
+  // Так же, как в бою (unitMul): казармы × уровень отряда.
+  const mul = troopMul(barracks) * levelMul(level);
   // Так же, как в бою: здоровье округляется, урон — до десятых.
   const hp = Math.round(d.hp * mul);
   const dmg = Math.round(d.damage * mul * 10) / 10;
@@ -104,7 +109,10 @@ export function troopInfo(id: TroopId, barracks: number): TroopInfo {
     safeFrom,
     cost: d.cost,
     unlock: d.unlock,
-    bonus: Math.round((mul - 1) * 100),
+    bonus: Math.round((troopMul(barracks) - 1) * 100),
+    level: Math.max(1, level),
+    levelBonus: Math.round((levelMul(level) - 1) * 100),
+    perTroopLevel: Math.round(LEVEL_BONUS * 100),
     bonusWhat: d.heal ? 'здоровья и лечения' : 'здоровья и урона',
     perLevel: Math.round((troopMul(2) - 1) * 100),
   };

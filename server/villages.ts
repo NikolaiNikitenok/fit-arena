@@ -19,6 +19,7 @@ import { dirname } from 'node:path';
 import { applyLoss, lootAvailable, type Res, RES_KEYS, thLevel, type Town } from '../shared/village';
 import { baseOf, type BattleArmy, type BattleBase, type Deploy, finishTraining, simulateBattle, TROOP_IDS, type UnitKind } from '../shared/villageBattle';
 import { botBase } from '../shared/villageCamps';
+import { finishResearch } from '../shared/villageLab';
 import {
   type AttackOutcome,
   checkArmy,
@@ -206,6 +207,8 @@ export class VillageStore {
     const pvp = (p.village as { pvp?: { def?: unknown; won?: unknown } }).pvp;
     const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(-100) : []);
     const t: Town = { res: { ...town.res }, b: town.b.map((b) => ({ ...b })), n: town.n, army: { ...town.army }, q: town.q.map((e) => ({ ...e })) };
+    if (town.tl && Object.keys(town.tl).length) t.tl = { ...town.tl };
+    if (town.r) t.r = { t: town.r.t, end: town.r.end };
     this.villages.set(id, {
       id,
       name: name ?? prev?.name ?? 'Соседняя деревня',
@@ -233,7 +236,7 @@ export class VillageStore {
     const v = this.villages.get(id);
     if (!v) return null;
     const now = this.d.now();
-    let t = finishTraining(v.town, now);
+    let t = finishResearch(finishTraining(v.town, now), now);
     for (const a of this.attacks) {
       if (a.defender === id && !a.bot && !v.def.includes(a.id)) t = applyLoss(t, a.loot, now);
       if (a.attacker === id && !v.won.includes(a.id)) {
@@ -413,6 +416,8 @@ export class VillageStore {
     }
     const a = body.army as BattleArmy;
     const army: BattleArmy = { troops: Object.fromEntries(TROOP_IDS.filter((k) => (a.troops[k] ?? 0) > 0).map((k) => [k, a.troops[k]])), level: a.level, hero: a.hero };
+    const lv = Object.fromEntries(TROOP_IDS.filter((k) => (a.lv?.[k] ?? 1) > 1).map((k) => [k, a.lv![k]]));
+    if (Object.keys(lv).length) army.lv = lv;
     const deploys = Array.isArray(body.deploys) ? (body.deploys as Deploy[]).map((d) => ({ t: d?.t, u: d?.u, x: d?.x, y: d?.y }) as Deploy) : body.deploys;
     const endTick = body.endTick == null ? undefined : (body.endTick as number);
     const depErr = checkDeploys(lock.base, army, deploys, endTick, lock.loot, lock.seed);

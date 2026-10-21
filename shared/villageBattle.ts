@@ -8,13 +8,16 @@
  * [{t: тик, u: отряд, x, y}], доступная добыча и seed. Выход: процент разрушений, звёзды, добыча.
  *
  *   Отряд        здоровье  урон/удар  удар раз в  дальность  скорость  мест  цена              обучение  казармы
- *   Воин         70        10         1 с         0.9        1.6       1     25 золота          15 с      1
- *   Лучник       30        8          1 с         3.5        1.8       1     40 золота          20 с      2
- *   Великан      400       21         1.5 с       1          1.0       5     200 зол + 50 камня 90 с      3
- *   Подрывник    25        12 (×40 по стенам, взрыв 1.5)   0.5   2.4   2     100 золота         45 с      4
- *   Целитель     120       лечит 18/с рядом (2.5)          3     1.4   8     400 зол + 100 дер. 180 с     5
+ *   Воин         70        10         1 с         0.9        1.6       1     10 золота          15 с      1
+ *   Лучник       30        8          1 с         3.5        1.8       1     15 зол + 5 дер.    20 с      2
+ *   Великан      400       21         1.5 с       1          1.0       5     80 зол + 30 камня  90 с      3
+ *   Подрывник    25        12 (×40 по стенам, взрыв 1.5)   0.5   2.4   2     40 золота          45 с      4
+ *   Целитель     120       лечит 18/с рядом (2.5)          3     1.4   8     160 зол + 60 дер.  180 с     5
  *   Герой        250+15·ур  20+ур       1 с         1          1.5       —     бесплатно, один на бой
- * Каждый уровень казарм сверх первого: +12% здоровья и урона отрядов.
+ * Каждый уровень казарм сверх первого: +12% здоровья и урона отрядов; каждый уровень отряда из
+ * лаборатории сверх первого — ещё +15% (множители перемножаются, shared/villageLab.ts).
+ * Цены: полный лагерь воинов на казармах 1 (20 мест) — 200 золота, около дня добычи на ратуше 1–2,
+ * и набег на первые лагеря Князя окупается.
  * Великан идёт к башням, подрывник — к стенам, целитель летает над стенами и лечит соседей.
  */
 import { BUILDINGS, Bld, BuildingType, GRID, NO_RES, Res, RES_KEYS, sizeOf, hpOf, thLevel, type Town } from './village';
@@ -48,11 +51,11 @@ export interface TroopDef {
 }
 
 export const TROOPS: Record<TroopId, TroopDef> = {
-  warrior: { id: 'warrior', name: 'Воин', desc: 'Крепкий и дешёвый. Бьёт ближайшую постройку.', hp: 70, damage: 10, every: 1, range: 0.9, speed: 1.6, housing: 1, cost: { gold: 25 }, train: 15, unlock: 1, prefer: 'any' },
-  archer: { id: 'archer', name: 'Лучник', desc: 'Стреляет издалека, даже через стены. Хрупкий.', hp: 30, damage: 8, every: 1, range: 3.5, speed: 1.8, housing: 1, cost: { gold: 40 }, train: 20, unlock: 2, prefer: 'any' },
-  giant: { id: 'giant', name: 'Великан', desc: 'Принимает удары на себя и идёт прямо к башням.', hp: 400, damage: 21, every: 1.5, range: 1, speed: 1, housing: 5, cost: { gold: 200, stone: 50 }, train: 90, unlock: 3, prefer: 'defense' },
-  wallbreaker: { id: 'wallbreaker', name: 'Подрывник', desc: 'Бежит к стене и взрывает её вместе с собой.', hp: 25, damage: 12, every: 1, range: 0.5, speed: 2.4, housing: 2, cost: { gold: 100 }, train: 45, unlock: 4, prefer: 'wall', splash: 1.5, wallMul: 40 },
-  healer: { id: 'healer', name: 'Целитель', desc: 'Летит над стенами и лечит отряды рядом с собой.', hp: 120, damage: 0, every: 1, range: 3, speed: 1.4, housing: 8, cost: { gold: 400, wood: 100 }, train: 180, unlock: 5, prefer: 'heal', heal: 18, flying: true },
+  warrior: { id: 'warrior', name: 'Воин', desc: 'Крепкий и дешёвый. Бьёт ближайшую постройку.', hp: 70, damage: 10, every: 1, range: 0.9, speed: 1.6, housing: 1, cost: { gold: 10 }, train: 15, unlock: 1, prefer: 'any' },
+  archer: { id: 'archer', name: 'Лучник', desc: 'Стреляет издалека, даже через стены. Хрупкий.', hp: 30, damage: 8, every: 1, range: 3.5, speed: 1.8, housing: 1, cost: { gold: 15, wood: 5 }, train: 20, unlock: 2, prefer: 'any' },
+  giant: { id: 'giant', name: 'Великан', desc: 'Принимает удары на себя и идёт прямо к башням.', hp: 400, damage: 21, every: 1.5, range: 1, speed: 1, housing: 5, cost: { gold: 80, stone: 30 }, train: 90, unlock: 3, prefer: 'defense' },
+  wallbreaker: { id: 'wallbreaker', name: 'Подрывник', desc: 'Бежит к стене и взрывает её вместе с собой.', hp: 25, damage: 12, every: 1, range: 0.5, speed: 2.4, housing: 2, cost: { gold: 40 }, train: 45, unlock: 4, prefer: 'wall', splash: 1.5, wallMul: 40 },
+  healer: { id: 'healer', name: 'Целитель', desc: 'Летит над стенами и лечит отряды рядом с собой.', hp: 120, damage: 0, every: 1, range: 3, speed: 1.4, housing: 8, cost: { gold: 160, wood: 60 }, train: 180, unlock: 5, prefer: 'heal', heal: 18, flying: true },
 };
 
 export const heroDef = (level: number): TroopDef => {
@@ -65,6 +68,11 @@ export const UNIT_NAMES: Record<UnitKind, string> = { warrior: 'Воин', arche
 // Мест в лагере по уровню казарм.
 export const ARMY_CAP = [20, 30, 40, 50, 65, 80, 100, 120];
 export const troopMul = (barracks: number) => 1 + 0.12 * (Math.max(1, barracks) - 1);
+// Уровень отряда из лаборатории: +15% за каждый сверх первого.
+export const LEVEL_BONUS = 0.15;
+export const levelMul = (level: number | undefined) => 1 + LEVEL_BONUS * (Math.max(1, level ?? 1) - 1);
+/** Во сколько раз отряд в бою сильнее базового: казармы × уровень отряда. */
+export const unitMul = (army: Pick<BattleArmy, 'level' | 'lv'>, id: TroopId) => troopMul(army.level) * levelMul(army.lv?.[id]);
 export const barracksLevel = (t: Pick<Town, 'b'>) => Math.max(0, ...t.b.filter((b) => b.t === 'barracks').map((b) => b.l));
 export const armyCap = (t: Pick<Town, 'b'>) => {
   const l = barracksLevel(t);
@@ -142,6 +150,8 @@ export interface BattleArmy {
   troops: Partial<Record<TroopId, number>>;
   // Уровень казарм нападающего: сила отрядов.
   level: number;
+  // Уровни отрядов из лаборатории (нет записи — 1-й).
+  lv?: Partial<Record<TroopId, number>>;
   // Уровень героя; без него героя в бою нет.
   hero?: number;
 }
@@ -319,7 +329,7 @@ function spawn(s: BattleState, d: Deploy) {
   s.left[d.u] = (s.left[d.u] ?? 0) - 1;
   s.used[d.u] = (s.used[d.u] ?? 0) + 1;
   const def = d.u === 'hero' ? heroDef(s.input.army.hero ?? 1) : TROOPS[d.u];
-  const mul = d.u === 'hero' ? 1 : troopMul(s.input.army.level);
+  const mul = d.u === 'hero' ? 1 : unitMul(s.input.army, d.u);
   const hp = Math.round(def.hp * mul);
   s.units.push({ n: s.units.length, u: d.u, x: d.x, y: d.y, hp, maxHp: hp, def, damage: Math.round(def.damage * mul * 10) / 10, alive: true, target: -1, block: -1, path: null, pi: 0, cd: 0, hit: -100 });
 }
@@ -518,7 +528,7 @@ function stepHealer(s: BattleState, u: SimUnit) {
       u.y += ((o.y - u.y) / d) * step;
     }
   }
-  const heal = (u.def.heal ?? 0) * troopMul(s.input.army.level) * DT;
+  const heal = (u.def.heal ?? 0) * unitMul(s.input.army, 'healer') * DT;
   for (const o of s.units) {
     if (!o.alive || o.def.prefer === 'heal' || o.hp >= o.maxHp || dist(u.x, u.y, o.x, o.y) > HEAL_RADIUS) continue;
     o.hp = Math.min(o.maxHp, o.hp + (o.u === 'hero' ? heal / 2 : heal));

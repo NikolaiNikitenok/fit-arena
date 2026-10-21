@@ -1,14 +1,13 @@
 import { Suspense } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { parseTint } from '../three/Instanced';
 import { ANIMS_URL, charUrl, useGltf } from '../three/kit';
 import { TroopId } from '../../shared/villageBattle';
 import { Lock } from '../icons';
 import { ResRow } from './BattleScreen';
 import { ModelThumb } from './Preview';
 import { troopInfo } from './troopInfo';
-import { bombGroup, TROOP_RIGS } from './troops3d';
+import { bombGroup, levelLook, paintTroop, TROOP_RIGS } from './troops3d';
 
 // Карточка отряда в казармах: живая мини-модель, роль, все цифры из боя (troopInfo.ts) и кнопка обучения.
 
@@ -21,7 +20,7 @@ const SHOWCASE: Record<TroopId, string> = {
   healer: 'Spellcasting',
 };
 
-function Live({ id, size }: { id: TroopId; size: number }) {
+function Live({ id, size, level }: { id: TroopId; size: number; level?: number }) {
   const rig = TROOP_RIGS[id];
   const char = useGltf(charUrl(rig.model));
   const anims = useGltf(ANIMS_URL);
@@ -34,11 +33,7 @@ function Live({ id, size }: { id: TroopId; size: number }) {
       if (!(m as THREE.SkinnedMesh).isSkinnedMesh && !m.name.startsWith('bomb') && !rig.gear.includes(m.name)) m.visible = false;
       if (m.name.startsWith('bomb')) return;
       const mat = (m.material as THREE.MeshStandardMaterial).clone();
-      mat.color.multiply(parseTint(rig.tint));
-      if (rig.glow) {
-        mat.emissive.set(rig.glow);
-        mat.emissiveIntensity = 0.22;
-      }
+      paintTroop(mat, rig, level);
       m.material = mat;
     });
     const mixer = new THREE.AnimationMixer(root);
@@ -55,14 +50,14 @@ function Live({ id, size }: { id: TroopId; size: number }) {
     };
     return g;
   };
-  return <ModelThumb id={`troop:${id}`} make={make} size={size} label={`Модель: ${troopInfo(id, 1).name}`} />;
+  return <ModelThumb id={`troop:${id}:${levelLook(level).tint ?? ''}${levelLook(level).glow ?? ''}`} make={make} size={size} label={`Модель: ${troopInfo(id, 1).name}`} />;
 }
 
 /** Живая мини-модель отряда. */
-export function TroopThumb({ id, size = 48 }: { id: TroopId; size?: number }) {
+export function TroopThumb({ id, size = 48, level }: { id: TroopId; size?: number; level?: number }) {
   return (
     <Suspense fallback={<span className={`vil-unit-big u-${id}`} style={{ width: size, height: size }} />}>
-      <Live id={id} size={size} />
+      <Live id={id} size={size} level={level} />
     </Suspense>
   );
 }
@@ -70,24 +65,28 @@ export function TroopThumb({ id, size = 48 }: { id: TroopId; size?: number }) {
 interface Props {
   id: TroopId;
   barracks: number;
+  // Уровень отряда из лаборатории.
+  level?: number;
   have: number;
   queued: number;
   onTrain: () => void;
   onClose: () => void;
 }
 
-export function TroopSheet({ id, barracks, have, queued, onTrain, onClose }: Props) {
-  const info = troopInfo(id, Math.max(1, barracks));
+export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onClose }: Props) {
+  const info = troopInfo(id, Math.max(1, barracks), level);
   const locked = barracks < info.unlock;
   return (
     <div className="sheet vil-troop-sheet" onClick={onClose}>
       <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
         <div className="vil-ti-head">
           <div className={`vil-ti-pic u-${id}`}>
-            <TroopThumb id={id} size={112} />
+            <TroopThumb id={id} size={112} level={level} />
           </div>
           <div className="vil-ti-title">
-            <b>{info.name}</b>
+            <b>
+              {info.name} <span className="level-tag">ур. {info.level}</span>
+            </b>
             <span className="muted">
               в лагере ×{have}
               {queued ? ` · учатся ${queued}` : ''}
@@ -133,6 +132,13 @@ export function TroopSheet({ id, barracks, have, queued, onTrain, onClose }: Pro
             </>
           ) : (
             <>Каждый уровень казарм выше первого: +{info.perLevel}% {info.bonusWhat}.</>
+          )}{' '}
+          {info.levelBonus > 0 ? (
+            <>
+              Лаборатория, {info.level} ур. отряда: <b>+{info.levelBonus}%</b> (тоже в цифрах).
+            </>
+          ) : (
+            <>В лаборатории каждый уровень отряда даёт ещё +{info.perTroopLevel}%.</>
           )}
         </div>
         <div className="vil-actions">

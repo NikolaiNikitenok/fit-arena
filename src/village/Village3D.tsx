@@ -360,7 +360,7 @@ function Scene(props: SceneProps) {
         // Персонажи грузятся отдельно: поле боя видно сразу.
         <>
           <Suspense fallback={null}>
-            <Troops view={props.battle} ids={props.battle.current?.s.input.army.troops ?? {}} lite={lite} />
+            <Troops view={props.battle} ids={props.battle.current?.s.input.army.troops ?? {}} lv={props.battle.current?.s.input.army.lv} lite={lite} />
           </Suspense>
           <Suspense fallback={null}>
             <HeroTroop view={props.battle} look={props.heroLook ?? DEFAULT_HERO} />

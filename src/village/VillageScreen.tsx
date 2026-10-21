@@ -60,6 +60,8 @@ import type { DefenseEntry } from './types';
 import type { Ctl, ViewBld } from './Village3D';
 import { Viewport } from './Viewport';
 import { TroopSheet, TroopThumb } from './TroopInfo';
+import { LabSheet } from './LabSheet';
+import { cancelResearch, finishResearchNow, labLevel, RESEARCH_ERRORS, startResearch, troopLevel, troopLevels } from '../../shared/villageLab';
 import { preloadTroops, type HeroLook } from './troops3d';
 import { itemById } from '../game/items';
 import { heroHands } from '../game/power';
@@ -74,7 +76,7 @@ interface Props {
   onDungeon?: () => void;
 }
 
-type Sheet = 'build' | 'army' | 'attack' | 'tasks' | 'log' | 'top' | null;
+type Sheet = 'build' | 'army' | 'lab' | 'attack' | 'tasks' | 'log' | 'top' | null;
 type Battle =
   | { kind: 'camp'; camp: Camp }
   | { kind: 'pvp'; target: TargetView; revengeOf?: string }
@@ -288,7 +290,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     const army: BattleArmy =
       battle.kind === 'replay'
         ? battle.entry.army
-        : { troops: town.army, level: Math.max(1, barracksLevel(town)), hero: battle.kind === 'pvp' ? Math.min(heroLvl, battle.target.heroMax ?? heroLvl) : heroLvl };
+        : { troops: town.army, level: Math.max(1, barracksLevel(town)), lv: troopLevels(town), hero: battle.kind === 'pvp' ? Math.min(heroLvl, battle.target.heroMax ?? heroLvl) : heroLvl };
     const finish = async (r: BattleResult, deploys: Deploy[], endTick?: number) => {
       if (battle.kind === 'replay') return;
       if (battle.kind === 'pvp') {
@@ -535,6 +537,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               sfx('coin');
             }}
             onArmy={() => setSheet('army')}
+            onLab={() => setSheet('lab')}
             onAttack={() => setSheet('attack')}
           />
         </div>
@@ -635,6 +638,29 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             const t = townOf(p);
             commit(withTown(p, { ...t, q: t.q.map((q) => ({ ...q, end: Date.now() })) }));
             setNow(Date.now());
+          }}
+          onClose={() => setSheet(null)}
+          onBuild={() => setSheet('build')}
+          onLab={() => setSheet('lab')}
+        />
+      )}
+
+      {sheet === 'lab' && (
+        <LabSheet
+          town={town}
+          now={now}
+          charge={charge}
+          onResearch={(id) => act((t) => {
+            const r = startResearch(t, id, Date.now());
+            return typeof r === 'string' ? RESEARCH_ERRORS[r] : r;
+          }, 'Учёные взялись за дело!') && sfx('coin')}
+          onCancel={() => act((t) => cancelResearch(t), 'Исследование отменено, ресурсы вернулись.')}
+          onSpeed={(n) => {
+            const p = spendCharge(latest.current, n);
+            if (!p) return flash('Не хватает заряда — потренируйся!');
+            commit(withTown(p, finishResearchNow(townOf(p), Date.now())));
+            setNow(Date.now());
+            sfx('levelup');
           }}
           onClose={() => setSheet(null)}
           onBuild={() => setSheet('build')}
@@ -898,7 +924,7 @@ const scaleRes = (r: Res, k: number): Res => ({ wood: Math.floor(r.wood * k), st
 // Повтор набега считается с той же доступной добычей, что и сам набег.
 const lootOf = (e: DefenseEntry): Res => e.avail ?? e.loot;
 
-function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMove, onCollect, onArmy, onAttack }: { b: Bld; town: Town; now: number; charge: number; onClose: () => void; onUpgrade: () => void; onSpeed: () => void; onMove: () => void; onCollect: () => void; onArmy: () => void; onAttack: () => void }) {
+function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMove, onCollect, onArmy, onLab, onAttack }: { b: Bld; town: Town; now: number; charge: number; onClose: () => void; onUpgrade: () => void; onSpeed: () => void; onMove: () => void; onCollect: () => void; onArmy: () => void; onLab: () => void; onAttack: () => void }) {
   const d = BUILDINGS[b.t];
   const th = thLevel(town);
   const next = b.l + 1;
@@ -946,6 +972,7 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
           </span>
         )}
         {b.t === 'barracks' && b.l >= 1 && <span>Мест в лагере {armyCap(town)}</span>}
+        {b.t === 'lab' && b.l >= 1 && <span>Отряды до {b.l + 1} уровня{town.r ? ` · идёт: ${TROOPS[town.r.t].name}` : ''}</span>}
         {b.t === 'townhall' && <span>Строителей {buildersAt(th)}</span>}
       </div>
       {b.u != null ? (
@@ -994,6 +1021,11 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
                 Войско
               </button>
             )}
+            {b.t === 'lab' && b.l >= 1 && (
+              <button className="secondary" onClick={onLab}>
+                Исследования
+              </button>
+            )}
             {b.t === 'townhall' && (
               <button className="secondary" onClick={onAttack}>
                 Набег
@@ -1026,7 +1058,7 @@ function unlocksAt(th: number): string {
   return out.join(', ');
 }
 
-function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, onBuild }: { town: Town; now: number; charge: number; onTrain: (id: TroopId) => void; onUntrain: (id: TroopId) => void; onSpeed: (charge: number) => void; onClose: () => void; onBuild: () => void }) {
+function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, onBuild, onLab }: { town: Town; now: number; charge: number; onTrain: (id: TroopId) => void; onUntrain: (id: TroopId) => void; onSpeed: (charge: number) => void; onClose: () => void; onBuild: () => void; onLab: () => void }) {
   const bl = barracksLevel(town);
   const cap = armyCap(town);
   const used = housingOf(town.army) + town.q.reduce((s, q) => s + TROOPS[q.t].housing, 0);
@@ -1039,6 +1071,7 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
       <TroopSheet
         id={info}
         barracks={bl}
+        level={troopLevel(town, info)}
         have={town.army[info] ?? 0}
         queued={town.q.filter((q) => q.t === info).length}
         onTrain={() => onTrain(info)}
@@ -1083,11 +1116,11 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
               return (
                 <div key={id} className={`vil-task vil-troop-card ${locked ? 'locked' : ''}`} role="button" tabIndex={0} onClick={() => setInfo(id)} aria-label={`${d.name}: подробнее`}>
                   <span className={`vil-troop-pic u-${id}`}>
-                    <TroopThumb id={id} size={52} />
+                    <TroopThumb id={id} size={52} level={troopLevel(town, id)} />
                   </span>
                   <div className="vil-shop-info">
                     <b>
-                      {d.name} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
+                      {d.name} {troopLevel(town, id) > 1 && <span className="level-tag">ур. {troopLevel(town, id)}</span>} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
                     </b>
                     <span className="muted">{locked ? `Казармы ${d.unlock} уровня` : d.desc}</span>
                     <span className="vil-shop-meta">
@@ -1124,6 +1157,13 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
                 </div>
               );
             })}
+            <button className="vil-lab-link" onClick={onLab}>
+              <span>
+                <b>Лаборатория</b>
+                <span className="muted">{labLevel(town) ? (town.r ? `Идёт исследование: ${TROOPS[town.r.t].name}` : 'Прокачай отряды: +15% за уровень') : 'Прокачка отрядов — с ратуши 2'}</span>
+              </span>
+              <span className="vil-more">›</span>
+            </button>
             <div className="muted">Герой идёт в каждый набег сам — его сила растёт с твоими тренировками.</div>
           </>
         )}

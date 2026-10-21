@@ -46,7 +46,7 @@ export const LOOT_CAP = [500, 1000, 2000, 3500, 5500, 8000, 11000, 15000];
 // Стартовые ресурсы деревни: хватает на первые сборщики.
 export const STARTER_RES: Res = { wood: 300, stone: 300, gold: 150 };
 
-export type BuildingType = 'townhall' | 'lumbermill' | 'quarry' | 'goldmine' | 'storage' | 'barracks' | 'forge' | 'tavern' | 'market' | 'tower' | 'catapult' | 'wall';
+export type BuildingType = 'townhall' | 'lumbermill' | 'quarry' | 'goldmine' | 'storage' | 'barracks' | 'forge' | 'tavern' | 'market' | 'tower' | 'catapult' | 'wall' | 'lab';
 export type Category = 'economy' | 'army' | 'defense' | 'village';
 export const CATEGORY_LABELS: Record<Category, string> = { economy: 'Хозяйство', army: 'Войско', defense: 'Оборона', village: 'Жители' };
 
@@ -129,6 +129,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'barracks', name: 'Казармы', desc: 'Обучают войско. Уровень открывает новые отряды, усиливает их и даёт больше мест.', size: 2, category: 'army',
     count: all(1), levelCap: [1, 2, 3, 4, 5, 6, 7, 8], cost: costs({ wood: 150, stone: 100 }), time: TIMES, hp: hps(350),
   },
+  lab: {
+    type: 'lab', name: 'Лаборатория', desc: 'Здесь прокачивают отряды: каждый уровень отряда — +15% здоровья и урона. Повторы на тренировке ускоряют исследование.', size: 2, category: 'army',
+    count: [0, 1, 1, 1, 1, 1, 1, 1], levelCap: [0, 1, 2, 3, 4, 5, 6, 7], cost: costs({ wood: 200, stone: 200, gold: 100 }), time: TIMES, hp: hps(400),
+  },
   forge: {
     type: 'forge', name: 'Кузница', desc: 'Точит оружие героя: +1% урона в походах за каждый уровень.', size: 2, category: 'village',
     count: [0, 1, 1, 1, 1, 1, 1, 1], levelCap: [0, 2, 3, 4, 5, 6, 7, 8], cost: costs({ wood: 200, stone: 250, gold: 100 }), time: TIMES, hp: hps(450),
@@ -189,6 +193,9 @@ export interface Town {
   army: Partial<Record<TroopId, number>>;
   // Очередь обучения: отряды выходят по одному, end — когда выйдет этот.
   q: { t: TroopId; end: number }[];
+  // Уровни отрядов из лаборатории (нет записи — 1-й) и идущее исследование (shared/villageLab.ts).
+  tl?: Partial<Record<TroopId, number>>;
+  r?: { t: TroopId; end: number };
 }
 
 export const thLevel = (t: Pick<Town, 'b'>) => t.b.find((b) => b.t === 'townhall')?.l ?? 1;

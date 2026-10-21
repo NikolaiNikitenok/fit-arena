@@ -169,3 +169,13 @@
 .vil-ti-bonus { padding: 9px 12px; border-radius: var(--r-md); background: rgba(255,210,122,.1); color: #f3e3bd; font-size: 13px; line-height: 1.35; }
 .vil-ti-bonus b { color: var(--gold); }
 .vil-ti-cost { flex: 1; font-size: 15px; }
+
+/* Лаборатория: идущее исследование и ссылка из казарм. */
+.vil-lab-now { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: var(--r-md); background: linear-gradient(135deg, rgba(138,255,193,.14), rgba(138,255,193,.04)); border: 1px solid rgba(138,255,193,.3); }
+.vil-lab-now .vil-troop-pic { color: #8affc1; }
+.vil-lab-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.vil-lab-btns .primary { padding: 8px 12px; display: inline-flex; align-items: center; gap: 4px; }
+.vil-lab-btns .small-btn.ghost { background: var(--surface-3); color: var(--text); }
+.vil-lab-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid rgba(138,255,193,.25); color: var(--text); text-align: left; }
+.vil-lab-link > span:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vil-lab-link .muted { font-size: 13px; }

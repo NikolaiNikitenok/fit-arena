@@ -30,6 +30,7 @@ export const TASKS: VillageTask[] = [
   { id: 'v-camp1', npc: 'lisa', text: 'Я выследила заставу лентяев. Разгроми её!', goal: { k: 'camps', n: 1 }, reward: { wood: 300, stone: 300 } },
   { id: 'v-th2', npc: 'boris', text: 'Ратуша тесновата. Улучши её до второго уровня.', goal: { k: 'have', t: 'townhall', l: 2 }, reward: { wood: 300, stone: 300, gold: 200 } },
   { id: 'v-forge', npc: 'marfa', text: 'Построй кузницу: острый меч — меньше лишних повторов.', goal: { k: 'have', t: 'forge' }, reward: { gold: 300 } },
+  { id: 'v-lab', npc: 'bip', text: 'БИП! Построй лабораторию: я прокачаю отряды. Каждый твой повтор ускорит исследование.', goal: { k: 'have', t: 'lab' }, reward: { gold: 250, stone: 150 } },
   { id: 'v-walls', npc: 'boris', text: 'Обнеси деревню стеной — хотя бы десять секций.', goal: { k: 'have', t: 'wall', n: 10 }, reward: { stone: 400 } },
   { id: 'v-towers2', npc: 'vega', text: 'Одной башни мало. Поставь вторую.', goal: { k: 'have', t: 'tower', n: 2 }, reward: { wood: 400, stone: 400 } },
   { id: 'v-camp3', npc: 'lisa', text: 'Три лагеря Князя — и он задумается!', goal: { k: 'camps', n: 3 }, reward: { wood: 600, stone: 600, gold: 300 } },

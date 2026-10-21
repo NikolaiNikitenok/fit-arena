@@ -1,6 +1,7 @@
 // Деревня внутри прогресса игрока: достать, изменить через чистые функции shared/village.ts и положить обратно.
 import { Bld, finishDue, newTown, NO_RES, Res, RES_KEYS, STARTER_RES, Town } from '../../shared/village';
 import { BattleBase, finishTraining } from '../../shared/villageBattle';
+import { boostResearch, finishResearch } from '../../shared/villageLab';
 import { villageOf } from '../game/resources';
 import type { Progress } from '../game/progress';
 import type { PackedBld } from './types';
@@ -11,12 +12,15 @@ export const hasTown = (p: Progress) => !!p.village?.b?.length;
 export function townOf(p: Progress): Town {
   const v = villageOf(p);
   if (!v.b?.length) return { ...newTown(v.res) };
-  return { res: v.res, b: v.b, n: v.n ?? v.b.length + 1, army: v.army ?? {}, q: v.q ?? [] };
+  const t: Town = { res: v.res, b: v.b, n: v.n ?? v.b.length + 1, army: v.army ?? {}, q: v.q ?? [] };
+  if (v.tl) t.tl = v.tl;
+  if (v.r) t.r = v.r;
+  return t;
 }
 
 export function withTown(p: Progress, t: Town): Progress {
   const v = villageOf(p);
-  return { ...p, village: { ...v, res: t.res, b: t.b, n: t.n, army: t.army, q: t.q } };
+  return { ...p, village: { ...v, res: t.res, b: t.b, n: t.n, army: t.army, q: t.q, tl: t.tl, r: t.r } };
 }
 
 // Первый набег — не раньше чем через двое суток после основания.
@@ -36,8 +40,14 @@ export function foundTown(p: Progress, now: number): Progress {
 export function tickTown(p: Progress, now: number): Progress {
   if (!hasTown(p)) return p;
   const t = townOf(p);
-  const next = finishTraining(finishDue(t, now), now);
+  const next = finishResearch(finishTraining(finishDue(t, now), now), now);
   return next === t ? p : withTown(p, next);
+}
+
+/** Тренировка ускоряет исследование в лаборатории: повтор — минута (shared/villageLab.ts). */
+export function boostLab(p: Progress, reps: number): Progress {
+  if (!hasTown(p) || !p.village?.r) return p;
+  return withTown(p, boostResearch(townOf(p), reps));
 }
 
 export const packBase = (base: BattleBase): PackedBld[] => base.buildings.map((b) => [b.i, b.t, b.x, b.y, b.l]);

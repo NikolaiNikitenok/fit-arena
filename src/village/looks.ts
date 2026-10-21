@@ -63,7 +63,7 @@ export interface Look {
   blob: number;
 }
 
-export const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, quarry: 2, goldmine: 2, storage: 2, barracks: 2, forge: 2, tavern: 2, market: 2, tower: 2, catapult: 2, wall: 1 };
+export const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, quarry: 2, goldmine: 2, storage: 2, barracks: 2, forge: 2, tavern: 2, market: 2, tower: 2, catapult: 2, wall: 1, lab: 2 };
 
 /** Ступень вида: 0 — дерево (1–2), 1 — камень (3–5), 2 — крепость (6–8). */
 export const stageOf = (l: number) => (l >= 6 ? 2 : l >= 3 ? 1 : 0);
@@ -97,6 +97,7 @@ const WOOD_D = '#6f4a2a';
 const BRICK = '#8b5a44';
 const IRON = '#3b3f48';
 const HAY = '#e3c25a';
+const MAGIC = '#8affc1';
 // Тёплый свет окон и фонарей.
 export const WARM = '#ffcf6e';
 const ROOF_OWN = '#3f6fc4';
@@ -373,6 +374,16 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
       b.anvil(0.3, 0.86);
       if (st >= 2) b.chimney(-0.55, -0.55, b.y0, 1.8).p('box', -0.55, b.y0 + 1.83, -0.55, 0.4, 0.08, 0.4, GOLD);
       else b.a('smoke', 0.3, b.y0 + 1.75 * g, 0.12);
+      break;
+    case 'lab':
+      b.m('building_church_blue', 1.05 * g, 0, -0.1);
+      // Светящийся кристалл на постаменте и котёл с зельем: здесь прокачивают отряды.
+      b.p('box', 0.78, b.y0 + 0.12, 0.78, 0.3, 0.24, 0.3, st >= 2 ? GOLD : STONE_D);
+      b.glow('cone', 0.78, b.y0 + 0.42, 0.78, 0.2, 0.36, 0.2, MAGIC).glow('cone', 0.78, b.y0 + 0.66, 0.78, 0.2, 0.18, 0.2, MAGIC, Math.PI);
+      b.p('cyl', -0.7, b.y0 + 0.13, 0.78, 0.36, 0.26, 0.36, IRON).glow('cyl', -0.7, b.y0 + 0.27, 0.78, 0.3, 0.03, 0.3, MAGIC);
+      b.a('smoke', -0.7, b.y0 + 0.32, 0.78, 0.6);
+      if (st >= 1) b.m('barrel', 2, 0.85, -0.6).lantern(0.05, 0.92);
+      if (st >= 2) b.m('chest_gold', 0.22, -0.85, -0.55, Math.PI / 2);
       break;
     case 'tavern':
       b.m('building_tavern_blue', 1.5 * g, 0, 0);

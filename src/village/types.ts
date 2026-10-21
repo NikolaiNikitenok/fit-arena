@@ -45,6 +45,9 @@ export interface VillageExtra {
   n?: number;
   army?: Partial<Record<TroopId, number>>;
   q?: { t: TroopId; end: number }[];
+  // Уровни отрядов из лаборатории и идущее исследование.
+  tl?: Partial<Record<TroopId, number>>;
+  r?: { t: TroopId; end: number };
   // Когда основана деревня.
   born?: number;
   // Забранные награды заданий жителей.

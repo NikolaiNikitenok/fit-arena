@@ -41,6 +41,31 @@ export const TROOP_RIGS: Record<TroopId, TroopRig> = {
   wallbreaker: { model: 'Skeleton_Minion', gear: [], height: 1.05, bomb: true, clips: { run: 'Running_A', idle: 'Idle', death: 'Death_A' } },
   healer: { model: 'Mage', gear: ['2H_Staff', 'Mage_Cape'], height: 1.3, tint: 'mul:1.15,1.12,1.05', glow: '#8affc1', fly: 0.85, clips: { idle: 'Idle', cast: 'Spellcasting', death: 'Death_A' } },
 };
+/**
+ * Как меняется отряд с уровнем из лаборатории: 1–2 — как есть, 3–5 — стальной отлив, 6–7 — золото,
+ * 8 — золото и мягкое свечение. Видно и в бою, и в карточках.
+ */
+export function levelLook(level: number | undefined): { tint?: string; glow?: string } {
+  const l = level ?? 1;
+  if (l >= 8) return { tint: 'mul:1.22,1.05,0.68', glow: '#ffcc66' };
+  if (l >= 6) return { tint: 'mul:1.2,1.05,0.72' };
+  if (l >= 3) return { tint: 'mul:0.9,0.97,1.12' };
+  return {};
+}
+
+/** Покраска материала отряда: свой оттенок, оттенок уровня и свечение. */
+export function paintTroop(m: THREE.MeshStandardMaterial, rig: TroopRig, level?: number) {
+  const look = levelLook(level);
+  if (!m.color) return;
+  m.color.multiply(parseTint(rig.tint));
+  if (look.tint) m.color.multiply(parseTint(look.tint));
+  const glow = rig.glow ?? look.glow;
+  if (glow && m.emissive) {
+    m.emissive.set(glow);
+    m.emissiveIntensity = 0.22;
+  }
+}
+
 const LOOPS: Record<TroopClip, boolean> = { run: true, idle: true, cast: true, attack: false, death: false };
 // Кадров в секунду движения при запекании: в экономном режиме меньше (меньше памяти и подготовки).
 const BAKE_FPS = { full: 12, lite: 8 };
@@ -105,7 +130,7 @@ export function bombGroup(): THREE.Group {
 }
 
 /** Запекает движения отряда в готовые позы. */
-export function bakeTroop(rig: TroopRig, char: THREE.Object3D, animations: THREE.AnimationClip[], lite: boolean): BakedTroop {
+export function bakeTroop(rig: TroopRig, char: THREE.Object3D, animations: THREE.AnimationClip[], lite: boolean, level?: number): BakedTroop {
   const root = cloneSkinned(char) as THREE.Group;
   if (rig.bomb) {
     const hand = root.getObjectByName('handslotr');
@@ -128,13 +153,7 @@ export function bakeTroop(rig: TroopRig, char: THREE.Object3D, animations: THREE
       k = materials.length;
       matIndex.set(src, k);
       const m = src.clone() as THREE.MeshStandardMaterial;
-      if (!isBomb && m.color) {
-        m.color.multiply(parseTint(rig.tint));
-        if (rig.glow && m.emissive) {
-          m.emissive.set(rig.glow);
-          m.emissiveIntensity = 0.22;
-        }
-      }
+      if (!isBomb) paintTroop(m, rig, level);
       materials.push(m);
     }
     const g = mesh.geometry;
@@ -335,14 +354,14 @@ interface Pool {
 }
 
 /** Обычные отряды: запечённые позы инстансами. */
-export function Troops({ view, ids, lite }: { view: React.MutableRefObject<BattleView | null>; ids: Partial<Record<TroopId, number>>; lite: boolean }) {
+export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<BattleView | null>; ids: Partial<Record<TroopId, number>>; lv?: Partial<Record<TroopId, number>>; lite: boolean }) {
   const anims = useGltf(ANIMS_URL);
   const knight = useGltf(charUrl('Knight'));
   const rogue = useGltf(charUrl('Rogue'));
   const barb = useGltf(charUrl('Barbarian'));
   const minion = useGltf(charUrl('Skeleton_Minion'));
   const mage = useGltf(charUrl('Mage'));
-  const key = (Object.keys(TROOP_RIGS) as TroopId[]).map((id) => `${id}:${ids[id] ?? 0}`).join(',');
+  const key = (Object.keys(TROOP_RIGS) as TroopId[]).map((id) => `${id}:${ids[id] ?? 0}:${lv?.[id] ?? 1}`).join(',');
   const pools = useMemo(() => {
     const scenes: Partial<Record<CharName, THREE.Object3D>> = { Knight: knight.scene, Rogue: rogue.scene, Barbarian: barb.scene, Skeleton_Minion: minion.scene, Mage: mage.scene };
     const out: Pool[] = [];
@@ -351,7 +370,7 @@ export function Troops({ view, ids, lite }: { view: React.MutableRefObject<Battl
       const cap = Math.min(140, ids[id] ?? 0);
       if (cap <= 0) continue;
       const rig = TROOP_RIGS[id];
-      const baked = bakeTroop(rig, scenes[rig.model]!, anims.animations, lite);
+      const baked = bakeTroop(rig, scenes[rig.model]!, anims.animations, lite, lv?.[id]);
       const meshes = new Map<string, THREE.InstancedMesh>();
       const list: THREE.InstancedMesh[] = [];
       for (const [clip, c] of Object.entries(baked.clips) as [TroopClip, BakedClip][]) {

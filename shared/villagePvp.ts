@@ -13,6 +13,7 @@
  *   Поиск (и пропуск соперника) — не чаще 10 раз в минуту.
  */
 import { BUILDINGS, BUILDING_TYPES, canPlace, maxCount, levelCap, type Res, RES_KEYS, type Town, TH_MAX, thLevel, type Bld } from './village';
+import { labLevel, maxTroopLevel, troopLevel } from './villageLab';
 import { armyCap, barracksLevel, type BattleArmy, type BattleBase, type BattleResult, type Deploy, housingOf, TROOP_IDS, TROOPS, type TroopId, BATTLE_TICKS, validateDeploys } from './villageBattle';
 
 const H = 3_600_000;
@@ -207,6 +208,11 @@ export function checkTown(t: unknown): string | null {
   const queued = q.reduce((s, e) => s + TROOPS[e.t].housing, 0);
   if (housingOf(army) + queued > armyCap(town as Town)) return 'войско больше лагеря';
   if ([...TROOP_IDS.filter((id) => (army[id] ?? 0) > 0), ...q.map((e) => e.t)].some((id) => TROOPS[id].unlock > barracks)) return 'отряд не открыт';
+  const tl = town.tl ?? {};
+  const maxLv = maxTroopLevel(labLevel(town as Town));
+  if (typeof tl !== 'object' || Object.keys(tl).some((k) => !TROOP_IDS.includes(k as TroopId) || !int(tl[k as TroopId], 1, maxLv))) return 'уровни отрядов';
+  const r = town.r;
+  if (r != null && (typeof r !== 'object' || !TROOP_IDS.includes(r.t) || !fin(r.end) || troopLevel(town as Town, r.t) + 1 > maxLv)) return 'исследование';
   return null;
 }
 
@@ -223,6 +229,12 @@ export function checkArmy(army: unknown, town: Town, heroMax: number): string | 
   }
   if (housingOf(a.troops) > armyCap(town)) return 'больше мест в лагере';
   if (a.level !== Math.max(1, barracksLevel(town))) return 'уровень казарм';
+  if (a.lv != null) {
+    if (typeof a.lv !== 'object') return 'уровни отрядов';
+    for (const k of Object.keys(a.lv)) {
+      if (!TROOP_IDS.includes(k as TroopId) || !int(a.lv[k as TroopId], 1, troopLevel(town, k as TroopId))) return `уровень ${k}`;
+    }
+  }
   if (a.hero != null && !int(a.hero, 1, Math.max(1, heroMax))) return 'уровень героя';
   return null;
 }

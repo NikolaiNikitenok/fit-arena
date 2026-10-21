@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { accrued, applyLoss, build, BUILDINGS, canPlace, capacity, collect, finishDue, finishNow, freeBuilders, lootAvailable, move, newTown, speedUpCharge, thLevel, Town, upgrade, villageBonus } from './village';
-import { finishTraining, train, untrain } from './villageBattle';
+import { finishTraining, train, TROOPS, untrain } from './villageBattle';
 
 const H = 3_600_000;
 const rich = (): Town => ({ ...newTown({ wood: 1e6, stone: 1e6, gold: 1e6 }) });
@@ -113,6 +113,6 @@ describe('деревня', () => {
     const gold = t.res.gold;
     t = untrain(t, 'warrior');
     expect(t.q.length).toBe(0);
-    expect(t.res.gold).toBe(gold + 25);
+    expect(t.res.gold).toBe(gold + TROOPS.warrior.cost.gold!);
   });
 });
