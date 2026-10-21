@@ -5,7 +5,7 @@ import { Canvas3D } from '../three/Canvas3D';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
-import { Anim, KitPart, Look, lookOf, Prim, SIZE, wallLook } from './looks';
+import { Anim, KitPart, Look, lookOf, Prim, SIZE, trapLook, wallLook } from './looks';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings, useSettings } from '../settings';
 import { emitFx, Particles } from './Particles';
@@ -15,7 +15,7 @@ import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { CRY, GUARD, QUAKE, SKILLS, type SkillId } from '../../shared/heroSkills';
 import { RES_COLORS } from './icons';
 import { Builders } from './Builders';
-import { DEFAULT_HERO, HealerAuras, HeroLook, HeroTroop, SkillAuras, Troops, UnitBars } from './troops3d';
+import { DEFAULT_HERO, HealerAuras, HeroLook, HeroTroop, KEEPER_FOE, SkillAuras, Troops, UnitBars } from './troops3d';
 
 // Деревня в 3D: изометрия ортогональной камерой, постройки KayKit инстансами, стены собираются
 // из секций между соседними клетками. Та же сцена показывает бой: отряды — персонажи KayKit
@@ -110,6 +110,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 function lookFor(b: ViewBld, enemy: boolean): Look {
   const s = SIZE[b.t];
   const kit = (name: string, sc: number): KitPart => ({ lib: name === 'building_dirt' ? 'village' : 'fantasy', name, s: sc, x: 0, z: 0, y: 0, ry: 0 });
+  if (b.t === 'bomb' || b.t === 'snare') return trapLook(b.t, b.l, b.state === 'ruin');
   if (b.state === 'ruin') return { kit: [b.t === 'wall' ? kit('rock_single_B', 3) : kit('building_destroyed', s / 1.6)], prim: [], anim: [], top: 1.6, blob: 0 };
   if (b.state === 'new') return { kit: [kit('building_dirt', s / 1.9), kit('building_scaffolding', s / 2.1)], prim: [], anim: [], top: 2.2, blob: s * 0.55 };
   return lookOf(b.t, b.l, enemy);
@@ -293,7 +294,7 @@ const ARROWS = 48;
 const BOOMS = 16;
 const CASTS = 8;
 // Сколько живёт эффект на экране, мс (при скорости ×1).
-const FX_MS = { shell: 1200, boom: 450, cast: 800, bolt: 450, arrow: 260, hit: 260 } as const;
+const FX_MS = { shell: 1200, boom: 450, cast: 800, bolt: 450, arrow: 260, hit: 260, snap: 500 } as const;
 const CAST_R: Partial<Record<SkillId, number>> = { cry: CRY.radius, guard: GUARD.radius, quake: QUAKE.stunRadius };
 function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) {
   const arrows = useMemo(() => {
@@ -356,6 +357,12 @@ function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) 
           const flick = t < 0.5 || (t > 0.65 && t < 0.8) ? 1 : 0.05;
           mat.makeScale(flick * (1.2 - t), 9, flick * (1.2 - t)).setPosition(W(f.x0), 4.5, W(f.y0));
           bolts.setMatrixAt(nl++, mat);
+        } else if (f.k === 'snap' && nr < CASTS) {
+          // Капкан захлопнулся: быстрое серое кольцо.
+          const r = 0.25 + 0.9 * Math.sqrt(t);
+          mat.makeScale(r, 1, r).setPosition(W(f.x0), 0.1, W(f.y0));
+          rings.setMatrixAt(nr, mat);
+          rings.setColorAt(nr++, col.set('#d9dee6').multiplyScalar(1 - t));
         } else if (f.k === 'boom' && nb < BOOMS) {
           const r = 0.4 + 1.1 * t;
           mat.makeScale(r, r * 0.6, r).setPosition(W(f.x0), 0.2, W(f.y0));
@@ -509,8 +516,13 @@ function Scene(props: SceneProps) {
             <Troops view={props.battle} ids={props.battle.current?.s.input.army.troops ?? {}} lv={props.battle.current?.s.input.army.lv} lite={lite} />
           </Suspense>
           <Suspense fallback={null}>
-            <HeroTroop view={props.battle} look={props.heroLook ?? DEFAULT_HERO} />
+            <HeroTroop view={props.battle} look={props.foe ? DEFAULT_HERO : (props.heroLook ?? DEFAULT_HERO)} />
           </Suspense>
+          {props.battle.current?.s.keeper && (
+            <Suspense fallback={null}>
+              <HeroTroop view={props.battle} keeper foe={!props.foe} look={props.foe ? (props.heroLook ?? DEFAULT_HERO) : KEEPER_FOE} />
+            </Suspense>
+          )}
         </>
       )}
       {props.battle && <HealerAuras view={props.battle} />}

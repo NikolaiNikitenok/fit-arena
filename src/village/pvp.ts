@@ -38,6 +38,7 @@ export function applyDefense(p: Progress, d: PvpDefense, now: number): Progress 
     army: d.army,
     deploys: d.deploys,
     base: d.base,
+    hero: d.hero,
     endTick: d.endTick,
     id: d.id,
     trophies: d.trophies,

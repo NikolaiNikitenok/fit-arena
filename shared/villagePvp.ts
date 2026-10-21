@@ -150,6 +150,8 @@ export interface PvpDefense {
   endTick?: number;
   // Раскладка в момент набега: [номер, тип, x, y, уровень].
   base: [number, Bld['t'], number, number, number][];
+  // Уровень моего героя, который охранял деревню (нет — не охранял).
+  hero?: number;
   trophies: number;
   // Сколько ещё можно отомстить, мс (0 — уже нельзя).
   revenge: number;

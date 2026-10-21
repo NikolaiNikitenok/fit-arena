@@ -363,7 +363,7 @@ export class VillageStore {
     if (near.length) {
       const v = near[Math.floor(this.d.random() * near.length)];
       const town = this.current(v.id)!;
-      return this.lockFor(me, { target: v.id, seed, base: baseOf(town), loot: lootAvailable(town, now), name: v.name, th: thLevel(town), trophies: v.trophies, bot: false }, now, mine.trophies, th);
+      return this.lockFor(me, { target: v.id, seed, base: baseOf(town, this.d.heroLevel(v.id)), loot: lootAvailable(town, now), name: v.name, th: thLevel(town), trophies: v.trophies, bot: false }, now, mine.trophies, th);
     }
     // Живых соперников нет — деревня-бот того же уровня (её тоже проверяет сервер).
     const level = Math.max(1, Math.min(8, th + (seed % 3) - 1));
@@ -393,7 +393,7 @@ export class VillageStore {
     if (mine.shieldUntil > now) mine.shieldUntil = now;
     const town = this.current(v.id)!;
     const seed = Math.floor(this.d.random() * 2_000_000_000);
-    return this.lockFor(me, { target: v.id, seed, base: baseOf(town), loot: lootAvailable(town, now), name: v.name, th: thLevel(town), trophies: v.trophies, bot: false, revengeOf: a.id }, now, mine.trophies, thLevel(mine.town));
+    return this.lockFor(me, { target: v.id, seed, base: baseOf(town, this.d.heroLevel(v.id)), loot: lootAvailable(town, now), name: v.name, th: thLevel(town), trophies: v.trophies, bot: false, revengeOf: a.id }, now, mine.trophies, thLevel(mine.town));
   }
 
   /** Набег: сервер сам проверяет войско и высадки и сам считает бой. */
@@ -491,6 +491,7 @@ export class VillageStore {
       deploys: a.deploys,
       endTick: a.endTick,
       base: a.base.buildings.map((b) => [b.i, b.t, b.x, b.y, b.l]),
+      hero: a.base.hero,
       trophies: a.defTrophies,
       revenge: a.revenged || !a.attacker ? 0 : Math.max(0, a.at + REVENGE_MS - now),
     };

@@ -92,7 +92,9 @@ export class BattleSounds {
       else if (f.k === 'boom') this.add('blast');
       else if (f.k === 'cast') this.add('skill');
       else if (f.k === 'bolt') this.add('thunder');
+      else if (f.k === 'snap') this.add('smash');
     }
+    if (s.keeper?.hit === tick) this.add('slash');
     // Стрелы лучников уже озвучены тетивой, остальные — выстрелы башен.
     this.add('shot', arrows - bows);
     s.buildings.forEach((b, k) => {

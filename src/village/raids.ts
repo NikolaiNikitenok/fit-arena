@@ -6,7 +6,7 @@
 import { applyLoss, GRID, lootAvailable, thLevel } from '../../shared/village';
 import { baseOf, BattleArmy, Deploy, simulateBattle, TROOP_IDS, TroopId } from '../../shared/villageBattle';
 import { knyazArmy } from '../../shared/villageCamps';
-import type { Progress } from '../game/progress';
+import { heroLevel, heroXp, type Progress } from '../game/progress';
 import { villageOf } from '../game/resources';
 import { hasTown, packBase, townOf, withTown } from './state';
 import type { DefenseEntry } from './types';
@@ -53,12 +53,13 @@ export function dueRaid(p: Progress, now: number): Progress | null {
   const seed = Math.floor(at / 1000) | 0;
   if (th < 2) return { ...p, village: { ...v, raidAt: nextRaidAt(now, seed) } };
   const army = knyazArmy(th);
-  const base = baseOf(t);
+  // Герой охраняет деревню и от лентяев Князя.
+  const base = baseOf(t, p.days ? heroLevel(heroXp(p)).level : null);
   const deploys = knyazDeploys(army, seed);
   const loot = lootAvailable(t, at, NPC_LOOT_MUL);
   const r = simulateBattle({ base, army, deploys, loot, seed });
   const lost = withTown(p, applyLoss(t, r.loot, at));
-  const entry: DefenseEntry = { at, who: 'Лентяи Князя Дивана', stars: r.stars, pct: r.destruction, loot: r.loot, avail: loot, seed, army, deploys, base: packBase(base) };
+  const entry: DefenseEntry = { at, who: 'Лентяи Князя Дивана', stars: r.stars, pct: r.destruction, loot: r.loot, avail: loot, seed, army, deploys, base: packBase(base), hero: base.hero };
   return { ...lost, village: { ...villageOf(lost), log: addLog(v.log, entry), raidAt: nextRaidAt(now, seed) } };
 }
 
@@ -67,7 +68,7 @@ export function addLog(log: DefenseEntry[] | undefined, entry: DefenseEntry): De
   return [entry, ...(log ?? [])]
     .sort((a, b) => b.at - a.at)
     .slice(0, LOG_MAX)
-    .map((e, k) => (k < REPLAYS ? e : { ...e, deploys: undefined, base: undefined, avail: undefined }));
+    .map((e, k) => (k < REPLAYS ? e : { ...e, deploys: undefined, base: undefined, avail: undefined, hero: undefined }));
 }
 
 export const unseenRaids = (p: Progress) => (villageOf(p).log ?? []).filter((e) => e.at > (villageOf(p).seenAt ?? 0));

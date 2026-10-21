@@ -114,6 +114,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
       while (acc >= 100 && !v.s.done) {
         acc -= 100;
         v.prev = new Map(v.s.units.map((u) => [u.n, [u.x, u.y]]));
+        if (v.s.keeper) v.prev.set(v.s.keeper.n, [v.s.keeper.x, v.s.keeper.y]);
         stepBattle(v.s, mode === 'attack');
         sounds.current!.collect(v.s);
         for (const f of v.s.fx) v.fx.push({ ...f, born: now });
@@ -139,7 +140,15 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
 
   const s = view.current.s;
   const dead = s.buildings.filter((b) => !b.alive).length;
-  const buildings = useMemo<ViewBld[]>(() => s.buildings.map((b) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l, state: b.alive ? 'ok' : 'ruin' })), [dead, s]);
+  const sprung = s.traps.filter((t) => t.fired >= 0).length;
+  // Ловушки у чужой деревни не видны, пока не сработают; в повторе набега на тебя видны все свои.
+  const buildings = useMemo<ViewBld[]>(
+    () => [
+      ...s.buildings.map((b): ViewBld => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l, state: b.alive ? 'ok' : 'ruin' })),
+      ...s.traps.filter((t) => !enemy || t.fired >= 0).map((t): ViewBld => ({ i: t.i, t: t.t, x: t.x, y: t.y, l: t.l, state: t.fired >= 0 ? 'ruin' : 'ok' })),
+    ],
+    [dead, sprung, s, enemy],
+  );
   const hp: Record<number, number> = {};
   for (const b of s.buildings) if (b.alive && !b.wall && b.hp < b.maxHp) hp[b.i] = b.hp / b.maxHp;
   const zone = useMemo(() => noDeployCells(base), [base]);

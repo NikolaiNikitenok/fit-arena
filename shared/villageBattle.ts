@@ -20,8 +20,12 @@
  * и набег на первые лагеря Князя окупается.
  * Великан идёт к башням, подрывник — к стенам, целитель летает над стенами и лечит соседей.
  * Умения героя (shared/heroSkills.ts) идут в том же списке высадок: u = id умения, точка не важна.
+ *
+ * Оборона кроме башен: ловушки (бомба и капкан, shared/village.ts) спрятаны и срабатывают по разу за бой,
+ * а герой защитника (base.hero — его уровень) стоит у ратуши и бросается на всех, кто подойдёт ближе
+ * KEEPER_LEASH клеток. Отряды, до которых он достаёт, отвечают ему; летающих он не бьёт.
  */
-import { BUILDINGS, Bld, BuildingType, GRID, NO_RES, Res, RES_KEYS, sizeOf, hpOf, thLevel, type Town } from './village';
+import { BUILDINGS, Bld, BuildingType, GRID, isTrap, NO_RES, Res, RES_KEYS, sizeOf, hpOf, thLevel, type Town } from './village';
 import { CRY, GUARD, isSkill, QUAKE, RAGE, SkillId, skillsFor, SQUAD, STORM } from './heroSkills';
 
 export type TroopId = 'warrior' | 'archer' | 'giant' | 'wallbreaker' | 'healer';
@@ -148,6 +152,8 @@ export interface BaseBuilding {
 }
 export interface BattleBase {
   buildings: BaseBuilding[];
+  // Уровень героя защитника: он охраняет ратушу. Нет — деревню никто не охраняет.
+  hero?: number;
 }
 export interface BattleArmy {
   // Сколько каких отрядов есть (больше высадить нельзя).
@@ -189,8 +195,12 @@ export interface BattleResult {
   destroyed: number[];
 }
 
-/** Раскладка защитника из его деревни: недостроенное в бою не участвует. */
-export const baseOf = (t: Pick<Town, 'b'>): BattleBase => ({ buildings: t.b.filter((b) => b.l >= 1).map((b: Bld) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l })) });
+/** Раскладка защитника из его деревни: недостроенное в бою не участвует. hero — уровень героя-защитника. */
+export const baseOf = (t: Pick<Town, 'b'>, hero?: number | null): BattleBase => {
+  const base: BattleBase = { buildings: t.b.filter((b) => b.l >= 1).map((b: Bld) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l })) };
+  if (hero && hero >= 1) base.hero = Math.min(60, Math.floor(hero));
+  return base;
+};
 
 export interface SimBuilding extends BaseBuilding {
   size: number;
@@ -226,9 +236,16 @@ export interface SimUnit {
   rage: number;
   cry: number;
   guard: number;
+  // До какого тика держит капкан.
+  root: number;
+}
+
+/** Ловушка в бою: где стоит и на каком тике сработала (-1 — ещё ждёт). */
+export interface SimTrap extends BaseBuilding {
+  fired: number;
 }
 export interface Fx {
-  k: 'arrow' | 'shell' | 'boom' | 'hit' | 'cast' | 'bolt';
+  k: 'arrow' | 'shell' | 'boom' | 'hit' | 'cast' | 'bolt' | 'snap';
   // Какое умение (у 'cast' и 'bolt').
   a?: SkillId;
   x0: number;
@@ -250,6 +267,9 @@ export interface BattleState {
   tick: number;
   buildings: SimBuilding[];
   units: SimUnit[];
+  traps: SimTrap[];
+  // Герой защитника (n = -1), если он есть.
+  keeper: SimUnit | null;
   shells: Shell[];
   // Эффекты последнего тика: выстрелы и взрывы, для показа.
   fx: Fx[];
@@ -289,6 +309,7 @@ export function canDeploy(base: BattleBase, x: number, y: number): boolean {
   const cx = Math.floor(x);
   const cy = Math.floor(y);
   for (const b of base.buildings) {
+    if (isTrap(b.t)) continue;
     const s = sizeOf(b.t);
     if (cx >= b.x - 1 && cx <= b.x + s && cy >= b.y - 1 && cy <= b.y + s) return false;
   }
@@ -299,6 +320,7 @@ export function canDeploy(base: BattleBase, x: number, y: number): boolean {
 export function noDeployCells(base: BattleBase): number[] {
   const out = new Set<number>();
   for (const b of base.buildings) {
+    if (isTrap(b.t)) continue;
     const s = sizeOf(b.t);
     for (let y = b.y - 1; y <= b.y + s; y++) for (let x = b.x - 1; x <= b.x + s; x++) if (inField(x, y)) out.add(cellIdx(x, y));
   }
@@ -306,9 +328,12 @@ export function noDeployCells(base: BattleBase): number[] {
 }
 export const cellOf = (idx: number) => ({ x: (idx % FIELD) - MARGIN, y: Math.floor(idx / FIELD) - MARGIN });
 
+// Герой защитника бросается на отряды не дальше стольких клеток от своего поста у ратуши.
+export const KEEPER_LEASH = 7;
+
 export function createBattle(input: BattleInput): BattleState {
   const buildings: SimBuilding[] = input.base.buildings
-    .filter((b) => b.l >= 1)
+    .filter((b) => b.l >= 1 && !isTrap(b.t))
     .map((b) => {
       const hp = hpOf(b.t, b.l);
       return { ...b, size: sizeOf(b.t), hp, maxHp: hp, wall: b.t === 'wall', alive: true, cd: 0, target: -1, stun: 0 };
@@ -322,7 +347,21 @@ export function createBattle(input: BattleInput): BattleState {
   const left: Partial<Record<DeployKind, number>> = { ...input.army.troops };
   if (input.army.hero) left.hero = 1;
   for (const k of skillsFor(input.army.hero)) left[k] = 1;
-  return { input, tick: 0, buildings, units: [], shells: [], fx: [], done: false, rng: input.seed | 0, queue, next: 0, left, used: {}, occ };
+  const traps: SimTrap[] = input.base.buildings.filter((b) => b.l >= 1 && isTrap(b.t)).map((b) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l, fired: -1 }));
+  return { input, tick: 0, buildings, units: [], traps, keeper: makeKeeper(input.base, buildings), shells: [], fx: [], done: false, rng: input.seed | 0, queue, next: 0, left, used: {}, occ };
+}
+
+/** Пост героя защитника: перед ратушей (если ратуши нет — середина деревни). */
+export function keeperPost(base: BattleBase): { x: number; y: number } {
+  const th = base.buildings.find((b) => b.t === 'townhall');
+  return th ? { x: th.x + sizeOf('townhall') / 2, y: th.y + sizeOf('townhall') + 0.6 } : { x: GRID / 2, y: GRID / 2 };
+}
+
+function makeKeeper(base: BattleBase, buildings: SimBuilding[]): SimUnit | null {
+  if (!base.hero || base.hero < 1 || !buildings.length) return null;
+  const def = heroDef(base.hero);
+  const { x, y } = keeperPost(base);
+  return { n: -1, u: 'hero', x, y, hp: def.hp, maxHp: def.hp, def, damage: def.damage, alive: true, target: -1, block: -1, path: null, pi: 0, cd: 0, hit: -100, rage: 0, cry: 0, guard: 0, root: 0 };
 }
 
 /** Живой герой на поле (для умений). */
@@ -362,7 +401,7 @@ function addUnit(s: BattleState, u: UnitKind, x: number, y: number) {
   const def = u === 'hero' ? heroDef(s.input.army.hero ?? 1) : TROOPS[u];
   const mul = u === 'hero' ? 1 : unitMul(s.input.army, u);
   const hp = Math.round(def.hp * mul);
-  s.units.push({ n: s.units.length, u, x, y, hp, maxHp: hp, def, damage: Math.round(def.damage * mul * 10) / 10, alive: true, target: -1, block: -1, path: null, pi: 0, cd: 0, hit: -100, rage: 0, cry: 0, guard: 0 });
+  s.units.push({ n: s.units.length, u, x, y, hp, maxHp: hp, def, damage: Math.round(def.damage * mul * 10) / 10, alive: true, target: -1, block: -1, path: null, pi: 0, cd: 0, hit: -100, rage: 0, cry: 0, guard: 0, root: 0 });
 }
 
 // Шесть точек вокруг героя для дружины: углы по 60°, без тригонометрии.
@@ -614,9 +653,24 @@ function stepHealer(s: BattleState, u: SimUnit) {
   }
 }
 
+/** Отряд отвечает герою защитника, если тот в досягаемости: стоит и бьёт его. */
+function fightKeeper(s: BattleState, u: SimUnit): boolean {
+  const k = s.keeper;
+  if (!k || !k.alive || u.def.splash || dist(u.x, u.y, k.x, k.y) > u.def.range + 0.4) return false;
+  if (u.cd > 0) return true;
+  u.cd = Math.round(u.def.every * TPS);
+  u.hit = s.tick;
+  u.target = -1;
+  u.path = null;
+  if (u.def.range > 1.5) s.fx.push({ k: 'arrow', x0: u.x, y0: u.y, x1: k.x, y1: k.y });
+  damageUnit(s, k, dmgOf(s, u));
+  return true;
+}
+
 function stepUnit(s: BattleState, u: SimUnit) {
   if (u.cd > 0) u.cd--;
   if (u.def.prefer === 'heal') return stepHealer(s, u);
+  if (fightKeeper(s, u)) return;
   if (u.target < 0 || !s.buildings[u.target].alive) {
     u.target = chooseTarget(s, u);
     u.path = null;
@@ -629,6 +683,8 @@ function stepUnit(s: BattleState, u: SimUnit) {
     if (s.buildings[u.block].alive && rectDist(s.buildings[u.block], u.x, u.y) <= Math.max(u.def.range, 0.9)) return attack(s, u, u.block);
     u.block = -1;
   }
+  // В капкане: стоит, пока не отпустит.
+  if (u.root > s.tick) return;
   if (!u.path) {
     u.path = findPath(s, u.x, u.y, u.target);
     u.pi = 0;
@@ -709,6 +765,67 @@ function stepDefense(s: BattleState, b: SimBuilding) {
   }
 }
 
+/** Герой защитника: бьёт ближайший наземный отряд у своего поста, иначе возвращается на пост. */
+function stepKeeper(s: BattleState) {
+  const k = s.keeper;
+  if (!k || !k.alive) return;
+  if (k.cd > 0) k.cd--;
+  const post = keeperPost(s.input.base);
+  let best: SimUnit | null = null;
+  let bestD = Infinity;
+  for (const u of s.units) {
+    if (!u.alive || u.def.flying || dist(u.x, u.y, post.x, post.y) > KEEPER_LEASH) continue;
+    const d = dist(u.x, u.y, k.x, k.y);
+    if (d < bestD - 1e-9) {
+      bestD = d;
+      best = u;
+    }
+  }
+  k.target = best ? best.n : -1;
+  const step = k.def.speed * DT;
+  if (best) {
+    if (bestD <= k.def.range) {
+      if (k.cd > 0) return;
+      k.cd = Math.round(k.def.every * TPS);
+      k.hit = s.tick;
+      damageUnit(s, best, k.damage);
+      return;
+    }
+    const go = Math.min(step, bestD - k.def.range * 0.9);
+    k.x += ((best.x - k.x) / bestD) * go;
+    k.y += ((best.y - k.y) / bestD) * go;
+    return;
+  }
+  const d = dist(k.x, k.y, post.x, post.y);
+  if (d > 1e-6) {
+    const go = Math.min(step, d);
+    k.x += ((post.x - k.x) / d) * go;
+    k.y += ((post.y - k.y) / d) * go;
+  }
+}
+
+/** Ловушки: срабатывают под первым наземным отрядом, который к ним подошёл. */
+function stepTraps(s: BattleState) {
+  for (const t of s.traps) {
+    if (t.fired >= 0) continue;
+    const def = BUILDINGS[t.t].trap!;
+    const cx = t.x + 0.5;
+    const cy = t.y + 0.5;
+    const who = s.units.find((u) => u.alive && !u.def.flying && dist(u.x, u.y, cx, cy) <= def.trigger);
+    if (!who) continue;
+    t.fired = s.tick;
+    const dmg = def.damage[t.l - 1];
+    if (def.splash) {
+      for (const u of s.units) if (u.alive && !u.def.flying && dist(u.x, u.y, cx, cy) <= def.splash) damageUnit(s, u, dmg);
+      s.fx.push({ k: 'boom', x0: cx, y0: cy, x1: cx, y1: cy });
+    } else {
+      who.root = s.tick + (def.hold?.[t.l - 1] ?? 0);
+      damageUnit(s, who, dmg);
+      s.fx.push({ k: 'snap', x0: cx, y0: cy, x1: who.x, y1: who.y });
+    }
+  }
+}
+
 const allDestroyed = (s: BattleState) => nonWall(s).every((b) => !b.alive);
 
 /** Один шаг боя (0,1 с). live — бой идёт на экране: конец, когда все погибли, решает игрок. */
@@ -717,6 +834,8 @@ export function stepBattle(s: BattleState, live = false): BattleState {
   s.fx = [];
   while (s.next < s.queue.length && s.queue[s.next].t <= s.tick) spawn(s, s.queue[s.next++]);
   for (const u of s.units) if (u.alive) stepUnit(s, u);
+  stepKeeper(s);
+  stepTraps(s);
   s.buildings.forEach((b) => stepDefense(s, b));
   s.shells = s.shells.filter((sh) => {
     if (sh.land > s.tick) return true;

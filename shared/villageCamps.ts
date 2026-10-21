@@ -2,7 +2,7 @@
  * Готовые раскладки: лагеря Князя Дивана (поход против NPC) и деревни-«боты» для поиска соперника,
  * пока живых соперников нет. Детерминированно, от номера и seed.
  */
-import type { BuildingType, Res } from './village';
+import { sizeOf, type BuildingType, type Res } from './village';
 import type { BaseBuilding, BattleBase, TroopId } from './villageBattle';
 
 export interface FortSpec {
@@ -20,7 +20,20 @@ export interface FortSpec {
   l: number;
   // Внешнее кольцо с проходом (слабее).
   gap?: boolean;
+  // Ловушки: сколько бомб и капканов и их уровень.
+  bombs?: number;
+  snares?: number;
+  trapL?: number;
+  // Герой-защитник у ратуши (его уровень).
+  hero?: number;
 }
+
+// Где прятать ловушки: проходы между кольцами стен и подступы к ратуше и башням (по порядку).
+const TRAP_SPOTS: [number, number][] = [
+  [11, 7], [7, 11], [16, 12], [12, 16], [13, 13], [9, 9], [14, 9], [9, 14],
+  [11, 4], [4, 11], [19, 12], [12, 19], [6, 6], [17, 6], [6, 17], [17, 17],
+  [11, 2], [2, 11], [21, 12], [12, 21],
+];
 
 function ring(out: BaseBuilding[], x0: number, y0: number, x1: number, y1: number, l: number, gap: boolean) {
   for (let x = x0; x <= x1; x++)
@@ -50,7 +63,16 @@ export function fortress(f: FortSpec): BattleBase {
   for (let k = 0; k < f.collectors; k++) put(coll[k % 3], f.l, outside);
   if (f.rings >= 1) ring(b, 7, 7, 16, 16, f.wallL, false);
   if (f.rings >= 2) ring(b, 4, 4, 19, 19, f.wallL, !!f.gap);
-  return { buildings: b.map((x, k) => ({ ...x, i: k + 1 })) };
+  // Ловушки — только на свободные клетки: бомбы первыми, потом капканы.
+  const traps: BuildingType[] = [...Array(f.bombs ?? 0).fill('bomb'), ...Array(f.snares ?? 0).fill('snare')];
+  const taken = (x: number, y: number) => b.some((o) => x >= o.x && x < o.x + sizeOf(o.t) && y >= o.y && y < o.y + sizeOf(o.t));
+  for (const [x, y] of TRAP_SPOTS) {
+    if (!traps.length) break;
+    if (!taken(x, y)) b.push({ i: 0, t: traps.shift()!, x, y, l: f.trapL ?? 1 });
+  }
+  const base: BattleBase = { buildings: b.map((x, k) => ({ ...x, i: k + 1 })) };
+  if (f.hero) base.hero = f.hero;
+  return base;
 }
 
 export interface Camp {
@@ -68,11 +90,11 @@ export const CAMPS: Camp[] = [
   { id: 1, name: 'Застава лентяев', th: 1, loot: { wood: 150, stone: 150, gold: 80 }, hint: 'Одна башня — высаживай воинов с другой стороны.', spec: { th: 1, towers: 1, towerL: 1, catapults: 0, catL: 1, rings: 0, wallL: 1, storages: 0, collectors: 2, l: 1 } },
   { id: 2, name: 'Диванный хутор', th: 1, loot: { wood: 300, stone: 300, gold: 150 }, hint: 'Две башни прикрывают друг друга. Бей с угла.', spec: { th: 1, towers: 2, towerL: 1, catapults: 0, catL: 1, rings: 0, wallL: 1, storages: 1, collectors: 3, l: 1 } },
   { id: 3, name: 'Подушечный острог', th: 2, loot: { wood: 500, stone: 500, gold: 250 }, hint: 'Ратуша за стеной: воины её проломят, лучники стреляют поверх.', spec: { th: 2, towers: 2, towerL: 2, catapults: 0, catL: 1, rings: 1, wallL: 1, storages: 1, collectors: 3, l: 2 } },
-  { id: 4, name: 'Крепость Зевоты', th: 2, loot: { wood: 800, stone: 800, gold: 400 }, hint: 'Катапульта бьёт по толпе — не высаживай всех в одно место.', spec: { th: 3, towers: 3, towerL: 2, catapults: 1, catL: 1, rings: 1, wallL: 2, storages: 2, collectors: 4, l: 2 } },
-  { id: 5, name: 'Сонная цитадель', th: 3, loot: { wood: 1200, stone: 1200, gold: 600 }, hint: 'Великаны примут удар башен на себя.', spec: { th: 3, towers: 4, towerL: 3, catapults: 1, catL: 2, rings: 2, wallL: 2, storages: 2, collectors: 5, l: 3, gap: true } },
-  { id: 6, name: 'Бастион Пледа', th: 4, loot: { wood: 2000, stone: 2000, gold: 1000 }, hint: 'Подрывники откроют путь к ратуше.', spec: { th: 4, towers: 4, towerL: 4, catapults: 2, catL: 3, rings: 2, wallL: 3, storages: 2, collectors: 6, l: 4 } },
-  { id: 7, name: 'Твердыня Прокрастинации', th: 5, loot: { wood: 3000, stone: 3000, gold: 1500 }, hint: 'Целитель за великанами — и стены не помеха.', spec: { th: 5, towers: 4, towerL: 5, catapults: 3, catL: 4, rings: 2, wallL: 4, storages: 3, collectors: 6, l: 5 } },
-  { id: 8, name: 'Диванный дворец', th: 6, loot: { wood: 5000, stone: 5000, gold: 2500 }, hint: 'Логово самого Князя. Приходи с полным лагерем.', spec: { th: 6, towers: 4, towerL: 6, catapults: 4, catL: 5, rings: 2, wallL: 5, storages: 4, collectors: 8, l: 6 } },
+  { id: 4, name: 'Крепость Зевоты', th: 2, loot: { wood: 800, stone: 800, gold: 400 }, hint: 'Катапульта бьёт по толпе — не высаживай всех в одно место. И берегись спрятанной бомбы.', spec: { th: 3, towers: 3, towerL: 2, catapults: 1, catL: 1, rings: 1, wallL: 2, storages: 2, collectors: 4, l: 2, bombs: 1, trapL: 1 } },
+  { id: 5, name: 'Сонная цитадель', th: 3, loot: { wood: 1200, stone: 1200, gold: 600 }, hint: 'Великаны примут удар башен на себя.', spec: { th: 3, towers: 4, towerL: 3, catapults: 1, catL: 2, rings: 2, wallL: 2, storages: 2, collectors: 5, l: 3, gap: true, bombs: 2, snares: 1, trapL: 2 } },
+  { id: 6, name: 'Бастион Пледа', th: 4, loot: { wood: 2000, stone: 2000, gold: 1000 }, hint: 'Подрывники откроют путь к ратуше.', spec: { th: 4, towers: 4, towerL: 4, catapults: 2, catL: 3, rings: 2, wallL: 3, storages: 2, collectors: 6, l: 4, bombs: 3, snares: 2, trapL: 3 } },
+  { id: 7, name: 'Твердыня Прокрастинации', th: 5, loot: { wood: 3000, stone: 3000, gold: 1500 }, hint: 'Целитель за великанами — и стены не помеха. У ратуши дежурит страж Князя.', spec: { th: 5, towers: 4, towerL: 5, catapults: 3, catL: 4, rings: 2, wallL: 4, storages: 3, collectors: 6, l: 5, bombs: 4, snares: 3, trapL: 4, hero: 8 } },
+  { id: 8, name: 'Диванный дворец', th: 6, loot: { wood: 5000, stone: 5000, gold: 2500 }, hint: 'Логово самого Князя: он сам охраняет ратушу. Приходи с полным лагерем.', spec: { th: 6, towers: 4, towerL: 6, catapults: 4, catL: 5, rings: 2, wallL: 5, storages: 4, collectors: 8, l: 6, bombs: 5, snares: 4, trapL: 5, hero: 15 } },
 ];
 export const campById = (id: number) => CAMPS.find((c) => c.id === id);
 export const campBase = (c: Camp) => fortress(c.spec);
@@ -94,6 +116,10 @@ export function botBase(th: number, seed: number): { base: BattleBase; loot: Res
     collectors: Math.min(8, 2 + th),
     l: Math.max(1, th - (r(3) % 2)),
     gap: r(4) % 2 === 0,
+    bombs: th >= 2 ? Math.min(8, th) : 0,
+    snares: th >= 3 ? Math.min(7, th - 1) : 0,
+    trapL: Math.max(1, th - 1),
+    hero: th >= 3 ? 3 * th : undefined,
   };
   const base = 200 * th * th + 100 * r(5);
   return { base: fortress(spec), loot: { wood: base, stone: base, gold: Math.floor(base / 2) } };

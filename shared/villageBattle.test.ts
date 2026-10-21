@@ -159,3 +159,78 @@ describe('умения героя', () => {
     expect(addDeploy(none, 'rage', 0, 0)).toBeNull();
   });
 });
+
+describe('ловушки и герой защитника', () => {
+  // Ратуша посередине и пустое поле вокруг: видно, что делают ловушки и страж.
+  const plain = (extra: BattleBase['buildings'] = [], hero?: number): BattleBase => ({ buildings: [{ i: 1, t: 'townhall', x: 10, y: 10, l: 3 }, ...extra], hero });
+  const run = (base: BattleBase, deploys: Deploy[], ticks = 300, troops = { warrior: 10 }) => {
+    const s = createBattle({ base, army: { troops, level: 1 }, deploys, loot: LOOT, seed: 3 });
+    for (let k = 0; k < ticks && !s.done; k++) stepBattle(s, true);
+    return s;
+  };
+
+  it('ловушки не видны в зоне высадки и не считаются в разрушениях', () => {
+    const base = plain([{ i: 2, t: 'bomb', x: 3, y: 3, l: 1 }]);
+    expect(canDeploy(base, 3.5, 3.5)).toBe(true);
+    const r = simulateBattle({ base, army: { troops: { warrior: 20 }, level: 1 }, deploys: wave('warrior', 20, 11, 5), loot: LOOT, seed: 1 });
+    expect(r.destruction).toBe(100);
+    expect(r.stars).toBe(3);
+  });
+
+  it('бомба взрывается под толпой и ранит всех рядом', () => {
+    const s = run(plain([{ i: 2, t: 'bomb', x: 11, y: 6, l: 1 }]), wave('warrior', 5, 10.5, 3), 60);
+    expect(s.traps[0].fired).toBeGreaterThan(0);
+    expect(s.units.filter((u) => u.hp < u.maxHp).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('капкан держит отряд на месте', () => {
+    const s = createBattle({ base: plain([{ i: 2, t: 'snare', x: 11, y: 6, l: 1 }]), army: { troops: { giant: 1 }, level: 3 }, deploys: [{ t: 0, u: 'giant', x: 11.5, y: 3 }], loot: LOOT, seed: 1 });
+    let caught = -1;
+    for (let k = 0; k < 200; k++) {
+      stepBattle(s, true);
+      if (caught < 0 && s.traps[0].fired >= 0) caught = s.tick;
+    }
+    expect(caught).toBeGreaterThan(0);
+    const g = s.units[0];
+    expect(g.root).toBe(s.traps[0].fired + 40);
+    // Пока держит — стоит.
+    const s2 = createBattle({ base: plain([{ i: 2, t: 'snare', x: 11, y: 6, l: 1 }]), army: { troops: { giant: 1 }, level: 3 }, deploys: [{ t: 0, u: 'giant', x: 11.5, y: 3 }], loot: LOOT, seed: 1 });
+    while (s2.traps[0].fired < 0) stepBattle(s2, true);
+    const at = [s2.units[0].x, s2.units[0].y];
+    for (let k = 0; k < 30; k++) stepBattle(s2, true);
+    expect([s2.units[0].x, s2.units[0].y]).toEqual(at);
+  });
+
+  it('герой защитника бьётся с отрядами у ратуши, отряды отвечают', () => {
+    const s = run(plain([], 10), wave('warrior', 4, 11, 16), 200);
+    expect(s.keeper).not.toBeNull();
+    expect(s.keeper!.hit).toBeGreaterThan(0);
+    expect(s.keeper!.hp).toBeLessThan(s.keeper!.maxHp);
+    expect(s.units.some((u) => !u.alive)).toBe(true);
+  });
+
+  it('с героем защитника деревню взять труднее, и бой по-прежнему детерминирован', () => {
+    const deploys = wave('warrior', 8, 11, 16);
+    const without = simulateBattle({ base: plain([]), army: { troops: { warrior: 8 }, level: 1 }, deploys, loot: LOOT, seed: 9 });
+    const input: BattleInput = { base: plain([], 20), army: { troops: { warrior: 8 }, level: 1 }, deploys, loot: LOOT, seed: 9 };
+    const withHero = simulateBattle(input);
+    expect(withHero).toEqual(simulateBattle(JSON.parse(JSON.stringify(input))));
+    expect(withHero.destruction).toBeLessThanOrEqual(without.destruction);
+    expect(without.destruction).toBe(100);
+  });
+
+  it('у лагерей Князя есть ловушки, у последних — страж', () => {
+    expect(campBase(CAMPS[4]).buildings.some((b) => b.t === 'bomb')).toBe(true);
+    expect(campBase(CAMPS[7]).hero).toBeGreaterThan(0);
+    // Ловушки не стоят на постройках.
+    for (const c of CAMPS) {
+      const b = campBase(c).buildings;
+      const cells = new Set<string>();
+      for (const x of b.filter((v) => v.t !== 'bomb' && v.t !== 'snare')) {
+        const size = x.t === 'townhall' ? 3 : x.t === 'wall' ? 1 : 2;
+        for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) cells.add(`${x.x + dx},${x.y + dy}`);
+      }
+      for (const t of b.filter((v) => v.t === 'bomb' || v.t === 'snare')) expect(cells.has(`${t.x},${t.y}`)).toBe(false);
+    }
+  });
+});

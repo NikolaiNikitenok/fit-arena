@@ -34,6 +34,7 @@ import {
   upgradeBlock,
   villageBonus,
   affordable,
+  isTrap,
   lootAvailable,
 } from '../../shared/village';
 import { armyCap, BattleArmy, BattleResult, barracksLevel, Deploy, housingOf, train, TRAIN_ERRORS, TROOP_IDS, TROOPS, TroopId, untrain } from '../../shared/villageBattle';
@@ -392,7 +393,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       );
     }
     const e = battle.entry;
-    return inBattle(<BattleScreen title={e.who} base={unpackBase(e.base ?? [])} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />);
+    return inBattle(<BattleScreen heroLook={heroLook} title={e.who} base={{ ...unpackBase(e.base ?? []), hero: e.hero }} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />);
   }
 
   const tap = (x: number, y: number) => {
@@ -549,7 +550,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             now={now}
             charge={charge}
             onClose={() => setSelected(null)}
-            onUpgrade={() => act((t) => upgrade(t, sel.i, Date.now()), sel.t === 'wall' ? 'Стена укреплена!' : 'Строители взялись за дело!') && sfx('coin')}
+            onUpgrade={() => act((t) => upgrade(t, sel.i, Date.now()), sel.t === 'wall' ? 'Стена укреплена!' : isTrap(sel.t) ? 'Ловушка стала сильнее!' : 'Строители взялись за дело!') && sfx('coin')}
             onSpeed={() => {
               const n = speedUpCharge(sel, Date.now());
               const p = spendCharge(latest.current, n);

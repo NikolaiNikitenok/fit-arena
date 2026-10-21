@@ -76,7 +76,9 @@ describe('поиск соперника', () => {
     const t = target(v.find('tg:1', 'Я'));
     expect(t.bot).toBeUndefined();
     expect(t.name).toBe('Боря');
-    expect(t.layout).toEqual(baseOf(townOf(testProgress(2))));
+    expect(t.layout.buildings).toEqual(baseOf(townOf(testProgress(2))).buildings);
+    // Деревню охраняет герой защитника его уровня.
+    expect(t.layout.hero).toBe(10);
     expect(t.lootAvailable).toEqual(lootAvailable(townOf(testProgress(2)), T0));
     // Пока tg:1 бьёт Борю, другим его не выдают.
     v.update('tg:6', testProgress(2), 'Вика');

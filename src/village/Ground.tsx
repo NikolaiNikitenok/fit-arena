@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Instanced, Placed } from '../three/Instanced';
 import { ribbonGeometry } from '../three/Prop';
-import { GRID } from '../../shared/village';
+import { GRID, isTrap } from '../../shared/village';
 import { MARGIN } from '../../shared/villageBattle';
 import { SIZE } from './looks';
 import type { ViewBld } from './Village3D';
@@ -54,6 +54,7 @@ export function tileKinds(buildings: ViewBld[]): Uint8Array {
   const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < GRID && y < GRID ? y * GRID + x : -1);
   for (const b of buildings) {
     const s = SIZE[b.t];
+    if (isTrap(b.t)) continue;
     if (b.t !== 'wall')
       for (let y = b.y - 1; y <= b.y + s; y++)
         for (let x = b.x - 1; x <= b.x + s; x++) {
@@ -67,7 +68,7 @@ export function tileKinds(buildings: ViewBld[]): Uint8Array {
     const tx = th.x + 1;
     const ty = th.y + 3;
     for (const b of buildings) {
-      if (b.t === 'wall' || b === th) continue;
+      if (b.t === 'wall' || isTrap(b.t) || b === th) continue;
       let x = b.x + (b.x < tx ? SIZE[b.t] : -1);
       let y = b.y + 1;
       const mark = () => {
@@ -86,6 +87,8 @@ export function tileKinds(buildings: ViewBld[]): Uint8Array {
     }
   }
   for (const b of buildings) {
+    // Ловушки прячутся в траве: под ними земля не меняется.
+    if (isTrap(b.t)) continue;
     const s = SIZE[b.t];
     for (let y = b.y; y < b.y + s; y++) for (let x = b.x; x < b.x + s; x++) {
       const i = at(x, y);

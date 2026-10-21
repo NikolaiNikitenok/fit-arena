@@ -46,7 +46,7 @@ export const LOOT_CAP = [500, 1000, 2000, 3500, 5500, 8000, 11000, 15000];
 // Стартовые ресурсы деревни: хватает на первые сборщики.
 export const STARTER_RES: Res = { wood: 300, stone: 300, gold: 150 };
 
-export type BuildingType = 'townhall' | 'lumbermill' | 'quarry' | 'goldmine' | 'storage' | 'barracks' | 'forge' | 'tavern' | 'market' | 'tower' | 'catapult' | 'wall' | 'lab';
+export type BuildingType = 'townhall' | 'lumbermill' | 'quarry' | 'goldmine' | 'storage' | 'barracks' | 'forge' | 'tavern' | 'market' | 'tower' | 'catapult' | 'wall' | 'lab' | 'bomb' | 'snare';
 export type Category = 'economy' | 'army' | 'defense' | 'village';
 export const CATEGORY_LABELS: Record<Category, string> = { economy: 'Хозяйство', army: 'Войско', defense: 'Оборона', village: 'Жители' };
 
@@ -79,6 +79,18 @@ export interface BuildingDef {
   defense?: DefenseStats;
   // Сколько «веса» добычи хранит постройка: от него зависит доля унесённого.
   lootWeight?: number;
+  // Ловушка: спрятана от нападающего, не мешает ходить, срабатывает один раз за бой (shared/villageBattle.ts).
+  trap?: TrapStats;
+}
+
+export interface TrapStats {
+  // Срабатывает, когда наземный отряд подходит ближе trigger клеток к её середине.
+  trigger: number;
+  damage: number[];
+  // Бомба: урон всем наземным в радиусе splash.
+  splash?: number;
+  // Капкан: держит попавшегося столько тиков боя (по уровню), он не может идти.
+  hold?: number[];
 }
 
 const GROWTH = [1, 2.5, 6, 12, 22, 38, 60, 90];
@@ -161,9 +173,21 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: [{ stone: 20 }, { stone: 60 }, { stone: 160 }, { stone: 400 }, { stone: 900, gold: 200 }, { stone: 1800, gold: 500 }, { stone: 3200, gold: 1000 }, { stone: 5200, gold: 1800 }],
     time: all(0), hp: [150, 300, 550, 900, 1400, 2000, 2800, 3800],
   },
+  // Ловушки ставятся сразу (без строителя) и после боя взводятся сами.
+  bomb: {
+    type: 'bomb', name: 'Скрытая бомба', desc: 'Прячется в траве и взрывается под ногами у толпы. Нападающий её не видит.', size: 1, category: 'defense',
+    count: [0, 2, 3, 4, 5, 6, 7, 8], levelCap: [0, 2, 3, 4, 5, 6, 7, 8], cost: costs({ gold: 80, stone: 20 }), time: all(0), hp: hps(1),
+    trap: { trigger: 1, splash: 1.6, damage: [40, 52, 66, 82, 100, 120, 145, 175] },
+  },
+  snare: {
+    type: 'snare', name: 'Капкан', desc: 'Хватает первого, кто наступит, и держит на месте. Даже великана.', size: 1, category: 'defense',
+    count: [0, 0, 2, 3, 4, 5, 6, 7], levelCap: [0, 0, 2, 3, 4, 5, 6, 7], cost: costs({ wood: 60, gold: 60 }), time: all(0), hp: hps(1),
+    trap: { trigger: 0.7, damage: [15, 20, 26, 33, 41, 50, 60, 72], hold: [40, 45, 50, 55, 60, 65, 70, 80] },
+  },
 };
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingType[];
 export const isDefense = (t: BuildingType) => !!BUILDINGS[t].defense;
+export const isTrap = (t: BuildingType) => !!BUILDINGS[t].trap;
 
 // Строители: двое, третий с ратуши 4, четвёртый с ратуши 7.
 export const buildersAt = (th: number) => (th >= 7 ? 4 : th >= 4 ? 3 : 2);

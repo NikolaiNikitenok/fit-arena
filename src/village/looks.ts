@@ -63,7 +63,7 @@ export interface Look {
   blob: number;
 }
 
-export const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, quarry: 2, goldmine: 2, storage: 2, barracks: 2, forge: 2, tavern: 2, market: 2, tower: 2, catapult: 2, wall: 1, lab: 2 };
+export const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, quarry: 2, goldmine: 2, storage: 2, barracks: 2, forge: 2, tavern: 2, market: 2, tower: 2, catapult: 2, wall: 1, lab: 2, bomb: 1, snare: 1 };
 
 /** Ступень вида: 0 — дерево (1–2), 1 — камень (3–5), 2 — крепость (6–8). */
 export const stageOf = (l: number) => (l >= 6 ? 2 : l >= 3 ? 1 : 0);
@@ -418,6 +418,7 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
   const st = stageOf(l);
   // Внутри ступени постройка понемногу растёт.
   const g = 1 + 0.03 * (l - 1);
+  if (t === 'bomb' || t === 'snare') return trapLook(t, l, false);
   if (t === 'wall') {
     // Для превью: столб и две секции.
     const w = wallLook(l);
@@ -591,6 +592,43 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
   return b.done();
 }
 
+/**
+ * Ловушка: бомба — чугунный шар в ямке с фитилём, капкан — раскрытые железные челюсти на дощечке.
+ * С уровнем — заклёпки, потом золотой обод. sprung — сработала в бою: воронка или захлопнутые челюсти.
+ */
+export function trapLook(t: 'bomb' | 'snare', l: number, sprung: boolean): Look {
+  const b = new Builder(false);
+  const st = stageOf(l);
+  const rim = st >= 2 ? GOLD : st === 1 ? STONE_D : WOOD_D;
+  b.blob = 0;
+  b.top = 0.8;
+  if (t === 'bomb') {
+    if (sprung) {
+      b.p('cyl', 0, 0.01, 0, 0.9, 0.02, 0.9, '#2b2420').p('cyl', 0, 0.015, 0, 0.55, 0.02, 0.55, '#141110');
+      return b.done();
+    }
+    b.p('cyl', 0, 0.02, 0, 0.62, 0.04, 0.62, '#6b4e33').p('cyl', 0, 0.035, 0, 0.5, 0.03, 0.5, rim);
+    b.p('cyl', 0, 0.16, 0, 0.36, 0.26, 0.36, IRON).p('cone', 0, 0.32, 0, 0.3, 0.1, 0.3, IRON);
+    b.p('cyl', 0.05, 0.42, 0, 0.03, 0.14, 0.03, '#d8c39a', { rz: -0.4 }).glow('box', 0.09, 0.5, 0, 0.06, 0.06, 0.06, '#ffb43d');
+    if (l >= 3) for (const a of [0, 1.57, 3.14, 4.71]) b.p('box', Math.cos(a) * 0.18, 0.18, Math.sin(a) * 0.18, 0.04, 0.04, 0.04, st >= 2 ? GOLD : STONE);
+    return b.done();
+  }
+  b.p('box', 0, 0.02, 0, 0.7, 0.04, 0.7, WOOD_D).p('cyl', 0, 0.06, 0, 0.18, 0.05, 0.18, rim);
+  // Челюсти: два полукольца зубьев; раскрытые лежат плашмя, захлопнутые стоят торчком.
+  for (const side of [-1, 1]) {
+    const y = sprung ? 0.2 : 0.06;
+    const off = sprung ? 0.02 : 0.24;
+    b.p('box', 0, y, side * off, 0.56, sprung ? 0.3 : 0.04, 0.04, IRON);
+    for (let k = 0; k < 5; k++) {
+      const x = -0.22 + k * 0.11;
+      if (sprung) b.p('cone', x, 0.38, side * 0.02, 0.05, 0.08, 0.05, '#c9ced6');
+      else b.p('cone', x, 0.1, side * (off - 0.05), 0.05, 0.08, 0.05, '#c9ced6', { rx: side * 1.2 });
+    }
+  }
+  if (l >= 4) b.p('box', 0, 0.05, 0.33, 0.6, 0.02, 0.03, rim).p('box', 0, 0.05, -0.33, 0.6, 0.02, 0.03, rim);
+  return b.done();
+}
+
 const T7 = 'сторожевая башенка';
 const T8 = 'золотая крыша башенки, факелы и золотое знамя';
 // Что нового появится на постройке с уровнем: индекс — уровень минус 2 (уровни 2…8).
@@ -608,6 +646,8 @@ const NEW_PARTS: Record<BuildingType, string[]> = {
   tower: ['флаг на верхушке и факел', 'высокая каменная башня', 'флаг над крышей и колчан стрел', 'золотой конёк, мишень и знамя', 'крепостная башня на золотом цоколе', 'золотые знамёна и колчаны', 'золотой шпиль'],
   catapult: ['знамя на башне и ящик', 'каменный двор и флаги', 'второе знамя и горка ядер', 'ещё ядра и знамя у входа', 'золотой цоколь', 'золотая кайма знамён и башенка', T8],
   wall: ['деревянная шапка', 'серый камень с плитой', 'железные шипы', 'синеватый камень', 'золотое навершие', 'золотой пояс', 'светящийся камень на вершине'],
+  bomb: ['больше пороха', 'заклёпки по бокам', 'двойной заряд', 'каменный обод', 'золотой обод', 'золотые заклёпки', 'самый мощный заряд'],
+  snare: ['пружина туже', 'держит дольше', 'железная окантовка', 'зубья острее', 'золотой обод', 'держит ещё дольше', 'самая крепкая хватка'],
 };
 
 /** Что появится на постройке t на уровне l (для l ≥ 2). */

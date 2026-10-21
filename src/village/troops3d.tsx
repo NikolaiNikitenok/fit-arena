@@ -596,8 +596,14 @@ export const HERO_HEIGHT = 1.6;
 // Герой без своего снаряжения (повтор чужого набега).
 export const DEFAULT_HERO: HeroLook = { model: 'Knight', glow: '#ff8a5c', tint: 'mul:0.95,0.85,0.8' };
 
-/** Герой: настоящий персонаж с костями, в своём снаряжении. */
-export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleView | null>; look: HeroLook }) {
+// Герой защитника у чужой деревни: кто он, нападающий не знает — варвар в красном.
+export const KEEPER_FOE: HeroLook = { model: 'Barbarian', glow: '#ff4d6a', tint: 'mul:1,0.78,0.78' };
+
+/**
+ * Герой: настоящий персонаж с костями, в своём снаряжении. keeper — герой защитника: он стоит у ратуши
+ * и бьётся с отрядами (кольцо под ним красное у чужого, голубое у своего).
+ */
+export function HeroTroop({ view, look, keeper, foe }: { view: React.MutableRefObject<BattleView | null>; look: HeroLook; keeper?: boolean; foe?: boolean }) {
   const g = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
   const [anim, setAnim] = useState<CharAnim>('idle');
@@ -612,7 +618,7 @@ export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleV
   }, [model]);
   useFrame((_, dt) => {
     const v = view.current;
-    const u = v?.s.units.find((w) => w.u === 'hero');
+    const u = keeper ? (v?.s.keeper ?? undefined) : v?.s.units.find((w) => w.u === 'hero');
     if (!g.current) return;
     const o = st.current;
     if (!v || !u) {
@@ -625,7 +631,7 @@ export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleV
     const now = performance.now();
     const { a } = simTime(v, now);
     const [x, y] = lerpUnit(v, u, a);
-    if (o.hp < 0) o.face = faceTo(GRID / 2 - x, GRID / 2 - y);
+    if (o.hp < 0) o.face = keeper ? faceTo(0, 1) : faceTo(GRID / 2 - x, GRID / 2 - y);
     const prev = v.prev.get(u.n);
     const moving = u.alive && !!prev && (Math.abs(prev[0] - u.x) > 1e-4 || Math.abs(prev[1] - u.y) > 1e-4) && !v.s.done;
     let fx = 0;
@@ -633,6 +639,12 @@ export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleV
     if (moving && prev) {
       fx = u.x - prev[0];
       fz = u.y - prev[1];
+    } else if (keeper) {
+      const t = u.target >= 0 ? v.s.units[u.target] : undefined;
+      if (t) {
+        fx = t.x - u.x;
+        fz = t.y - u.y;
+      }
     } else {
       const b = v.s.buildings[u.block >= 0 ? u.block : u.target];
       if (b) {
@@ -667,7 +679,7 @@ export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleV
     <group ref={g} visible={false}>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]} renderOrder={2}>
         <ringGeometry args={[0.42, 0.52, 6]} />
-        <meshBasicMaterial color="#ffd27a" transparent opacity={0.85} depthWrite={false} />
+        <meshBasicMaterial color={keeper ? (foe ? '#ff4d6a' : '#7fd8ff') : '#ffd27a'} transparent opacity={0.85} depthWrite={false} />
       </mesh>
       <Character {...look} anim={anim} pulse={pulse} pulseAnim="attack" hit={hit} scale={scale} />
     </group>
@@ -803,9 +815,11 @@ export function UnitBars({ view, foe }: { view: React.MutableRefObject<BattleVie
       const q = camera.quaternion;
       tmp.r.set(1, 0, 0).applyQuaternion(q);
       const { a } = simTime(v, performance.now());
-      for (const u of v.s.units) {
+      const list = v.s.keeper ? [...v.s.units, v.s.keeper] : v.s.units;
+      for (const u of list) {
         if (!u.alive || n >= BAR_MAX) continue;
         const hero = u.u === 'hero';
+        const keeper = u.n < 0;
         const f = Math.max(0, Math.min(1, u.hp / u.maxHp));
         if (!hero && f >= 0.999) continue;
         const [x, y] = lerpUnit(v, u, a);
@@ -819,7 +833,8 @@ export function UnitBars({ view, foe }: { view: React.MutableRefObject<BattleVie
         tmp.p.addScaledVector(tmp.r, -(w * (1 - f)) / 2);
         tmp.m.compose(tmp.p, q, tmp.s.set(Math.max(0.001, w * f), hero ? 0.15 : 0.11, 1));
         fill.setMatrixAt(n, tmp.m);
-        tmp.c.set(hero ? BAR_COLORS.hero : foe ? BAR_COLORS.foe : f > 0.3 ? BAR_COLORS.ours : '#ffd27a');
+        // Герой защитника — на другой стороне: в набеге он чужой, в повторе набега на тебя — свой.
+        tmp.c.set(keeper ? (foe ? BAR_COLORS.ours : BAR_COLORS.foe) : hero ? BAR_COLORS.hero : foe ? BAR_COLORS.foe : f > 0.3 ? BAR_COLORS.ours : '#ffd27a');
         fill.setColorAt(n, tmp.c);
         n++;
       }

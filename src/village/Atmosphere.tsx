@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { GRID } from '../../shared/village';
+import { GRID, isTrap } from '../../shared/village';
 import { SIZE } from './looks';
 import { nowSky, overcast, skyAt, SkyLook, Weather } from './sky';
 import type { Ctl, ViewBld } from './Village3D';
@@ -204,7 +204,7 @@ export function lampSpots(buildings: ViewBld[]): [number, number][] {
     return cells;
   }));
   for (const b of buildings) {
-    if (b.t === 'wall' || b.state === 'ruin') continue;
+    if (b.t === 'wall' || isTrap(b.t) || b.state === 'ruin') continue;
     const s = SIZE[b.t];
     // Ближний к камере угол постройки, если там свободно.
     if (taken.has(`${b.x + s},${b.y + s}`)) continue;
@@ -285,7 +285,7 @@ export function Windows({ buildings, on, ctl }: { buildings: ViewBld[]; on: numb
   const geo = useMemo(() => {
     const list: { x: number; y: number; z: number; size: number; color: string }[] = [];
     for (const b of buildings) {
-      if (b.t === 'wall' || b.state !== 'ok') continue;
+      if (b.t === 'wall' || isTrap(b.t) || b.state !== 'ok') continue;
       const s = SIZE[b.t];
       const cx = W(b.x + s / 2);
       const cz = W(b.y + s / 2);

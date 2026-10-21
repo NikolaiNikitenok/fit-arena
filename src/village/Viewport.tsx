@@ -1,5 +1,6 @@
 import { createContext, Suspense, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { bubbleAt, cellAt, Ctl, pan, SceneProps, stopCamera, Village3D, zoomAt } from './Village3D';
+import { SIZE } from './looks';
 
 export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
   ctl: React.MutableRefObject<Ctl>;
@@ -46,7 +47,7 @@ export function Viewport(props: ViewportProps) {
           const c = at(e);
           const gh = props.ghost;
           if (c && gh && props.onGhost) {
-            const s = gh.t === 'townhall' ? 3 : gh.t === 'wall' ? 1 : 2;
+            const s = SIZE[gh.t];
             if (c.x >= gh.x - 0.5 && c.x <= gh.x + s + 0.5 && c.y >= gh.y - 0.5 && c.y <= gh.y + s + 0.5) g.current.ghost = { ox: c.x - gh.x, oy: c.y - gh.y };
           }
         } else if (pts.current.size === 2) {
