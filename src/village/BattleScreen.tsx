@@ -43,8 +43,9 @@ interface Props {
   resultNote?: ReactNode;
   // Сколько секунд можно осматриваться: потом бой начнётся сам (набег на игрока — цель забронирована).
   scout?: number;
-  // «Следующий»: пропустить соперника до первой высадки.
+  // «Следующий»: пропустить соперника до первой высадки; skipBusy — новый соперник уже ищется.
   onSkip?: () => void;
+  skipBusy?: boolean;
   // Бой окончен: что получилось, какие были высадки и когда игрок сдался.
   onFinish?: (r: BattleResult, deploys: Deploy[], endTick?: number) => void;
   onClose: () => void;
@@ -54,7 +55,7 @@ interface Props {
 
 const ORDER: UnitKind[] = ['hero', 'warrior', 'archer', 'giant', 'wallbreaker', 'healer'];
 
-export function BattleScreen({ title, base, loot, seed, army, mode, deploys, endTick, enemy, note, resultNote, scout, onSkip, onFinish, onClose, heroLook }: Props) {
+export function BattleScreen({ title, base, loot, seed, army, mode, deploys, endTick, enemy, note, resultNote, scout, onSkip, skipBusy, onFinish, onClose, heroLook }: Props) {
   // В бою видно всё поле с краем для высадки.
   const ctl = useRef<Ctl>({ tx: 0, tz: 0, zoom: Math.max(11, Math.min(window.innerWidth, window.innerHeight * 0.8) / 25) });
   const view = useRef<BattleView | null>(null);
@@ -176,9 +177,25 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
             {live.destruction}%<small>{scouting ? `осмотр ${scoutLeft} с` : `${Math.floor(secLeft / 60)}:${String(secLeft % 60).padStart(2, '0')}`}</small>
           </div>
         </div>
-        <div className="vil-battle-loot">
-          <span className="muted">Добыча:</span> <ResRow res={live.loot} />
-          {!RES_KEYS.some((k) => live.loot[k] > 0) && <span className="muted">пока ничего</span>}
+        {/* Сколько всего можно унести и сколько уже взято: полоска заполняется по ходу боя. */}
+        <div className="vil-loot-panel">
+          <span className="vil-loot-title">{mode === 'replay' ? 'Могли унести' : started.current ? 'Добыча' : 'Можно унести'}</span>
+          {RES_KEYS.some((k) => loot[k] > 0) ? (
+            RES_KEYS.filter((k) => loot[k] > 0).map((k) => (
+              <span key={k} className="vil-loot-cell" style={{ '--c': RES_COLORS[k] } as React.CSSProperties}>
+                <ResIcon r={k} size={20} />
+                <span className="vil-loot-num">
+                  <b>{fmtNum(loot[k])}</b>
+                  <i className="vil-loot-bar">
+                    <i style={{ width: `${Math.min(100, (100 * live.loot[k]) / loot[k])}%` }} />
+                  </i>
+                  {started.current || mode === 'replay' ? <small>+{fmtNum(live.loot[k])}</small> : null}
+                </span>
+              </span>
+            ))
+          ) : (
+            <span className="muted">добычи нет</span>
+          )}
         </div>
       </div>
       <div className="vil-side">
@@ -196,8 +213,14 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
         <div className="vil-bottom">
           {!started.current && <div className="vil-hint">Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки{scouting ? ` или через ${scoutLeft} с` : ''}.</div>}
           {!started.current && onSkip && (
-            <button className="small-btn vil-skip" onClick={onSkip}>
-              Следующий соперник
+            <button className="vil-next" onClick={onSkip} disabled={skipBusy}>
+              <span>
+                <b>{skipBusy ? 'Ищем другую деревню…' : 'Следующая деревня'}</b>
+                <small>Не нравится добыча — поищи другую</small>
+              </span>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h13M13 6l6 6-6 6" />
+              </svg>
             </button>
           )}
           <div className="vil-troops">
