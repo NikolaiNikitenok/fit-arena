@@ -56,13 +56,8 @@ function stageOf(slot: Slot): Stage {
   const spin = new THREE.Group();
   spin.add(model);
   scene.add(spin);
-  // Рамка по постройке: радиус вокруг оси вращения и высота.
-  const box = new THREE.Box3().setFromObject(model);
-  const rad = Math.max(Math.hypot(box.max.x, box.max.z), Math.hypot(box.min.x, box.min.z), Math.hypot(box.max.x, box.min.z), Math.hypot(box.min.x, box.max.z));
   // Своя рамка у модели (персонажи: оружие в замахе не должно уменьшать фигуру).
-  const frame = model.userData.frame as { h: number; half: number } | undefined;
-  const h = frame?.h ?? box.max.y;
-  const half = frame?.half ?? Math.max(1.1, rad, (h * Math.cos(PITCH) + 2 * rad * Math.sin(PITCH)) / 2) * 1.04;
+  const { h, half } = (model.userData.frame as { h: number; half: number } | undefined) ?? frameOf(model);
   const cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.1, 100);
   // Центр кадра — середина постройки по высоте: тогда она целиком входит в квадрат half×half.
   const dir = new THREE.Vector3(0, Math.sin(PITCH), Math.cos(PITCH));
@@ -71,6 +66,16 @@ function stageOf(slot: Slot): Stage {
   st = { scene, spin, model, cam };
   stages.set(slot.key, st);
   return st;
+}
+
+/** Рамка по модели: радиус вокруг оси вращения и высота — модель целиком входит в квадрат. */
+function frameOf(model: THREE.Object3D): { h: number; half: number } {
+  // Детали двигаются матрицами без автообновления: мировые матрицы считаем сами, иначе рамка не та.
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model);
+  const rad = Math.max(Math.hypot(box.max.x, box.max.z), Math.hypot(box.min.x, box.min.z), Math.hypot(box.max.x, box.min.z), Math.hypot(box.min.x, box.max.z));
+  const h = box.max.y;
+  return { h, half: Math.max(1.1, rad, (h * Math.cos(PITCH) + 2 * rad * Math.sin(PITCH)) / 2) * 1.04 };
 }
 
 function getRenderer(): THREE.WebGLRenderer {
@@ -179,21 +184,30 @@ function useSlot(ref: React.RefObject<HTMLCanvasElement | null>, key: string, ma
   }, [ref, key, size, fixed]);
 }
 
-function Live({ t, l, size }: { t: BuildingType; l: number; size: number }) {
+function Live({ t, l, size, frameL }: { t: BuildingType; l: number; size: number; frameL?: number }) {
   const fantasy = useLib('fantasy');
   const village = useLib('village');
   const s = useSettings();
   const ref = useRef<HTMLCanvasElement>(null);
   // Смена экономного режима — другой рендерер и другие детали (без дыма и искр).
-  useSlot(ref, `${t}:${l}:${s.lowPower ? 1 : 0}`, () => lookGroup(lookOf(t, l), { fantasy, village, space: undefined, city: undefined }, { lite: s.lowPower }), size);
+  const libs = { fantasy, village, space: undefined, city: undefined };
+  useSlot(ref, `${t}:${l}:${frameL ?? ''}:${s.lowPower ? 1 : 0}`, () => {
+    const g = lookGroup(lookOf(t, l), libs, { lite: s.lowPower });
+    // Общая рамка с уровнем frameL: рядом «сейчас → после улучшения» видно, что постройка выросла.
+    if (frameL) {
+      const f = frameOf(lookGroup(lookOf(t, Math.max(l, frameL)), libs, { lite: s.lowPower }));
+      g.userData.frame = { h: f.h, half: f.half };
+    }
+    return g;
+  }, size);
   return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label="Модель постройки" />;
 }
 
-/** Мини-модель постройки t уровня l. */
-export function Preview({ t, l = 1, size = 60 }: { t: BuildingType; l?: number; size?: number }) {
+/** Мини-модель постройки t уровня l; frameL — уровень, по которому выбрана рамка кадра. */
+export function Preview({ t, l = 1, size = 60, frameL }: { t: BuildingType; l?: number; size?: number; frameL?: number }) {
   return (
     <Suspense fallback={<span className={`vil-swatch b-${t}`} style={{ width: size, height: size }} />}>
-      <Live t={t} l={l} size={size} />
+      <Live t={t} l={l} size={size} frameL={frameL} />
     </Suspense>
   );
 }

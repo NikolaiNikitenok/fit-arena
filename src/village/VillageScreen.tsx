@@ -48,7 +48,7 @@ import { spendCharge, villageOf } from '../game/resources';
 import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
 import { Bolt, Dungeon, Hammer, Move, Scroll, Star, Trophy } from './icons';
 import { Preview } from './Preview';
-import { STAGE_NAMES, stageOf } from './looks';
+import { newPartsAt } from './looks';
 import { defenseLog, fetchInbox, fetchTop, findTarget, isOnline, OFFLINE, PvpError, revengeTarget, setPvpNotify, submitAttack, TargetView } from './pvpApi';
 import { applyInbox, applyMe, applyWin, canRevenge, markRevenged } from './pvp';
 import { type PvpTopRow, SCOUT_SECONDS, VILLAGE_LEAGUES, villageLeague } from '../../shared/villagePvp';
@@ -390,18 +390,18 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     const cy = Math.floor(y);
     const b = town.b.find((v) => cx >= v.x && cx < v.x + sizeOf(v.t) && cy >= v.y && cy < v.y + sizeOf(v.t));
     if (!b) return setSelected(null);
-    // Урожай собирается сразу, по тапу — как в CoC.
-    if (BUILDINGS[b.t].collector && b.l >= 1 && accrued(b, now) > 0 && selected !== b.i && bubbles.some((x) => x.i === b.i)) {
-      const r = collect(townOf(latest.current), b.i, Date.now());
-      if (r.got > 0) {
-        commit(withTown(latest.current, r.town));
-        sfx('coin');
-        flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
-      } else flash('Склады полны: построй или улучши склад.');
-      return;
-    }
     sfx('tap');
     setSelected(b.i);
+  };
+
+  // Урожай собирается тапом по пузырю над постройкой; тап по самой постройке открывает её карточку.
+  const harvest = (i: number) => {
+    const r = collect(townOf(latest.current), i, Date.now());
+    if (r.got > 0) {
+      commit(withTown(latest.current, r.town));
+      sfx('coin');
+      flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
+    } else flash('Склады полны: построй или улучши склад.');
   };
 
   const startPlacing = (t: BuildingType) => {
@@ -442,7 +442,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     <div className="vil-screen">
       <ViewHost
         slot={viewSlot}
-        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
+        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
       />
 
       <div className="vil-top">
@@ -954,18 +954,17 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
         </button>
       </div>
       <div className="vil-evo">
-        {b.l >= 1 && <Preview t={b.t} l={b.l} size={58} />}
+        {/* Обе мини-модели в одной рамке — по следующему уровню: видно, как постройка вырастет. */}
+        {b.l >= 1 && <Preview t={b.t} l={b.l} size={72} frameL={maxed ? b.l : next} />}
         {!maxed && (
           <>
             {b.l >= 1 && <span className="vil-evo-arrow">→</span>}
-            <Preview t={b.t} l={next} size={58} />
+            <Preview t={b.t} l={next} size={72} frameL={next} />
           </>
         )}
         <span className="muted">
           {d.desc}
-          {!maxed && b.l >= 1 && (b.t === 'townhall' || stageOf(next) !== stageOf(b.l)) && (
-            <b className="vil-evo-note"> Уровень {next}: {b.t === 'townhall' ? 'ратуша станет больше' : STAGE_NAMES[stageOf(next)]}.</b>
-          )}
+          {!maxed && b.l >= 1 && newPartsAt(b.t, next) && <b className="vil-evo-note"> Уровень {next}: {newPartsAt(b.t, next)}.</b>}
         </span>
       </div>
       <div className="vil-stats">

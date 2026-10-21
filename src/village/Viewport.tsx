@@ -1,10 +1,12 @@
 import { createContext, Suspense, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { cellAt, Ctl, pan, SceneProps, Village3D } from './Village3D';
+import { bubbleAt, cellAt, Ctl, pan, SceneProps, Village3D } from './Village3D';
 
 export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
   ctl: React.MutableRefObject<Ctl>;
   // Тап по земле: клетка (дробная).
   onTap?: (x: number, y: number) => void;
+  // Тап по пузырю урожая над постройкой i.
+  onBubble?: (i: number) => void;
   // Перетаскивание призрака: новый левый верхний угол.
   onGhost?: (x: number, y: number) => void;
 }
@@ -66,6 +68,8 @@ export function Viewport(props: ViewportProps) {
       onPointerUp={(e) => {
         pts.current.delete(e.pointerId);
         if (pts.current.size === 0 && g.current.moved < 8 && !g.current.ghost) {
+          const hit = el.current && props.onBubble && props.bubbles ? bubbleAt(ctl, el.current, e.clientX, e.clientY, props.buildings, props.bubbles) : null;
+          if (hit != null) return props.onBubble?.(hit);
           const c = at(e);
           if (c) props.onTap?.(c.x, c.y);
         }

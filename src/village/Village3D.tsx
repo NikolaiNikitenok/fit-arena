@@ -5,7 +5,7 @@ import { Canvas3D } from '../three/Canvas3D';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
-import { Anim, GOLD, KitPart, Look, lookOf, Prim, SIZE } from './looks';
+import { Anim, KitPart, Look, lookOf, Prim, SIZE, wallLook } from './looks';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings } from '../settings';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
@@ -71,10 +71,10 @@ function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[
     const cz = W(b.y + s / 2);
     if (b.t === 'wall' && b.state !== 'ruin') {
       // Столб в клетке и секции к соседям справа и снизу; с 6 уровня на столбе золотая шапка.
-      const tint = b.l >= 5 ? 'mul:0.8,0.85,1' : b.l >= 3 ? undefined : 'mul:1.15,1.05,0.9';
-      const cs = 0.55 + 0.03 * b.l;
+      // Вид столба по уровню — wallLook в looks.ts, тот же в превью.
+      const { tint, cs, prim: trim } = wallLook(b.l);
       out.fantasy.push({ name: 'column', x: cx, z: cz, s: cs, tint });
-      if (b.l >= 6) prim.push({ k: 'cone', x: cx, y: 1.4 * cs + 0.12, z: cz, sx: 0.32, sy: 0.26, sz: 0.32, c: GOLD });
+      for (const p of trim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
       if (walls.has(`${b.x + 1},${b.y}`)) out.fantasy.push({ name: 'wall_straight', x: cx + 0.5, z: cz, s: 0.5, tint });
       if (walls.has(`${b.x},${b.y + 1}`)) out.fantasy.push({ name: 'wall_straight', x: cx, z: cz + 0.5, s: 0.5, ry: Math.PI / 2, tint });
       continue;
@@ -405,6 +405,32 @@ export function cellAt(ctl: Ctl, el: HTMLElement, clientX: number, clientY: numb
   ray.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), ctl.camera);
   if (!ray.ray.intersectPlane(ground, hit)) return null;
   return { x: hit.x + GRID / 2, y: hit.z + GRID / 2 };
+}
+
+const proj = new THREE.Vector3();
+/**
+ * Пузырь урожая под пальцем: номер постройки или null. Пузырь висит над крышей, далеко от клеток
+ * постройки, поэтому ищем его на экране, а не на земле.
+ */
+export function bubbleAt(ctl: Ctl, el: HTMLElement, clientX: number, clientY: number, buildings: ViewBld[], bubbles: { i: number }[]): number | null {
+  if (!ctl.camera || !bubbles.length) return null;
+  const r = el.getBoundingClientRect();
+  // Пузырь — 1,5 клетки; палец промахивается, поэтому круг попадания чуть больше.
+  const rad = Math.max(28, 0.9 * ctl.zoom);
+  let best: number | null = null;
+  let bestD = rad;
+  for (const bb of bubbles) {
+    const b = buildings.find((v) => v.i === bb.i);
+    if (!b) continue;
+    const s = SIZE[b.t];
+    proj.set(W(b.x + s / 2), lookFor(b, false).top, W(b.y + s / 2)).project(ctl.camera);
+    const d = Math.hypot(r.left + ((proj.x + 1) / 2) * r.width - clientX, r.top + ((1 - proj.y) / 2) * r.height - clientY);
+    if (d < bestD) {
+      bestD = d;
+      best = b.i;
+    }
+  }
+  return best;
 }
 
 /** Сдвиг камеры пальцем на (dx, dy) пикселей. */

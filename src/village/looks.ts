@@ -2,7 +2,7 @@ import type { LibName } from '../three/kit';
 import type { BuildingType } from '../../shared/village';
 
 // Как выглядит постройка на каждом уровне. Три ступени: 1–2 — дерево, 3–5 — камень, 6–8 — крепость
-// с золотой отделкой, флагами и башенками. Ратуша меняется на каждом уровне. Тот же вид рисуют
+// с золотой отделкой, флагами и башенками; внутри ступени каждый уровень добавляет свои детали (NEW_PARTS). Тот же вид рисуют
 // деревня, бой, призрак при расстановке и превью в меню стройки.
 // Координаты — от центра постройки в клетках; y — высота над землёй.
 
@@ -67,7 +67,6 @@ export const SIZE: Record<BuildingType, number> = { townhall: 3, lumbermill: 2, 
 
 /** Ступень вида: 0 — дерево (1–2), 1 — камень (3–5), 2 — крепость (6–8). */
 export const stageOf = (l: number) => (l >= 6 ? 2 : l >= 3 ? 1 : 0);
-export const STAGE_NAMES = ['деревянный вид', 'каменный вид', 'вид крепости с золотом'] as const;
 
 // Где лежит синяя (своя) модель и чем её заменить у Князя Дивана.
 const OWN: Record<string, LibName> = {
@@ -248,6 +247,93 @@ class Builder {
     this.p('cyl', x, this.y0 + h / 2, z, 0.3, h, 0.3, STONE).p('cyl', x, this.y0 + h + 0.03, z, 0.36, 0.06, 0.36, gold ? GOLD : STONE_D);
     return this.p('cone', x, this.y0 + h + 0.24, z, 0.36, 0.38, 0.36, gold ? GOLD : this.enemy ? ROOF_ENEMY : ROOF_OWN);
   }
+  /** Смещение на d вдоль оси ry (как поворачивает three.js): x — cos, z — −sin. */
+  private along(x: number, z: number, ry: number, d: number): [number, number] {
+    return [x + d * Math.cos(ry), z - d * Math.sin(ry)];
+  }
+  /** Подъёмный кран: столб, стрела вдоль ry и груз на верёвке. */
+  crane(x: number, z: number, load: string, ry = 0, h = 1.5) {
+    const y = this.y0;
+    this.p('cyl', x, y + h / 2, z, 0.09, h, 0.09, WOOD_D).p('box', x, y + 0.04, z, 0.3, 0.08, 0.3, WOOD_D);
+    const [bx, bz] = this.along(x, z, ry, 0.32);
+    this.p('box', bx, y + h - 0.05, bz, 0.8, 0.07, 0.07, WOOD, { ry });
+    // Подкос под стрелой.
+    const [sx, sz] = this.along(x, z, ry, 0.15);
+    this.p('box', sx, y + h - 0.25, sz, 0.42, 0.05, 0.05, WOOD_D, { ry, rz: 0.75 });
+    const [hx, hz] = this.along(x, z, ry, 0.66);
+    this.p('cyl', hx, y + h - 0.32, hz, 0.02, 0.5, 0.02, '#d9c9a3');
+    return this.p('box', hx, y + h - 0.66, hz, 0.24, 0.2, 0.24, load, { ry: 0.3 });
+  }
+  /** Стол со скамьями под открытым небом; ry — вдоль чего стоит стол. */
+  table(x: number, z: number, ry = 0) {
+    const y = this.y0;
+    this.p('box', x, y + 0.27, z, 0.52, 0.05, 0.28, WOOD, { ry }).p('box', x, y + 0.13, z, 0.36, 0.24, 0.08, WOOD_D, { ry });
+    for (const d of [-0.25, 0.25]) {
+      const bx = x - d * Math.sin(ry);
+      const bz = z - d * Math.cos(ry);
+      this.p('box', bx, y + 0.13, bz, 0.5, 0.05, 0.1, WOOD_D, { ry }).p('box', bx, y + 0.06, bz, 0.06, 0.12, 0.06, WOOD_D, { ry });
+    }
+    // Кружки на столе.
+    return this.p('cyl', x - 0.1, y + 0.33, z, 0.06, 0.08, 0.06, '#d9c9a3').p('cyl', x + 0.12, y + 0.33, z + 0.04, 0.06, 0.08, 0.06, '#d9c9a3');
+  }
+  /** Торговый лоток с полосатым навесом и товаром. */
+  stall(x: number, z: number, c: string, ry = 0) {
+    const y = this.y0;
+    this.p('box', x, y + 0.14, z, 0.52, 0.28, 0.26, WOOD, { ry });
+    for (const d of [-0.22, 0.22]) {
+      const [px, pz] = this.along(x, z, ry, d);
+      this.p('box', px, y + 0.38, pz, 0.04, 0.5, 0.04, WOOD_D);
+    }
+    this.p('box', x, y + 0.64, z, 0.6, 0.04, 0.34, c, { ry, rx: 0.25 }).p('box', x, y + 0.665, z, 0.2, 0.045, 0.34, '#fff4e0', { ry, rx: 0.25 });
+    const fruit = ['#e84a4a', '#ffd27a', '#7ac74f'];
+    fruit.forEach((f, k) => {
+      const [fx, fz] = this.along(x, z, ry, (k - 1) * 0.15);
+      this.p('box', fx, y + 0.32, fz, 0.11, 0.08, 0.11, f, { ry });
+    });
+    return this;
+  }
+  /** Точильный круг на станине. */
+  grindstone(x: number, z: number, ry = 0) {
+    const y = this.y0;
+    this.p('box', x, y + 0.1, z, 0.3, 0.2, 0.12, WOOD_D, { ry });
+    return this.p('cyl', x, y + 0.28, z, 0.32, 0.08, 0.32, STONE, { rx: Math.PI / 2, ry }).p('cyl', x, y + 0.28, z, 0.06, 0.12, 0.06, IRON, { rx: Math.PI / 2, ry });
+  }
+  /** Гора руды или самоцветов: несколько гранёных камней. */
+  pile(x: number, z: number, c: string, s = 1) {
+    const y = this.y0;
+    this.p('cone', x, y + 0.11 * s, z, 0.42 * s, 0.22 * s, 0.42 * s, c);
+    this.p('box', x + 0.1 * s, y + 0.2 * s, z - 0.05 * s, 0.11 * s, 0.11 * s, 0.11 * s, c, { ry: 0.6, rx: 0.4 });
+    return this.p('box', x - 0.1 * s, y + 0.16 * s, z + 0.08 * s, 0.1 * s, 0.1 * s, 0.1 * s, c, { ry: 1.1, rz: 0.5 });
+  }
+  /** Знамя на шесте с перекладиной: висит неподвижно, цвета своего войска. */
+  banner(x: number, z: number, ry = Math.PI / 4, gold = false) {
+    const y = this.y0;
+    const h = 1.05;
+    this.p('cyl', x, y + h / 2, z, 0.05, h, 0.05, gold ? GOLD : WOOD_D).p('box', x, y + h - 0.03, z, 0.36, 0.035, 0.035, gold ? GOLD : WOOD_D, { ry });
+    this.p('box', x, y + h - 0.27, z, 0.3, 0.44, 0.02, this.enemy ? ROOF_ENEMY : ROOF_OWN, { ry });
+    return this.p('box', x, y + h - 0.25, z, 0.1, 0.1, 0.025, gold ? GOLD : '#f2efe6', { ry });
+  }
+  /**
+   * Полотнище на стене: face 'z' — на передней грани (смотрит на +z), 'x' — на правой (+x).
+   * Цвет своего войска, по низу — кайма (золотая у крепости).
+   */
+  drape(face: 'x' | 'z', x: number, y: number, z: number, w: number, h: number, gold = false) {
+    const c = this.enemy ? ROOF_ENEMY : ROOF_OWN;
+    const ry = face === 'z' ? 0 : Math.PI / 2;
+    this.p('box', x, y, z, w, h, 0.02, c, { ry });
+    this.p('box', x, y - h / 2 + 0.03, z, w + 0.02, 0.06, 0.03, gold ? GOLD : '#f2efe6', { ry });
+    return this.p('box', x, y + 0.04, z, w * 0.4, w * 0.4, 0.03, gold ? GOLD : '#f2efe6', { ry: ry, rz: Math.PI / 4 });
+  }
+  /** Гирлянда огоньков между двумя точками, с провисанием посередине. */
+  garland(x0: number, z0: number, x1: number, z1: number, y: number, n = 7) {
+    const colors = [WARM, '#ff8a6b', '#8affc1', '#ffd27a'];
+    for (let k = 0; k < n; k++) {
+      const a = k / (n - 1);
+      const sag = 0.16 * 4 * a * (1 - a);
+      this.glow('box', x0 + (x1 - x0) * a, y - sag, z0 + (z1 - z0) * a, 0.07, 0.07, 0.07, colors[k % colors.length]);
+    }
+    return this;
+  }
   /** Факел: столб и огонёк. */
   torch(x: number, z: number) {
     return this.p('cyl', x, this.y0 + 0.25, z, 0.06, 0.5, 0.06, WOOD_D).glow('cone', x, this.y0 + 0.58, z, 0.14, 0.18, 0.14, '#ffb43d');
@@ -267,13 +353,17 @@ function townhall(l: number, enemy: boolean): Look {
   const b = new Builder(enemy);
   const st = stageOf(l);
   if (l <= 2) {
-    // Деревянный дом старосты с пристройкой; на 2-м уровне — колодец, второй дом и флаг.
+    // Деревянный дом старосты с пристройкой. На 2-м уровне хозяйство растёт: мельница за домом,
+    // колодец, флаг, фонарь и забор уже с двух сторон.
     b.m('building_home_B_blue', l === 1 ? 1.55 : 1.75, -0.15, -0.1, Math.PI / 6);
     b.m('building_home_A_blue', l === 1 ? 1.0 : 1.15, 0.85, -0.75, -Math.PI / 5);
-    b.m('crate_A_big', 2.2, 0.95, 0.95).m('barrel', 2.4, 1.15, 0.6);
     b.stakes(-1.35, 1.35, 0.6, 1.35, 6);
-    if (l === 2) b.m('building_well_blue', 1.1, -0.95, 0.85).flag(1.3, -1.3, 0);
-    b.top = l === 1 ? 2.8 : 3.1;
+    if (l === 1) b.m('crate_A_big', 2.2, 0.95, 0.95).m('barrel', 2.4, 1.15, 0.6);
+    else {
+      b.m('building_windmill_blue', 1.0, -1.0, 0.2, Math.PI / 4).m('crate_A_big', 2.1, 1.0, 0.9).m('barrel', 2.3, 1.2, 0.5);
+      b.m('building_well_blue', 1.0, 0.3, 1.0).flag(1.3, -1.3, 0).lantern(-0.45, 1.12).hay(1.3, -0.15, 0.3);
+    }
+    b.top = l === 1 ? 2.8 : 3.4;
     return b.done();
   }
   b.plinth(st, 1.5);
@@ -300,6 +390,26 @@ function townhall(l: number, enemy: boolean): Look {
   return b.done();
 }
 
+/**
+ * Стена уровня l: оттенок камня, размер столба и навершие (от центра столба). Каждый уровень своё:
+ * 1 — светлый камень, 2 — деревянная шапка, 3 — серый камень с плитой, 4 — железные шипы,
+ * 5 — синеватый камень, 6 — золотое навершие, 7 — и золотой пояс, 8 — светящийся камень на вершине.
+ */
+export function wallLook(l: number): { tint?: string; cs: number; prim: Prim[] } {
+  const tint = l >= 5 ? 'mul:0.8,0.85,1' : l >= 3 ? undefined : 'mul:1.15,1.05,0.9';
+  const cs = 0.55 + 0.03 * l;
+  const top = 1.4 * cs;
+  const prim: Prim[] = [];
+  const box = (y: number, sx: number, sy: number, c: string, k: PrimKind = 'box', glow = false) => prim.push({ k, x: 0, y, z: 0, sx, sy, sz: sx, c, glow: glow || undefined });
+  if (l === 2) box(top + 0.1, 0.42, 0.2, WOOD, 'cone');
+  if (l >= 3 && l <= 5) box(top + 0.04, 0.5, 0.08, l === 5 ? '#8a93a6' : STONE_D);
+  if (l === 4 || l === 5) for (const [dx, dz] of [[-0.15, -0.15], [0.15, -0.15], [-0.15, 0.15], [0.15, 0.15]]) prim.push({ k: 'cone', x: dx, y: top + 0.16, z: dz, sx: 0.09, sy: 0.18, sz: 0.09, c: IRON });
+  if (l >= 6) box(top + 0.12, 0.32, 0.26, GOLD, 'cone');
+  if (l >= 7) box(top * 0.55, 0.46, 0.06, GOLD);
+  if (l === 8) box(top + 0.32, 0.12, 0.14, '#7fe6ff', 'box', true);
+  return { tint, cs, prim };
+}
+
 /** Вид постройки уровня l (у Князя — enemy). */
 export function lookOf(t: BuildingType, l: number, enemy = false): Look {
   if (t === 'townhall') return townhall(Math.max(1, Math.min(8, l)), enemy);
@@ -307,11 +417,12 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
   l = Math.max(1, Math.min(8, l));
   const st = stageOf(l);
   // Внутри ступени постройка понемногу растёт.
-  const g = 1 + 0.025 * (l - 1);
+  const g = 1 + 0.03 * (l - 1);
   if (t === 'wall') {
     // Для превью: столб и две секции.
-    const tint = l >= 5 ? 'mul:0.8,0.85,1' : l >= 3 ? undefined : 'mul:1.15,1.05,0.9';
-    b.m('column', 0.55 + 0.03 * l, 0, 0, 0, 0, tint).m('wall_straight', 0.5, 0.5, 0, 0, 0, tint).m('wall_straight', 0.5, 0, 0.5, Math.PI / 2, 0, tint);
+    const w = wallLook(l);
+    b.m('column', w.cs, 0, 0, 0, 0, w.tint).m('wall_straight', 0.5, 0.5, 0, 0, 0, w.tint).m('wall_straight', 0.5, 0, 0.5, Math.PI / 2, 0, w.tint);
+    b.prim.push(...w.prim);
     b.top = 1.2;
     return b.done();
   }
@@ -319,21 +430,29 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
   // Деревянная ступень: двор обведён брусом, у камня и крепости — цоколь.
   if (st === 0) b.yard(1);
   b.blob = 1.42;
+  // Каждый уровень что-то добавляет: 2 — хозяйство побольше, 3 — камень, флаги и фонарь, 4 и 5 — новые
+  // постройки во дворе, 6 — крепостной цоколь с золотом, 7 — башенка, 8 — факелы и золотое знамя.
   switch (t) {
     case 'lumbermill':
       b.m('building_lumbermill_blue', 1.3 * g, 0, 0);
       b.m('resource_lumber', 1.5, 0.45, 0.78, 0.2);
       if (st === 0) b.m('tree_single_A_cut', 2.2, -0.8, 0.75).m('tree_single_A_cut', 1.8, -0.75, -0.75).stakes(-0.95, 0.95, 0.1, 0.95, 4);
+      if (l === 2) b.logs(-0.35, 0.55).m('wheelbarrow', 1.5, 0.85, 0.15, -1.2).lantern(0.92, 0.92);
       if (st >= 1) b.m('pallet', 2.2, -0.62, 0.7).m('crate_long_A', 2, -0.62, 0.7, 0.4, b.y0 + 0.17).lantern(0.92, 0.92);
-      if (l >= 5) b.m('resource_lumber', 1.3, 0.8, -0.2, 1.4);
+      if (l >= 4) b.chimney(-0.45, -0.45, b.y0, 1.9).m('ladder', 1.4, 0.2, 0.62, 0, b.y0);
+      if (l >= 5) b.m('resource_lumber', 1.3, 0.8, -0.2, 1.4).drape('z', 0.0, b.y0 + 0.75, 0.62, 0.32, 0.42);
+      if (l >= 6) b.crane(0.9, 0.2, WOOD, Math.PI / 2, 1.7);
       // Пила крутится на козлах у правого края двора.
       b.saw(0.86, l >= 5 ? -0.75 : -0.35, Math.PI / 2);
       if (st === 0) b.logs(0.15, 0.55);
       break;
     case 'quarry':
       b.m('resource_stone', 2.6 * g, -0.1, 0.2).m('rock_single_C', 3.2 * g, 0.5, -0.4).m('rock_single_A', 3, -0.5, -0.5).m('wheelbarrow', 1.6, 0.5, 0.55, 0.6);
-      if (st >= 1) b.m('building_stage_B', 1.05, -0.35, -0.45, Math.PI / 3).m('crate_A_big', 2, 0.85, 0.15).lantern(-0.9, 0.9);
       if (st === 0) b.m('rock_single_E', 2.2, -0.75, 0.75).m('bucket_empty', 2.2, 0.85, -0.2);
+      if (l === 2) b.m('ladder', 1.5, 0.3, -0.15, Math.PI / 2, 0).m('resource_stone', 1.3, 0.85, 0.15).lantern(-0.3, 0.92);
+      if (st >= 1) b.m('building_stage_B', 1.05, -0.35, -0.45, Math.PI / 3).m('crate_A_big', 2, 0.85, 0.15).lantern(-0.9, 0.9);
+      if (l >= 4) b.crane(0.75, -0.75, STONE, Math.PI);
+      if (l >= 5) b.p('box', -0.75, b.y0 + 0.11, 0.35, 0.3, 0.22, 0.3, STONE).p('box', -0.75, b.y0 + 0.33, 0.35, 0.24, 0.22, 0.24, STONE_D, { ry: 0.4 });
       if (st >= 2) b.m('building_tower_base_blue', 0.62, -0.7, -0.65).m('resource_stone', 1.8, 0.85, 0.85);
       // Вагонетка с камнем возит его вдоль переднего края.
       b.rails(-0.05, 0.86, true, STONE);
@@ -341,39 +460,53 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
     case 'goldmine':
       b.m('building_mine_blue', 1.1 * g, 0, 0);
       if (st === 0) b.m('bucket_water', 2.2, 0.85, 0.85).stakes(0.95, 0.95, 0.95, -0.2, 4);
+      if (l === 2) b.pile(-0.7, 0.5, GOLD, 1.1).lantern(0.9, -0.55);
       if (st >= 1) b.m('wheelbarrow', 1.7, 0.8, 0.75, -0.5).m('crate_A_big', 2.2, -0.85, 0.8).lantern(0.9, -0.55);
+      if (l >= 4) b.pile(-0.8, 0.2, GOLD, 1.2).m('sack', 2.6, -0.45, 0.9).drape('z', 0.05, b.y0 + 0.95, 0.75, 0.3, 0.36);
+      if (l >= 5) b.crane(0.85, 0.1, '#6b5a48', Math.PI / 2, 1.3);
       if (st >= 2) b.m('coin_stack_large', 0.3, 0.2, 0.92).m('chest_gold', 0.24, 0.92, -0.35, -Math.PI / 2);
       // Вагонетка с рудой выкатывается из штольни.
       b.rails(-0.1, st >= 2 ? 0.62 : 0.86, true, '#6b5a48');
       break;
     case 'storage':
       b.m('building_grain', 0.95 * g, 0, 0).m('crates_stacked', 0.38, -0.35, -0.3).m('barrel', 2.2, 0.45, 0.35).m('sack', 3, 0.1, 0.55);
-      if (st === 0) b.hay(0.82, -0.3, 0.3).hay(0.84, 0.15, -0.2).hay(0.83, -0.08, 0, b.y0 + 0.22).m('crate_A_small', 2.4, -0.8, 0.82);
+      if (st === 0) b.hay(0.82, -0.3, 0.3).m('crate_A_small', 2.4, -0.8, 0.82);
+      if (l === 2) b.hay(0.84, 0.15, -0.2).hay(0.83, -0.08, 0, b.y0 + 0.22).m('barrel', 2, -0.85, 0.4).lantern(0.9, 0.9);
       if (st >= 1) b.m('barrel_small_stack', 0.32, 0.35, -0.55).m('crate_A_big', 2.4, -0.55, 0.5).flowers(0.85, 0.85, Math.PI / 4).lantern(-0.9, 0.9);
-      if (l >= 5) b.m('barrel_large', 0.3, -0.62, 0.05);
+      if (l >= 4) b.m('building_windmill_blue', 0.9, -0.6, -0.6, Math.PI / 4);
+      if (l >= 5) b.m('barrel_large', 0.3, -0.62, 0.05).m('sack', 2.6, 0.85, 0.2).m('sack', 2.4, 0.75, 0.38, 0.8);
       if (st >= 2) b.m('chest_gold', 0.26, 0.55, 0.62, Math.PI / 4).m('coin_stack_large', 0.22, 0.05, 0.75);
       break;
     case 'barracks':
       if (st === 0) {
         // Лагерь из палаток с костром: настоящие казармы — с камня.
         b.m('tent', 1.9, -0.45, -0.35, 0.3).m('tent', 1.6, 0.5, -0.5, -0.4).m('weaponrack', 2.6, 0.6, 0.55, -Math.PI / 4).m('target', 2.6, -0.55, 0.65, Math.PI / 5);
-        if (l === 2) b.m('tent', 1.5, -0.6, 0.5, 1.2).flag(0.85, 0.9, 0);
+        if (l === 2) b.m('tent', 1.5, -0.6, 0.5, 1.2).flag(0.85, 0.9, 0).m('weaponrack', 2.2, 0.85, -0.05, -Math.PI / 2);
         b.campfire(0.05, 0.25);
         b.top = 2;
       } else {
-        b.m('building_barracks_blue', 1.3 * g, 0, 0).m('weaponrack', 2.4, 0.85, 0.7, -Math.PI / 4).lantern(-0.9, 0.9);
-        if (l >= 5) b.m('target', 2.4, -0.82, 0.78, Math.PI / 5);
+        const k = 1.3 * g;
+        b.m('building_barracks_blue', k, 0, 0).m('weaponrack', 2.4, 0.85, 0.7, -Math.PI / 4).lantern(-0.9, 0.9);
+        // 4 — флаги на башенках, 5 — знамёна на стенах, 6 — стойка с оружием, 7 — большой флаг на крыше.
+        if (l >= 4) b.flag(0.55 * k, 0.6 * k, st, b.y0 + 1.25 * k, 0.6).flag(-0.55 * k, 0.6 * k, st, b.y0 + 1.25 * k, 0.6).m('target', 2.2, -0.82, 0.88, Math.PI / 5);
+        if (l >= 5) b.drape('z', 0.3 * k, b.y0 + 0.75 * k, 0.86 * k, 0.26, 0.5, st >= 2).drape('x', 0.74 * k, b.y0 + 0.75 * k, 0.2 * k, 0.26, 0.5, st >= 2);
+        if (l >= 6) b.m('weaponrack', 2.2, 0.88, 0.05, -Math.PI / 2).m('barrel', 2, 0.6, 0.9);
+        if (l >= 7) b.flag(0, 0, 2, b.y0 + 1.64 * k, 1);
         b.chimney(-0.55, -0.6, b.y0, 1.75);
       }
       break;
     case 'forge':
       b.m('building_blacksmith_blue', 1.4 * g, 0, 0);
       b.m('barrel', 2.2, 0.85, 0.75);
+      if (l >= 2) b.grindstone(-0.75, 0.7, Math.PI / 4);
       if (st >= 1) b.m('weaponrack', 2.3, -0.82, 0.78, Math.PI / 4).m('resource_stone', 1.2, 0.85, -0.75);
+      if (l >= 4) b.pile(0.85, -0.15, IRON, 0.9).anvil(-0.2, 0.9);
+      if (l >= 5) b.m('crate_open', 2, 0.55, 0.88).banner(0.92, 0.45);
       // Наковальня с искрами у входа; труба горна дымит — на крепостной ступени она кирпичная и выше.
       b.anvil(0.3, 0.86);
-      if (st >= 2) b.chimney(-0.55, -0.55, b.y0, 1.8).p('box', -0.55, b.y0 + 1.83, -0.55, 0.4, 0.08, 0.4, GOLD);
+      if (l >= 5) b.chimney(-0.55, -0.55, b.y0, l >= 6 ? 1.8 : 1.4);
       else b.a('smoke', 0.3, b.y0 + 1.75 * g, 0.12);
+      if (st >= 2) b.p('box', -0.55, b.y0 + 1.83, -0.55, 0.4, 0.08, 0.4, GOLD);
       break;
     case 'lab':
       b.m('building_church_blue', 1.05 * g, 0, -0.1);
@@ -382,34 +515,55 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
       b.glow('cone', 0.78, b.y0 + 0.42, 0.78, 0.2, 0.36, 0.2, MAGIC).glow('cone', 0.78, b.y0 + 0.66, 0.78, 0.2, 0.18, 0.2, MAGIC, Math.PI);
       b.p('cyl', -0.7, b.y0 + 0.13, 0.78, 0.36, 0.26, 0.36, IRON).glow('cyl', -0.7, b.y0 + 0.27, 0.78, 0.3, 0.03, 0.3, MAGIC);
       b.a('smoke', -0.7, b.y0 + 0.32, 0.78, 0.6);
-      if (st >= 1) b.m('barrel', 2, 0.85, -0.6).lantern(0.05, 0.92);
+      if (l >= 2) b.m('crate_open', 1.8, 0.05, 0.9).glow('box', 0.05, b.y0 + 0.22, 0.9, 0.1, 0.12, 0.1, '#c08bff');
+      if (st >= 1) b.m('barrel', 2, 0.85, -0.6).lantern(0.4, 0.92);
+      if (l >= 4) {
+        // Второй, высокий кристалл на колонне.
+        b.p('cyl', 0.88, b.y0 + 0.35, 0.05, 0.16, 0.7, 0.16, STONE);
+        b.glow('cone', 0.88, b.y0 + 0.86, 0.05, 0.16, 0.3, 0.16, '#c08bff').glow('cone', 0.88, b.y0 + 1.06, 0.05, 0.16, 0.14, 0.16, '#c08bff', Math.PI);
+      }
+      if (l >= 5) b.p('cyl', -0.85, b.y0 + 0.11, 0.2, 0.26, 0.22, 0.26, IRON).glow('cyl', -0.85, b.y0 + 0.23, 0.2, 0.22, 0.03, 0.22, '#ff9ad5');
       if (st >= 2) b.m('chest_gold', 0.22, -0.85, -0.55, Math.PI / 2);
       break;
     case 'tavern':
       b.m('building_tavern_blue', 1.5 * g, 0, 0);
       b.m('barrel', 2.3, 0.85, 0.7);
+      // 2 — навес у входа, 4 — гирлянда огоньков и столы на улице, 5 — знамёна на стенах.
+      if (l >= 2) b.p('box', 0.05, b.y0 + 0.95, 0.98, 0.7, 0.04, 0.3, '#e0584a', { rx: 0.45 }).p('box', 0.05, b.y0 + 0.97, 0.98, 0.22, 0.045, 0.3, '#fff4e0', { rx: 0.45 });
       if (st >= 1) b.m('barrel_small_stack', 0.3, -0.75, 0.75, 0.6);
+      if (l >= 4) b.garland(-0.85, 0.98, 0.9, 0.98, b.y0 + 1.45, 9).garland(0.95, 0.9, 0.95, -0.8, b.y0 + 1.45, 8).table(0.85, -0.05, Math.PI / 2);
+      if (l >= 5) b.drape('x', 0.9, b.y0 + 0.75, -0.45, 0.26, 0.5, st >= 2).m('crate_A_big', 1.8, 0.9, 0.15);
       if (st >= 2) b.m('building_well_blue', 0.75, 0.8, -0.75);
       // Вывеска с кружкой качается, из трубы идёт дым, у входа цветы и фонарь.
       b.sign(0.35, 0.95, st >= 2 ? GOLD : '#c98a4b', 0);
       b.chimney(-0.6, -0.45, b.y0, 2.1);
-      b.flowers(-0.2, 0.9, 0);
+      if (l < 4) b.flowers(-0.2, 0.9, 0);
       if (st >= 1) b.lantern(-0.92, 0.25);
       break;
     case 'market':
       b.m('building_market_blue', 1.05 * g, 0, 0);
       b.m('sack', 3, 0.8, 0.85);
       if (st === 0) b.m('crate_B_small', 2.4, -0.85, 0.82).hay(0.86, 0.2, 0.4);
-      if (st >= 1) b.m('crate_open', 2.3, -0.85, 0.75).m('barrel', 2.1, 0.9, -0.1).m('crate_B_big', 2, 0.85, -0.75).lantern(0.25, 0.92);
-      if (st >= 2) b.m('chest_gold', 0.22, 0.1, 0.9).m('coin_stack_large', 0.2, -0.45, 0.9);
-      b.flowers(-0.35, 0.9, 0);
+      if (l >= 2) b.stall(-0.15, 0.82, '#e0584a', 0);
+      if (st >= 1) b.m('crate_open', 2.3, -0.85, 0.75).m('barrel', 2.1, 0.9, -0.1).m('crate_B_big', 2, 0.85, -0.75).lantern(0.4, 0.95);
+      if (l >= 4) b.stall(0.85, 0.3, '#4aa3e0', Math.PI / 2);
+      if (l >= 5) b.banner(-0.92, 0.1).m('sack', 2.6, 0.55, 0.92);
+      if (st >= 2) b.m('chest_gold', 0.22, 0.1, 0.55).m('coin_stack_large', 0.2, -0.55, 0.5);
+      if (l < 2) b.flowers(-0.35, 0.9, 0);
       break;
     case 'tower':
       // Ступени башни: низкая каменная, высокая, большая крепостная.
-      if (st === 0) b.m('building_tower_base_blue', 1.2 * g, 0, 0).stakes(-0.95, 0.95, 0.95, 0.95, 6);
+      if (st === 0) b.m('building_tower_base_blue', (l === 2 ? 1.35 : 1.2) * g, 0, 0).stakes(-0.95, 0.95, 0.95, 0.95, 6);
       else if (st === 1) b.m('building_tower_A_blue', 1.5 * g, 0, 0);
       else b.m('building_tower_B_blue', 1.3 * g, 0, 0).flag(0, 0, 2, b.y0 + 2.49 * 1.3 * g - 0.05, 0.9);
+      // 2 — флаг на верхушке, 4 — флаг над крышей, 5 — золотой конёк и мишень, 7 — колчаны и золотое знамя, 8 — золотой шпиль.
+      if (l === 2) b.torch(0.88, -0.3).flag(0, 0, 0, b.y0 + 1.5 * 1.35 * g, 0.9);
+      if (l >= 4 && st === 1) b.flag(0, 0, 1, b.y0 + 2.19 * 1.5 * g - 0.05, 0.9);
+      if (l === 5) b.p('cone', 0, b.y0 + 2.19 * 1.5 * g - 0.02, 0, 0.24, 0.3, 0.24, GOLD);
       if (l >= 4) b.m('bucket_arrows', 2.2, 0.82, 0.75);
+      if (l >= 5) b.m('target', 2.2, -0.82, 0.78, Math.PI / 5).banner(-0.9, 0.2, Math.PI / 4, st >= 2);
+      if (l >= 7) b.m('bucket_arrows', 2, 0.5, 0.88).drape('z', 0, b.y0 + 0.9, 0.7 * 1.3 * g, 0.3, 0.55, true).drape('x', 0.62 * 1.3 * g, b.y0 + 0.9, 0, 0.3, 0.55, true);
+      if (l === 8) b.p('cone', 0, b.y0 + 2.49 * 1.3 * g + 0.25, 0, 0.35, 0.5, 0.35, GOLD);
       // Факелы у входа светятся тёплым; на деревянной ступени — ящик стрел.
       if (st === 0) b.m('crate_A_small', 2.2, 0.82, -0.6);
       else b.torch(0.88, -0.2).torch(-0.2, 0.88);
@@ -418,17 +572,43 @@ export function lookOf(t: BuildingType, l: number, enemy = false): Look {
     case 'catapult':
       b.m('building_tower_catapult_blue', 1.4 * g, 0, 0);
       if (st === 0) b.stakes(-0.95, 0.95, 0.95, 0.95, 6);
+      // 2 — знамя на передней стене, 4 — на правой и горка ядер, 5 — третья, 7 — золотая кайма знамён.
+      const kc = 1.4 * g;
+      if (l >= 2) b.m('crate_A_big', 1.8, -0.85, 0.75).drape('z', 0, b.y0 + 1.3 * kc, 0.6 * kc, 0.3, 0.6, l >= 7);
       if (st >= 1) b.m('resource_stone', 1.4, 0.8, 0.75).lantern(-0.9, 0.9);
-      // Запас ядер у подножия.
+      // Запас ядер у подножия: с каждым уровнем горка выше.
       b.m('projectile_catapult', 1.6, 0.86, -0.45).m('projectile_catapult', 1.6, 0.7, -0.62);
-      if (l >= 5) b.m('projectile_catapult', 1.6, 0.78, -0.53, 0, b.y0 + 0.14);
+      if (l >= 4) b.m('projectile_catapult', 1.6, 0.92, -0.75).m('projectile_catapult', 1.6, 0.6, -0.85).drape('x', 0.48 * kc, b.y0 + 1.3 * kc, -0.1, 0.3, 0.6, l >= 7);
+      if (l >= 5) b.m('projectile_catapult', 1.6, 0.78, -0.53, 0, b.y0 + 0.14).banner(0.3, 0.92, Math.PI / 4, st >= 2);
       b.top = 3.6;
       break;
   }
   // Флаги на ступенях из камня, факелы и башенки — у крепости.
   if (st >= 1 && t !== 'tower') b.flag(L[0], L[1], st).flag(R[0], R[1], st);
   if (l >= 7 && t !== 'tower') b.turret(F[0], F[1], 0.55, l === 8);
-  if (l === 8 && t !== 'tower') b.torch(0.95, 0.2).torch(0.2, 0.95);
+  if (l === 8 && t !== 'tower') b.torch(0.95, 0.2).torch(0.2, 0.95).banner(-0.92, -0.2, Math.PI / 4, true);
   if (b.top === 2.6) b.top = b.y0 + 2.4;
   return b.done();
 }
+
+const T7 = 'сторожевая башенка';
+const T8 = 'золотая крыша башенки, факелы и золотое знамя';
+// Что нового появится на постройке с уровнем: индекс — уровень минус 2 (уровни 2…8).
+const NEW_PARTS: Record<BuildingType, string[]> = {
+  townhall: ['мельница, колодец и флаг', 'каменный замок', 'две сторожевые башни', 'высокие башни с флагами', 'золотой цоколь и ещё две башни', 'четыре большие башни и золотой шпиль', 'казна с золотом и факелы'],
+  lumbermill: ['тачка, поленница и фонарь', 'каменный двор, флаги и ящики', 'труба с дымом и лестница', 'второй штабель и знамя', 'золотой цоколь и подъёмный кран', T7, T8],
+  quarry: ['лестница, груда камня и фонарь', 'каменный двор, помост и флаги', 'подъёмный кран', 'штабель тёсаных блоков', 'золотой цоколь и каменная башня', T7, T8],
+  goldmine: ['горка золотой руды и фонарь', 'каменный двор, тачка и флаги', 'большая горка руды и знамя', 'подъёмный кран', 'золотой цоколь, сундук и монеты', T7, T8],
+  storage: ['ещё сено, бочка и фонарь', 'каменный двор, бочки и цветы', 'мельница', 'большая бочка и мешки', 'золотой цоколь, сундук и монеты', T7, T8],
+  barracks: ['третья палатка, флаг и стойка с оружием', 'каменные казармы', 'флаги на башенках и мишени', 'знамёна на стенах', 'золотой цоколь и вторая стойка с оружием', 'большой флаг на крыше и башенка', T8],
+  lab: ['ящик с колбами', 'каменный двор, фонарь и флаги', 'второй кристалл на колонне', 'второй котёл с зельем', 'золотой цоколь и сундук', T7, T8],
+  forge: ['точильный круг', 'каменный двор, стойка с оружием и флаги', 'вторая наковальня и груда железа', 'кирпичная труба горна и знамя', 'золотой цоколь и высокая труба', T7, T8],
+  tavern: ['навес над входом', 'каменный двор, бочки и фонарь', 'гирлянда огоньков и стол на улице', 'знамя на стене', 'золотой цоколь и колодец', T7, T8],
+  market: ['лоток с фруктами', 'каменный двор, ящики и бочки', 'второй лоток', 'знамя и мешки', 'золотой цоколь, сундук и монеты', T7, T8],
+  tower: ['флаг на верхушке и факел', 'высокая каменная башня', 'флаг над крышей и колчан стрел', 'золотой конёк, мишень и знамя', 'крепостная башня на золотом цоколе', 'золотые знамёна и колчаны', 'золотой шпиль'],
+  catapult: ['знамя на башне и ящик', 'каменный двор и флаги', 'второе знамя и горка ядер', 'ещё ядра и знамя у входа', 'золотой цоколь', 'золотая кайма знамён и башенка', T8],
+  wall: ['деревянная шапка', 'серый камень с плитой', 'железные шипы', 'синеватый камень', 'золотое навершие', 'золотой пояс', 'светящийся камень на вершине'],
+};
+
+/** Что появится на постройке t на уровне l (для l ≥ 2). */
+export const newPartsAt = (t: BuildingType, l: number): string | undefined => NEW_PARTS[t][l - 2];
