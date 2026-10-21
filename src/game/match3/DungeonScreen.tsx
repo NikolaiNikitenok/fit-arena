@@ -47,6 +47,7 @@ import {
   surrenderRun,
 } from './dungeon';
 import './dungeon.css';
+import { Sheet } from '../../Sheet';
 
 // Подземелье «три в ряд»: список этажей, партия, итог и экран «заряд кончился».
 // Экран самостоятельный: его открывает главный экран героя, а может открыть и деревня.
@@ -462,70 +463,63 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
       </div>
 
       {giveUp && saved && (
-        <div className="sheet" onClick={() => setGiveUp(false)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="level-title">Сдаться на этаже {saved.floor}?</div>
-            <LeaveText loot={saved.loot} />
-            <button className="primary" onClick={surrender}>
-              Сдаться
-            </button>
-            <button
-              className="secondary"
-              onClick={() => {
-                setGiveUp(false);
-                resume();
-              }}
-            >
-              Продолжить этаж {saved.floor}
-            </button>
-          </div>
-        </div>
+        <Sheet onClose={() => setGiveUp(false)}>
+          <div className="level-title">Сдаться на этаже {saved.floor}?</div>
+          <LeaveText loot={saved.loot} />
+          <button className="primary" onClick={surrender}>
+            Сдаться
+          </button>
+          <button
+            className="secondary"
+            onClick={() => {
+              setGiveUp(false);
+              resume();
+            }}
+          >
+            Продолжить этаж {saved.floor}
+          </button>
+        </Sheet>
       )}
 
       {howto && <HowTo onDone={() => setHowto(false)} />}
 
       {picked && (
-        <div className="sheet" onClick={() => setPicked(null)}>
-          <div className="sheet-body m3-pick" onClick={(e) => e.stopPropagation()} style={{ ['--la' as string]: landDef(picked.land).accent }}>
-            <div className="m3-pick-top">
-              {picked.monster ? <MonsterFace shape={picked.monster.shape} color={picked.monster.color} boss={picked.boss} size={72} /> : <GoalBadge f={picked} size={72} />}
-              <div>
-                <div className="m3-result-tag">
-                  {landDef(picked.land).name} · этаж {picked.id}
-                </div>
-                <div className="level-title">{goalText(picked)}</div>
-                {picked.monster && (
-                  <div className="muted">
-                    {picked.monster.name}: <Heart size={12} className="heart" /> {picked.monster.hp}, бьёт на {picked.monster.atk} раз в {picked.monster.every} {plural(picked.monster.every, 'ход', 'хода', 'ходов')}
-                  </div>
-                )}
+        <Sheet onClose={() => setPicked(null)} bodyClassName="m3-pick" bodyStyle={{ ['--la' as string]: landDef(picked.land).accent }}>
+          <div className="m3-pick-top">
+            {picked.monster ? <MonsterFace shape={picked.monster.shape} color={picked.monster.color} boss={picked.boss} size={72} /> : <GoalBadge f={picked} size={72} />}
+            <div>
+              <div className="m3-result-tag">
+                {landDef(picked.land).name} · этаж {picked.id}
+              </div>
+              <div className="level-title">{goalText(picked)}</div>
+              {picked.monster && (
                 <div className="muted">
-                  {picked.moves} ходов · <Stars n={d.stars[picked.id] ?? 0} />
+                  {picked.monster.name}: <Heart size={12} className="heart" /> {picked.monster.hp}, бьёт на {picked.monster.atk} раз в {picked.monster.every} {plural(picked.monster.every, 'ход', 'хода', 'ходов')}
                 </div>
+              )}
+              <div className="muted">
+                {picked.moves} ходов · <Stars n={d.stars[picked.id] ?? 0} />
               </div>
             </div>
-            <div className="m3-legend">
-              <span>
-                <GemIcon kind="wood" /> <GemIcon kind="stone" /> <GemIcon kind="gold" /> ресурсы деревни
-              </span>
-              <span>
-                <GemIcon kind="sword" /> бьют чудовище · <GemIcon kind="heart" /> лечат
-              </span>
-              <span>4 в ряд — луч, уголок — бомба, 5 в ряд — радуга</span>
-            </div>
-            <button className="primary" disabled={!floorOpen(progress, picked.id)} onClick={() => play(picked.id)}>
-              {d.stars[picked.id] ? 'Пройти ещё раз' : 'В бой'}
-              <span className="m3-cost">
-                <Bolt size={14} /> {FLOOR_COST}
-              </span>
-            </button>
-            {v.charge < FLOOR_COST && <div className="muted m3-center">Заряда {v.charge} из {FLOOR_COST}: ещё {repsToFloor(progress)} повторов</div>}
-            {saved && v.charge >= FLOOR_COST && <div className="muted m3-center">Незаконченный этаж {saved.floor} засчитается поражением: останется половина его добычи.</div>}
-            <button className="link" onClick={() => setPicked(null)}>
-              Закрыть
-            </button>
           </div>
-        </div>
+          <div className="m3-legend">
+            <span>
+              <GemIcon kind="wood" /> <GemIcon kind="stone" /> <GemIcon kind="gold" /> ресурсы деревни
+            </span>
+            <span>
+              <GemIcon kind="sword" /> бьют чудовище · <GemIcon kind="heart" /> лечат
+            </span>
+            <span>4 в ряд — луч, уголок — бомба, 5 в ряд — радуга</span>
+          </div>
+          <button className="primary" disabled={!floorOpen(progress, picked.id)} onClick={() => play(picked.id)}>
+            {d.stars[picked.id] ? 'Пройти ещё раз' : 'В бой'}
+            <span className="m3-cost">
+              <Bolt size={14} /> {FLOOR_COST}
+            </span>
+          </button>
+          {v.charge < FLOOR_COST && <div className="muted m3-center">Заряда {v.charge} из {FLOOR_COST}: ещё {repsToFloor(progress)} повторов</div>}
+          {saved && v.charge >= FLOOR_COST && <div className="muted m3-center">Незаконченный этаж {saved.floor} засчитается поражением: останется половина его добычи.</div>}
+        </Sheet>
       )}
     </div>
   );
@@ -906,26 +900,24 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
       {!intro && howto && <HowTo targets={{ board: wrap, hud: hudRef, loot: lootRef }} onDone={() => setHowto(false)} />}
 
       {quit && (
-        <div className="sheet" onClick={() => setQuit(false)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="level-title">Покинуть этаж?</div>
-            <LeaveText loot={run.loot} />
-            <div className="muted m3-leave">Можно и просто закрыть приложение: этаж сохранится, доиграешь в течение суток.</div>
-            <button
-              className="primary"
-              onClick={() => {
-                setQuit(false);
-                if (busyRef.current) return;
-                onFinish({ ...run, status: 'lost' });
-              }}
-            >
-              Уйти с добычей
-            </button>
-            <button className="secondary" onClick={() => setQuit(false)}>
-              Играть дальше
-            </button>
-          </div>
-        </div>
+        <Sheet onClose={() => setQuit(false)}>
+          <div className="level-title">Покинуть этаж?</div>
+          <LeaveText loot={run.loot} />
+          <div className="muted m3-leave">Можно и просто закрыть приложение: этаж сохранится, доиграешь в течение суток.</div>
+          <button
+            className="primary"
+            onClick={() => {
+              setQuit(false);
+              if (busyRef.current) return;
+              onFinish({ ...run, status: 'lost' });
+            }}
+          >
+            Уйти с добычей
+          </button>
+          <button className="secondary" onClick={() => setQuit(false)}>
+            Играть дальше
+          </button>
+        </Sheet>
       )}
     </div>
   );

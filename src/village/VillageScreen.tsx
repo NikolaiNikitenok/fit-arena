@@ -66,6 +66,7 @@ import { preloadTroops, type HeroLook } from './troops3d';
 import { itemById } from '../game/items';
 import { heroHands } from '../game/power';
 import './village.css';
+import { Sheet } from '../Sheet';
 
 interface Props {
   progress: Progress;
@@ -576,60 +577,58 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       )}
 
       {sheet === 'build' && (
-        <div className="sheet" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">
-              Строительство
-              <span className="muted">
-                строители {builders - busy}/{builders}
-              </span>
-            </div>
-            <div className="tabs small">
-              {CATS.map((c) => (
-                <button key={c} className={c === cat ? 'active' : ''} onClick={() => setCat(c)}>
-                  {CATEGORY_LABELS[c]}
-                </button>
-              ))}
-            </div>
-            {BUILDING_TYPES.filter((t) => BUILDINGS[t].category === cat && t !== 'townhall').map((t) => {
-              const d = BUILDINGS[t];
-              const have = countOf(town, t);
-              const max = maxCount(t, th);
-              const cost = costOf(t, 1);
-              const locked = max === 0;
-              const full = have >= max;
-              const can = !locked && !full && affordable(town.res, cost) && (timeOf(t, 1) === 0 || busy < builders);
-              return (
-                <button key={t} className={`vil-shop ${locked ? 'locked' : ''}`} disabled={locked || full} onClick={() => (can ? startPlacing(t) : flash(!affordable(town.res, cost) ? BUILD_ERRORS.cost : BUILD_ERRORS.builders))}>
-                  <span className="vil-shop-pic">{sheet === 'build' && <Preview t={t} l={1} size={64} />}</span>
-                  <span className="vil-shop-info">
-                    <b>{d.name}</b>
-                    <span className="muted">{d.desc}</span>
-                    <span className="vil-shop-meta">
-                      {locked ? (
-                        <>
-                          <Lock /> ратуша {thFor(t, 1)}
-                        </>
-                      ) : (
-                        <>
-                          <ResRow res={cost} />
-                          {timeOf(t, 1) > 0 && (
-                            <span>
-                              <Timer size={13} /> {fmtTime(timeOf(t, 1))}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </span>
-                  </span>
-                  <span className="vil-shop-count">
-                    {have}/{max}
-                  </span>
-                </button>
-              );
-            })}
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">
+            Строительство
+            <span className="muted">
+              строители {builders - busy}/{builders}
+            </span>
           </div>
-        </div>
+          <div className="tabs small">
+            {CATS.map((c) => (
+              <button key={c} className={c === cat ? 'active' : ''} onClick={() => setCat(c)}>
+                {CATEGORY_LABELS[c]}
+              </button>
+            ))}
+          </div>
+          {BUILDING_TYPES.filter((t) => BUILDINGS[t].category === cat && t !== 'townhall').map((t) => {
+            const d = BUILDINGS[t];
+            const have = countOf(town, t);
+            const max = maxCount(t, th);
+            const cost = costOf(t, 1);
+            const locked = max === 0;
+            const full = have >= max;
+            const can = !locked && !full && affordable(town.res, cost) && (timeOf(t, 1) === 0 || busy < builders);
+            return (
+              <button key={t} className={`vil-shop ${locked ? 'locked' : ''}`} disabled={locked || full} onClick={() => (can ? startPlacing(t) : flash(!affordable(town.res, cost) ? BUILD_ERRORS.cost : BUILD_ERRORS.builders))}>
+                <span className="vil-shop-pic">{sheet === 'build' && <Preview t={t} l={1} size={64} />}</span>
+                <span className="vil-shop-info">
+                  <b>{d.name}</b>
+                  <span className="muted">{d.desc}</span>
+                  <span className="vil-shop-meta">
+                    {locked ? (
+                      <>
+                        <Lock /> ратуша {thFor(t, 1)}
+                      </>
+                    ) : (
+                      <>
+                        <ResRow res={cost} />
+                        {timeOf(t, 1) > 0 && (
+                          <span>
+                            <Timer size={13} /> {fmtTime(timeOf(t, 1))}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </span>
+                </span>
+                <span className="vil-shop-count">
+                  {have}/{max}
+                </span>
+              </button>
+            );
+          })}
+        </Sheet>
       )}
 
       {sheet === 'army' && (
@@ -678,233 +677,225 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       )}
 
       {sheet === 'attack' && (
-        <div className="sheet" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">
-              Набег
-              <span className="muted">
-                войско {housingOf(town.army)}/{armyCap(town)}
-              </span>
-            </div>
-            {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
-            <button className="vil-pvp" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp()}>
-              <Swords size={26} />
-              <span>
-                <b>{!online ? OFFLINE : searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
-                <span className="muted">
-                  {online ? (
-                    <>
-                      Деревня игрока твоего уровня · <Trophy size={12} /> {trophies} {league.name}
-                      {shieldLeft > 0 && ' · набег снимет щит'}
-                    </>
-                  ) : (
-                    'Лагеря Князя Дивана работают и без сети'
-                  )}
-                </span>
-              </span>
-            </button>
-            <div className="section-title">Лагеря Князя Дивана</div>
-            {CAMPS.map((c, k) => {
-              const stars = v.camps?.[c.id] ?? 0;
-              const open = th >= c.th && (k === 0 || (v.camps?.[CAMPS[k - 1].id] ?? 0) > 0);
-              return (
-                <button
-                  key={c.id}
-                  className={`vil-camp ${open ? '' : 'locked'}`}
-                  disabled={!open || troopCount(town.army) === 0}
-                  onClick={() => {
-                    setSheet(null);
-                    setBattle({ kind: 'camp', camp: c });
-                  }}
-                >
-                  <span className="vil-camp-num">{c.id}</span>
-                  <span className="vil-shop-info">
-                    <b>{c.name}</b>
-                    <span className="muted">{open ? c.hint : th < c.th ? `Нужна ратуша ${c.th}` : 'Сначала разгроми предыдущий лагерь'}</span>
-                    <span className="vil-shop-meta">
-                      <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
-                    </span>
-                  </span>
-                  <span className="vil-stars">
-                    {[0, 1, 2].map((s) => (
-                      <Star key={s} size={14} className={s < stars ? 'on' : ''} />
-                    ))}
-                  </span>
-                </button>
-              );
-            })}
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">
+            Набег
+            <span className="muted">
+              войско {housingOf(town.army)}/{armyCap(town)}
+            </span>
           </div>
-        </div>
+          {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
+          <button className="vil-pvp" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp()}>
+            <Swords size={26} />
+            <span>
+              <b>{!online ? OFFLINE : searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
+              <span className="muted">
+                {online ? (
+                  <>
+                    Деревня игрока твоего уровня · <Trophy size={12} /> {trophies} {league.name}
+                    {shieldLeft > 0 && ' · набег снимет щит'}
+                  </>
+                ) : (
+                  'Лагеря Князя Дивана работают и без сети'
+                )}
+              </span>
+            </span>
+          </button>
+          <div className="section-title">Лагеря Князя Дивана</div>
+          {CAMPS.map((c, k) => {
+            const stars = v.camps?.[c.id] ?? 0;
+            const open = th >= c.th && (k === 0 || (v.camps?.[CAMPS[k - 1].id] ?? 0) > 0);
+            return (
+              <button
+                key={c.id}
+                className={`vil-camp ${open ? '' : 'locked'}`}
+                disabled={!open || troopCount(town.army) === 0}
+                onClick={() => {
+                  setSheet(null);
+                  setBattle({ kind: 'camp', camp: c });
+                }}
+              >
+                <span className="vil-camp-num">{c.id}</span>
+                <span className="vil-shop-info">
+                  <b>{c.name}</b>
+                  <span className="muted">{open ? c.hint : th < c.th ? `Нужна ратуша ${c.th}` : 'Сначала разгроми предыдущий лагерь'}</span>
+                  <span className="vil-shop-meta">
+                    <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
+                  </span>
+                </span>
+                <span className="vil-stars">
+                  {[0, 1, 2].map((s) => (
+                    <Star key={s} size={14} className={s < stars ? 'on' : ''} />
+                  ))}
+                </span>
+              </button>
+            );
+          })}
+        </Sheet>
       )}
 
       {sheet === 'tasks' && (
-        <div className="sheet" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">
-              Просьбы жителей
-              <span className="muted">
-                {(v.tasks ?? []).length}/{TASKS.length}
-              </span>
-            </div>
-            {tasks.length === 0 && <div className="muted">Все просьбы выполнены. Жители счастливы!</div>}
-            {tasks.map((t) => {
-              const [a, b] = taskProgress(progress, t);
-              const done = a >= b;
-              return (
-                <div key={t.id} className="vil-task">
-                  <Portrait line={say(t.npc, '')} size={46} />
-                  <div className="vil-shop-info">
-                    <b style={{ color: NPCS[t.npc].color }}>{NPCS[t.npc].name}</b>
-                    <span>{t.text}</span>
-                    <span className="vil-shop-meta">
-                      <ResRow res={t.reward} plus /> <span className="muted">{a}/{b}</span>
-                    </span>
-                  </div>
-                  <button
-                    className="small-btn"
-                    disabled={!done}
-                    onClick={() => {
-                      const p = claimTask(latest.current, t.id);
-                      if (!p) return;
-                      commit(p);
-                      sfx('chest');
-                      flash('Спасибо! Награда в запасах.');
-                    }}
-                  >
-                    {done ? 'Забрать' : <Lock />}
-                  </button>
-                </div>
-              );
-            })}
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">
+            Просьбы жителей
+            <span className="muted">
+              {(v.tasks ?? []).length}/{TASKS.length}
+            </span>
           </div>
-        </div>
+          {tasks.length === 0 && <div className="muted">Все просьбы выполнены. Жители счастливы!</div>}
+          {tasks.map((t) => {
+            const [a, b] = taskProgress(progress, t);
+            const done = a >= b;
+            return (
+              <div key={t.id} className="vil-task">
+                <Portrait line={say(t.npc, '')} size={46} />
+                <div className="vil-shop-info">
+                  <b style={{ color: NPCS[t.npc].color }}>{NPCS[t.npc].name}</b>
+                  <span>{t.text}</span>
+                  <span className="vil-shop-meta">
+                    <ResRow res={t.reward} plus /> <span className="muted">{a}/{b}</span>
+                  </span>
+                </div>
+                <button
+                  className="small-btn"
+                  disabled={!done}
+                  onClick={() => {
+                    const p = claimTask(latest.current, t.id);
+                    if (!p) return;
+                    commit(p);
+                    sfx('chest');
+                    flash('Спасибо! Награда в запасах.');
+                  }}
+                >
+                  {done ? 'Забрать' : <Lock />}
+                </button>
+              </div>
+            );
+          })}
+        </Sheet>
       )}
 
       {sheet === 'log' && (
-        <div className="sheet" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">Журнал обороны</div>
-            <div className="muted">
-              Защищено от набегов: {fmtNum(Math.floor(cap * 0.25))} каждого ресурса. Сейчас можно унести: <ResRow res={lootAvailable(town, now)} />
-            </div>
-            {!log.length && <div className="vil-note">Набегов пока не было. Князь Диван присматривается…</div>}
-            {log.map((e) => (
-              <div key={e.id ?? e.at} className="vil-task vil-log">
-                {e.id ? (
-                  <span className="vil-foe">
-                    <Swords size={22} />
-                  </span>
-                ) : (
-                  <Portrait line={say('knyaz', '')} size={42} />
-                )}
-                <div className="vil-shop-info">
-                  <b>{e.who}</b>
-                  <span className="muted">
-                    {new Date(e.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · разрушено {e.pct}%
-                    {e.trophies ? (
-                      <span className={e.trophies > 0 ? 'ok' : 'bad'}>
-                        {' '}
-                        · {e.trophies > 0 ? '+' : '−'}
-                        {Math.abs(e.trophies)} <Trophy size={11} />
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="vil-shop-meta">
-                    {RES_KEYS.some((k) => e.loot[k] > 0) ? (
-                      <>
-                        унесли <ResRow res={e.loot} />
-                      </>
-                    ) : (
-                      'ничего не унесли'
-                    )}
-                  </span>
-                </div>
-                <span className="vil-stars">
-                  {[0, 1, 2].map((s) => (
-                    <Star key={s} size={13} className={s < e.stars ? 'on bad' : ''} />
-                  ))}
-                </span>
-                {((e.deploys && e.base) || canRevenge(e, now)) && (
-                  <div className="vil-log-actions">
-                    {e.deploys && e.base && (
-                      <button
-                        className="small-btn ghost"
-                        onClick={() => {
-                          setSheet(null);
-                          setBattle({ kind: 'replay', entry: e });
-                        }}
-                      >
-                        Смотреть
-                      </button>
-                    )}
-                    {canRevenge(e, now) && (
-                      <button className="small-btn accent" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp(e.id)}>
-                        <Swords size={15} /> Отомстить · {fmtTime(((e.revengeUntil ?? 0) - now) / 1000)}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-            <label className="toggle-row">
-              <div>
-                <div className="toggle-title">Бот пишет о нападениях на деревню</div>
-                <div className="muted">Кто напал, сколько унёс и кнопка «Отомстить». Ночью (22–09 по Москве) не будим — сообщение придёт утром.</div>
-              </div>
-              <input
-                type="checkbox"
-                className="switch"
-                checked={notify ?? true}
-                disabled={notify === null || !online || !cloudState()?.telegram}
-                onChange={(ev) => {
-                  const on = ev.target.checked;
-                  setNotify(on);
-                  setPvpNotify(on)
-                    .then((me) => setNotify(me.notify))
-                    .catch(() => setNotify(!on));
-                }}
-              />
-            </label>
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">Журнал обороны</div>
+          <div className="muted">
+            Защищено от набегов: {fmtNum(Math.floor(cap * 0.25))} каждого ресурса. Сейчас можно унести: <ResRow res={lootAvailable(town, now)} />
           </div>
-        </div>
+          {!log.length && <div className="vil-note">Набегов пока не было. Князь Диван присматривается…</div>}
+          {log.map((e) => (
+            <div key={e.id ?? e.at} className="vil-task vil-log">
+              {e.id ? (
+                <span className="vil-foe">
+                  <Swords size={22} />
+                </span>
+              ) : (
+                <Portrait line={say('knyaz', '')} size={42} />
+              )}
+              <div className="vil-shop-info">
+                <b>{e.who}</b>
+                <span className="muted">
+                  {new Date(e.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · разрушено {e.pct}%
+                  {e.trophies ? (
+                    <span className={e.trophies > 0 ? 'ok' : 'bad'}>
+                      {' '}
+                      · {e.trophies > 0 ? '+' : '−'}
+                      {Math.abs(e.trophies)} <Trophy size={11} />
+                    </span>
+                  ) : null}
+                </span>
+                <span className="vil-shop-meta">
+                  {RES_KEYS.some((k) => e.loot[k] > 0) ? (
+                    <>
+                      унесли <ResRow res={e.loot} />
+                    </>
+                  ) : (
+                    'ничего не унесли'
+                  )}
+                </span>
+              </div>
+              <span className="vil-stars">
+                {[0, 1, 2].map((s) => (
+                  <Star key={s} size={13} className={s < e.stars ? 'on bad' : ''} />
+                ))}
+              </span>
+              {((e.deploys && e.base) || canRevenge(e, now)) && (
+                <div className="vil-log-actions">
+                  {e.deploys && e.base && (
+                    <button
+                      className="small-btn ghost"
+                      onClick={() => {
+                        setSheet(null);
+                        setBattle({ kind: 'replay', entry: e });
+                      }}
+                    >
+                      Смотреть
+                    </button>
+                  )}
+                  {canRevenge(e, now) && (
+                    <button className="small-btn accent" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp(e.id)}>
+                      <Swords size={15} /> Отомстить · {fmtTime(((e.revengeUntil ?? 0) - now) / 1000)}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          <label className="toggle-row">
+            <div>
+              <div className="toggle-title">Бот пишет о нападениях на деревню</div>
+              <div className="muted">Кто напал, сколько унёс и кнопка «Отомстить». Ночью (22–09 по Москве) не будим — сообщение придёт утром.</div>
+            </div>
+            <input
+              type="checkbox"
+              className="switch"
+              checked={notify ?? true}
+              disabled={notify === null || !online || !cloudState()?.telegram}
+              onChange={(ev) => {
+                const on = ev.target.checked;
+                setNotify(on);
+                setPvpNotify(on)
+                  .then((me) => setNotify(me.notify))
+                  .catch(() => setNotify(!on));
+              }}
+            />
+          </label>
+        </Sheet>
       )}
 
       {sheet === 'top' && (
-        <div className="sheet" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">
-              Лучшие деревни
-              <span className="muted">
-                <Trophy size={13} /> {trophies} · {league.name}
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">
+            Лучшие деревни
+            <span className="muted">
+              <Trophy size={13} /> {trophies} · {league.name}
+            </span>
+          </div>
+          <div className="vil-leagues">
+            {VILLAGE_LEAGUES.map((l) => (
+              <span key={l.name} className={l.name === league.name ? 'on' : ''} style={{ color: l.color }}>
+                {l.name}
+                <small>{l.from}+</small>
               </span>
-            </div>
-            <div className="vil-leagues">
-              {VILLAGE_LEAGUES.map((l) => (
-                <span key={l.name} className={l.name === league.name ? 'on' : ''} style={{ color: l.color }}>
-                  {l.name}
-                  <small>{l.from}+</small>
-                </span>
-              ))}
-            </div>
-            {topErr && <div className="vil-note">{topErr}</div>}
-            {!top && !topErr && <div className="muted">Загружаем…</div>}
-            {top && !top.length && <div className="vil-note">Пока никто не взял ни одного кубка. Будь первым!</div>}
-            {top?.map((r, k) => (
-              <div key={k} className={`vil-top-row ${r.me ? 'me' : ''}`}>
-                <span className="vil-top-n">{k + 1}</span>
-                <span className="vil-shop-info">
-                  <b>{r.name}</b>
-                  <span className="muted">
-                    ратуша {r.th} · <span style={{ color: villageLeague(r.trophies).color }}>{r.league}</span>
-                  </span>
-                </span>
-                <b className="vil-top-cups">
-                  <Trophy size={14} /> {r.trophies}
-                </b>
-              </div>
             ))}
           </div>
-        </div>
+          {topErr && <div className="vil-note">{topErr}</div>}
+          {!top && !topErr && <div className="muted">Загружаем…</div>}
+          {top && !top.length && <div className="vil-note">Пока никто не взял ни одного кубка. Будь первым!</div>}
+          {top?.map((r, k) => (
+            <div key={k} className={`vil-top-row ${r.me ? 'me' : ''}`}>
+              <span className="vil-top-n">{k + 1}</span>
+              <span className="vil-shop-info">
+                <b>{r.name}</b>
+                <span className="muted">
+                  ратуша {r.th} · <span style={{ color: villageLeague(r.trophies).color }}>{r.league}</span>
+                </span>
+              </span>
+              <b className="vil-top-cups">
+                <Trophy size={14} /> {r.trophies}
+              </b>
+            </div>
+          ))}
+        </Sheet>
       )}
 
       {dialog && (
@@ -1088,95 +1079,93 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
       />
     );
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="section-title">
-          Казармы{bl ? ` · ур. ${bl}` : ''}
-          <span className="muted">
-            мест {used}/{cap}
-          </span>
-        </div>
-        {bl === 0 ? (
-          <>
-            <div className="vil-note">Сначала построй казармы.</div>
-            <button className="primary" onClick={onBuild}>
-              Строить
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="bar">
-              <div className="bar-fill" style={{ width: `${Math.min(100, (used / cap) * 100)}%`, background: 'var(--accent-grad)' }} />
+    <Sheet onClose={onClose}>
+      <div className="section-title">
+        Казармы{bl ? ` · ур. ${bl}` : ''}
+        <span className="muted">
+          мест {used}/{cap}
+        </span>
+      </div>
+      {bl === 0 ? (
+        <>
+          <div className="vil-note">Сначала построй казармы.</div>
+          <button className="primary" onClick={onBuild}>
+            Строить
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="bar">
+            <div className="bar-fill" style={{ width: `${Math.min(100, (used / cap) * 100)}%`, background: 'var(--accent-grad)' }} />
+          </div>
+          {town.q.length > 0 && (
+            <div className="vil-actions">
+              <span className="vil-timer">
+                <Timer size={15} /> обучение {town.q.length} · {fmtTime((lastEnd - now) / 1000)}
+              </span>
+              <button className="primary" disabled={charge < sp} onClick={() => onSpeed(sp)}>
+                Ускорить <Bolt size={15} /> {sp}
+              </button>
             </div>
-            {town.q.length > 0 && (
-              <div className="vil-actions">
-                <span className="vil-timer">
-                  <Timer size={15} /> обучение {town.q.length} · {fmtTime((lastEnd - now) / 1000)}
+          )}
+          {TROOP_IDS.map((id) => {
+            const d = TROOPS[id];
+            const locked = bl < d.unlock;
+            const queued = town.q.filter((q) => q.t === id).length;
+            return (
+              <div key={id} className={`vil-task vil-troop-card ${locked ? 'locked' : ''}`} role="button" tabIndex={0} onClick={() => setInfo(id)} aria-label={`${d.name}: подробнее`}>
+                <span className={`vil-troop-pic u-${id}`}>
+                  <TroopThumb id={id} size={52} level={troopLevel(town, id)} />
                 </span>
-                <button className="primary" disabled={charge < sp} onClick={() => onSpeed(sp)}>
-                  Ускорить <Bolt size={15} /> {sp}
-                </button>
-              </div>
-            )}
-            {TROOP_IDS.map((id) => {
-              const d = TROOPS[id];
-              const locked = bl < d.unlock;
-              const queued = town.q.filter((q) => q.t === id).length;
-              return (
-                <div key={id} className={`vil-task vil-troop-card ${locked ? 'locked' : ''}`} role="button" tabIndex={0} onClick={() => setInfo(id)} aria-label={`${d.name}: подробнее`}>
-                  <span className={`vil-troop-pic u-${id}`}>
-                    <TroopThumb id={id} size={52} level={troopLevel(town, id)} />
-                  </span>
-                  <div className="vil-shop-info">
-                    <b>
-                      {d.name} {troopLevel(town, id) > 1 && <span className="level-tag">ур. {troopLevel(town, id)}</span>} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
-                    </b>
-                    <span className="muted">{locked ? `Казармы ${d.unlock} уровня` : d.desc}</span>
-                    <span className="vil-shop-meta">
-                      <ResRow res={d.cost} />
-                      <span className="muted">
-                        мест {d.housing} · {fmtTime(d.train)}
-                      </span>
-                      <span className="vil-more">подробнее ›</span>
+                <div className="vil-shop-info">
+                  <b>
+                    {d.name} {troopLevel(town, id) > 1 && <span className="level-tag">ур. {troopLevel(town, id)}</span>} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
+                  </b>
+                  <span className="muted">{locked ? `Казармы ${d.unlock} уровня` : d.desc}</span>
+                  <span className="vil-shop-meta">
+                    <ResRow res={d.cost} />
+                    <span className="muted">
+                      мест {d.housing} · {fmtTime(d.train)}
                     </span>
-                  </div>
-                  {queued > 0 && (
-                    <button
-                      className="small-btn ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUntrain(id);
-                      }}
-                      aria-label="Убрать из очереди"
-                    >
-                      −
-                    </button>
-                  )}
+                    <span className="vil-more">подробнее ›</span>
+                  </span>
+                </div>
+                {queued > 0 && (
                   <button
-                    className="small-btn"
-                    disabled={locked}
+                    className="small-btn ghost"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onTrain(id);
+                      onUntrain(id);
                     }}
-                    aria-label="Обучить"
+                    aria-label="Убрать из очереди"
                   >
-                    {locked ? <Lock /> : '+'}
+                    −
                   </button>
-                </div>
-              );
-            })}
-            <button className="vil-lab-link" onClick={onLab}>
-              <span>
-                <b>Лаборатория</b>
-                <span className="muted">{labLevel(town) ? (town.r ? `Идёт исследование: ${TROOPS[town.r.t].name}` : 'Прокачай отряды: +15% за уровень') : 'Прокачка отрядов — с ратуши 2'}</span>
-              </span>
-              <span className="vil-more">›</span>
-            </button>
-            <div className="muted">Герой идёт в каждый набег сам — его сила растёт с твоими тренировками.</div>
-          </>
-        )}
-      </div>
-    </div>
+                )}
+                <button
+                  className="small-btn"
+                  disabled={locked}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTrain(id);
+                  }}
+                  aria-label="Обучить"
+                >
+                  {locked ? <Lock /> : '+'}
+                </button>
+              </div>
+            );
+          })}
+          <button className="vil-lab-link" onClick={onLab}>
+            <span>
+              <b>Лаборатория</b>
+              <span className="muted">{labLevel(town) ? (town.r ? `Идёт исследование: ${TROOPS[town.r.t].name}` : 'Прокачай отряды: +15% за уровень') : 'Прокачка отрядов — с ратуши 2'}</span>
+            </span>
+            <span className="vil-more">›</span>
+          </button>
+          <div className="muted">Герой идёт в каждый набег сам — его сила растёт с твоими тренировками.</div>
+        </>
+      )}
+    </Sheet>
   );
 }

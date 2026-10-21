@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Coin } from '../icons';
 import { type AchIcon, type AchTier, achDone, type Achievement, ACHIEVEMENTS } from './achievements';
 import type { Progress } from './progress';
+import { Sheet } from '../Sheet';
 
 const GLYPH: Record<AchIcon, string> = {
   flame: 'M12 22c4.2 0 7-2.8 7-6.8 0-3.2-1.8-5.6-3.6-7.6-.4 1.9-1.4 3.2-2.6 3.8.3-3.4-1-6.6-3.8-9.4-.2 3.4-1.8 5.4-3.4 7.4C4.3 11.1 5 13.4 5 15.2 5 19.2 7.8 22 12 22z',
@@ -46,66 +47,61 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
     return rank(x) - rank(y) || Math.min(1, y.value(progress, now) / y.goal) - Math.min(1, x.value(progress, now) / x.goal);
   });
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="level-title">
-          Достижения <span className="muted">{done.length} из {ACHIEVEMENTS.length}</span>
-        </div>
-        <div className="muted ach-hint">За каждое — монеты и титул. Титул виден под именем героя; нажми на полученный, чтобы надеть.</div>
-        <div className="tabs">
-          <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
-            Все
-          </button>
-          <button className={tab === 'done' ? 'active' : ''} onClick={() => setTab('done')}>
-            Полученные
-          </button>
-        </div>
-        <div className="ach-list">
-          {list.map((x) => {
-            const ok = achDone(x, progress, now);
-            const claimed = progress.achClaimed?.includes(x.id);
-            const worn = progress.title === x.id;
-            const v = Math.min(x.goal, x.value(progress, now));
-            return (
-              <div key={x.id} className={`ach-row ${ok ? 'done' : ''} ${worn ? 'worn' : ''}`} onClick={() => claimed && onTitle(worn ? undefined : x.id)}>
-                <AchBadge ach={x} done={ok} size={46} />
-                <div className="ach-meta">
-                  <div className="ach-title">
-                    {x.title} <span className={`ach-tier ${x.tier}`}>{TIER[x.tier].name}</span>
-                  </div>
-                  <div className="muted">{x.text}</div>
-                  {!ok && x.goal > 1 && (
-                    <div className="ach-progress">
-                      <div className="bar">
-                        <div className="bar-fill" style={{ width: `${(v / x.goal) * 100}%`, background: TIER[x.tier].ring }} />
-                      </div>
-                      <span>
-                        {v.toLocaleString('ru')} / {x.goal.toLocaleString('ru')}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {ok && !claimed ? (
-                  <button
-                    className="small-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClaim(x);
-                    }}
-                  >
-                    <Coin size={13} /> {x.coins}
-                  </button>
-                ) : (
-                  worn && <span className="ach-worn">титул</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <button className="link" onClick={onClose}>
-          Закрыть
+    <Sheet onClose={onClose}>
+      <div className="level-title">
+        Достижения <span className="muted">{done.length} из {ACHIEVEMENTS.length}</span>
+      </div>
+      <div className="muted ach-hint">За каждое — монеты и титул. Титул виден под именем героя; нажми на полученный, чтобы надеть.</div>
+      <div className="tabs">
+        <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
+          Все
+        </button>
+        <button className={tab === 'done' ? 'active' : ''} onClick={() => setTab('done')}>
+          Полученные
         </button>
       </div>
-    </div>
+      <div className="ach-list">
+        {list.map((x) => {
+          const ok = achDone(x, progress, now);
+          const claimed = progress.achClaimed?.includes(x.id);
+          const worn = progress.title === x.id;
+          const v = Math.min(x.goal, x.value(progress, now));
+          return (
+            <div key={x.id} className={`ach-row ${ok ? 'done' : ''} ${worn ? 'worn' : ''}`} onClick={() => claimed && onTitle(worn ? undefined : x.id)}>
+              <AchBadge ach={x} done={ok} size={46} />
+              <div className="ach-meta">
+                <div className="ach-title">
+                  {x.title} <span className={`ach-tier ${x.tier}`}>{TIER[x.tier].name}</span>
+                </div>
+                <div className="muted">{x.text}</div>
+                {!ok && x.goal > 1 && (
+                  <div className="ach-progress">
+                    <div className="bar">
+                      <div className="bar-fill" style={{ width: `${(v / x.goal) * 100}%`, background: TIER[x.tier].ring }} />
+                    </div>
+                    <span>
+                      {v.toLocaleString('ru')} / {x.goal.toLocaleString('ru')}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {ok && !claimed ? (
+                <button
+                  className="small-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClaim(x);
+                  }}
+                >
+                  <Coin size={13} /> {x.coins}
+                </button>
+              ) : (
+                worn && <span className="ach-worn">титул</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Sheet>
   );
 }

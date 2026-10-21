@@ -184,7 +184,10 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .sheet { position: fixed; inset: 0; background: rgba(5,6,10,.6); display: flex; align-items: flex-end; justify-content: center; z-index: 10; animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; } }
 .sheet-body { width: 100%; max-width: 480px; max-height: min(82vh, calc(100dvh - var(--safe-top) - 12px)); overflow: auto; padding: 10px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; background: var(--surface); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; animation: rise .25s ease-out; }
-.sheet-body::before { content: ''; align-self: center; width: 38px; height: 4px; border-radius: 2px; background: var(--surface-3); margin-bottom: 4px; }
+.sheet-top { position: sticky; top: -10px; z-index: 3; flex: none; display: flex; align-items: center; justify-content: center; height: 40px; margin: -10px -16px -10px; padding: 0 16px; background: var(--surface); border-radius: 22px 22px 0 0; touch-action: none; cursor: grab; }
+.sheet-grip { width: 42px; height: 5px; border-radius: 3px; background: var(--surface-3); }
+.sheet-x { position: absolute; top: 8px; right: 10px; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--hint); display: grid; place-items: center; cursor: pointer; }
+.sheet-x:active { transform: scale(.92); }
 @keyframes rise { from { transform: translateY(30px); } }
 .coins { display: flex; align-items: center; gap: 6px; font-weight: 900; font-size: 16px; }
 .coins .coin { color: var(--gold); }

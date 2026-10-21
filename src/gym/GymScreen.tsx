@@ -38,6 +38,7 @@ import {
 } from './gym';
 import { ExIcon } from './GymIcons';
 import './gym.css';
+import { Sheet } from '../Sheet';
 
 // Дневник зала: план недели, свои тренировки, запись подходов и итог. На серию, задание дня и рейтинг не влияет.
 
@@ -224,27 +225,25 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
       )}
 
       {dayPick !== null && (
-        <div className="sheet" onClick={() => setDayPick(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">{['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'][dayPick]}</div>
-            <div className="gym-pick-list">
-              {[null, ...g.templates].map((t) => (
-                <button
-                  key={t?.id ?? 'rest'}
-                  className={`gym-pick ${g.week[dayPick] === (t?.id ?? null) ? 'on' : ''}`}
-                  onClick={() => {
-                    update((p) => setWeekDay(p, dayPick, t?.id ?? null));
-                    setDayPick(null);
-                  }}
-                >
-                  {t ? t.name : 'Отдых'}
-                  {g.week[dayPick] === (t?.id ?? null) && <Check size={16} />}
-                </button>
-              ))}
-            </div>
-            {!g.templates.length && <div className="muted">Сначала создай тренировку или добавь готовую.</div>}
+        <Sheet onClose={() => setDayPick(null)}>
+          <div className="section-title">{['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'][dayPick]}</div>
+          <div className="gym-pick-list">
+            {[null, ...g.templates].map((t) => (
+              <button
+                key={t?.id ?? 'rest'}
+                className={`gym-pick ${g.week[dayPick] === (t?.id ?? null) ? 'on' : ''}`}
+                onClick={() => {
+                  update((p) => setWeekDay(p, dayPick, t?.id ?? null));
+                  setDayPick(null);
+                }}
+              >
+                {t ? t.name : 'Отдых'}
+                {g.week[dayPick] === (t?.id ?? null) && <Check size={16} />}
+              </button>
+            ))}
           </div>
-        </div>
+          {!g.templates.length && <div className="muted">Сначала создай тренировку или добавь готовую.</div>}
+        </Sheet>
       )}
     </div>
   );
@@ -533,31 +532,29 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
       )}
 
       {confirm && (
-        <div className="sheet" onClick={() => setConfirm(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">{confirm === 'finish' ? 'Завершить тренировку?' : 'Отменить тренировку?'}</div>
-            <div className="muted">
-              {confirm === 'finish'
-                ? doneCount
-                  ? `Отмечено ${doneCount} ${setsWord(doneCount)}, ${kgText(vol)}. Неотмеченные подходы не попадут в дневник.`
-                  : 'Ни один подход не отмечен галочкой — записывать будет нечего.'
-                : 'Все записанные подходы этой тренировки пропадут.'}
-            </div>
-            <button
-              className="primary"
-              onClick={() => {
-                setConfirm(null);
-                if (confirm === 'finish') onFinish();
-                else update(cancelRun);
-              }}
-            >
-              {confirm === 'finish' ? (doneCount ? 'Завершить' : 'Выйти без записи') : 'Да, отменить'}
-            </button>
-            <button className="secondary" onClick={() => setConfirm(null)}>
-              Продолжить тренировку
-            </button>
+        <Sheet onClose={() => setConfirm(null)}>
+          <div className="section-title">{confirm === 'finish' ? 'Завершить тренировку?' : 'Отменить тренировку?'}</div>
+          <div className="muted">
+            {confirm === 'finish'
+              ? doneCount
+                ? `Отмечено ${doneCount} ${setsWord(doneCount)}, ${kgText(vol)}. Неотмеченные подходы не попадут в дневник.`
+                : 'Ни один подход не отмечен галочкой — записывать будет нечего.'
+              : 'Все записанные подходы этой тренировки пропадут.'}
           </div>
-        </div>
+          <button
+            className="primary"
+            onClick={() => {
+              setConfirm(null);
+              if (confirm === 'finish') onFinish();
+              else update(cancelRun);
+            }}
+          >
+            {confirm === 'finish' ? (doneCount ? 'Завершить' : 'Выйти без записи') : 'Да, отменить'}
+          </button>
+          <button className="secondary" onClick={() => setConfirm(null)}>
+            Продолжить тренировку
+          </button>
+        </Sheet>
       )}
     </div>
   );

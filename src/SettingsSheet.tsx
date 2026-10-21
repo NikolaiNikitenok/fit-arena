@@ -8,6 +8,7 @@ import { setSetting, Settings, useSettings } from './settings';
 import { tg } from './telegram';
 import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
+import { Sheet } from './Sheet';
 
 const TOGGLES: { key: { [K in keyof Settings]-?: Settings[K] extends boolean ? K : never }[keyof Settings]; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -25,62 +26,57 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
   const s = useSettings();
   const [confirm, setConfirm] = useState(false);
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="level-title">Настройки</div>
-        {TOGGLES.map((t) => (
-          <label key={t.key} className="toggle-row">
-            <div>
-              <div className="toggle-title">{t.title}</div>
-              <div className="muted">{t.text}</div>
-            </div>
-            <input type="checkbox" className="switch" checked={s[t.key]} onChange={(e) => setSetting(t.key, e.target.checked)} />
-          </label>
-        ))}
-        <RecalibrateRow />
-        <RemindRow />
-        <RaidNotifyRow />
-        <BlackListRow />
-        <button className="secondary" onClick={onIntro}>
-          Посмотреть знакомство заново
-        </button>
-        <div className="settings-note">
-          <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.{' '}
-          <PrivacyLink />
-        </div>
-        <div className="settings-note">
-          <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
-        </div>
-        <TelegramIdRow />
-        <AdminStatsRow />
-        <AdminChargeRow />
-        {confirm ? (
-          <div className="danger-row">
-            <span>Стереть героя, предметы и монеты?</span>
-            <button
-              className="small-btn danger"
-              onClick={() => {
-                onReset();
-                onClose();
-              }}
-            >
-              Стереть
-            </button>
-            <button className="small-btn ghost" onClick={() => setConfirm(false)}>
-              Отмена
-            </button>
+    <Sheet onClose={onClose}>
+      <div className="level-title">Настройки</div>
+      {TOGGLES.map((t) => (
+        <label key={t.key} className="toggle-row">
+          <div>
+            <div className="toggle-title">{t.title}</div>
+            <div className="muted">{t.text}</div>
           </div>
-        ) : (
-          <button className="link danger-link" onClick={() => setConfirm(true)}>
-            Начать игру заново
-          </button>
-        )}
-        <DeleteDataRow />
-        <button className="secondary" onClick={onClose}>
-          Готово
-        </button>
+          <input type="checkbox" className="switch" checked={s[t.key]} onChange={(e) => setSetting(t.key, e.target.checked)} />
+        </label>
+      ))}
+      <RecalibrateRow />
+      <RemindRow />
+      <RaidNotifyRow />
+      <BlackListRow />
+      <button className="secondary" onClick={onIntro}>
+        Посмотреть знакомство заново
+      </button>
+      <div className="settings-note">
+        <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.{' '}
+        <PrivacyLink />
       </div>
-    </div>
+      <div className="settings-note">
+        <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
+      </div>
+      <TelegramIdRow />
+      <AdminStatsRow />
+      <AdminChargeRow />
+      {confirm ? (
+        <div className="danger-row">
+          <span>Стереть героя, предметы и монеты?</span>
+          <button
+            className="small-btn danger"
+            onClick={() => {
+              onReset();
+              onClose();
+            }}
+          >
+            Стереть
+          </button>
+          <button className="small-btn ghost" onClick={() => setConfirm(false)}>
+            Отмена
+          </button>
+        </div>
+      ) : (
+        <button className="link danger-link" onClick={() => setConfirm(true)}>
+          Начать игру заново
+        </button>
+      )}
+      <DeleteDataRow />
+    </Sheet>
   );
 }
 

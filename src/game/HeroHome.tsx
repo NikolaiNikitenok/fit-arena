@@ -22,6 +22,7 @@ import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './m
 import { homeBadges } from './homeBadges';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
 import './home.css';
+import { Sheet } from '../Sheet';
 
 // Главное меню на один экран телефона: сверху ресурсы, герой, большая кнопка боя и задание дня,
 // под ними четыре быстрые плитки и сетка «Ещё». Снаряжение и сила героя — в листе по тапу на героя.
@@ -386,151 +387,146 @@ function HeroSheet({ progress, pro, onShop, onEquip, onEquipGear, onPotion, onAc
   const owned = ITEMS.filter((i) => progress.items.includes(i.id));
 
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body hb-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="hero-info hb-sheet-info">
-          <div className="hero-level">{lvl.level}</div>
-          <div className="hero-meta">
-            <div className="hero-title">
-              <span className={pro ? 'pro-name' : ''}>{heroTitle(lvl.level)}</span>
-              {pro && <span className="pro-chip">PRO</span>}
-            </div>
-            {badge && (
-              <button className="hero-badge" onClick={onAchievements}>
-                <AchBadge ach={badge} done size={18} /> {badge.title}
-              </button>
-            )}
-            <div className="hero-skin" style={{ color: RARITY_COLORS[item.rarity] }}>
-              {item.name}
-            </div>
-            <div className="xp-bar">
-              <div style={{ width: `${(lvl.into / lvl.need) * 100}%` }} />
-            </div>
-            <div className="xp-text">
-              {lvl.into} / {lvl.need} опыта · 1 повтор = 1 опыт
-            </div>
+    <Sheet onClose={onClose} bodyClassName="hb-sheet">
+      <div className="hero-info hb-sheet-info">
+        <div className="hero-level">{lvl.level}</div>
+        <div className="hero-meta">
+          <div className="hero-title">
+            <span className={pro ? 'pro-name' : ''}>{heroTitle(lvl.level)}</span>
+            {pro && <span className="pro-chip">PRO</span>}
           </div>
-        </div>
-        <div className="power-tiles hb-sheet-power">
-          <div>
-            <b>
-              <Swords size={16} /> {power.damage}
-            </b>
-            <span>урон за повтор</span>
-          </div>
-          <div>
-            <b>
-              <Heart size={15} className="heart" /> {maxLives(progress)}
-            </b>
-            <span>жизней</span>
-          </div>
-          <div>
-            <b>
-              <Heart size={15} className="heart" /> {power.hearts}
-            </b>
-            <span>сердец у боссов</span>
-          </div>
-        </div>
-        <div className="power-hint hb-sheet-hint">
-          Урон: база {BASE_DAMAGE} + уровень {power.level} + снаряжение {power.atk}
-          {power.pct > 0 && ` и +${(Math.round(power.pct * 1000) / 10).toLocaleString('ru')}%`}
-          {power.pet > 0 && ` (питомец +${(Math.round(power.pet * 1000) / 10).toLocaleString('ru')}%)`}
-          {power.offhandOff && ' · двуручное оружие: вторая рука не действует'}
-        </div>
-
-        <div className="slots">
-          <button className={`slot ${inv === 'outfit' ? 'on' : ''}`} onClick={() => setInv('outfit')}>
-            <ItemFace hero={item.hero} color={item.color} glow={item.glow} />
-            <span className="slot-label">Облик</span>
-            <span className="slot-name">{item.name}</span>
-          </button>
-          <button className={`slot ${inv === 'weapon' ? 'on' : ''}`} onClick={() => setInv('weapon')}>
-            {weapon ? <GearFace g={weapon} /> : <span className="gear-face empty" />}
-            <span className="slot-label">Оружие</span>
-            <span className="slot-name">{weapon?.name ?? 'пусто'}</span>
-          </button>
-          <button className={`slot ${power.offhandOff ? 'off' : ''} ${inv === 'offhand' ? 'on' : ''}`} onClick={() => setInv('offhand')}>
-            {offhand ? <GearFace g={offhand} /> : <span className="gear-face empty">+</span>}
-            <span className="slot-label">Вторая рука</span>
-            <span className="slot-name">{offhand?.name ?? 'пусто'}</span>
-          </button>
-        </div>
-
-        <div className="section-title">
-          Инвентарь
-          <button className="link hb-hit" onClick={() => onShop(inv)}>
-            Лавка Фёдора ›
-          </button>
-        </div>
-        <div className="tabs hb-tabs">
-          {INV_TABS.map((t) => (
-            <button key={t.tab} className={inv === t.tab ? 'active' : ''} onClick={() => setInv(t.tab)}>
-              {t.label}
+          {badge && (
+            <button className="hero-badge" onClick={onAchievements}>
+              <AchBadge ach={badge} done size={18} /> {badge.title}
             </button>
-          ))}
+          )}
+          <div className="hero-skin" style={{ color: RARITY_COLORS[item.rarity] }}>
+            {item.name}
+          </div>
+          <div className="xp-bar">
+            <div style={{ width: `${(lvl.into / lvl.need) * 100}%` }} />
+          </div>
+          <div className="xp-text">
+            {lvl.into} / {lvl.need} опыта · 1 повтор = 1 опыт
+          </div>
         </div>
-        {inv === 'potion' ? (
-          <div className="potion-list">
-            {POTIONS.map((pt) => {
-              const n = progress.potions?.[pt.id] ?? 0;
-              const active = pt.id === 'might' && progress.might;
-              return (
-                <div key={pt.id} className={`potion ${n ? '' : 'none'}`}>
-                  <Flask color={pt.color} scroll={pt.id === 'swap'} />
-                  <div className="potion-body">
-                    <div className="potion-name">
-                      {pt.name} <span className="potion-count">×{n}</span>
-                    </div>
-                    <div className="muted">{active ? 'Выпит: действует в следующем бою' : pt.text}</div>
-                  </div>
-                  {n > 0 ? (
-                    <button className="small-btn" disabled={!!active} onClick={() => onPotion(pt.id)}>
-                      {pt.id === 'swap' ? 'Прочесть' : 'Выпить'}
-                    </button>
-                  ) : (
-                    <button className="small-btn ghost" onClick={() => onShop('potion')}>
-                      <Coin size={13} /> {pt.price}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="inventory">
-            {inv === 'outfit'
-              ? owned.map((i) => (
-                  <button key={i.id} className={`inv-item ${progress.equipped === i.id ? 'on' : ''}`} style={{ borderColor: progress.equipped === i.id ? RARITY_COLORS[i.rarity] : undefined }} onClick={() => onEquip(i.id)}>
-                    <ItemFace hero={i.hero} color={i.color} glow={i.glow} />
-                    <span className="inv-name">{i.name}</span>
-                    <span className="inv-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
-                      {progress.equipped === i.id ? 'надето' : i.coinBonus ? `+${Math.round(i.coinBonus * 100)}% монет` : RARITY_NAMES[i.rarity]}
-                    </span>
-                  </button>
-                ))
-              : ownedGear.map((g) => {
-                  const on = progress.weapon === g.id || progress.offhand === g.id;
-                  return (
-                    <button key={g.id} className={`inv-item ${on ? 'on' : ''}`} style={{ borderColor: on ? RARITY_COLORS[g.rarity] : undefined }} onClick={() => onEquipGear(g.id)}>
-                      <GearFace g={g} />
-                      <span className="inv-name">{g.name}</span>
-                      <span className="inv-meta" style={{ color: on ? RARITY_COLORS[g.rarity] : undefined }}>
-                        {on ? 'надето' : gearText(g)}
-                      </span>
-                    </button>
-                  );
-                })}
-            <button className="inv-item add" onClick={() => onShop(inv)}>
-              <span className="gear-face empty">+</span>
-              <span className="inv-name">Ещё в лавке</span>
-              <span className="inv-meta">и в сундуках</span>
-            </button>
-          </div>
-        )}
-        <button className="secondary" onClick={onClose}>
-          Закрыть
+      </div>
+      <div className="power-tiles hb-sheet-power">
+        <div>
+          <b>
+            <Swords size={16} /> {power.damage}
+          </b>
+          <span>урон за повтор</span>
+        </div>
+        <div>
+          <b>
+            <Heart size={15} className="heart" /> {maxLives(progress)}
+          </b>
+          <span>жизней</span>
+        </div>
+        <div>
+          <b>
+            <Heart size={15} className="heart" /> {power.hearts}
+          </b>
+          <span>сердец у боссов</span>
+        </div>
+      </div>
+      <div className="power-hint hb-sheet-hint">
+        Урон: база {BASE_DAMAGE} + уровень {power.level} + снаряжение {power.atk}
+        {power.pct > 0 && ` и +${(Math.round(power.pct * 1000) / 10).toLocaleString('ru')}%`}
+        {power.pet > 0 && ` (питомец +${(Math.round(power.pet * 1000) / 10).toLocaleString('ru')}%)`}
+        {power.offhandOff && ' · двуручное оружие: вторая рука не действует'}
+      </div>
+
+      <div className="slots">
+        <button className={`slot ${inv === 'outfit' ? 'on' : ''}`} onClick={() => setInv('outfit')}>
+          <ItemFace hero={item.hero} color={item.color} glow={item.glow} />
+          <span className="slot-label">Облик</span>
+          <span className="slot-name">{item.name}</span>
+        </button>
+        <button className={`slot ${inv === 'weapon' ? 'on' : ''}`} onClick={() => setInv('weapon')}>
+          {weapon ? <GearFace g={weapon} /> : <span className="gear-face empty" />}
+          <span className="slot-label">Оружие</span>
+          <span className="slot-name">{weapon?.name ?? 'пусто'}</span>
+        </button>
+        <button className={`slot ${power.offhandOff ? 'off' : ''} ${inv === 'offhand' ? 'on' : ''}`} onClick={() => setInv('offhand')}>
+          {offhand ? <GearFace g={offhand} /> : <span className="gear-face empty">+</span>}
+          <span className="slot-label">Вторая рука</span>
+          <span className="slot-name">{offhand?.name ?? 'пусто'}</span>
         </button>
       </div>
-    </div>
+
+      <div className="section-title">
+        Инвентарь
+        <button className="link hb-hit" onClick={() => onShop(inv)}>
+          Лавка Фёдора ›
+        </button>
+      </div>
+      <div className="tabs hb-tabs">
+        {INV_TABS.map((t) => (
+          <button key={t.tab} className={inv === t.tab ? 'active' : ''} onClick={() => setInv(t.tab)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {inv === 'potion' ? (
+        <div className="potion-list">
+          {POTIONS.map((pt) => {
+            const n = progress.potions?.[pt.id] ?? 0;
+            const active = pt.id === 'might' && progress.might;
+            return (
+              <div key={pt.id} className={`potion ${n ? '' : 'none'}`}>
+                <Flask color={pt.color} scroll={pt.id === 'swap'} />
+                <div className="potion-body">
+                  <div className="potion-name">
+                    {pt.name} <span className="potion-count">×{n}</span>
+                  </div>
+                  <div className="muted">{active ? 'Выпит: действует в следующем бою' : pt.text}</div>
+                </div>
+                {n > 0 ? (
+                  <button className="small-btn" disabled={!!active} onClick={() => onPotion(pt.id)}>
+                    {pt.id === 'swap' ? 'Прочесть' : 'Выпить'}
+                  </button>
+                ) : (
+                  <button className="small-btn ghost" onClick={() => onShop('potion')}>
+                    <Coin size={13} /> {pt.price}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="inventory">
+          {inv === 'outfit'
+            ? owned.map((i) => (
+                <button key={i.id} className={`inv-item ${progress.equipped === i.id ? 'on' : ''}`} style={{ borderColor: progress.equipped === i.id ? RARITY_COLORS[i.rarity] : undefined }} onClick={() => onEquip(i.id)}>
+                  <ItemFace hero={i.hero} color={i.color} glow={i.glow} />
+                  <span className="inv-name">{i.name}</span>
+                  <span className="inv-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
+                    {progress.equipped === i.id ? 'надето' : i.coinBonus ? `+${Math.round(i.coinBonus * 100)}% монет` : RARITY_NAMES[i.rarity]}
+                  </span>
+                </button>
+              ))
+            : ownedGear.map((g) => {
+                const on = progress.weapon === g.id || progress.offhand === g.id;
+                return (
+                  <button key={g.id} className={`inv-item ${on ? 'on' : ''}`} style={{ borderColor: on ? RARITY_COLORS[g.rarity] : undefined }} onClick={() => onEquipGear(g.id)}>
+                    <GearFace g={g} />
+                    <span className="inv-name">{g.name}</span>
+                    <span className="inv-meta" style={{ color: on ? RARITY_COLORS[g.rarity] : undefined }}>
+                      {on ? 'надето' : gearText(g)}
+                    </span>
+                  </button>
+                );
+              })}
+          <button className="inv-item add" onClick={() => onShop(inv)}>
+            <span className="gear-face empty">+</span>
+            <span className="inv-name">Ещё в лавке</span>
+            <span className="inv-meta">и в сундуках</span>
+          </button>
+        </div>
+      )}
+    </Sheet>
   );
 }

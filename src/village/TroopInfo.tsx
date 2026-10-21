@@ -10,6 +10,7 @@ import { ResRow } from './BattleScreen';
 import { ModelThumb } from './Preview';
 import { troopInfo } from './troopInfo';
 import { bombGroup, type HeroLook, levelLook, paintTroop, TROOP_RIGS } from './troops3d';
+import { Sheet } from '../Sheet';
 
 // Карточка отряда в казармах: живая мини-модель, роль, все цифры из боя (troopInfo.ts) и кнопка обучения.
 
@@ -123,85 +124,83 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
   const info = troopInfo(id, Math.max(1, barracks), level);
   const locked = barracks < info.unlock;
   return (
-    <div className="sheet vil-troop-sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="vil-ti-head">
-          <div className={`vil-ti-pic u-${id}`}>
-            <TroopThumb id={id} size={112} level={level} />
-          </div>
-          <div className="vil-ti-title">
-            <b>
-              {info.name} <span className="level-tag">ур. {info.level}</span>
-            </b>
-            <span className="muted">
-              в лагере ×{have}
-              {queued ? ` · учатся ${queued}` : ''}
-            </span>
-            <div className="vil-ti-tags">
-              {info.tags.map((t) => (
-                <span key={t} className={t === 'Летающий' ? 'air' : t === 'Наземный' ? 'ground' : ''}>
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
+    <Sheet onClose={onClose} className="vil-troop-sheet">
+      <div className="vil-ti-head">
+        <div className={`vil-ti-pic u-${id}`}>
+          <TroopThumb id={id} size={112} level={level} />
         </div>
-        <p className="vil-ti-role">{info.role}</p>
-        <div className="vil-ti-grid">
-          {info.stats.map((s) => (
-            <div key={s.label} className={s.label === 'Цель' ? 'wide' : ''}>
-              <small>{s.label}</small>
-              <b>{s.value}</b>
-              {s.note && <em>{s.note}</em>}
-            </div>
-          ))}
-        </div>
-        <div className="vil-ti-hit">
-          <small>По нему бьют</small>
-          <div>
-            {info.hitBy.map((n) => (
-              <span key={n} className="bad">
-                {n}
-              </span>
-            ))}
-            {info.safeFrom.map((n) => (
-              <span key={n} className="ok">
-                {n} не достаёт
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="vil-ti-bonus">
-          {info.bonus > 0 ? (
-            <>
-              Казармы {barracks} ур.: <b>+{info.bonus}%</b> {info.bonusWhat} (уже в цифрах). Каждый следующий уровень — ещё +{info.perLevel}%.
-            </>
-          ) : (
-            <>Каждый уровень казарм выше первого: +{info.perLevel}% {info.bonusWhat}.</>
-          )}{' '}
-          {info.levelBonus > 0 ? (
-            <>
-              Лаборатория, {info.level} ур. отряда: <b>+{info.levelBonus}%</b> (тоже в цифрах).
-            </>
-          ) : (
-            <>В лаборатории каждый уровень отряда даёт ещё +{info.perTroopLevel}%.</>
-          )}
-        </div>
-        <div className="vil-actions">
-          <span className="vil-ti-cost">
-            <ResRow res={info.cost} />
+        <div className="vil-ti-title">
+          <b>
+            {info.name} <span className="level-tag">ур. {info.level}</span>
+          </b>
+          <span className="muted">
+            в лагере ×{have}
+            {queued ? ` · учатся ${queued}` : ''}
           </span>
-          {locked ? (
-            <button className="secondary" disabled>
-              <Lock /> Казармы {info.unlock} уровня
-            </button>
-          ) : (
-            <button className="primary" onClick={onTrain}>
-              Обучить
-            </button>
-          )}
+          <div className="vil-ti-tags">
+            {info.tags.map((t) => (
+              <span key={t} className={t === 'Летающий' ? 'air' : t === 'Наземный' ? 'ground' : ''}>
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+      <p className="vil-ti-role">{info.role}</p>
+      <div className="vil-ti-grid">
+        {info.stats.map((s) => (
+          <div key={s.label} className={s.label === 'Цель' ? 'wide' : ''}>
+            <small>{s.label}</small>
+            <b>{s.value}</b>
+            {s.note && <em>{s.note}</em>}
+          </div>
+        ))}
+      </div>
+      <div className="vil-ti-hit">
+        <small>По нему бьют</small>
+        <div>
+          {info.hitBy.map((n) => (
+            <span key={n} className="bad">
+              {n}
+            </span>
+          ))}
+          {info.safeFrom.map((n) => (
+            <span key={n} className="ok">
+              {n} не достаёт
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="vil-ti-bonus">
+        {info.bonus > 0 ? (
+          <>
+            Казармы {barracks} ур.: <b>+{info.bonus}%</b> {info.bonusWhat} (уже в цифрах). Каждый следующий уровень — ещё +{info.perLevel}%.
+          </>
+        ) : (
+          <>Каждый уровень казарм выше первого: +{info.perLevel}% {info.bonusWhat}.</>
+        )}{' '}
+        {info.levelBonus > 0 ? (
+          <>
+            Лаборатория, {info.level} ур. отряда: <b>+{info.levelBonus}%</b> (тоже в цифрах).
+          </>
+        ) : (
+          <>В лаборатории каждый уровень отряда даёт ещё +{info.perTroopLevel}%.</>
+        )}
+      </div>
+      <div className="vil-actions">
+        <span className="vil-ti-cost">
+          <ResRow res={info.cost} />
+        </span>
+        {locked ? (
+          <button className="secondary" disabled>
+            <Lock /> Казармы {info.unlock} уровня
+          </button>
+        ) : (
+          <button className="primary" onClick={onTrain}>
+            Обучить
+          </button>
+        )}
+      </div>
+    </Sheet>
   );
 }

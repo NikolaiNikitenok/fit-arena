@@ -16,6 +16,7 @@ import { sfx } from '../audio';
 import { BAD_NAME, badName, hasProfanity } from '../../shared/profanity';
 import { muteText } from '../../shared/moderation';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
+import { Sheet } from '../Sheet';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: 'глава', officer: 'заместитель', member: '' };
@@ -701,53 +702,51 @@ function SettingsForm({ initial, submit, onSubmit }: { initial: ClanSettings; su
 function ClanSettingsSheet({ clan, api, onClose }: { clan: ClanView; api: ReturnType<typeof useClan>; onClose: () => void }) {
   const [leaving, setLeaving] = useState(false);
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="level-title">{clan.myRole === 'leader' ? 'Настройки клана' : `Клан «${clan.name}»`}</div>
-        {clan.myRole === 'leader' ? (
-          <SettingsForm
-            initial={{ name: clan.name, tag: clan.tag, description: clan.description, open: clan.open, minLevel: clan.minLevel, flag: clan.flag, country: clan.country, city: clan.city }}
-            submit="Сохранить"
-            onSubmit={(s) => {
-              api.send({ type: 'clanUpdate', clan: s });
+    <Sheet onClose={onClose}>
+      <div className="level-title">{clan.myRole === 'leader' ? 'Настройки клана' : `Клан «${clan.name}»`}</div>
+      {clan.myRole === 'leader' ? (
+        <SettingsForm
+          initial={{ name: clan.name, tag: clan.tag, description: clan.description, open: clan.open, minLevel: clan.minLevel, flag: clan.flag, country: clan.country, city: clan.city }}
+          submit="Сохранить"
+          onSubmit={(s) => {
+            api.send({ type: 'clanUpdate', clan: s });
+            onClose();
+          }}
+        />
+      ) : (
+        <div className="about-clan">
+          <Flag flag={clan.flag} tag={clan.tag} level={clanLevel(clan.xp).level} size={84} />
+          <div>
+            {clanPlace(clan) && <div className="clan-place">{clanPlace(clan)}</div>}
+            <div className="settings-note">{clan.description || 'Глава клана пока не добавил описание.'}</div>
+          </div>
+        </div>
+      )}
+      <div className="settings-note">
+        <b>Код приглашения: {clan.code}</b>. Его можно ввести вручную, если ссылка не открывается.
+      </div>
+      {leaving ? (
+        <div className="danger-row">
+          <span>{clan.members.length === 1 ? 'Ты последний: клан будет распущен.' : 'Выйти из клана? Урон в рейде останется клану.'}</span>
+          <button
+            className="small-btn danger"
+            onClick={() => {
+              api.send({ type: 'clanLeave' });
               onClose();
             }}
-          />
-        ) : (
-          <div className="about-clan">
-            <Flag flag={clan.flag} tag={clan.tag} level={clanLevel(clan.xp).level} size={84} />
-            <div>
-              {clanPlace(clan) && <div className="clan-place">{clanPlace(clan)}</div>}
-              <div className="settings-note">{clan.description || 'Глава клана пока не добавил описание.'}</div>
-            </div>
-          </div>
-        )}
-        <div className="settings-note">
-          <b>Код приглашения: {clan.code}</b>. Его можно ввести вручную, если ссылка не открывается.
-        </div>
-        {leaving ? (
-          <div className="danger-row">
-            <span>{clan.members.length === 1 ? 'Ты последний: клан будет распущен.' : 'Выйти из клана? Урон в рейде останется клану.'}</span>
-            <button
-              className="small-btn danger"
-              onClick={() => {
-                api.send({ type: 'clanLeave' });
-                onClose();
-              }}
-            >
-              Выйти
-            </button>
-            <button className="small-btn ghost" onClick={() => setLeaving(false)}>
-              Отмена
-            </button>
-          </div>
-        ) : (
-          <button className="link danger-link" onClick={() => setLeaving(true)}>
-            Выйти из клана
+          >
+            Выйти
           </button>
-        )}
-      </div>
-    </div>
+          <button className="small-btn ghost" onClick={() => setLeaving(false)}>
+            Отмена
+          </button>
+        </div>
+      ) : (
+        <button className="link danger-link" onClick={() => setLeaving(true)}>
+          Выйти из клана
+        </button>
+      )}
+    </Sheet>
   );
 }
 
@@ -815,19 +814,17 @@ function NoClan({ api, level }: { api: ReturnType<typeof useClan>; level: number
         })}
       </div>
       {creating && (
-        <div className="sheet" onClick={() => setCreating(false)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="level-title">Новый клан</div>
-            <SettingsForm
-              initial={{ name: '', tag: '', description: '', open: true, minLevel: 1, flag: defaultFlag(String(Math.random())), country: 'RU', city: '' }}
-              submit="Создать"
-              onSubmit={(s) => {
-                api.send({ type: 'clanCreate', clan: s });
-                setCreating(false);
-              }}
-            />
-          </div>
-        </div>
+        <Sheet onClose={() => setCreating(false)}>
+          <div className="level-title">Новый клан</div>
+          <SettingsForm
+            initial={{ name: '', tag: '', description: '', open: true, minLevel: 1, flag: defaultFlag(String(Math.random())), country: 'RU', city: '' }}
+            submit="Создать"
+            onSubmit={(s) => {
+              api.send({ type: 'clanCreate', clan: s });
+              setCreating(false);
+            }}
+          />
+        </Sheet>
       )}
     </>
   );
@@ -841,41 +838,36 @@ function LevelsSheet({ level, onClose }: { level: number; onClose: () => void })
   const now = useRef<HTMLDivElement>(null);
   useEffect(() => now.current?.scrollIntoView({ block: 'center' }), []);
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="level-title">Уровень клана {level}</div>
-        <div className="perk-grid">
-          <span>
-            <b>{perks.slots}</b> мест
-          </span>
-          <span>
-            <b>{perks.attacks}</b> атаки в день
-          </span>
-          <span>
-            <b>+{Math.round(perks.raidCoins * 100)}%</b> монет рейда
-          </span>
-          <span>
-            <b>+{Math.round(perks.raidDamage * 100)}%</b> урона в рейде
-          </span>
-        </div>
-        <div className="muted">Опыт клану приносят повторы участников в приключении (до {CLAN_REPS_PER_DAY} в день от каждого), урон по рейд-боссу, победа над ним и войны кланов. На каждом новом уровне все участники получают подарок.</div>
-        <div className="levels-list">
-          {Array.from({ length: CLAN_MAX_LEVEL - 1 }, (_, i) => i + 2).map((l) => {
-            const gift = clanGift(l);
-            return (
-              <div key={l} ref={l === level + 1 ? now : undefined} className={`level-row ${l <= level ? 'done' : ''} ${l === level + 1 ? 'next' : ''}`}>
-                <span className="level-row-num">{l}</span>
-                <span className="level-row-text">
-                  {[...clanUnlocks(l), `подарок ${gift.coins} монет${gift.potions.vigor ? ' и эликсиры' : ''}`].join(' · ')}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <button className="link" onClick={onClose}>
-          Закрыть
-        </button>
+    <Sheet onClose={onClose}>
+      <div className="level-title">Уровень клана {level}</div>
+      <div className="perk-grid">
+        <span>
+          <b>{perks.slots}</b> мест
+        </span>
+        <span>
+          <b>{perks.attacks}</b> атаки в день
+        </span>
+        <span>
+          <b>+{Math.round(perks.raidCoins * 100)}%</b> монет рейда
+        </span>
+        <span>
+          <b>+{Math.round(perks.raidDamage * 100)}%</b> урона в рейде
+        </span>
       </div>
-    </div>
+      <div className="muted">Опыт клану приносят повторы участников в приключении (до {CLAN_REPS_PER_DAY} в день от каждого), урон по рейд-боссу, победа над ним и войны кланов. На каждом новом уровне все участники получают подарок.</div>
+      <div className="levels-list">
+        {Array.from({ length: CLAN_MAX_LEVEL - 1 }, (_, i) => i + 2).map((l) => {
+          const gift = clanGift(l);
+          return (
+            <div key={l} ref={l === level + 1 ? now : undefined} className={`level-row ${l <= level ? 'done' : ''} ${l === level + 1 ? 'next' : ''}`}>
+              <span className="level-row-num">{l}</span>
+              <span className="level-row-text">
+                {[...clanUnlocks(l), `подарок ${gift.coins} монет${gift.potions.vigor ? ' и эликсиры' : ''}`].join(' · ')}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Sheet>
   );
 }

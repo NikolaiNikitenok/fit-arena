@@ -55,6 +55,7 @@ import { Coin, Flask, Heart, Lock, Swords } from '../icons';
 import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
+import { Sheet } from '../Sheet';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
@@ -538,7 +539,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           </div>
         </div>
       </div>
-      {/* Листы вне карты: иначе нижнее меню перекрывает их низ вместе с кнопкой «Закрыть». */}
+      {/* Листы вне карты: иначе нижнее меню перекрывает их низ. */}
       {sheets}
     </>
   );
@@ -568,133 +569,128 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
   const later = stock.filter((g) => !near.includes(g) && (rarity === 'all' || g.rarity === rarity)).sort((a, b) => a.minLand - b.minLand)[0];
   const damageNow = heroPower(progress).damage;
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="remark">
-          <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
-          <div>
-            <div className="level-title">Купец Фёдор</div>
-            <div className="muted">«Оружие бьёт сильнее, щит бережёт сердца в бою с боссом. Лучшее привожу, когда ты уходишь дальше.»</div>
-          </div>
+    <Sheet onClose={onClose}>
+      <div className="remark">
+        <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
+        <div>
+          <div className="level-title">Купец Фёдор</div>
+          <div className="muted">«Оружие бьёт сильнее, щит бережёт сердца в бою с боссом. Лучшее привожу, когда ты уходишь дальше.»</div>
         </div>
-        <div className="shop-head">
-          <div className="coins">
-            <Coin className="coin" /> {progress.coins}
-          </div>
-          <div className="muted">
-            <Swords size={13} /> урон {heroPower(progress).damage}
-          </div>
-        </div>
-        <div className="tabs">
-          {SHOP_TABS.map((t) => (
-            <button key={t.tab} className={tab === t.tab ? 'active' : ''} onClick={() => setTab(t.tab)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {tab === 'potion' &&
-          POTIONS.map((pt) => (
-            <div key={pt.id} className="shop-item">
-              <Flask color={pt.color} scroll={pt.id === 'swap'} />
-              <div className="shop-name">
-                <div>
-                  {pt.name} <span className="potion-count">×{progress.potions?.[pt.id] ?? 0}</span>
-                </div>
-                <div className="shop-meta muted">{pt.text}</div>
-              </div>
-              {price(pt.price, () => buyPotion(progress, pt.id))}
-            </div>
-          ))}
-        {(tab === 'weapon' || tab === 'offhand') && (
-          <div className="rarity-chips">
-            {(['all', ...RARITY_ORDER] as const).map((r) => {
-              const n = r === 'all' ? near.length : near.filter((g) => g.rarity === r).length;
-              return (
-                <button
-                  key={r}
-                  className={`rarity-chip ${rarity === r ? 'on' : ''}`}
-                  style={r !== 'all' ? { ['--rc' as string]: RARITY_COLORS[r] } : undefined}
-                  onClick={(e) => {
-                    setRarity(r);
-                    e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-                  }}
-                >
-                  {r !== 'all' && <i />}
-                  {r === 'all' ? 'Все' : RARITY_SHORT[r]} <small>{n}</small>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {(tab === 'weapon' || tab === 'offhand') &&
-          gear.map((g) => {
-            const owned = progress.items.includes(g.id);
-            const on = progress.weapon === g.id || progress.offhand === g.id;
-            const locked = !owned && g.minLand > reachedLand;
-            const damage = heroPower({ ...progress, [g.slot]: g.id }).damage;
-            const blocked = g.slot === 'offhand' && !!gearById(progress.weapon)?.twoHanded;
-            return (
-              <div key={g.id} className={`shop-item gear-row ${locked ? 'locked' : ''}`} style={{ ['--rc' as string]: RARITY_COLORS[g.rarity] }}>
-                <GearFace g={g} size={44} />
-                <div className="shop-name">
-                  <div>{g.name}</div>
-                  <div className="shop-meta" style={{ color: RARITY_COLORS[g.rarity] }}>
-                    {RARITY_NAMES[g.rarity]} · {gearText(g)}
-                  </div>
-                  {!on && damage > damageNow && (
-                    <div className="shop-delta up">
-                      <Swords size={11} /> урон {damageNow} → {damage}
-                    </div>
-                  )}
-                  {!on && blocked && <div className="shop-delta">не действует с двуручным оружием</div>}
-                </div>
-                {owned ? (
-                  <button className="small-btn" disabled={on && g.slot === 'weapon'} onClick={() => setProgress(equipGear(progress, g.id))}>
-                    {on ? (g.slot === 'weapon' ? 'Надето' : 'Снять') : 'Надеть'}
-                  </button>
-                ) : locked ? (
-                  <span className="shop-lock">
-                    <Lock size={12} /> с {LANDS[g.minLand].name}
-                  </span>
-                ) : (
-                  price(g.price, () => buyGear(progress, g.id))
-                )}
-              </div>
-            );
-          })}
-        {(tab === 'weapon' || tab === 'offhand') && later && (
-          <div className="shop-later muted">
-            <Lock size={12} /> {gear.length ? 'Ещё товар' : 'Такого пока нет'}: Фёдор привезёт его с земли «{LANDS[later.minLand].name}».
-          </div>
-        )}
-        {tab === 'outfit' &&
-          ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
-            const owned = progress.items.includes(i.id);
-            return (
-              <div key={i.id} className="shop-item">
-                <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
-                <div className="shop-name">
-                  <div>{i.name}</div>
-                  <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
-                    {RARITY_NAMES[i.rarity]}
-                    {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
-                  </div>
-                </div>
-                {owned ? (
-                  <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
-                    {progress.equipped === i.id ? 'Надето' : 'Надеть'}
-                  </button>
-                ) : (
-                  price(i.price, () => buy(progress, i.id))
-                )}
-              </div>
-            );
-          })}
-        <button className="link" onClick={onClose}>
-          Закрыть
-        </button>
       </div>
-    </div>
+      <div className="shop-head">
+        <div className="coins">
+          <Coin className="coin" /> {progress.coins}
+        </div>
+        <div className="muted">
+          <Swords size={13} /> урон {heroPower(progress).damage}
+        </div>
+      </div>
+      <div className="tabs">
+        {SHOP_TABS.map((t) => (
+          <button key={t.tab} className={tab === t.tab ? 'active' : ''} onClick={() => setTab(t.tab)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'potion' &&
+        POTIONS.map((pt) => (
+          <div key={pt.id} className="shop-item">
+            <Flask color={pt.color} scroll={pt.id === 'swap'} />
+            <div className="shop-name">
+              <div>
+                {pt.name} <span className="potion-count">×{progress.potions?.[pt.id] ?? 0}</span>
+              </div>
+              <div className="shop-meta muted">{pt.text}</div>
+            </div>
+            {price(pt.price, () => buyPotion(progress, pt.id))}
+          </div>
+        ))}
+      {(tab === 'weapon' || tab === 'offhand') && (
+        <div className="rarity-chips">
+          {(['all', ...RARITY_ORDER] as const).map((r) => {
+            const n = r === 'all' ? near.length : near.filter((g) => g.rarity === r).length;
+            return (
+              <button
+                key={r}
+                className={`rarity-chip ${rarity === r ? 'on' : ''}`}
+                style={r !== 'all' ? { ['--rc' as string]: RARITY_COLORS[r] } : undefined}
+                onClick={(e) => {
+                  setRarity(r);
+                  e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                }}
+              >
+                {r !== 'all' && <i />}
+                {r === 'all' ? 'Все' : RARITY_SHORT[r]} <small>{n}</small>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {(tab === 'weapon' || tab === 'offhand') &&
+        gear.map((g) => {
+          const owned = progress.items.includes(g.id);
+          const on = progress.weapon === g.id || progress.offhand === g.id;
+          const locked = !owned && g.minLand > reachedLand;
+          const damage = heroPower({ ...progress, [g.slot]: g.id }).damage;
+          const blocked = g.slot === 'offhand' && !!gearById(progress.weapon)?.twoHanded;
+          return (
+            <div key={g.id} className={`shop-item gear-row ${locked ? 'locked' : ''}`} style={{ ['--rc' as string]: RARITY_COLORS[g.rarity] }}>
+              <GearFace g={g} size={44} />
+              <div className="shop-name">
+                <div>{g.name}</div>
+                <div className="shop-meta" style={{ color: RARITY_COLORS[g.rarity] }}>
+                  {RARITY_NAMES[g.rarity]} · {gearText(g)}
+                </div>
+                {!on && damage > damageNow && (
+                  <div className="shop-delta up">
+                    <Swords size={11} /> урон {damageNow} → {damage}
+                  </div>
+                )}
+                {!on && blocked && <div className="shop-delta">не действует с двуручным оружием</div>}
+              </div>
+              {owned ? (
+                <button className="small-btn" disabled={on && g.slot === 'weapon'} onClick={() => setProgress(equipGear(progress, g.id))}>
+                  {on ? (g.slot === 'weapon' ? 'Надето' : 'Снять') : 'Надеть'}
+                </button>
+              ) : locked ? (
+                <span className="shop-lock">
+                  <Lock size={12} /> с {LANDS[g.minLand].name}
+                </span>
+              ) : (
+                price(g.price, () => buyGear(progress, g.id))
+              )}
+            </div>
+          );
+        })}
+      {(tab === 'weapon' || tab === 'offhand') && later && (
+        <div className="shop-later muted">
+          <Lock size={12} /> {gear.length ? 'Ещё товар' : 'Такого пока нет'}: Фёдор привезёт его с земли «{LANDS[later.minLand].name}».
+        </div>
+      )}
+      {tab === 'outfit' &&
+        ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
+          const owned = progress.items.includes(i.id);
+          return (
+            <div key={i.id} className="shop-item">
+              <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
+              <div className="shop-name">
+                <div>{i.name}</div>
+                <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
+                  {RARITY_NAMES[i.rarity]}
+                  {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
+                </div>
+              </div>
+              {owned ? (
+                <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
+                  {progress.equipped === i.id ? 'Надето' : 'Надеть'}
+                </button>
+              ) : (
+                price(i.price, () => buy(progress, i.id))
+              )}
+            </div>
+          );
+        })}
+    </Sheet>
   );
 }
 
@@ -718,67 +714,62 @@ function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: nu
   const max = Math.max(10, ...last.map((d) => d.reps));
   const total = last.reduce((s, d) => s + d.reps, 0);
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="remark">
-          <Portrait line={{ face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name }} size={52} />
-          <div>
-            <div className="level-title">Твоя сила</div>
-            <div className="muted">
-              {series.days > 0
-                ? `Серия ${series.days} ${series.days === 1 ? 'день' : series.days < 5 ? 'дня' : 'дней'}. Отдыхать можно ${REST_PER_WEEK} дня в неделю, серия не сгорит.`
-                : 'Начни серию сегодня: одна тренировка в день, отдыхать можно два дня в неделю.'}
-            </div>
+    <Sheet onClose={onClose}>
+      <div className="remark">
+        <Portrait line={{ face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name }} size={52} />
+        <div>
+          <div className="level-title">Твоя сила</div>
+          <div className="muted">
+            {series.days > 0
+              ? `Серия ${series.days} ${series.days === 1 ? 'день' : series.days < 5 ? 'дня' : 'дней'}. Отдыхать можно ${REST_PER_WEEK} дня в неделю, серия не сгорит.`
+              : 'Начни серию сегодня: одна тренировка в день, отдыхать можно два дня в неделю.'}
           </div>
         </div>
-        {EXERCISES.map((ex) => {
-          const best = progress.best[ex];
-          const first = progress.first[ex];
-          const up = best && first && best.reps > first.reps ? best.reps - first.reps : 0;
-          return (
-            <div key={ex} className="strength-row">
-              <div className="strength-ex">
-                {EXERCISE_LABELS[ex]}
-                <div className="strength-was">{first ? `первый подход: ${amountText(ex, first.reps)}` : 'ещё не делал'}</div>
-              </div>
-              {up > 0 && <span className="strength-up">+{amountText(ex, up)}</span>}
-              <span className="strength-val">{best ? amountText(ex, best.reps) : '—'}</span>
+      </div>
+      {EXERCISES.map((ex) => {
+        const best = progress.best[ex];
+        const first = progress.first[ex];
+        const up = best && first && best.reps > first.reps ? best.reps - first.reps : 0;
+        return (
+          <div key={ex} className="strength-row">
+            <div className="strength-ex">
+              {EXERCISE_LABELS[ex]}
+              <div className="strength-was">{first ? `первый подход: ${amountText(ex, first.reps)}` : 'ещё не делал'}</div>
             </div>
-          );
-        })}
-        <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
-        <div className="tabs">
-          <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>
-            2 недели
-          </button>
-          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>
-            Календарь
-          </button>
-          <button className={view === 'chart' ? 'active' : ''} onClick={() => setView('chart')}>
-            График
-          </button>
-        </div>
-        {view === 'week' && (
-          <>
-            <div className="week-bars">
-              {last.map((d, i) => (
-                <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
-              ))}
-            </div>
-            <div className="week-days">
-              {last.map((d, i) => (
-                <span key={i}>{d.day}</span>
-              ))}
-            </div>
-          </>
-        )}
-        {view === 'month' && <Calendar progress={progress} now={now} />}
-        {view === 'chart' && <RepsChart progress={progress} now={now} />}
-        <button className="link" onClick={onClose}>
-          Закрыть
+            {up > 0 && <span className="strength-up">+{amountText(ex, up)}</span>}
+            <span className="strength-val">{best ? amountText(ex, best.reps) : '—'}</span>
+          </div>
+        );
+      })}
+      <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
+      <div className="tabs">
+        <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>
+          2 недели
+        </button>
+        <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>
+          Календарь
+        </button>
+        <button className={view === 'chart' ? 'active' : ''} onClick={() => setView('chart')}>
+          График
         </button>
       </div>
-    </div>
+      {view === 'week' && (
+        <>
+          <div className="week-bars">
+            {last.map((d, i) => (
+              <div key={i} className={d.reps ? '' : 'rest'} style={{ height: `${(d.reps / max) * 100}%` }} title={`${d.reps}`} />
+            ))}
+          </div>
+          <div className="week-days">
+            {last.map((d, i) => (
+              <span key={i}>{d.day}</span>
+            ))}
+          </div>
+        </>
+      )}
+      {view === 'month' && <Calendar progress={progress} now={now} />}
+      {view === 'chart' && <RepsChart progress={progress} now={now} />}
+    </Sheet>
   );
 }
 

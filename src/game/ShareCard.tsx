@@ -12,6 +12,7 @@ import { LevelDef } from './levels';
 import { heroHands } from './power';
 import { heroLevel, heroTitle, heroXp, Progress, streak } from './progress';
 import './ShareCard.css';
+import { Sheet } from '../Sheet';
 
 // Открытка «Я победил босса»: герой в победной позе рядом с поверженным боссом, статистика и ссылка на бота.
 // 3D-сцену рисуем на невидимом холсте, потом поверх неё на 2D-холсте — фон, надписи и приглашение.
@@ -585,21 +586,16 @@ export function ShareVictory({ card }: { card: () => CardData }) {
         Поделиться победой
       </button>
       {open && (
-        <div className="sheet" onClick={() => setOpen(false)}>
-          <div className="sheet-body share-card" onClick={(e) => e.stopPropagation()}>
-            <div className="share-card-preview">{img ? <img src={img.url} alt="Открытка победы" /> : <div className="share-card-wait">{busy ? 'Рисую открытку…' : ''}</div>}</div>
-            {note && <div className="muted share-card-note">{note}</div>}
-            <button className="primary" disabled={!img} onClick={shareCard}>
-              Поделиться
-            </button>
-            <button className="secondary" onClick={sendFriend}>
-              Отправить другу
-            </button>
-            <button className="link" onClick={() => setOpen(false)}>
-              Закрыть
-            </button>
-          </div>
-        </div>
+        <Sheet onClose={() => setOpen(false)} bodyClassName="share-card">
+          <div className="share-card-preview">{img ? <img src={img.url} alt="Открытка победы" /> : <div className="share-card-wait">{busy ? 'Рисую открытку…' : ''}</div>}</div>
+          {note && <div className="muted share-card-note">{note}</div>}
+          <button className="primary" disabled={!img} onClick={shareCard}>
+            Поделиться
+          </button>
+          <button className="secondary" onClick={sendFriend}>
+            Отправить другу
+          </button>
+        </Sheet>
       )}
     </>
   );

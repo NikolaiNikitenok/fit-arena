@@ -7,6 +7,7 @@ import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { friendInviteCode, friendInviteLink, share } from '../telegram';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
+import { Sheet } from '../Sheet';
 
 const NOTE_TEXT = {
   app: 'Друг в игре — ему пришло приглашение. Ждём его на арене!',
@@ -245,35 +246,30 @@ function AddFriendSheet({ data, busy, onAdd, onClose }: { data: FriendsReply; bu
       .then(() => setShared('Код скопирован'))
       .catch(() => null);
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body add-friend" onClick={(e) => e.stopPropagation()}>
-        <h3>Добавить друга</h3>
-        <div className="muted">Отправь другу ссылку: он откроет игру и сразу окажется у тебя в друзьях.</div>
-        <button className="primary" onClick={invite}>
-          <UserPlus size={18} /> Поделиться ссылкой
-        </button>
-        {shared && <div className="muted center">{shared}</div>}
-        <div className="my-code">
-          <div>
-            <div className="muted">Мой код</div>
-            <b>{data.code}</b>
-          </div>
-          <button className="small-btn ghost" onClick={copyCode}>
-            Скопировать
-          </button>
+    <Sheet onClose={onClose} bodyClassName="add-friend">
+      <h3>Добавить друга</h3>
+      <div className="muted">Отправь другу ссылку: он откроет игру и сразу окажется у тебя в друзьях.</div>
+      <button className="primary" onClick={invite}>
+        <UserPlus size={18} /> Поделиться ссылкой
+      </button>
+      {shared && <div className="muted center">{shared}</div>}
+      <div className="my-code">
+        <div>
+          <div className="muted">Мой код</div>
+          <b>{data.code}</b>
         </div>
-        <div className="muted">Есть код друга? Введи его — друг получит заявку и примет её.</div>
-        <div className="join">
-          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Код друга" maxLength={6} autoCapitalize="characters" />
-          <button disabled={code.length !== 6 || busy} onClick={() => onAdd(code)}>
-            Добавить
-          </button>
-        </div>
-        {data.error && <div className="muted center warn">{data.error}</div>}
-        <button className="link" onClick={onClose}>
-          Закрыть
+        <button className="small-btn ghost" onClick={copyCode}>
+          Скопировать
         </button>
       </div>
-    </div>
+      <div className="muted">Есть код друга? Введи его — друг получит заявку и примет её.</div>
+      <div className="join">
+        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Код друга" maxLength={6} autoCapitalize="characters" />
+        <button disabled={code.length !== 6 || busy} onClick={() => onAdd(code)}>
+          Добавить
+        </button>
+      </div>
+      {data.error && <div className="muted center warn">{data.error}</div>}
+    </Sheet>
   );
 }

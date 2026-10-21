@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { BlockedView } from '../../shared/moderation';
 import { moderationApi } from './api';
+import { Sheet } from '../Sheet';
 
 export function BlackListRow() {
   const [open, setOpen] = useState(false);
@@ -39,34 +40,29 @@ export function BlackListSheet({ onClose }: { onClose: () => void }) {
       .finally(() => setBusy(null));
   };
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="level-title">Чёрный список</div>
-        {list === null ? (
-          <div className="muted center">Загружаю…</div>
-        ) : list === 'error' ? (
-          <div className="muted center">Чёрный список работает, когда игра открыта из Telegram</div>
-        ) : list.length === 0 ? (
-          <div className="muted center">Здесь пусто. Заблокировать игрока можно, нажав на его сообщение в чате клана или на него в списке друзей.</div>
-        ) : (
-          <div className="friend-list">
-            {list.map((b) => (
-              <div key={b.id} className="friend blocked-row">
-                <div className="friend-main">
-                  <span className="friend-name">{b.name}</span>
-                  <span className="muted">в списке с {new Date(b.at).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}</span>
-                </div>
-                <button className="small-btn ghost" disabled={busy === b.id} onClick={() => unblock(b.id)}>
-                  Разблокировать
-                </button>
+    <Sheet onClose={onClose}>
+      <div className="level-title">Чёрный список</div>
+      {list === null ? (
+        <div className="muted center">Загружаю…</div>
+      ) : list === 'error' ? (
+        <div className="muted center">Чёрный список работает, когда игра открыта из Telegram</div>
+      ) : list.length === 0 ? (
+        <div className="muted center">Здесь пусто. Заблокировать игрока можно, нажав на его сообщение в чате клана или на него в списке друзей.</div>
+      ) : (
+        <div className="friend-list">
+          {list.map((b) => (
+            <div key={b.id} className="friend blocked-row">
+              <div className="friend-main">
+                <span className="friend-name">{b.name}</span>
+                <span className="muted">в списке с {new Date(b.at).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}</span>
               </div>
-            ))}
-          </div>
-        )}
-        <button className="secondary" onClick={onClose}>
-          Готово
-        </button>
-      </div>
-    </div>
+              <button className="small-btn ghost" disabled={busy === b.id} onClick={() => unblock(b.id)}>
+                Разблокировать
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
   );
 }

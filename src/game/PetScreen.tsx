@@ -34,6 +34,7 @@ import { heroLevel, heroXp, Progress, saveProgress as save } from './progress';
 import './pets.css';
 import { PetEntry, PetFace } from './PetEntry';
 import { Canvas3D } from '../three/Canvas3D';
+import { Sheet } from '../Sheet';
 
 // Кнопка и мордочка — в лёгком модуле главного экрана; отсюда тоже доступны.
 export { PetEntry, PetFace };
@@ -107,75 +108,70 @@ export function PetScreen({ progress, setProgress, onClose }: { progress: Progre
   };
 
   return (
-    <div className="sheet" onClick={onClose}>
-      <div className="sheet-body pet-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="level-title">Питомцы</div>
-        {def && id ? (
-          <ActivePet progress={progress} def={def} hop={hop} onHop={() => setHop((h) => h + 1)} editing={editing} draft={draft} setDraft={setDraft}
-            onEdit={() => {
-              setDraft(petName(progress, def.id));
-              setEditing(true);
-            }}
-            onSave={() => {
-              // Кличку видит только сам игрок, но с матом всё равно не принимаем.
-              if (badName(draft)) return setMsg(BAD_NAME);
-              setProgress(save(renamePet(progress, def.id, draft)));
-              setEditing(false);
-            }}
-            now={now}
-          />
-        ) : (
-          <div className="pet-empty">
-            <span className="pet-entry-egg big" />
-            <div className="muted">Мастер Гром нашёл яйцо и отдаст его после твоей первой победы. Пройди первый уровень на карте.</div>
-          </div>
-        )}
-        {msg && <div className="pet-msg">{msg}</div>}
-        <div className="section-title">Все питомцы</div>
-        <div className="pet-list">
-          {PETS.map((d) => {
-            const open = petOpen(progress, d, lvl);
-            const on = d.id === id;
-            const pl = petLevel(petXp(progress, d.id)).level;
-            return (
-              <div key={d.id} className={`pet-row ${on ? 'on' : ''} ${open ? '' : 'locked'}`} style={{ ['--pc' as string]: d.color }}>
-                <PetFace id={d.id} size={46} dim={!open} />
-                <div className="pet-row-meta">
-                  <div className="pet-row-name">
-                    {open ? petName(progress, d.id) : d.kind}
-                    {fresh.includes(d.id) && !on && <span className="pet-new">новый</span>}
-                  </div>
-                  {open && (
-                    <div className="pet-row-kind">
-                      {d.kind} · ур. {pl}, {STAGE_NAMES[petStage(pl)]}
-                    </div>
-                  )}
-                  <div className="pet-row-bonus">{open ? bonusText(petBonusAt(d, pl)) : `до ${bonusText(petBonusAt(d, 20))}`}</div>
-                  <div className="muted">{open ? d.text : unlockText(progress, d, lvl)}</div>
+    <Sheet onClose={onClose} bodyClassName="pet-sheet">
+      <div className="level-title">Питомцы</div>
+      {def && id ? (
+        <ActivePet progress={progress} def={def} hop={hop} onHop={() => setHop((h) => h + 1)} editing={editing} draft={draft} setDraft={setDraft}
+          onEdit={() => {
+            setDraft(petName(progress, def.id));
+            setEditing(true);
+          }}
+          onSave={() => {
+            // Кличку видит только сам игрок, но с матом всё равно не принимаем.
+            if (badName(draft)) return setMsg(BAD_NAME);
+            setProgress(save(renamePet(progress, def.id, draft)));
+            setEditing(false);
+          }}
+          now={now}
+        />
+      ) : (
+        <div className="pet-empty">
+          <span className="pet-entry-egg big" />
+          <div className="muted">Мастер Гром нашёл яйцо и отдаст его после твоей первой победы. Пройди первый уровень на карте.</div>
+        </div>
+      )}
+      {msg && <div className="pet-msg">{msg}</div>}
+      <div className="section-title">Все питомцы</div>
+      <div className="pet-list">
+        {PETS.map((d) => {
+          const open = petOpen(progress, d, lvl);
+          const on = d.id === id;
+          const pl = petLevel(petXp(progress, d.id)).level;
+          return (
+            <div key={d.id} className={`pet-row ${on ? 'on' : ''} ${open ? '' : 'locked'}`} style={{ ['--pc' as string]: d.color }}>
+              <PetFace id={d.id} size={46} dim={!open} />
+              <div className="pet-row-meta">
+                <div className="pet-row-name">
+                  {open ? petName(progress, d.id) : d.kind}
+                  {fresh.includes(d.id) && !on && <span className="pet-new">новый</span>}
                 </div>
-                {on ? (
-                  <span className="pet-on">рядом</span>
-                ) : open ? (
-                  <button className="small-btn" onClick={() => pick(d)}>
-                    Взять
-                  </button>
-                ) : d.unlock.kind === 'shop' ? (
-                  <button className="small-btn" disabled={progress.coins < d.unlock.price} onClick={() => buy(d)}>
-                    <Coin size={13} /> {d.unlock.price}
-                  </button>
-                ) : null}
+                {open && (
+                  <div className="pet-row-kind">
+                    {d.kind} · ур. {pl}, {STAGE_NAMES[petStage(pl)]}
+                  </div>
+                )}
+                <div className="pet-row-bonus">{open ? bonusText(petBonusAt(d, pl)) : `до ${bonusText(petBonusAt(d, 20))}`}</div>
+                <div className="muted">{open ? d.text : unlockText(progress, d, lvl)}</div>
               </div>
-            );
-          })}
-        </div>
-        <div className="muted pet-help">
-          Опыт получает тот, кто рядом: 1 повтор = 1 опыт в любом режиме. Облик меняется на 7-м и 14-м уровне, бонус растёт до 20-го.
-        </div>
-        <button className="link" onClick={onClose}>
-          Закрыть
-        </button>
+              {on ? (
+                <span className="pet-on">рядом</span>
+              ) : open ? (
+                <button className="small-btn" onClick={() => pick(d)}>
+                  Взять
+                </button>
+              ) : d.unlock.kind === 'shop' ? (
+                <button className="small-btn" disabled={progress.coins < d.unlock.price} onClick={() => buy(d)}>
+                  <Coin size={13} /> {d.unlock.price}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
-    </div>
+      <div className="muted pet-help">
+        Опыт получает тот, кто рядом: 1 повтор = 1 опыт в любом режиме. Облик меняется на 7-м и 14-м уровне, бонус растёт до 20-го.
+      </div>
+    </Sheet>
   );
 }
 
