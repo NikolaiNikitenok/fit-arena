@@ -26,10 +26,16 @@ export interface Settings {
   powerRules?: number;
   // Сюжетные диалоги перед уровнями.
   story: boolean;
+  // Деревня живёт по местным часам: утро, день, вечер с фонарями, ночь.
+  dayNight: boolean;
+  // Дождь и снег, светлячки, пыль, обломки, монеты и салют в деревне.
+  villageFx: boolean;
+  // Пролёт камеры над деревней при входе.
+  flyIn: boolean;
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true };
+const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true };
 
 let current: Settings = (() => {
   try {

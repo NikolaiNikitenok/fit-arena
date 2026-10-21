@@ -7,7 +7,8 @@ import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
 import { Anim, KitPart, Look, lookOf, Prim, SIZE, wallLook } from './looks';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
-import { getSettings } from '../settings';
+import { getSettings, useSettings } from '../settings';
+import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, Windows } from './Atmosphere';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { CRY, GUARD, QUAKE, SKILLS, type SkillId } from '../../shared/heroSkills';
@@ -90,13 +91,14 @@ function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[
   return { kit: out as Record<LibName, Placed[]>, prim, anim, blobs };
 }
 
-function Rig({ ctl, sun }: { ctl: React.MutableRefObject<Ctl>; sun: React.RefObject<THREE.DirectionalLight | null> }) {
+function Rig({ ctl, sun, sunH = 1 }: { ctl: React.MutableRefObject<Ctl>; sun: React.RefObject<THREE.DirectionalLight | null>; sunH?: number }) {
   const { camera, size } = useThree();
   const last = useRef(0);
   useFrame(() => {
     const c = ctl.current;
     if (!c.zoom) c.zoom = Math.max(12, Math.min(size.width, size.height * 0.8) / 19);
     c.camera = camera;
+    if (import.meta.env.DEV) (window as unknown as { __vil?: Ctl }).__vil = c;
     const cam = camera as THREE.OrthographicCamera;
     camera.position.set(c.tx + OFF.x, OFF.y, c.tz + OFF.z);
     camera.lookAt(c.tx, 0, c.tz);
@@ -106,7 +108,7 @@ function Rig({ ctl, sun }: { ctl: React.MutableRefObject<Ctl>; sun: React.RefObj
       last.current = c.zoom;
     }
     if (sun.current) {
-      sun.current.position.set(c.tx + 12, 22, c.tz + 6);
+      sun.current.position.set(c.tx + 12 + 10 * (1 - sunH), 22 * sunH, c.tz + 6);
       sun.current.target.position.set(c.tx, 0, c.tz);
       sun.current.target.updateMatrixWorld();
     }
@@ -426,15 +428,27 @@ function HpBar({ hp, x, y, z, scale = 1 }: { hp: number; x: number; y: number; z
 /** Сцена деревни с камерой, светом и землёй. Пальцами её двигает VillageView. */
 export function Village3D(props: SceneProps) {
   const sun = useRef<THREE.DirectionalLight>(null);
+  const hemi = useRef<THREE.HemisphereLight>(null);
+  const s = useSettings();
+  // Своя деревня живёт по часам и погоде; бой и чужая деревня — всегда ясный день.
+  const live = !props.battle && !props.enemy;
+  const { sky, weather } = useSky(live, s.dayNight);
+  const fx = s.villageFx;
+  const spots = useMemo(() => lampSpots(props.buildings), [props.buildings]);
   return (
-    <Canvas3D orthographic camera={{ position: [OFF.x, OFF.y, OFF.z], zoom: 14, near: 1, far: 200 }} gl={{ antialias: true }}>
-      <color attach="background" args={['#6a9a40']} />
-      <hemisphereLight args={['#ffffff', '#5a4a38', 1.25]} />
+    <Canvas3D orthographic camera={{ position: [OFF.x, OFF.y, OFF.z], zoom: 14, near: 1, far: 260 }} gl={{ antialias: true }}>
+      <hemisphereLight ref={hemi} args={['#ffffff', '#5a4a38', 1.25]} />
       <directionalLight ref={sun} intensity={2.3} castShadow shadow-mapSize={[1024, 1024]} shadow-camera-left={-22} shadow-camera-right={22} shadow-camera-top={22} shadow-camera-bottom={-22} shadow-bias={-0.0006} />
-      <Rig ctl={props.ctl} sun={sun} />
+      <SkyLights sky={sky} sun={sun} hemi={hemi} />
+      <Rig ctl={props.ctl} sun={sun} sunH={sky.sunH} />
+      <EdgeFog color={sky.fog} />
       <Suspense fallback={null}>
         <Scene {...props} />
       </Suspense>
+      {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
+      {live && sky.lamps > 0.01 && <Windows buildings={props.buildings} on={sky.lamps} ctl={props.ctl} />}
+      {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
+      {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
     </Canvas3D>
   );
 }

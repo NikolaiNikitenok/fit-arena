@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Instanced, Placed } from '../three/Instanced';
@@ -373,23 +374,34 @@ const RIVER: [number, number][] = Array.from({ length: 40 }, (_, k) => {
   return [x, -21.5 + 2.2 * Math.sin(x / 7) + (x > 20 ? (x - 20) * 0.35 : 0)];
 });
 const LAKE = { x: -25, z: 6, r: 6.5 };
+const riverZ = (x: number) => -21.5 + 2.2 * Math.sin(x / 7) + (x > 20 ? (x - 20) * 0.35 : 0);
+// Дорога от деревни на север: вниз с обрыва, через мост за реку и в дымку.
+const BRIDGE = { x: 3, z: riverZ(3) };
+const ROAD: [number, number][] = Array.from({ length: 16 }, (_, k) => {
+  const z = -16 - k * 1.6;
+  return [BRIDGE.x + 0.9 * Math.sin(k * 0.55) * (k > 5 ? 1 : 0.3), z];
+});
+// Мельница на реке и ветряк на холме.
+const MILL = { x: -11, z: riverZ(-11) + 3.4 };
+const WINDMILL = { x: -21, z: 21 };
 const nearWater = (x: number, z: number) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 2 || RIVER.some(([rx, rz]) => Math.hypot(x - rx, z - rz) < 3.6);
+const nearRoad = (x: number, z: number) => ROAD.some(([rx, rz]) => Math.hypot(x - rx, z - rz) < 2.2) || Math.hypot(x - MILL.x, z - MILL.z) < 3 || Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 3.2;
 
 function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
   const fantasy: Placed[] = [];
   const village: Placed[] = [];
   let seed = 7;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const free = (x: number, z: number) => !(Math.abs(x) < EDGE + 1.2 && Math.abs(z) < EDGE + 1.2) && !nearWater(x, z) && !nearRoad(x, z);
   const big = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B', 'hills_A_trees', 'hills_B_trees', 'mountain_A_grass_trees', 'mountain_B_grass_trees'];
-  const n = lite ? 110 : 230;
+  const n = lite ? 90 : 170;
   const Y = LOWLAND_Y;
   for (let k = 0; k < n; k++) {
     const a = rnd() * Math.PI * 2;
     const r = 17.2 + rnd() * 22;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
-    if (Math.abs(x) < EDGE + 1.2 && Math.abs(z) < EDGE + 1.2) continue;
-    if (nearWater(x, z)) continue;
+    if (!free(x, z)) continue;
     const near = r < 22;
     const roll = rnd();
     if (near && roll < 0.35) {
@@ -401,7 +413,42 @@ function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
     const name = big[Math.floor(rnd() * (r > 28 ? big.length : 7))];
     fantasy.push({ name, x, y: Y, z, s: name.startsWith('mountain') ? 2.4 : name.startsWith('hills') ? 1.7 : 1 + rnd() * 0.6, ry: rnd() * 6.28 });
   }
+  // Рощи: густые кучки деревьев, тёмные в середине, с подлеском по краю.
+  const groves = lite ? 9 : 16;
+  for (let g = 0; g < groves; g++) {
+    const a = rnd() * Math.PI * 2;
+    const r = 20 + rnd() * 14;
+    const gx = Math.cos(a) * r;
+    const gz = Math.sin(a) * r;
+    const cnt = (lite ? 4 : 7) + Math.floor(rnd() * 5);
+    for (let k = 0; k < cnt; k++) {
+      const d = Math.sqrt(rnd()) * 3.6;
+      const b = rnd() * 6.28;
+      const x = gx + Math.cos(b) * d;
+      const z = gz + Math.sin(b) * d;
+      if (!free(x, z)) continue;
+      const edge = d > 2.6;
+      if (edge && rnd() < 0.5) village.push({ name: 'bush', x, y: Y, z, s: 2 + rnd(), ry: rnd() * 6.28 });
+      else fantasy.push({ name: ['trees_A_large', 'trees_B_large', 'tree_single_A', 'tree_single_B'][Math.floor(rnd() * 4)], x, y: Y, z, s: 1.15 + rnd() * 0.5, ry: rnd() * 6.28, tint: rnd() < 0.3 ? 'mul:.85,.95,.85' : undefined });
+    }
+  }
+  // Горы у горизонта: кольцом за лесом, тонут в дымке.
+  const peaks = lite ? 14 : 26;
+  for (let k = 0; k < peaks; k++) {
+    const a = (k / peaks) * Math.PI * 2 + rnd() * 0.2;
+    const r = 41 + rnd() * 9;
+    const name = ['mountain_A', 'mountain_C_grass', 'mountain_B_grass_trees', 'mountain_A'][Math.floor(rnd() * 4)];
+    fantasy.push({ name, x: Math.cos(a) * r, y: Y - 0.3, z: Math.sin(a) * r, s: 3.6 + rnd() * 2.2, ry: rnd() * 6.28 });
+  }
   if (!lite) for (let k = 0; k < 14; k++) village.push({ name: k % 2 ? 'hills_C_trees' : 'hill_single_C', x: (k % 2 ? 1 : -1) * (24 + rnd() * 10), y: Y, z: 14 + rnd() * 18, s: 1.6 + rnd(), ry: rnd() * 6.28 });
+  // Мост, мельница, ветряк, повозка у дороги.
+  fantasy.push({ name: 'building_bridge_A', x: BRIDGE.x, y: Y, z: BRIDGE.z, s: 2.3, ry: Math.PI / 2 });
+  fantasy.push({ name: 'building_watermill_blue', x: MILL.x, y: Y, z: MILL.z, s: 2.2, ry: Math.PI });
+  fantasy.push({ name: 'hill_single_A', x: WINDMILL.x, y: Y - 0.2, z: WINDMILL.z, s: 2.6, ry: 0.4 });
+  fantasy.push({ name: 'building_windmill_yellow', x: WINDMILL.x, y: Y + 0.75, z: WINDMILL.z, s: 1.9, ry: -0.6 });
+  fantasy.push({ name: 'wheelbarrow', x: ROAD[3][0] + 1.3, y: Y, z: ROAD[3][1], s: 1.6, ry: 0.8 });
+  fantasy.push({ name: 'sack', x: MILL.x + 1.6, y: Y, z: MILL.z + 0.8, s: 1.8, ry: 0.3 });
+  village.push({ name: 'crate_A_small', x: MILL.x + 1.9, y: Y, z: MILL.z - 0.2, s: 2, ry: 0.5 });
   // Кувшинки и камыш у воды.
   for (let k = 0; k < (lite ? 6 : 14); k++) {
     const a = rnd() * 6.28;
@@ -411,6 +458,61 @@ function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
     village.push({ name: 'waterplant_B', x: LAKE.x + Math.cos(b) * (LAKE.r + 0.2), y: Y, z: LAKE.z + Math.sin(b) * (LAKE.r + 0.2), s: 3 + rnd() * 2, ry: rnd() * 6.28 });
   }
   return { fantasy, village };
+}
+
+/** Низина: трава пятнами (светлые поляны, тёмные места под лесом), без единого шва. */
+function lowlandGeometry(enemy: boolean): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(240, 240, 120, 120);
+  g.rotateX(-Math.PI / 2);
+  const pos = g.attributes.position;
+  const col: number[] = [];
+  const base = new THREE.Color(enemy ? '#8f8b52' : '#6f9e42');
+  const light = new THREE.Color(enemy ? '#a39e60' : '#86b34c');
+  const dark = new THREE.Color(enemy ? '#76733f' : '#55833a');
+  const c = new THREE.Color();
+  for (let k = 0; k < pos.count; k++) {
+    const x = pos.getX(k);
+    const z = pos.getZ(k);
+    const n = noise(x / 7 + 40, z / 7 + 40) * 0.7 + noise(x / 2.5, z / 2.5) * 0.3;
+    c.copy(base);
+    if (n > 0.55) c.lerp(light, Math.min(1, (n - 0.55) * 3));
+    else if (n < 0.42) c.lerp(dark, Math.min(1, (0.42 - n) * 3));
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
+
+// Блики на воде: тонкие светлые полосы плывут по течению.
+const SHIMMER_VERT = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vW;
+  void main() {
+    vUv = uv;
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vW = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }
+`;
+const SHIMMER_FRAG = /* glsl */ `
+  uniform float uTime;
+  uniform float uRiver;
+  varying vec2 vUv;
+  varying vec3 vW;
+  void main() {
+    float a;
+    if (uRiver > 0.5) {
+      float s = sin(vUv.y * 1.7 - uTime * 2.2 + sin(vUv.x * 9.0 + vUv.y * 0.3) * 1.4);
+      a = smoothstep(0.86, 1.0, s) * (1.0 - abs(vUv.x - 0.5) * 1.6);
+    } else {
+      float s = sin(vW.x * 1.3 + uTime * 0.8 + sin(vW.z * 1.1 - uTime * 0.6) * 1.5) * sin(vW.z * 1.6 - uTime * 0.5);
+      a = smoothstep(0.8, 1.0, s);
+    }
+    gl_FragColor = vec4(1.0, 1.0, 1.0, a * 0.45);
+  }
+`;
+function shimmerMaterial(river: boolean) {
+  return new THREE.ShaderMaterial({ vertexShader: SHIMMER_VERT, fragmentShader: SHIMMER_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { uTime: { value: 0 }, uRiver: { value: river ? 1 : 0 } } });
 }
 
 function lakeGeometry(r: number, y: number) {
@@ -429,7 +531,7 @@ function lakeGeometry(r: number, y: number) {
   return g;
 }
 
-function Water({ enemy }: { enemy: boolean }) {
+function Water({ enemy, lite }: { enemy: boolean; lite: boolean }) {
   const geos = useMemo(
     () => ({
       bank: ribbonGeometry(RIVER, 5, LOWLAND_Y + 0.02),
@@ -440,6 +542,13 @@ function Water({ enemy }: { enemy: boolean }) {
     [],
   );
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
+  const shimmer = useMemo(() => ({ river: shimmerMaterial(true), lake: shimmerMaterial(false) }), []);
+  const road = useMemo(() => ribbonGeometry(ROAD, 1.5, LOWLAND_Y + 0.03), []);
+  useEffect(() => () => [shimmer.river, shimmer.lake, road].forEach((x) => x.dispose()), [shimmer, road]);
+  useFrame((_, dt) => {
+    shimmer.river.uniforms.uTime.value += Math.min(dt, 0.1);
+    shimmer.lake.uniforms.uTime.value += Math.min(dt, 0.1);
+  });
   const sand = enemy ? '#b9a173' : '#d2bb84';
   const water = enemy ? '#5f8f9e' : '#4fa6d8';
   return (
@@ -455,6 +564,11 @@ function Water({ enemy }: { enemy: boolean }) {
       </mesh>
       <mesh geometry={geos.lake}>
         <meshStandardMaterial color={water} roughness={0.25} metalness={0.1} side={THREE.DoubleSide} />
+      </mesh>
+      {!lite && <mesh geometry={geos.river} material={shimmer.river} position={[0, 0.02, 0]} renderOrder={1} />}
+      {!lite && <mesh geometry={geos.lake} material={shimmer.lake} position={[0, 0.02, 0]} renderOrder={1} />}
+      <mesh geometry={road} receiveShadow>
+        <meshStandardMaterial color={enemy ? '#a08860' : '#b8946a'} roughness={1} side={THREE.DoubleSide} />
       </mesh>
     </>
   );
@@ -477,17 +591,18 @@ export function Ground({ buildings, enemy, lite, grid, ghost }: GroundProps) {
   const tiles = useBoxMesh(list, !lite);
   const small = useMemo(() => bits(kinds, lite, enemy), [kinds, lite, enemy]);
   const far = useMemo(() => lowland(lite), [lite]);
+  const plain = useMemo(() => lowlandGeometry(enemy), [enemy]);
+  useEffect(() => () => plain.dispose(), [plain]);
   return (
     <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, LOWLAND_Y, 0]} receiveShadow>
-        <planeGeometry args={[240, 240]} />
-        <meshStandardMaterial color={enemy ? '#8f8b52' : '#6f9e42'} roughness={1} />
+      <mesh geometry={plain} position={[0, LOWLAND_Y, 0]} receiveShadow>
+        <meshStandardMaterial vertexColors roughness={1} />
       </mesh>
       <primitive object={tiles} />
       <BitMesh list={small.tufts} geo={tuftGeo} flat />
       <BitMesh list={small.flowers} geo={flowerGeo} />
       <BitMesh list={small.pebbles} geo={pebbleGeo} flat />
-      <Water enemy={enemy} />
+      <Water enemy={enemy} lite={lite} />
       <Instanced lib="fantasy" items={far.fantasy} shadows={!lite} />
       <Instanced lib="village" items={far.village} shadows={false} />
       {grid && <GridLines />}

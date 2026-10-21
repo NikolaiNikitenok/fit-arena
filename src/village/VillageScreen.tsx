@@ -67,6 +67,9 @@ import { itemById } from '../game/items';
 import { heroHands } from '../game/power';
 import './village.css';
 import { Sheet } from '../Sheet';
+import { BarKey, FlyApi, FlyLayer, ResBar } from './Hud';
+import { getSettings } from '../settings';
+import { CHARGE_MAX } from '../game/resources';
 
 interface Props {
   progress: Progress;
@@ -173,6 +176,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheet]);
   const ctl = useRef<Ctl>({ tx: 0, tz: 0, zoom: 0 });
+  const barEls = useRef<Partial<Record<BarKey, HTMLDivElement | null>>>({});
+  const flyRef = useRef<FlyApi>(null);
   // Журнал обороны: набеги Князя с телефона и (когда появится сервер) набеги игроков.
   const [log, setLog] = useState<DefenseEntry[]>([]);
   useEffect(() => {
@@ -396,12 +401,13 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   };
 
   // Урожай собирается тапом по пузырю над постройкой; тап по самой постройке открывает её карточку.
-  const harvest = (i: number) => {
+  const harvest = (i: number, x?: number, y?: number) => {
     const r = collect(townOf(latest.current), i, Date.now());
     if (r.got > 0) {
       commit(withTown(latest.current, r.town));
       sfx('coin');
-      flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
+      if (r.res && x != null && y != null && getSettings().villageFx) flyRef.current?.fly(r.res, x, y, r.got);
+      else flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
     } else flash('Склады полны: построй или улучши склад.');
   };
 
@@ -446,50 +452,50 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
       />
 
-      <div className="vil-top">
-        <div className="vil-res">
+      <div className="vil-top vil-hud">
+        <div className="hud-left">
+          <div className="hud-th">
+            <span className="hud-th-emblem">
+              <svg viewBox="0 0 40 44" aria-hidden="true">
+                <path d="M20 2l16 5v13c0 10-7 18-16 22C11 38 4 30 4 20V7z" fill="#2b3350" stroke="#8f98b0" strokeWidth="2.5" />
+                <path d="M20 7l11 3.5v9.5c0 7-4.8 12.8-11 15.6-6.2-2.8-11-8.6-11-15.6v-9.5z" fill="#ff8a5c" opacity=".9" />
+              </svg>
+              <b>{th}</b>
+            </span>
+            <span className="hud-th-text">
+              <b>Ратуша</b>
+              <small>деревня героя</small>
+            </span>
+          </div>
+          <div className="hud-chips">
+            <button className="hud-chip" onClick={() => setSheet('top')} aria-label="Топ деревень">
+              <span style={{ color: league.color, display: 'inline-flex' }}>
+                <Trophy size={15} />
+              </span>
+              {trophies}
+              <small>{league.name}</small>
+            </button>
+            <span className={`hud-chip ${busy >= builders ? 'empty' : ''}`} title="Свободные строители">
+              <Hammer />
+              {builders - busy}/{builders}
+            </span>
+            {shieldLeft > 0 && (
+              <span className="hud-chip mint" title="Щит: на деревню нельзя напасть">
+                <Shield size={14} />
+                {fmtTime(shieldLeft / 1000)}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="hud-right">
           {RES_KEYS.map((k) => (
-            <span key={k} className={`pill ${town.res[k] >= cap ? 'full' : ''}`}>
-              <ResIcon r={k} />
-              {fmtNum(town.res[k])}
-              <small>/{fmtNum(cap)}</small>
-            </span>
+            <ResBar key={k} k={k} value={town.res[k]} cap={cap} ref={(el) => void (barEls.current[k] = el)} />
           ))}
-        </div>
-        <div className="vil-res">
-          <span className="pill">
-            <span className="vil-charge">
-              <Bolt />
-            </span>
-            {charge}
-          </span>
-          <span className={`pill ${busy >= builders ? 'empty' : ''}`}>
-            <Hammer />
-            {builders - busy}/{builders}
-          </span>
-          <span className="pill">
-            <Shield size={15} />
-            Ратуша {th}
-          </span>
-        </div>
-        <div className="vil-res">
-          <button className="pill vil-trophies" onClick={() => setSheet('top')} aria-label="Топ деревень">
-            <span style={{ color: league.color, display: 'inline-flex' }}>
-              <Trophy size={15} />
-            </span>
-            {trophies}
-            <small>{league.name}</small>
-          </button>
-          {shieldLeft > 0 && (
-            <span className="pill vil-shield" title="Щит: на деревню нельзя напасть">
-              <Shield size={14} />
-              {fmtTime(shieldLeft / 1000)}
-            </span>
-          )}
+          <ResBar k="charge" value={charge} cap={CHARGE_MAX} ref={(el) => void (barEls.current.charge = el)} />
         </div>
       </div>
 
-      <div className="vil-side">
+      <div className="vil-side vil-hud">
         <button className="vil-round" onClick={() => setSheet('tasks')} aria-label="Задания">
           <Scroll />
           {tasksReady > 0 && <i className="vil-badge">{tasksReady}</i>}
@@ -503,6 +509,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           </button>
         )}
       </div>
+      <FlyLayer ref={flyRef} bars={barEls} />
 
       {toast && <div className="toast vil-warn">{toast}</div>}
 

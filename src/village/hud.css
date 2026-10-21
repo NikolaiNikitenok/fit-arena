@@ -1,0 +1,96 @@
+/* Панели деревни: тёмно-синяя основа, рамки из дерева и камня, «толстые» кнопки с нижней кромкой. */
+.vil-screen {
+  --wood: #7a4a2c;
+  --wood-dark: #4a2a17;
+  --wood-hi: rgba(226, 170, 120, .45);
+  --stone: #687088;
+  --stone-dark: #3a4054;
+  --stone-hi: rgba(210, 220, 240, .22);
+  --panel: linear-gradient(180deg, rgba(30, 36, 56, .94), rgba(16, 19, 31, .94));
+}
+
+/* Верх: слева — ратуша, кубки и строители, справа — полосы запасов. */
+.vil-top.vil-hud { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.hud-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; pointer-events: auto; }
+.hud-right { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+
+.hud-th { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 16px; background: var(--panel); border: 2px solid var(--wood); box-shadow: inset 0 1px 0 var(--wood-hi), 0 3px 0 var(--wood-dark), 0 6px 14px rgba(0,0,0,.3); color: var(--text); }
+.hud-th-emblem { position: relative; width: 40px; height: 44px; display: grid; place-items: center; color: #3c4560; }
+.hud-th-emblem svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hud-th-emblem b { position: relative; margin-top: -3px; font-size: 18px; font-weight: 900; color: #fff; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0,0,0,.5); }
+.hud-th-text { display: flex; flex-direction: column; line-height: 1.1; }
+.hud-th-text b { font-size: 14px; font-weight: 900; }
+.hud-th-text small { font-size: 11px; color: var(--hint); font-weight: 800; }
+
+.hud-chips { display: flex; gap: 5px; flex-wrap: wrap; max-width: 180px; }
+.hud-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px 0 8px; border-radius: 14px; background: var(--panel); border: 2px solid var(--stone); box-shadow: inset 0 1px 0 var(--stone-hi), 0 2px 0 var(--stone-dark); color: var(--text); font: inherit; font-size: 13px; font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hud-chip small { font-size: 11px; color: var(--hint); font-weight: 800; }
+.hud-chip.mint { color: var(--mint); }
+.hud-chip.empty { color: var(--rose); }
+button.hud-chip:active { transform: translateY(1px); box-shadow: inset 0 1px 0 var(--stone-hi); }
+
+/* Полоса запаса: иконка в кольце заходит на полосу слева. */
+.hud-bar { position: relative; width: 150px; height: 32px; display: flex; align-items: center; padding-left: 16px; }
+.hud-track { position: relative; flex: 1; height: 26px; border-radius: 13px; overflow: hidden; display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding: 0 9px 0 22px; background: linear-gradient(180deg, #0b0e19, #1b2034); border: 2px solid var(--stone); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), 0 2px 0 var(--stone-dark); }
+.hud-fillbox { position: absolute; left: 16px; right: 0; top: 0; bottom: 0; }
+.hud-fill { position: absolute; left: 0; top: 0; bottom: 0; min-width: 4px; border-radius: 0 11px 11px 0; transition: width .25s ease-out; }
+.hud-fill::after { content: ''; position: absolute; left: 4px; right: 4px; top: 3px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.3); }
+.hud-wood .hud-fill { background: linear-gradient(180deg, #e3a466, #a8662f); }
+.hud-stone .hud-fill { background: linear-gradient(180deg, #d6dce8, #7d879b); }
+.hud-gold .hud-fill { background: linear-gradient(180deg, #ffe08a, #e09b22); }
+.hud-charge .hud-fill { background: linear-gradient(180deg, #9cf0ff, #2fa6d9); }
+.hud-num { position: relative; font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.55); font-variant-numeric: tabular-nums; }
+.hud-num.bump { animation: hud-bump .45s ease-out; }
+.hud-track small { position: relative; font-size: 10.5px; font-weight: 800; color: rgba(255,255,255,.82); text-shadow: 0 1px 0 rgba(0,0,0,.9); }
+.hud-bar.full .hud-track small { color: #ffd6dc; }
+.hud-bar.full .hud-track { border-color: #b65366; }
+.hud-ico { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, #2c3450, #121625 75%); border: 2px solid var(--stone); box-shadow: inset 0 1px 0 var(--stone-hi), 0 2px 0 var(--stone-dark), 0 3px 8px rgba(0,0,0,.35); }
+.hud-gold .hud-ico { border-color: #b8873a; }
+.hud-charge .hud-ico { color: #8be9ff; border-color: #3c8db0; }
+@keyframes hud-bump { 0% { transform: scale(1); } 35% { transform: scale(1.28); color: #fff6c9; } 100% { transform: scale(1); } }
+
+/* Монеты, летящие в полосу. */
+.hud-fly { position: fixed; inset: 0; pointer-events: none; z-index: 8; }
+.hud-coin { position: absolute; width: 0; height: 0; animation: hud-coin 1.05s both; }
+.hud-coin > span { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; display: grid; place-items: center; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
+@keyframes hud-coin {
+  0% { transform: translate(0, 0) scale(.3); opacity: 0; animation-timing-function: cubic-bezier(.2,.8,.4,1); }
+  10% { opacity: 1; }
+  32% { transform: translate(var(--sx), var(--sy)) scale(1.15); animation-timing-function: cubic-bezier(.6,0,.9,.6); }
+  92% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.55); opacity: 0; }
+}
+.hud-plus { position: absolute; transform: translate(-50%, -100%); font-size: 22px; font-weight: 900; color: #fff3c4; text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 10px rgba(255,180,90,.6); animation: hud-plus 1.2s ease-out both; }
+@keyframes hud-plus { 0% { opacity: 0; transform: translate(-50%, -60%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -110%) scale(1.15); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -230%) scale(1); } }
+
+/* Круглые кнопки сбоку — в каменном кольце. */
+.vil-side.vil-hud { left: 10px; right: auto; top: calc(112px + var(--safe-top)); }
+.vil-round { border: 2px solid var(--stone); background: radial-gradient(circle at 50% 30%, #2a3250, #131726 75%); box-shadow: inset 0 1px 0 var(--stone-hi), 0 3px 0 var(--stone-dark), 0 6px 14px rgba(0,0,0,.3); }
+.vil-round.accent { border: 2px solid #ffc08a; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 3px 0 #a8461f, 0 6px 14px rgba(255,122,89,.3); }
+.vil-round:active { transform: translateY(2px); box-shadow: inset 0 1px 0 var(--stone-hi), 0 1px 0 var(--stone-dark); }
+
+/* Нижние кнопки: толстые, с деревянной рамкой и кромкой снизу — нажимаются как настоящие. */
+.vil-dock-btn { border: 2px solid var(--wood); background: var(--panel); box-shadow: inset 0 1px 0 var(--wood-hi), 0 4px 0 var(--wood-dark), 0 8px 18px rgba(0,0,0,.35); text-shadow: 0 1px 0 rgba(0,0,0,.6); transition: transform .08s, box-shadow .08s; }
+.vil-dock-btn .icon { filter: drop-shadow(0 1px 0 rgba(0,0,0,.5)); }
+.vil-dock-btn:active { transform: translateY(3px); box-shadow: inset 0 1px 0 var(--wood-hi), 0 1px 0 var(--wood-dark); }
+.vil-dock-btn.accent { border: 2px solid #ffc08a; text-shadow: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 4px 0 #a8461f, 0 10px 22px rgba(255,122,89,.32); }
+.vil-dock-btn.accent:active { box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 1px 0 #a8461f; }
+.vil-army-n { background: rgba(255,255,255,.1); border: 1px solid var(--stone); }
+
+/* Карточка постройки и шторки деревни — в деревянной рамке. */
+.vil-card { background: var(--panel); border: 2px solid var(--wood); box-shadow: inset 0 1px 0 var(--wood-hi), 0 4px 0 var(--wood-dark), 0 12px 30px rgba(0,0,0,.4); }
+.vil-card .primary { box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 3px 0 #a8461f; }
+.vil-card .primary:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 1px 0 #a8461f; }
+.vil-card .secondary { border: 2px solid var(--stone); box-shadow: inset 0 1px 0 var(--stone-hi), 0 3px 0 var(--stone-dark); }
+.vil-screen .sheet-body { border-top: 3px solid var(--wood); box-shadow: inset 0 1px 0 var(--wood-hi), 0 -8px 30px rgba(0,0,0,.35); background: linear-gradient(180deg, #1b2032, var(--surface) 140px); }
+.vil-screen .sheet-top { background: transparent; }
+.vil-screen .sheet-body .section-title { padding-bottom: 6px; border-bottom: 2px solid rgba(201,147,102,.22); }
+.vil-screen .vil-shop, .vil-screen .vil-camp, .vil-screen .vil-task { border: 1px solid rgba(201,147,102,.16); box-shadow: 0 2px 0 rgba(0,0,0,.25); }
+
+/* Надпись-подсказка о бонусе — на деревянной табличке. */
+.vil-bonus { align-self: center; padding: 3px 12px; border-radius: 10px; background: rgba(40,24,14,.72); border: 1px solid rgba(201,147,102,.35); }
+
+@media (max-width: 360px) {
+  .hud-bar { width: 132px; }
+  .hud-chips { max-width: 150px; }
+}

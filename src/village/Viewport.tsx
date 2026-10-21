@@ -6,7 +6,7 @@ export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
   // Тап по земле: клетка (дробная).
   onTap?: (x: number, y: number) => void;
   // Тап по пузырю урожая над постройкой i.
-  onBubble?: (i: number) => void;
+  onBubble?: (i: number, clientX: number, clientY: number) => void;
   // Перетаскивание призрака: новый левый верхний угол.
   onGhost?: (x: number, y: number) => void;
 }
@@ -69,7 +69,7 @@ export function Viewport(props: ViewportProps) {
         pts.current.delete(e.pointerId);
         if (pts.current.size === 0 && g.current.moved < 8 && !g.current.ghost) {
           const hit = el.current && props.onBubble && props.bubbles ? bubbleAt(ctl, el.current, e.clientX, e.clientY, props.buildings, props.bubbles) : null;
-          if (hit != null) return props.onBubble?.(hit);
+          if (hit != null) return props.onBubble?.(hit, e.clientX, e.clientY);
           const c = at(e);
           if (c) props.onTap?.(c.x, c.y);
         }
