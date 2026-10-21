@@ -38,7 +38,7 @@ const CLIPS: Record<CharAnim, string> = {
 const ONCE: CharAnim[] = ['jump', 'attack', 'punch', 'cast', 'hit', 'death', 'awaken', 'interact', 'block', 'shoot', 'chop2'];
 
 // Какое снаряжение из набора видно у каждого героя (остальные предметы набора прячем).
-const GEAR: Partial<Record<CharName, string[]>> = {
+export const GEAR: Partial<Record<CharName, string[]>> = {
   Knight: ['1H_Sword', 'Round_Shield', 'Knight_Helmet', 'Knight_Cape'],
   Barbarian: ['1H_Axe', 'Barbarian_Round_Shield', 'Barbarian_Hat', 'Barbarian_Cape'],
   Mage: ['2H_Staff', 'Mage_Hat', 'Mage_Cape'],

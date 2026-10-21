@@ -86,6 +86,15 @@ describe('движения отрядов в бою', () => {
     expect(wind.t).toBeCloseTo(0.45 - 0.2 * 1.07);
   });
 
+  it('подрывник замахивается бомбой на последних шагах', () => {
+    const bomber = { ...base, every: 0, moving: true };
+    // Далеко от стены — бежит.
+    expect(troopPose({ ...bomber, blastIn: 2 }).clip).toBe('run');
+    // Замах начинается так, чтобы удар пришёлся на взрыв.
+    expect(troopPose({ ...bomber, blastIn: 0.3 })).toEqual({ clip: 'attack', t: 0.45 - 0.3 });
+    expect(troopPose({ ...bomber, blastIn: 0 })).toEqual({ clip: 'attack', t: 0.45 });
+  });
+
   it('кадры по кругу и с остановкой', () => {
     expect(frameOf(0, 1, 8, true)).toBe(0);
     expect(frameOf(0.99, 1, 8, true)).toBe(7);

@@ -1,7 +1,7 @@
-import { Suspense, useRef } from 'react';
+import { createContext, Suspense, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { cellAt, Ctl, pan, SceneProps, Village3D } from './Village3D';
 
-interface Props extends Omit<SceneProps, 'ctl'> {
+export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
   ctl: React.MutableRefObject<Ctl>;
   // Тап по земле: клетка (дробная).
   onTap?: (x: number, y: number) => void;
@@ -10,7 +10,7 @@ interface Props extends Omit<SceneProps, 'ctl'> {
 }
 
 // Пальцами: один — двигать карту (или призрак постройки, если начали на нём), два — масштаб.
-export function Viewport(props: Props) {
+export function Viewport(props: ViewportProps) {
   const el = useRef<HTMLDivElement>(null);
   const pts = useRef(new Map<number, { x: number; y: number }>());
   const g = useRef<{ moved: number; ghost: { ox: number; oy: number } | null; pinch: number }>({ moved: 0, ghost: null, pinch: 0 });
@@ -78,4 +78,51 @@ export function Viewport(props: Props) {
       </Suspense>
     </div>
   );
+}
+
+// Одна 3D-сцена на деревню и бой. Раньше бой открывал свой холст: старый WebGL гасился, новый заново
+// собирал все шейдеры и грузил модели — экран замирал на старте набега. Теперь холст один: экран деревни
+// держит его на месте (ViewHost), а бой лишь подменяет, что в нём показано (useHostedView).
+
+interface ViewSlot {
+  props: ViewportProps | null;
+  subs: Set<() => void>;
+}
+const ViewCtx = createContext<ViewSlot | null>(null);
+
+export function useViewSlot(): ViewSlot {
+  return useState<ViewSlot>(() => ({ props: null, subs: new Set() }))[0];
+}
+
+/**
+ * Холст на постоянном месте. С props — показывает их (экран деревни), без — что прислал бой
+ * (до первой присылки — последнее показанное, чтобы холст не пропадал ни на кадр).
+ */
+export function ViewHost({ slot, props, children }: { slot: ViewSlot; props?: ViewportProps; children?: React.ReactNode }) {
+  const sent = useSyncExternalStore(
+    (cb) => {
+      slot.subs.add(cb);
+      return () => slot.subs.delete(cb);
+    },
+    () => slot.props,
+  );
+  if (props) slot.props = props;
+  const shown = props ?? sent;
+  return (
+    <ViewCtx.Provider value={slot}>
+      {shown && <Viewport {...shown} />}
+      {children}
+    </ViewCtx.Provider>
+  );
+}
+
+/** Показать сцену в общем холсте; вне ViewHost вернёт свой Viewport. */
+export function useHostedView(props: ViewportProps): React.ReactNode {
+  const slot = useContext(ViewCtx);
+  useLayoutEffect(() => {
+    if (!slot) return;
+    slot.props = props;
+    for (const f of slot.subs) f();
+  });
+  return slot ? null : <Viewport {...props} />;
 }

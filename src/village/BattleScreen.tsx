@@ -6,8 +6,9 @@ import { Coin, Cross } from '../icons';
 import { RES_COLORS, Star, Stone, Wood } from './icons';
 import { fmtNum } from './state';
 import type { BattleView, Ctl, ViewBld } from './Village3D';
-import { Viewport } from './Viewport';
-import type { HeroLook } from './troops3d';
+import { useHostedView } from './Viewport';
+import { DEFAULT_HERO, type HeroLook } from './troops3d';
+import { HeroThumb, TroopThumb } from './TroopInfo';
 
 export const ResIcon = ({ r, size = 15 }: { r: keyof Res; size?: number }) => (
   <span style={{ color: RES_COLORS[r], display: 'inline-flex' }}>{r === 'wood' ? <Wood size={size} /> : r === 'stone' ? <Stone size={size} /> : <Coin size={size} />}</span>
@@ -154,9 +155,11 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
     setTick((t) => t + 1);
   };
 
+  const viewport = useHostedView({ ctl, buildings, enemy, battle: view, hp, heroLook, foe: mode === 'replay', noDeploy: showZone || (mode === 'attack' && !started.current) ? zone : undefined, onTap: tap });
+
   return (
-    <div className="vil-screen battle">
-      <Viewport ctl={ctl} buildings={buildings} enemy={enemy} battle={view} hp={hp} heroLook={heroLook} foe={mode === 'replay'} noDeploy={showZone || (mode === 'attack' && !started.current) ? zone : undefined} onTap={tap} />
+    <div className="vil-battle-ui">
+      {viewport}
       <div className="vil-top">
         <div className="vil-battle-head">
           <div>
@@ -199,10 +202,11 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
           )}
           <div className="vil-troops">
             {ORDER.filter((u) => (u === 'hero' ? army.hero : army.troops[u as keyof typeof TROOPS])).map((u) => (
-              <button key={u} className={`vil-troop ${unit === u ? 'active' : ''} ${(s.left[u] ?? 0) <= 0 ? 'empty' : ''}`} onClick={() => setUnit(u)} disabled={(s.left[u] ?? 0) <= 0}>
-                <span className={`vil-unit-dot u-${u}`} />
-                <span>{UNIT_NAMES[u]}</span>
-                <b>×{s.left[u] ?? 0}</b>
+              <button key={u} className={`vil-troop ${unit === u ? 'active' : ''} ${(s.left[u] ?? 0) <= 0 ? 'empty' : ''}`} onClick={() => setUnit(u)} disabled={(s.left[u] ?? 0) <= 0} aria-label={`${UNIT_NAMES[u]}: ${s.left[u] ?? 0}`}>
+                <span className={`vil-troop-face u-${u}`}>{u === 'hero' ? <HeroThumb look={heroLook ?? DEFAULT_HERO} size={52} /> : <TroopThumb id={u} size={52} level={army.lv?.[u]} still />}</span>
+                <b className="vil-troop-n">×{s.left[u] ?? 0}</b>
+                {u !== 'hero' && (army.lv?.[u] ?? 1) > 1 && <span className="vil-troop-lv">{army.lv?.[u]}</span>}
+                <span className="vil-troop-name">{UNIT_NAMES[u]}</span>
               </button>
             ))}
           </div>

@@ -11,7 +11,7 @@ import { getSettings } from '../settings';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { RES_COLORS } from './icons';
-import { HealerAuras, HeroLook, HeroTroop, Troops, UnitBars } from './troops3d';
+import { DEFAULT_HERO, HealerAuras, HeroLook, HeroTroop, Troops, UnitBars } from './troops3d';
 
 // Деревня в 3D: изометрия ортогональной камерой, постройки KayKit инстансами, стены собираются
 // из секций между соседними клетками. Та же сцена показывает бой: отряды — персонажи KayKit
@@ -286,9 +286,6 @@ function NoDeploy({ cells }: { cells: number[] }) {
   return <primitive object={mesh} />;
 }
 
-// Герой чужого нападающего (повтор набега): его снаряжения мы не знаем.
-const DEFAULT_HERO: HeroLook = { model: 'Knight', glow: '#ff8a5c', tint: 'mul:0.95,0.85,0.8' };
-
 export interface SceneProps {
   buildings: ViewBld[];
   enemy?: boolean;
@@ -341,20 +338,11 @@ function Scene(props: SceneProps) {
         Object.entries(props.hp).map(([id, hp]) => {
           const b = byId.get(Number(id));
           return (
-            b && (
-              <group key={`hp${b.i}`} position={[W(b.x + SIZE[b.t] / 2), top(b) - 0.9, W(b.y + SIZE[b.t] / 2)]} rotation={[0, Math.PI / 4, 0]}>
-                <mesh renderOrder={4}>
-                  <planeGeometry args={[1.1, 0.16]} />
-                  <meshBasicMaterial color="#1b1d26" depthTest={false} />
-                </mesh>
-                <mesh position={[-0.55 + 0.55 * hp, 0, 0.001]} scale={[hp, 1, 1]} renderOrder={5}>
-                  <planeGeometry args={[1.1, 0.12]} />
-                  <meshBasicMaterial color={hp > 0.5 ? '#6ee7b7' : hp > 0.25 ? '#ffd27a' : '#ff6b81'} depthTest={false} />
-                </mesh>
-              </group>
-            )
+            b && <HpBar key={`hp${b.i}`} hp={hp} x={W(b.x + SIZE[b.t] / 2)} y={top(b) - 0.9} z={W(b.y + SIZE[b.t] / 2)} />
           );
         })}
+      {/* Невидимая (сжатая в точку) полоска с начала боя: её шейдер собран до первого попадания. */}
+      {props.battle && <HpBar hp={1} x={0} y={0} z={0} scale={1e-4} />}
       {props.noDeploy && <NoDeploy cells={props.noDeploy} />}
       {props.battle && (
         // Персонажи грузятся отдельно: поле боя видно сразу.
@@ -371,6 +359,22 @@ function Scene(props: SceneProps) {
       {props.battle && <UnitBars view={props.battle} foe={!!props.foe} />}
       {props.battle && <Effects view={props.battle} />}
     </>
+  );
+}
+
+/** Полоска здоровья постройки. */
+function HpBar({ hp, x, y, z, scale = 1 }: { hp: number; x: number; y: number; z: number; scale?: number }) {
+  return (
+    <group position={[x, y, z]} rotation={[0, Math.PI / 4, 0]} scale={scale}>
+      <mesh renderOrder={4}>
+        <planeGeometry args={[1.1, 0.16]} />
+        <meshBasicMaterial color="#1b1d26" depthTest={false} />
+      </mesh>
+      <mesh position={[-0.55 + 0.55 * hp, 0, 0.001]} scale={[hp, 1, 1]} renderOrder={5}>
+        <planeGeometry args={[1.1, 0.12]} />
+        <meshBasicMaterial color={hp > 0.5 ? '#6ee7b7' : hp > 0.25 ? '#ffd27a' : '#ff6b81'} depthTest={false} />
+      </mesh>
+    </group>
   );
 }
 

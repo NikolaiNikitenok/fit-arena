@@ -58,7 +58,7 @@ import { fmtNum, fmtTime, foundTown, hasTown, tickTown, townOf, unpackBase, with
 import { claimTask, openTasks, taskDone, taskProgress, TASKS } from './tasks';
 import type { DefenseEntry } from './types';
 import type { Ctl, ViewBld } from './Village3D';
-import { Viewport } from './Viewport';
+import { useViewSlot, ViewHost } from './Viewport';
 import { TroopSheet, TroopThumb } from './TroopInfo';
 import { LabSheet } from './LabSheet';
 import { cancelResearch, finishResearchNow, labLevel, RESEARCH_ERRORS, startResearch, troopLevel, troopLevels } from '../../shared/villageLab';
@@ -105,6 +105,13 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const [sheet, setSheet] = useState<Sheet>(null);
   const [cat, setCat] = useState<Category>('economy');
   const [battle, setBattleState] = useState<Battle | null>(null);
+  // Холст деревни и боя один и тот же: набег открывается без нового WebGL.
+  const viewSlot = useViewSlot();
+  const inBattle = (el: ReactNode) => (
+    <div className="vil-screen battle">
+      <ViewHost slot={viewSlot}>{el}</ViewHost>
+    </div>
+  );
   const [toast, setToast] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Line[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -334,12 +341,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       const c = battle.camp;
       const repeat = (v.camps?.[c.id] ?? 0) > 0;
       const loot = repeat ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot;
-      return <BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />;
+      return inBattle(<BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />);
     }
     if (battle.kind === 'pvp') {
       const t = battle.target;
       const offer = t.offer;
-      return (
+      return inBattle(
         <BattleScreen
           key={t.token ?? t.id}
           heroLook={heroLook}
@@ -367,11 +374,11 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           onSkip={battle.revengeOf || searching ? undefined : () => void startPvp()}
           onFinish={finish}
           onClose={() => setBattle(null)}
-        />
+        />,
       );
     }
     const e = battle.entry;
-    return <BattleScreen title={e.who} base={unpackBase(e.base ?? [])} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />;
+    return inBattle(<BattleScreen title={e.who} base={unpackBase(e.base ?? [])} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />);
   }
 
   const tap = (x: number, y: number) => {
@@ -433,7 +440,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
 
   return (
     <div className="vil-screen">
-      <Viewport ctl={ctl} buildings={shown} selected={selected ?? undefined} ghost={placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null} grid={!!placing} bubbles={placing ? [] : bubbles} labels={placing ? [] : labels} onTap={tap} onGhost={(x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) })} />
+      <ViewHost
+        slot={viewSlot}
+        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
+      />
 
       <div className="vil-top">
         <div className="vil-res">

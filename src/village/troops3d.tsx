@@ -6,7 +6,7 @@ import { Character, type CharacterProps, type CharAnim } from '../three/Characte
 import { parseTint } from '../three/Instanced';
 import { ANIMS_URL, CharName, charUrl, preloadGltf, useGltf } from '../three/kit';
 import { GRID } from '../../shared/village';
-import { DT, HEAL_RADIUS, SimUnit, TPS, TroopId, UnitKind } from '../../shared/villageBattle';
+import { DT, HEAL_RADIUS, rectDist, SimUnit, TPS, TroopId, UnitKind } from '../../shared/villageBattle';
 import { faceTo, frameOf, TroopClip, troopPose, turnToward } from './troopPose';
 import type { BattleView } from './Village3D';
 
@@ -38,7 +38,7 @@ export const TROOP_RIGS: Record<TroopId, TroopRig> = {
   warrior: { model: 'Knight', gear: ['1H_Sword', 'Round_Shield', 'Knight_Helmet', 'Knight_Cape'], height: 1.3, clips: { run: 'Running_A', attack: '1H_Melee_Attack_Chop', idle: 'Idle', death: 'Death_A' }, impact: 0.45 },
   archer: { model: 'Rogue', gear: ['1H_Crossbow', 'Rogue_Cape'], height: 1.25, tint: 'mul:0.9,1.1,0.85', clips: { run: 'Running_A', attack: '1H_Ranged_Shoot', idle: 'Idle', death: 'Death_A' }, impact: 0.3 },
   giant: { model: 'Barbarian', gear: ['2H_Axe', 'Barbarian_Hat', 'Barbarian_Cape'], height: 2.1, clips: { run: 'Walking_A', attack: '2H_Melee_Attack_Chop', idle: 'Idle', death: 'Death_A' }, impact: 0.5 },
-  wallbreaker: { model: 'Skeleton_Minion', gear: [], height: 1.05, bomb: true, clips: { run: 'Running_A', idle: 'Idle', death: 'Death_A' } },
+  wallbreaker: { model: 'Skeleton_Minion', gear: [], height: 1.05, bomb: true, clips: { run: 'Running_A', attack: '1H_Melee_Attack_Chop', idle: 'Idle', death: 'Death_A' }, impact: 0.42 },
   healer: { model: 'Mage', gear: ['2H_Staff', 'Mage_Cape'], height: 1.3, tint: 'mul:1.15,1.12,1.05', glow: '#8affc1', fly: 0.85, clips: { idle: 'Idle', cast: 'Spellcasting', death: 'Death_A' } },
 };
 /**
@@ -131,6 +131,18 @@ export function bombGroup(): THREE.Group {
 
 /** Запекает движения отряда в готовые позы. */
 export function bakeTroop(rig: TroopRig, char: THREE.Object3D, animations: THREE.AnimationClip[], lite: boolean, level?: number): BakedTroop {
+  const steps = bakeSteps(rig, char, animations, lite, level);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * То же по шагам: после каждой позы можно отдать кадр. Бой открывается сразу, а позы готовятся
+ * понемногу, пока игрок осматривает базу, — без замирания экрана на запекании.
+ */
+export function* bakeSteps(rig: TroopRig, char: THREE.Object3D, animations: THREE.AnimationClip[], lite: boolean, level?: number): Generator<void, BakedTroop> {
   const root = cloneSkinned(char) as THREE.Group;
   if (rig.bomb) {
     const hand = root.getObjectByName('handslotr');
@@ -283,6 +295,7 @@ export function bakeTroop(rig: TroopRig, char: THREE.Object3D, animations: THREE
       const t = LOOPS[key] ? (i / n) * dur : (i / (n - 1)) * dur * 0.999;
       mixer.setTime(t);
       frames.push(pose());
+      yield;
     }
     clips[key] = { dur, frames };
   }
@@ -345,6 +358,13 @@ function healingNow(v: BattleView, u: SimUnit): boolean {
   return false;
 }
 
+/** Подрывник: сколько секунд боя ему бежать до цели (до взрыва). */
+function blastIn(v: BattleView, u: SimUnit, x: number, y: number): number | undefined {
+  const b = v.s.buildings[u.block >= 0 ? u.block : u.target];
+  if (!b || !b.alive) return undefined;
+  return Math.max(0, rectDist(b, x, y) - u.def.range) / u.def.speed;
+}
+
 interface Pool {
   id: TroopId;
   baked: BakedTroop;
@@ -353,7 +373,39 @@ interface Pool {
   list: THREE.InstancedMesh[];
 }
 
-/** Обычные отряды: запечённые позы инстансами. */
+// Сколько миллисекунд кадра можно отдать подготовке поз и сколько новых поз за кадр показывать видеокарте.
+const BAKE_BUDGET_MS = 6;
+const WARM_PER_FRAME = 10;
+
+/** Готовит пул поз отряда: InstancedMesh на каждый кадр каждого движения. */
+function makePool(id: TroopId, baked: BakedTroop, cap: number): Pool {
+  const meshes = new Map<string, THREE.InstancedMesh>();
+  const list: THREE.InstancedMesh[] = [];
+  for (const [clip, c] of Object.entries(baked.clips) as [TroopClip, BakedClip][]) {
+    c.frames.forEach((g, i) => {
+      const m = new THREE.InstancedMesh(g, baked.materials.length > 1 ? baked.materials : baked.materials[0], cap);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.setColorAt(0, new THREE.Color(1, 1, 1));
+      m.count = 0;
+      m.visible = false;
+      m.castShadow = true;
+      m.frustumCulled = false;
+      meshes.set(`${clip}${i}`, m);
+      list.push(m);
+    });
+  }
+  return { id, baked, meshes, list };
+}
+
+/**
+ * Обычные отряды: запечённые позы инстансами.
+ *
+ * «Рывок на старте» был отсюда: при входе в бой все позы всех отрядов запекались разом (сотни мс),
+ * а при первой высадке видеокарта впервые получала десятки новых поз и собирала для них шейдеры.
+ * Теперь позы запекаются по кусочку в каждом кадре (не дольше BAKE_BUDGET_MS), а готовые сразу
+ * «прогреваются»: показываются видеокарте пустыми (0 экземпляров) — шейдер собран, геометрия
+ * загружена, и первая высадка уже ничего не ждёт.
+ */
 export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<BattleView | null>; ids: Partial<Record<TroopId, number>>; lv?: Partial<Record<TroopId, number>>; lite: boolean }) {
   const anims = useGltf(ANIMS_URL);
   const knight = useGltf(charUrl('Knight'));
@@ -361,55 +413,77 @@ export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<B
   const barb = useGltf(charUrl('Barbarian'));
   const minion = useGltf(charUrl('Skeleton_Minion'));
   const mage = useGltf(charUrl('Mage'));
+  const group = useRef<THREE.Group>(null);
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const key = (Object.keys(TROOP_RIGS) as TroopId[]).map((id) => `${id}:${ids[id] ?? 0}:${lv?.[id] ?? 1}`).join(',');
-  const pools = useMemo(() => {
+  // Пулы появляются по мере готовности; job — оставшаяся подготовка, warm — позы, которые видеокарта ещё не видела.
+  const prep = useMemo(() => {
     const scenes: Partial<Record<CharName, THREE.Object3D>> = { Knight: knight.scene, Rogue: rogue.scene, Barbarian: barb.scene, Skeleton_Minion: minion.scene, Mage: mage.scene };
-    const out: Pool[] = [];
-    const t0 = performance.now();
-    for (const id of Object.keys(TROOP_RIGS) as TroopId[]) {
-      const cap = Math.min(140, ids[id] ?? 0);
-      if (cap <= 0) continue;
-      const rig = TROOP_RIGS[id];
-      const baked = bakeTroop(rig, scenes[rig.model]!, anims.animations, lite, lv?.[id]);
-      const meshes = new Map<string, THREE.InstancedMesh>();
-      const list: THREE.InstancedMesh[] = [];
-      for (const [clip, c] of Object.entries(baked.clips) as [TroopClip, BakedClip][]) {
-        c.frames.forEach((g, i) => {
-          const m = new THREE.InstancedMesh(g, baked.materials.length > 1 ? baked.materials : baked.materials[0], cap);
-          m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-          m.setColorAt(0, new THREE.Color(1, 1, 1));
-          m.count = 0;
-          m.visible = false;
-          m.castShadow = true;
-          m.frustumCulled = false;
-          meshes.set(`${clip}${i}`, m);
-          list.push(m);
-        });
+    const pools: Pool[] = [];
+    const byId = new Map<TroopId, Pool>();
+    const warm: THREE.InstancedMesh[] = [];
+    const todo = (Object.keys(TROOP_RIGS) as TroopId[]).filter((id) => Math.min(140, ids[id] ?? 0) > 0);
+    function* job(): Generator<void, void> {
+      for (const id of todo) {
+        const rig = TROOP_RIGS[id];
+        const baked: BakedTroop = yield* bakeSteps(rig, scenes[rig.model]!, anims.animations, lite, lv?.[id]);
+        const pool = makePool(id, baked, Math.min(140, ids[id] ?? 0));
+        pools.push(pool);
+        byId.set(id, pool);
       }
-      out.push({ id, baked, meshes, list });
     }
-    if (out.length) (window as unknown as { __troopBakeMs?: number }).__troopBakeMs = Math.round(performance.now() - t0);
-    return out;
+    return { pools, byId, warm, job: job(), spent: 0, added: 0, done: !todo.length };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, lite, anims, knight, rogue, barb, minion, mage]);
-  const byId = useMemo(() => new Map(pools.map((p) => [p.id, p])), [pools]);
   useEffect(
     () => () => {
-      for (const p of pools) {
-        for (const m of p.list) m.dispose();
+      for (const p of prep.pools) {
+        for (const m of p.list) {
+          m.removeFromParent();
+          m.dispose();
+        }
         disposeBaked(p.baked);
       }
     },
-    [pools],
+    [prep],
   );
+  const { pools, byId } = prep;
 
   const vis = useRef(new Map<number, Vis>());
 
   const tmp = useMemo(() => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), p: new THREE.Vector3(), s: new THREE.Vector3(), c: new THREE.Color() }), []);
   const last = useRef(performance.now());
   useFrame(() => {
-    const v = view.current;
     const now = performance.now();
+    if (!prep.done) {
+      // Запекаем, пока не вышло время кадра. Если отряд уже высажен, а его позы не готовы, — доделываем
+      // сразу (так бывает, только если высадить в первую секунду боя).
+      const v0 = view.current;
+      const urgent = !!v0 && v0.s.units.some((u) => u.u !== 'hero' && !prep.byId.has(u.u as TroopId));
+      while (urgent || performance.now() - now < BAKE_BUDGET_MS) {
+        if (prep.job.next().done) {
+          prep.done = true;
+          break;
+        }
+        if (urgent && !v0!.s.units.some((u) => u.u !== 'hero' && !prep.byId.has(u.u as TroopId))) break;
+      }
+      prep.spent += performance.now() - now;
+      // Сколько всего ушло на запекание (для замеров).
+      if (prep.done) (window as unknown as { __troopBakeMs?: number }).__troopBakeMs = Math.round(prep.spent);
+    }
+    for (; prep.added < pools.length && group.current; prep.added++) {
+      const pool = pools[prep.added];
+      for (const m of pool.list) group.current.add(m);
+      // Шейдер отряда собираем в фоне (где браузер умеет — параллельно), потом показываем позы видеокарте.
+      const first = pool.list[0];
+      first.visible = true;
+      const ready = () => prep.warm.push(...pool.list);
+      gl.compileAsync(first, camera, scene).then(ready, ready);
+      first.visible = false;
+    }
+    const v = view.current;
     const dt = Math.min(0.1, (now - last.current) / 1000);
     last.current = now;
     for (const p of pools) for (const m of p.list) m.count = 0;
@@ -464,10 +538,11 @@ export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<B
         alive: u.alive,
         moving: moving && !healer,
         sinceHit: (t - u.hit * DT),
-        every: u.def.every,
+        every: u.def.splash ? 0 : u.def.every,
         attackDur: pool.baked.clips.attack?.dur ?? 0,
         impact: (pool.baked.clips.attack?.dur ?? 0) * (TROOP_RIGS[u.u as TroopId].impact ?? 0.4),
         healing: healer && u.alive && healingNow(v, u),
+        blastIn: u.def.splash && u.alive ? blastIn(v, u, x, y) : undefined,
         deadFor: o.deadAt >= 0 ? (now - o.deadAt) / 1000 : 0,
         clock: healer ? t + u.n * 0.21 : moving ? o.run * (pool.baked.clips.run?.dur ?? 1) : t + u.n * 0.29,
       });
@@ -507,18 +582,18 @@ export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<B
           if (m.instanceColor) m.instanceColor.needsUpdate = true;
         }
       }
+    // Прогрев: несколько новых поз показываем пустыми — шейдер и геометрия будут готовы до первой встречи.
+    for (const m of prep.warm.splice(0, WARM_PER_FRAME)) m.visible = true;
     frameCost.note(performance.now() - now);
   });
 
-  return (
-    <>
-      {pools.map((p) => p.list.map((m) => <primitive key={m.uuid} object={m} />))}
-    </>
-  );
+  return <group ref={group} />;
 }
 
 export type HeroLook = Pick<CharacterProps, 'model' | 'tint' | 'glow' | 'hands'>;
 export const HERO_HEIGHT = 1.6;
+// Герой без своего снаряжения (повтор чужого набега).
+export const DEFAULT_HERO: HeroLook = { model: 'Knight', glow: '#ff8a5c', tint: 'mul:0.95,0.85,0.8' };
 
 /** Герой: настоящий персонаж с костями, в своём снаряжении. */
 export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleView | null>; look: HeroLook }) {
@@ -527,7 +602,7 @@ export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleV
   const [anim, setAnim] = useState<CharAnim>('idle');
   const [pulse, setPulse] = useState(0);
   const [hit, setHit] = useState(0);
-  const st = useRef({ hit: -100, hp: -1, face: 0, gone: 0, flashAt: 0, deadAt: -1 });
+  const st = useRef({ hit: -100, hp: -1, face: 0, gone: 0, flashAt: 0, deadAt: -1, warm: 0 });
   // Масштаб до роста HERO_HEIGHT по модели героя.
   const model = useGltf(charUrl(look.model));
   const scale = useMemo(() => {
@@ -538,14 +613,17 @@ export function HeroTroop({ view, look }: { view: React.MutableRefObject<BattleV
     const v = view.current;
     const u = v?.s.units.find((w) => w.u === 'hero');
     if (!g.current) return;
+    const o = st.current;
     if (!v || !u) {
-      g.current.visible = false;
+      // Пока героя не высадили — первые кадры рисуем его под землёй: шейдер с костями собран заранее.
+      const w = o.warm++ < 20;
+      g.current.visible = w;
+      if (w) g.current.position.set(0, -30, 0);
       return;
     }
     const now = performance.now();
     const { a } = simTime(v, now);
     const [x, y] = lerpUnit(v, u, a);
-    const o = st.current;
     if (o.hp < 0) o.face = faceTo(GRID / 2 - x, GRID / 2 - y);
     const prev = v.prev.get(u.n);
     const moving = u.alive && !!prev && (Math.abs(prev[0] - u.x) > 1e-4 || Math.abs(prev[1] - u.y) > 1e-4) && !v.s.done;

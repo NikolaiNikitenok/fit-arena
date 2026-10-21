@@ -1,13 +1,15 @@
 import { Suspense } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { GEAR } from '../three/Character';
+import { parseTint } from '../three/Instanced';
 import { ANIMS_URL, charUrl, useGltf } from '../three/kit';
 import { TroopId } from '../../shared/villageBattle';
 import { Lock } from '../icons';
 import { ResRow } from './BattleScreen';
 import { ModelThumb } from './Preview';
 import { troopInfo } from './troopInfo';
-import { bombGroup, levelLook, paintTroop, TROOP_RIGS } from './troops3d';
+import { bombGroup, type HeroLook, levelLook, paintTroop, TROOP_RIGS } from './troops3d';
 
 // Карточка отряда в казармах: живая мини-модель, роль, все цифры из боя (troopInfo.ts) и кнопка обучения.
 
@@ -20,7 +22,10 @@ const SHOWCASE: Record<TroopId, string> = {
   healer: 'Spellcasting',
 };
 
-function Live({ id, size, level }: { id: TroopId; size: number; level?: number }) {
+// Портрет на карточке в бою: какой момент движения (с).
+const POSE_T: Record<TroopId, number> = { warrior: 0.45, archer: 0.35, giant: 0.55, wallbreaker: 0.25, healer: 0.6 };
+
+function Live({ id, size, level, still }: { id: TroopId; size: number; level?: number; still?: boolean }) {
   const rig = TROOP_RIGS[id];
   const char = useGltf(charUrl(rig.model));
   const anims = useGltf(ANIMS_URL);
@@ -43,6 +48,7 @@ function Live({ id, size, level }: { id: TroopId; size: number; level?: number }
     g.add(root);
     // Рамка по росту персонажа (KayKit ~2,5 единицы), с запасом на шапку и полёт.
     g.userData.frame = { h: rig.fly ? 2.7 : 2.5, half: 1.55 };
+    g.userData.poseT = POSE_T[id];
     g.userData.tick = (t: number) => {
       mixer.setTime(t);
       // Целитель парит.
@@ -50,14 +56,54 @@ function Live({ id, size, level }: { id: TroopId; size: number; level?: number }
     };
     return g;
   };
-  return <ModelThumb id={`troop:${id}:${levelLook(level).tint ?? ''}${levelLook(level).glow ?? ''}`} make={make} size={size} label={`Модель: ${troopInfo(id, 1).name}`} />;
+  return <ModelThumb id={`troop:${id}:${levelLook(level).tint ?? ''}${levelLook(level).glow ?? ''}`} make={make} size={size} label={`Модель: ${troopInfo(id, 1).name}`} still={still} />;
 }
 
-/** Живая мини-модель отряда. */
-export function TroopThumb({ id, size = 48, level }: { id: TroopId; size?: number; level?: number }) {
+/** Живая мини-модель отряда; still — неподвижный портрет (карточки в бою). */
+export function TroopThumb({ id, size = 48, level, still }: { id: TroopId; size?: number; level?: number; still?: boolean }) {
   return (
     <Suspense fallback={<span className={`vil-unit-big u-${id}`} style={{ width: size, height: size }} />}>
-      <Live id={id} size={size} level={level} />
+      <Live id={id} size={size} level={level} still={still} />
+    </Suspense>
+  );
+}
+
+function HeroLive({ look, size }: { look: HeroLook; size: number }) {
+  const char = useGltf(charUrl(look.model));
+  const anims = useGltf(ANIMS_URL);
+  const make = () => {
+    const root = cloneSkinned(char.scene) as THREE.Group;
+    const gear = GEAR[look.model];
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      if (gear && !(m as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(m.name)) m.visible = false;
+      const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      if (look.tint) mat.color.multiply(parseTint(look.tint));
+      if (look.glow && mat.emissive) {
+        mat.emissive.set(look.glow);
+        mat.emissiveIntensity = 0.18;
+      }
+      m.material = mat;
+    });
+    const mixer = new THREE.AnimationMixer(root);
+    const clip = anims.animations.find((a) => a.name === 'Idle_Combat') ?? anims.animations.find((a) => a.name === 'Idle');
+    if (clip) mixer.clipAction(clip).play();
+    const g = new THREE.Group();
+    g.add(root);
+    g.userData.frame = { h: 2.5, half: 1.55 };
+    g.userData.poseT = 0.3;
+    g.userData.tick = (t: number) => mixer.setTime(t);
+    return g;
+  };
+  return <ModelThumb id={`hero:${look.model}:${look.tint ?? ''}:${look.glow ?? ''}`} make={make} size={size} label="Модель: герой" still />;
+}
+
+/** Портрет героя в его облике (без оружия из рук — только набор модели). */
+export function HeroThumb({ look, size = 48 }: { look: HeroLook; size?: number }) {
+  return (
+    <Suspense fallback={<span className="vil-unit-big u-hero" style={{ width: size, height: size }} />}>
+      <HeroLive look={look} size={size} />
     </Suspense>
   );
 }

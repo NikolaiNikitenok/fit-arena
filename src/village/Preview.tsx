@@ -29,6 +29,9 @@ interface Slot {
   visible: boolean;
   // Размер на экране (CSS px): большие превью рисуются в кадр крупнее.
   size: number;
+  // Неподвижный портрет (карточки в бою): рисуется один раз, рендерер потом свободен.
+  still?: boolean;
+  drawn?: boolean;
 }
 
 const slots = new Set<Slot>();
@@ -104,10 +107,14 @@ function frame(nowMs: number) {
     idle = window.setTimeout(dropRenderer, 4000);
     return;
   }
+  // Есть живые (вращающиеся) мини-модели — даже прокрученные за край, они вернутся.
+  let moving = false;
+  for (const slot of slots) if (!slot.still) moving = true;
   if (!document.hidden) {
     const t = nowMs / 1000;
     for (const slot of slots) {
       if (!slot.visible) continue;
+      if (slot.still && slot.drawn) continue;
       const r = getRenderer();
       // Кадр по размеру карточки: обычные — px, крупные — пропорционально больше (не больше 384).
       const want = slot.size > 80 ? Math.min(lite ? 192 : 384, Math.round((px * slot.size) / 64)) : px;
@@ -117,41 +124,49 @@ function frame(nowMs: number) {
       }
       if (slot.canvas.width !== want) slot.canvas.width = slot.canvas.height = want;
       const st = stageOf(slot);
-      st.spin.rotation.y = -Math.PI / 4 - (still ? 0 : (t / TURN_S) * Math.PI * 2);
-      animateGroup(st.model, still ? 0 : t);
+      const fixed = still || slot.still;
+      // Портрет — в выразительный момент движения (замах), а не в первом кадре.
+      const pose = (st.model.userData.poseT as number | undefined) ?? 0;
+      st.spin.rotation.y = -Math.PI / 4 - (fixed ? 0 : (t / TURN_S) * Math.PI * 2);
+      animateGroup(st.model, fixed ? 0 : t);
       // Персонажи: своё движение (микшер с костями).
-      (st.model.userData.tick as ((t: number) => void) | undefined)?.(still ? 0 : t);
+      (st.model.userData.tick as ((t: number) => void) | undefined)?.(fixed ? pose : t);
       r.render(st.scene, st.cam);
       const g = slot.canvas.getContext('2d');
       if (g) {
         g.clearRect(0, 0, want, want);
         g.drawImage(r.domElement, 0, 0);
       }
+      slot.drawn = true;
     }
   }
-  // «Меньше движения» в системе: один неподвижный кадр.
-  if (!still) raf = requestAnimationFrame(frame);
+  // «Меньше движения» в системе и одни портреты: кадр нарисован, дальше рендерер не нужен.
+  if (!still && moving) raf = requestAnimationFrame(frame);
+  else if (!moving) {
+    clearTimeout(idle);
+    idle = window.setTimeout(dropRenderer, 4000);
+  }
 }
 
 function kick() {
   if (!raf) raf = requestAnimationFrame(frame);
 }
 
-function useSlot(ref: React.RefObject<HTMLCanvasElement | null>, key: string, make: () => THREE.Group, size = 60) {
+function useSlot(ref: React.RefObject<HTMLCanvasElement | null>, key: string, make: () => THREE.Group, size = 60, fixed = false) {
   const mk = useRef(make);
   mk.current = make;
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     still = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const slot: Slot = { canvas, key, make: () => mk.current(), visible: true, size };
+    const slot: Slot = { canvas, key, make: () => mk.current(), visible: true, size, still: fixed };
     slots.add(slot);
     // Рисуем только то, что видно: прокрученные за край листа карточки не стоят ничего.
     const io =
       typeof IntersectionObserver !== 'undefined'
         ? new IntersectionObserver(([e]) => {
             slot.visible = e.isIntersecting;
-            if (still) kick();
+            if (still || slot.still) kick();
           })
         : null;
     io?.observe(canvas);
@@ -161,7 +176,7 @@ function useSlot(ref: React.RefObject<HTMLCanvasElement | null>, key: string, ma
       slots.delete(slot);
       kick();
     };
-  }, [ref, key, size]);
+  }, [ref, key, size, fixed]);
 }
 
 function Live({ t, l, size }: { t: BuildingType; l: number; size: number }) {
@@ -186,10 +201,11 @@ export function Preview({ t, l = 1, size = 60 }: { t: BuildingType; l?: number; 
 /**
  * Любая мини-модель в общем рендерере: id — что это (одинаковые id делят одну сцену), make — собрать
  * модель; у модели может быть userData.tick(t) — своё движение каждый кадр (персонажи с костями).
+ * still — неподвижный портрет в момент userData.poseT: рисуется один раз.
  */
-export function ModelThumb({ id, make, size = 60, label }: { id: string; make: () => THREE.Group; size?: number; label: string }) {
+export function ModelThumb({ id, make, size = 60, label, still = false }: { id: string; make: () => THREE.Group; size?: number; label: string; still?: boolean }) {
   const s = useSettings();
   const ref = useRef<HTMLCanvasElement>(null);
-  useSlot(ref, `${id}:${s.lowPower ? 1 : 0}`, make, size);
+  useSlot(ref, `${id}:${s.lowPower ? 1 : 0}`, make, size, still);
   return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label={label} />;
 }

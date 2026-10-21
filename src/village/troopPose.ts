@@ -16,6 +16,8 @@ export interface PoseInput {
   impact: number;
   // Целитель рядом с ранеными.
   healing?: boolean;
+  // Подрывник: через сколько секунд он добежит до цели и взорвётся (удара у него нет — один бросок).
+  blastIn?: number;
   // Сколько секунд назад погиб (для живых не важно).
   deadFor?: number;
   // Время для движений по кругу (бег, покой, лечение), с.
@@ -35,6 +37,8 @@ export interface Pose {
 export function troopPose(p: PoseInput): Pose {
   if (!p.alive) return { clip: 'death', t: Math.max(0, p.deadFor ?? 0) };
   if (p.healing) return { clip: 'cast', t: p.clock };
+  // Замах бомбой на последних шагах: взрыв приходится на момент удара движения.
+  if (p.blastIn != null && p.attackDur > 0 && p.blastIn <= p.impact) return { clip: 'attack', t: p.impact - Math.max(0, p.blastIn) };
   if (p.moving) return { clip: 'run', t: p.clock };
   if (p.attackDur > 0 && p.every > 0) {
     const rate = Math.max(1, p.attackDur / p.every);
