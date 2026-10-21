@@ -12,8 +12,8 @@
 .hb-hit::after { content: ''; position: absolute; inset: -4px -2px; }
 .hb-bolt { color: #ffd23f; }
 
-/* Герой: сцена на всю карточку, подпись поверх снизу. Высота подстраивается под экран, чтобы меню влезало целиком. */
-.hb-hero { position: relative; flex: none; display: flex; flex-direction: column; height: clamp(170px, calc(100dvh - 600px - var(--safe-top)), 300px); cursor: pointer; transition: transform .15s ease; box-shadow: var(--hb-shadow); }
+/* Герой: большая сцена, подпись поверх снизу. Остальное меню листается ниже. */
+.hb-hero { position: relative; flex: none; display: flex; flex-direction: column; height: clamp(340px, 48dvh, 430px); cursor: pointer; transition: transform .15s ease; box-shadow: var(--hb-shadow); }
 .hb-hero:active { transform: scale(.985); }
 .hb-stage { position: relative; flex: 1; min-height: 0; height: auto; }
 .hb-hero-bar { position: relative; z-index: 2; margin: 0 8px 8px; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 7px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
