@@ -1,0 +1,23 @@
+name: Promo to Telegram
+
+# Временный: отправляет промо-ролики владельцу через бота.
+on:
+  push:
+    branches: [claude/project-thread-nom8xy]
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send videos
+        run: |
+          send() {
+            curl -sS -F chat_id=991020798 -F supports_streaming=true -F width=1080 -F height=1920 -F duration="$2" \
+              -F caption="$3" -F video=@"$1" "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);console.log("ok:",r.ok,r.description??"");process.exit(r.ok?0:1)})'
+          }
+          send promo-send/nikitenok-arena-promo-30s-v2.mp4 30 "NikitenokArena: короткий промо-ролик, 30 секунд"
+          send promo-send/nikitenok-arena-promo-55s-v2.mp4 55 "NikitenokArena: обзор всех возможностей, около минуты"
