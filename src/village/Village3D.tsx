@@ -8,6 +8,7 @@ import { Ground } from './Ground';
 import { Anim, KitPart, Look, lookOf, Prim, SIZE, wallLook } from './looks';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings, useSettings } from '../settings';
+import { emitFx, Particles } from './Particles';
 import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, Windows } from './Atmosphere';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
@@ -44,13 +45,66 @@ export interface Ctl {
   tz: number;
   zoom: number;
   camera?: THREE.Camera;
+  // Поворот камеры вокруг деревни, рад (только во время пролёта, потом 0).
+  yaw?: number;
+  // Обычный зум для этого экрана: от него считаем наезд на постройку.
+  base?: number;
+  // Плавный переход камеры: пролёт при входе, наезд на постройку.
+  anim?: CamAnim | null;
+  // Инерция после броска пальцем, пикселей в секунду.
+  fling?: { vx: number; vy: number } | null;
+  // Пролететь над деревней, когда сцена загрузится.
+  intro?: boolean;
+  // Сцена с моделями на экране (до этого пролёт ждёт).
+  ready?: boolean;
 }
+
+interface CamPose {
+  tx: number;
+  tz: number;
+  zoom: number;
+  yaw: number;
+}
+interface CamAnim {
+  from: CamPose;
+  to: CamPose;
+  // Прошло, мс: считаем по кадрам, а не по часам, чтобы подвисание на сборке шейдеров не съело пролёт.
+  t: number;
+  dur: number;
+}
+
+const pose = (c: Ctl): CamPose => ({ tx: c.tx, tz: c.tz, zoom: c.zoom, yaw: c.yaw ?? 0 });
+
+/** Плавно перевести камеру. */
+export function animateTo(c: Ctl, to: Partial<CamPose>, dur = 550) {
+  c.fling = null;
+  c.anim = { from: pose(c), to: { ...pose(c), yaw: 0, ...to }, t: 0, dur };
+}
+
+/** Остановить пролёт или наезд: палец главнее. Поворот быстро возвращается к обычному. */
+export function stopCamera(c: Ctl) {
+  c.fling = null;
+  if (!c.anim) return;
+  c.anim = (c.yaw ?? 0) !== 0 ? { from: pose(c), to: { ...pose(c), yaw: 0 }, t: 0, dur: 220 } : null;
+}
+
+/** Подвести камеру к точке сцены так, чтобы она оказалась чуть выше середины (над карточкой). */
+export function focusOn(c: Ctl, x: number, z: number, screenH: number) {
+  const zoom = Math.min(70, Math.max(c.zoom, (c.base ?? c.zoom) * 1.12));
+  const t = { tx: x, tz: z, zoom };
+  // Постройка встаёт на треть экрана сверху: её не закроет карточка снизу.
+  pan(t, 0, -screenH * 0.18);
+  animateTo(c, t, 520);
+}
+
+const ease = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
 
 const W = (c: number) => c - GRID / 2;
 // Камера смотрит с юго-востока под 50°.
 const PITCH = (50 * Math.PI) / 180;
 const OFF = new THREE.Vector3(Math.cos(PITCH) * Math.SQRT1_2, Math.sin(PITCH), Math.cos(PITCH) * Math.SQRT1_2).multiplyScalar(60);
 export const SIN_PITCH = Math.sin(PITCH);
+const UP = new THREE.Vector3(0, 1, 0);
 
 // Вид постройки по уровню — src/village/looks.ts; стройка и руины — общие для всех.
 function lookFor(b: ViewBld, enemy: boolean): Look {
@@ -94,13 +148,41 @@ function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[
 function Rig({ ctl, sun, sunH = 1 }: { ctl: React.MutableRefObject<Ctl>; sun: React.RefObject<THREE.DirectionalLight | null>; sunH?: number }) {
   const { camera, size } = useThree();
   const last = useRef(0);
-  useFrame(() => {
+  const off = useMemo(() => new THREE.Vector3(), []);
+  useFrame((_, raw) => {
     const c = ctl.current;
+    const dt = Math.min(raw, 0.05);
     if (!c.zoom) c.zoom = Math.max(12, Math.min(size.width, size.height * 0.8) / 19);
+    c.base ??= c.zoom;
+    if (c.intro && c.ready) {
+      // Пролёт: издалека и сбоку, по дуге к деревне.
+      c.intro = false;
+      const to = pose(c);
+      c.anim = { from: { tx: to.tx - 6, tz: to.tz + 10, zoom: to.zoom * 0.42, yaw: -1.1 }, to, t: 0, dur: 2400 };
+    }
+    if (c.anim) {
+      const a = c.anim;
+      a.t += dt * 1000;
+      const k = Math.min(1, a.t / a.dur);
+      const e = ease(k);
+      c.tx = a.from.tx + (a.to.tx - a.from.tx) * e;
+      c.tz = a.from.tz + (a.to.tz - a.from.tz) * e;
+      c.zoom = a.from.zoom * Math.pow(a.to.zoom / a.from.zoom, e);
+      c.yaw = a.from.yaw + (a.to.yaw - a.from.yaw) * e;
+      if (k >= 1) c.anim = null;
+    } else if (c.fling) {
+      // Карта катится по инерции и плавно останавливается.
+      pan(c, c.fling.vx * dt, c.fling.vy * dt);
+      const k = Math.exp(-4.5 * dt);
+      c.fling.vx *= k;
+      c.fling.vy *= k;
+      if (Math.hypot(c.fling.vx, c.fling.vy) < 12) c.fling = null;
+    }
     c.camera = camera;
-    if (import.meta.env.DEV) (window as unknown as { __vil?: Ctl }).__vil = c;
+    if (import.meta.env.DEV) Object.assign(window, { __vil: c, __fx: emitFx });
     const cam = camera as THREE.OrthographicCamera;
-    camera.position.set(c.tx + OFF.x, OFF.y, c.tz + OFF.z);
+    off.copy(OFF).applyAxisAngle(UP, c.yaw ?? 0);
+    camera.position.set(c.tx + off.x, OFF.y, c.tz + off.z);
     camera.lookAt(c.tx, 0, c.tz);
     if (last.current !== c.zoom) {
       cam.zoom = c.zoom;
@@ -345,9 +427,39 @@ export interface SceneProps {
   ctl: React.MutableRefObject<Ctl>;
 }
 
+/**
+ * Следит за постройками и пускает эффекты: рухнула в бою — пыль и обломки, достроилась — пыль
+ * и искры, ратуша выросла — салют. Первый показ сцены ничего не взрывает.
+ */
+function useBuildFx(buildings: ViewBld[], on: boolean, scope: string) {
+  const prev = useRef<{ scope: string; map: Map<number, ViewBld> } | null>(null);
+  useEffect(() => {
+    // Деревня, бой и чужая деревня — разные постройки с теми же номерами: при смене сцены не сравниваем.
+    const was = prev.current?.scope === scope ? prev.current.map : null;
+    prev.current = { scope, map: new Map(buildings.map((b) => [b.i, b])) };
+    if (!was || !on) return;
+    for (const b of buildings) {
+      const old = was.get(b.i);
+      if (!old) continue;
+      const s = SIZE[b.t];
+      const x = W(b.x + s / 2);
+      const z = W(b.y + s / 2);
+      if (b.state === 'ruin' && old.state !== 'ruin') emitFx('ruin', x, z, s);
+      else if (b.state === 'ok' && (old.state === 'new' || old.state === 'up')) emitFx(b.t === 'townhall' && b.l > old.l ? 'fireworks' : 'built', x, z, s);
+      else if (b.t === 'townhall' && b.l > old.l) emitFx('fireworks', x, z, s);
+    }
+  }, [buildings, on, scope]);
+}
+
 function Scene(props: SceneProps) {
   const { buildings, enemy = false } = props;
   const lite = getSettings().lowPower;
+  const fx = useSettings().villageFx;
+  const ctlRef = props.ctl;
+  useEffect(() => {
+    ctlRef.current.ready = true;
+  }, [ctlRef]);
+  useBuildFx(buildings, fx, `${!!props.battle}${enemy}`);
   const items = useMemo(() => placed(buildings, enemy), [buildings, enemy]);
   const byId = useMemo(() => new Map(buildings.map((b) => [b.i, b])), [buildings]);
   const sel = props.selected != null ? byId.get(props.selected) : undefined;
@@ -405,6 +517,7 @@ function Scene(props: SceneProps) {
       {props.battle && <SkillAuras view={props.battle} />}
       {props.battle && <UnitBars view={props.battle} foe={!!props.foe} />}
       {props.battle && <Effects view={props.battle} />}
+      {fx && <Particles lite={lite} />}
     </>
   );
 }
@@ -444,9 +557,9 @@ export function Village3D(props: SceneProps) {
       <EdgeFog color={sky.fog} />
       <Suspense fallback={null}>
         <Scene {...props} />
+        {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
+        {live && sky.lamps > 0.01 && <Windows buildings={props.buildings} on={sky.lamps} ctl={props.ctl} />}
       </Suspense>
-      {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
-      {live && sky.lamps > 0.01 && <Windows buildings={props.buildings} on={sky.lamps} ctl={props.ctl} />}
       {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
     </Canvas3D>
@@ -492,8 +605,18 @@ export function bubbleAt(ctl: Ctl, el: HTMLElement, clientX: number, clientY: nu
   return best;
 }
 
+/**
+ * Масштаб с центром в точке экрана (пиксели от центра холста): то, что под пальцами, остаётся под ними.
+ */
+export function zoomAt(ctl: Ctl, zoom: number, dx: number, dy: number) {
+  const z1 = ctl.zoom;
+  const z2 = Math.max(7, Math.min(70, zoom));
+  ctl.zoom = z2;
+  pan(ctl, -dx * (z2 / z1 - 1), -dy * (z2 / z1 - 1));
+}
+
 /** Сдвиг камеры пальцем на (dx, dy) пикселей. */
-export function pan(ctl: Ctl, dx: number, dy: number) {
+export function pan(ctl: { tx: number; tz: number; zoom: number }, dx: number, dy: number) {
   const k = 1 / ctl.zoom;
   // Вправо по экрану — (1, 0, -1)/√2, вверх по экрану на земле — (-1, 0, -1)/√2 и растянуто наклоном.
   const r = Math.SQRT1_2;

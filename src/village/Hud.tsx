@@ -87,7 +87,7 @@ export const FlyLayer = forwardRef<FlyApi, { bars: React.RefObject<Partial<Recor
       const tx = r ? r.right - 16 : window.innerWidth - 40;
       const ty = r ? r.top + r.height / 2 : 30;
       const id = ++seq.current;
-      const n = Math.max(4, Math.min(10, Math.round(amount / 40)));
+      const n = Math.max(6, Math.min(12, Math.round(amount / 30)));
       setList((l) => [...l, { id, k, x, y, dx: tx - x, dy: ty - y, n, amount }]);
       window.setTimeout(() => setList((l) => l.filter((f) => f.id !== id)), 1500);
     },
@@ -113,7 +113,7 @@ export const FlyLayer = forwardRef<FlyApi, { bars: React.RefObject<Partial<Recor
             } as React.CSSProperties;
             return (
               <span key={j} className="hud-coin" style={style}>
-                <span>{f.k === 'charge' ? <Bolt size={20} /> : <ResIcon r={f.k} size={22} />}</span>
+                <span>{f.k === 'charge' ? <Bolt size={20} /> : <ResIcon r={f.k} size={26} />}</span>
               </span>
             );
           })}

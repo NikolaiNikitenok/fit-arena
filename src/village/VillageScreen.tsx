@@ -57,7 +57,7 @@ import { dueRaid, markRaidsSeen, troopCount, unseenRaids } from './raids';
 import { fmtNum, fmtTime, foundTown, hasTown, tickTown, townOf, unpackBase, withTown } from './state';
 import { claimTask, openTasks, taskDone, taskProgress, TASKS } from './tasks';
 import type { DefenseEntry } from './types';
-import type { Ctl, ViewBld } from './Village3D';
+import { focusOn, type Ctl, type ViewBld } from './Village3D';
 import { useViewSlot, ViewHost } from './Viewport';
 import { TroopSheet, TroopThumb } from './TroopInfo';
 import { LabSheet } from './LabSheet';
@@ -70,6 +70,9 @@ import { Sheet } from '../Sheet';
 import { BarKey, FlyApi, FlyLayer, ResBar } from './Hud';
 import { getSettings } from '../settings';
 import { CHARGE_MAX } from '../game/resources';
+
+// Пролёт над деревней уже был в этом запуске приложения.
+let flownIn = false;
 
 interface Props {
   progress: Progress;
@@ -175,7 +178,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheet]);
-  const ctl = useRef<Ctl>({ tx: 0, tz: 0, zoom: 0 });
+  // Пролёт над деревней — при первом входе за запуск приложения.
+  const ctl = useRef<Ctl>(null as unknown as Ctl);
+  if (!ctl.current) {
+    ctl.current = { tx: 0, tz: 0, zoom: 0, intro: !flownIn && getSettings().flyIn };
+    flownIn = true;
+  }
   const barEls = useRef<Partial<Record<BarKey, HTMLDivElement | null>>>({});
   const flyRef = useRef<FlyApi>(null);
   // Журнал обороны: набеги Князя с телефона и (когда появится сервер) набеги игроков.
@@ -398,6 +406,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     if (!b) return setSelected(null);
     sfx('tap');
     setSelected(b.i);
+    const s = sizeOf(b.t);
+    focusOn(ctl.current, b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, window.innerHeight);
   };
 
   // Урожай собирается тапом по пузырю над постройкой; тап по самой постройке открывает её карточку.

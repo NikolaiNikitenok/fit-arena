@@ -1,5 +1,5 @@
 import { createContext, Suspense, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { bubbleAt, cellAt, Ctl, pan, SceneProps, Village3D } from './Village3D';
+import { bubbleAt, cellAt, Ctl, pan, SceneProps, stopCamera, Village3D, zoomAt } from './Village3D';
 
 export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
   ctl: React.MutableRefObject<Ctl>;
@@ -15,13 +15,22 @@ export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
 export function Viewport(props: ViewportProps) {
   const el = useRef<HTMLDivElement>(null);
   const pts = useRef(new Map<number, { x: number; y: number }>());
-  const g = useRef<{ moved: number; ghost: { ox: number; oy: number } | null; pinch: number }>({ moved: 0, ghost: null, pinch: 0 });
+  const g = useRef<{ moved: number; ghost: { ox: number; oy: number } | null; pinch: number; mid: { x: number; y: number } | null; vx: number; vy: number; t: number }>({ moved: 0, ghost: null, pinch: 0, mid: null, vx: 0, vy: 0, t: 0 });
   const ctl = props.ctl.current;
 
   const at = (e: { clientX: number; clientY: number }) => (el.current ? cellAt(ctl, el.current, e.clientX, e.clientY) : null);
   const pinchDist = () => {
     const [a, b] = [...pts.current.values()];
     return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const pinchMid = () => {
+    const [a, b] = [...pts.current.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  // Точка экрана относительно центра холста.
+  const fromCenter = (x: number, y: number) => {
+    const r = el.current?.getBoundingClientRect();
+    return r ? { x: x - (r.left + r.width / 2), y: y - (r.top + r.height / 2) } : { x: 0, y: 0 };
   };
 
   return (
@@ -31,8 +40,9 @@ export function Viewport(props: ViewportProps) {
       onPointerDown={(e) => {
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        stopCamera(ctl);
         if (pts.current.size === 1) {
-          g.current = { moved: 0, ghost: null, pinch: 0 };
+          g.current = { moved: 0, ghost: null, pinch: 0, mid: null, vx: 0, vy: 0, t: performance.now() };
           const c = at(e);
           const gh = props.ghost;
           if (c && gh && props.onGhost) {
@@ -41,6 +51,7 @@ export function Viewport(props: ViewportProps) {
           }
         } else if (pts.current.size === 2) {
           g.current.pinch = pinchDist();
+          g.current.mid = pinchMid();
           g.current.moved += 100;
           g.current.ghost = null;
         }
@@ -52,12 +63,25 @@ export function Viewport(props: ViewportProps) {
         const dy = e.clientY - prev.y;
         pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pts.current.size >= 2) {
+          // Два пальца: масштаб вокруг точки между ними и сдвиг, если пальцы едут вместе.
           const d = pinchDist();
-          if (g.current.pinch > 0) ctl.zoom = Math.max(7, Math.min(70, ctl.zoom * (d / g.current.pinch)));
+          const m = pinchMid();
+          if (g.current.mid) pan(ctl, m.x - g.current.mid.x, m.y - g.current.mid.y);
+          if (g.current.pinch > 0) {
+            const c = fromCenter(m.x, m.y);
+            zoomAt(ctl, ctl.zoom * (d / g.current.pinch), c.x, c.y);
+          }
           g.current.pinch = d;
+          g.current.mid = m;
           return;
         }
         g.current.moved += Math.abs(dx) + Math.abs(dy);
+        // Скорость пальца для инерции: сглаженная, пикселей в секунду.
+        const now = performance.now();
+        const dtm = Math.max(1, now - g.current.t);
+        g.current.t = now;
+        g.current.vx = g.current.vx * 0.6 + ((dx / dtm) * 1000) * 0.4;
+        g.current.vy = g.current.vy * 0.6 + ((dy / dtm) * 1000) * 0.4;
         if (g.current.ghost && props.onGhost) {
           const c = at(e);
           if (c) props.onGhost(Math.round(c.x - g.current.ghost.ox), Math.round(c.y - g.current.ghost.oy));
@@ -67,6 +91,10 @@ export function Viewport(props: ViewportProps) {
       }}
       onPointerUp={(e) => {
         pts.current.delete(e.pointerId);
+        if (pts.current.size === 1) g.current.mid = null;
+        // Бросок: палец ушёл быстро и только что двигался — карта катится дальше.
+        if (pts.current.size === 0 && g.current.moved >= 8 && !g.current.ghost && g.current.pinch === 0 && performance.now() - g.current.t < 80 && Math.hypot(g.current.vx, g.current.vy) > 150)
+          ctl.fling = { vx: g.current.vx, vy: g.current.vy };
         if (pts.current.size === 0 && g.current.moved < 8 && !g.current.ghost) {
           const hit = el.current && props.onBubble && props.bubbles ? bubbleAt(ctl, el.current, e.clientX, e.clientY, props.buildings, props.bubbles) : null;
           if (hit != null) return props.onBubble?.(hit, e.clientX, e.clientY);
@@ -75,7 +103,11 @@ export function Viewport(props: ViewportProps) {
         }
       }}
       onPointerCancel={(e) => pts.current.delete(e.pointerId)}
-      onWheel={(e) => (ctl.zoom = Math.max(7, Math.min(70, ctl.zoom * (e.deltaY > 0 ? 0.9 : 1.1))))}
+      onWheel={(e) => {
+        stopCamera(ctl);
+        const c = fromCenter(e.clientX, e.clientY);
+        zoomAt(ctl, ctl.zoom * (e.deltaY > 0 ? 0.9 : 1.1), c.x, c.y);
+      }}
     >
       <Suspense fallback={<div className="lazy-loading muted">Загружаем деревню…</div>}>
         <Village3D {...props} />
