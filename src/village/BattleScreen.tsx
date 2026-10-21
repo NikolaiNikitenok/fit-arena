@@ -1,9 +1,11 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Res, RES_KEYS } from '../../shared/village';
-import { addDeploy, BATTLE_TICKS, BattleArmy, BattleBase, BattleResult, battleResult, createBattle, Deploy, noDeployCells, stepBattle, TPS, TROOPS, UNIT_NAMES, UnitKind, unitsLeft } from '../../shared/villageBattle';
+import { addDeploy, BATTLE_TICKS, BattleArmy, BattleBase, BattleResult, battleResult, createBattle, Deploy, heroUnit, noDeployCells, stepBattle, TPS, TROOPS, UNIT_NAMES, UnitKind, unitsLeft } from '../../shared/villageBattle';
 import { sfx } from '../audio';
-import { Coin, Cross } from '../icons';
-import { RES_COLORS, Star, Stone, Wood } from './icons';
+import { BattleSounds } from '../gameSounds';
+import { Coin, Cross, Lock } from '../icons';
+import { RES_COLORS, SkillIcon, Star, Stone, Wood } from './icons';
+import { nextSkill, SKILLS, skillsFor, type SkillId } from '../../shared/heroSkills';
 import { fmtNum } from './state';
 import type { BattleView, Ctl, ViewBld } from './Village3D';
 import { useHostedView } from './Viewport';
@@ -74,6 +76,8 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
   const started = useRef(mode === 'replay');
   const scoutEnd = useRef(scout ? performance.now() + scout * 1000 : 0);
   const scoutSec = useRef(0);
+  const sounds = useRef<BattleSounds | null>(null);
+  sounds.current ??= new BattleSounds(view.current.s);
 
   const finish = (endTick?: number) => {
     if (finished.current) return;
@@ -111,12 +115,16 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
         acc -= 100;
         v.prev = new Map(v.s.units.map((u) => [u.n, [u.x, u.y]]));
         stepBattle(v.s, mode === 'attack');
+        sounds.current!.collect(v.s);
         for (const f of v.s.fx) v.fx.push({ ...f, born: now });
         v.at = now;
         v.ms = 100 / speedRef.current;
         stepped = true;
       }
-      if (stepped) setTick(v.s.tick);
+      if (stepped) {
+        sounds.current!.play();
+        setTick(v.s.tick);
+      }
       const s = v.s;
       if (s.done) finish(s.input.endTick);
       // Все высаженные погибли, а высаживать некого — конец.
@@ -154,6 +162,21 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
     if ((s.left[unit] ?? 0) <= 0) setUnit(ORDER.find((u) => (s.left[u] ?? 0) > 0) ?? null);
     setTick((t) => t + 1);
   };
+
+  // Умение героя: срабатывает сразу вокруг героя, один раз за бой.
+  const cast = (a: SkillId) => {
+    if (mode !== 'attack' || finished.current) return;
+    if (!addDeploy(s, a, 0, 0)) {
+      setWarn(heroUnit(s) ? 'Это умение уже было.' : 'Сначала высади героя — умение срабатывает вокруг него.');
+      setTimeout(() => setWarn(null), 1800);
+      return;
+    }
+    started.current = true;
+    setTick((t) => t + 1);
+  };
+  const skills = skillsFor(army.hero);
+  const locked = army.hero ? nextSkill(army.hero) : undefined;
+  const hero = heroUnit(s);
 
   const viewport = useHostedView({ ctl, buildings, enemy, battle: view, hp, heroLook, foe: mode === 'replay', noDeploy: showZone || (mode === 'attack' && !started.current) ? zone : undefined, onTap: tap });
 
@@ -210,6 +233,27 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
               </button>
             ))}
           </div>
+          {(skills.length > 0 || locked) && (
+            <div className="vil-skills">
+              {skills.map((a) => {
+                const ready = (s.left[a] ?? 0) > 0;
+                return (
+                  <button key={a} className={`vil-skill ${ready && hero ? 'ready' : ''} ${ready ? '' : 'used'}`} style={{ color: SKILLS[a].color }} onClick={() => cast(a)} disabled={!ready} aria-label={`${SKILLS[a].name}: ${SKILLS[a].desc}`}>
+                    <SkillIcon id={a} size={24} />
+                    <span>{SKILLS[a].name}</span>
+                  </button>
+                );
+              })}
+              {locked && (
+                <div className="vil-skill locked" title={locked.desc}>
+                  <Lock size={18} />
+                  <span>
+                    {locked.name} · ур. {locked.level}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       {result && (

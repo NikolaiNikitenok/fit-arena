@@ -183,3 +183,13 @@
 .vil-lab-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid rgba(138,255,193,.25); color: var(--text); text-align: left; }
 .vil-lab-link > span:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .vil-lab-link .muted { font-size: 13px; }
+/* Умения героя под панелью высадки: светятся, пока герой жив и умение не потрачено. */
+.vil-skills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-top: 2px; }
+.vil-skill { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px 5px 6px; border-radius: 999px; border: 2px solid color-mix(in srgb, currentColor 35%, transparent); background: rgba(16,18,28,.9); font-size: 12px; font-weight: 900; opacity: .55; }
+.vil-skill span { color: var(--text); white-space: nowrap; }
+.vil-skill.ready { opacity: 1; border-color: currentColor; box-shadow: 0 0 14px color-mix(in srgb, currentColor 45%, transparent); animation: vil-skill-glow 1.6s ease-in-out infinite; }
+.vil-skill.ready:active { transform: scale(.95); }
+.vil-skill.used { opacity: .3; filter: grayscale(1); }
+.vil-skill.locked { color: var(--hint); border-style: dashed; border-color: rgba(255,255,255,.15); opacity: .8; }
+.vil-skill.locked span { color: var(--hint); }
+@keyframes vil-skill-glow { 50% { box-shadow: 0 0 22px color-mix(in srgb, currentColor 70%, transparent); } }

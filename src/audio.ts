@@ -4,7 +4,11 @@ import { getSettings, subscribeSettings } from './settings';
 import { midiToFreq, NoteEvent, stepSeconds, Theme, themeStep, THEMES } from './music';
 import { tg } from './telegram';
 
-export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup';
+export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup' | BattleSfx;
+// Бой в деревне: удары отрядов, выстрелы башен, разрушения, умения героя. n — сколько таких событий сразу.
+export type BattleSfx = 'sword' | 'slash' | 'bow' | 'smash' | 'blast' | 'heal' | 'shot' | 'cannon' | 'crumble' | 'wallbreak' | 'skill' | 'thunder' | 'hammer';
+// Звуки боя повторяются реже: при толпе отрядов один звук на всех, только чуть громче.
+const MIN_GAP: Partial<Record<Sfx, number>> = { sword: 0.11, slash: 0.15, bow: 0.12, smash: 0.2, blast: 0.12, heal: 1.2, shot: 0.14, cannon: 0.2, crumble: 0.25, wallbreak: 0.15, skill: 0.3, thunder: 0.3, hammer: 0.12 };
 
 // Громкость музыки: тихий фон, чтобы были слышны повторы.
 const MUSIC_VOLUME = 0.16;
@@ -170,8 +174,8 @@ export function sfx(name: Sfx, n = 0): void {
   const c = audio();
   if (!c || c.state !== 'running') return;
   const t = c.currentTime + 0.005;
-  // Один и тот же звук не чаще раза в 40 мс, чтобы не было каши.
-  if ((lastPlayed[name] ?? -1) > t - 0.04) return;
+  // Один и тот же звук не чаще раза в 40 мс (звуки боя — реже), чтобы не было каши.
+  if ((lastPlayed[name] ?? -1) > t - (MIN_GAP[name] ?? 0.04)) return;
   lastPlayed[name] = t;
   try {
     play(c, name, t, n);
@@ -274,6 +278,93 @@ function play(c: AudioContext, name: Sfx, t: number, n: number): void {
       notes([523, 659, 784, 1047, 1319, 1568], 0.07, 0.25, { type: 'triangle', vol: 0.15 });
       notes([523, 659, 784, 1047, 1319, 1568], 0.07, 0.2, { type: 'square', vol: 0.04, lp: [3000, 1500] });
       noise(c, t + 0.4, 0.5, 0.05, 'highpass', 7000);
+      break;
+    default:
+      playBattle(c, name, t, n);
+  }
+}
+
+/** Громкость звука боя: один удар тихо, толпа — громче, но не больше чем вдвое. */
+const crowd = (n: number) => Math.min(2, 0.75 + 0.35 * Math.log2(Math.max(1, n)));
+// Немного разной высоты, чтобы одинаковые удары не звучали как пулемёт.
+const vary = () => 1 + (Math.random() - 0.5) * 0.12;
+
+function playBattle(c: AudioContext, name: BattleSfx, t: number, n: number): void {
+  const v = crowd(n);
+  const p = vary();
+  const notes = (freqs: number[], gap: number, dur: number, o: ToneOpts) => freqs.forEach((f, i) => tone(c, f, t + i * gap, dur, o));
+  switch (name) {
+    case 'sword':
+      // Звон клинка о дерево и камень: две высокие «квадратные» ноты и щелчок шума.
+      noise(c, t, 0.05, 0.16 * v, 'highpass', 3500);
+      tone(c, 1850 * p, t, 0.14, { type: 'square', vol: 0.025 * v, lp: [6000, 1500] });
+      tone(c, 2730 * p, t + 0.004, 0.1, { type: 'square', vol: 0.015 * v, lp: [6000, 1800] });
+      tone(c, 180 * p, t, 0.08, { vol: 0.16 * v, glide: 90 });
+      break;
+    case 'slash':
+      // Герой: свист замаха и тяжёлый звонкий удар.
+      noise(c, t, 0.12, 0.12 * v, 'bandpass', 1400 * p, sfxBus, 0.8);
+      tone(c, 1320 * p, t + 0.07, 0.25, { type: 'square', vol: 0.035 * v, lp: [5000, 900] });
+      tone(c, 1980 * p, t + 0.07, 0.18, { type: 'triangle', vol: 0.05 * v });
+      tone(c, 130 * p, t + 0.07, 0.14, { vol: 0.3 * v, glide: 55 });
+      break;
+    case 'bow':
+      // Тетива: короткий «твинь» вниз и шорох стрелы.
+      tone(c, 330 * p, t, 0.12, { type: 'triangle', vol: 0.13 * v, glide: 190 });
+      tone(c, 660 * p, t, 0.05, { type: 'sawtooth', vol: 0.02 * v, lp: [2500, 600] });
+      noise(c, t + 0.03, 0.13, 0.05 * v, 'bandpass', 4200 * p, sfxBus, 2);
+      break;
+    case 'smash':
+      // Великан: глухой удар дубиной и треск.
+      tone(c, 75 * p, t, 0.3, { vol: 0.5 * v, glide: 32 });
+      noise(c, t, 0.22, 0.28 * v, 'lowpass', 700);
+      noise(c, t + 0.02, 0.08, 0.08 * v, 'bandpass', 2400);
+      break;
+    case 'blast':
+      // Взрыв подрывника или снаряда мортиры.
+      tone(c, 95 * p, t, 0.45, { vol: 0.45 * v, glide: 28 });
+      noise(c, t, 0.5, 0.4 * v, 'lowpass', 900 * p);
+      noise(c, t, 0.12, 0.12 * v, 'highpass', 2500);
+      break;
+    case 'heal':
+      notes([880, 1175, 1568], 0.07, 0.4, { vol: 0.035 * v });
+      break;
+    case 'shot':
+      // Выстрел башни лучников: сухой щелчок и свист.
+      tone(c, 520 * p, t, 0.07, { type: 'triangle', vol: 0.07 * v, glide: 260 });
+      noise(c, t, 0.1, 0.05 * v, 'bandpass', 3000 * p, sfxBus, 2);
+      break;
+    case 'cannon':
+      tone(c, 120 * p, t, 0.2, { vol: 0.35 * v, glide: 45 });
+      noise(c, t, 0.16, 0.2 * v, 'lowpass', 1200);
+      break;
+    case 'crumble':
+      // Постройка рушится: долгий низкий грохот и осыпающиеся камни.
+      tone(c, 60 * p, t, 0.7, { vol: 0.45 * v, glide: 30 });
+      noise(c, t, 0.8, 0.35 * v, 'lowpass', 500);
+      for (let i = 0; i < 5; i++) noise(c, t + 0.08 + i * 0.09 + Math.random() * 0.05, 0.07, 0.1 * v, 'bandpass', 900 + Math.random() * 1500, sfxBus, 3);
+      break;
+    case 'wallbreak':
+      noise(c, t, 0.3, 0.25 * v, 'lowpass', 1100);
+      tone(c, 110 * p, t, 0.2, { vol: 0.25 * v, glide: 50 });
+      noise(c, t + 0.05, 0.06, 0.08 * v, 'bandpass', 1800, sfxBus, 3);
+      break;
+    case 'skill':
+      // Умение героя: взлёт «пилы» через открывающийся фильтр и звон.
+      tone(c, 220, t, 0.45, { type: 'sawtooth', vol: 0.12, glide: 660, lp: [600, 4000] });
+      notes([659, 988, 1319], 0.06, 0.45, { type: 'triangle', vol: 0.09 });
+      noise(c, t, 0.4, 0.08, 'highpass', 5000);
+      break;
+    case 'thunder':
+      noise(c, t, 0.06, 0.4, 'highpass', 3000);
+      tone(c, 70, t + 0.04, 1, { vol: 0.5, glide: 30 });
+      noise(c, t + 0.04, 1.1, 0.4, 'lowpass', 400);
+      break;
+    case 'hammer':
+      // Молоток строителя: короткий звонкий стук по дереву.
+      tone(c, 900 * p, t, 0.06, { type: 'square', vol: 0.025, lp: [4000, 900] });
+      tone(c, 240 * p, t, 0.07, { vol: 0.12, glide: 140 });
+      noise(c, t, 0.03, 0.07, 'bandpass', 2600);
       break;
   }
 }

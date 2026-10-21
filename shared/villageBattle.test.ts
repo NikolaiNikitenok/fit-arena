@@ -114,3 +114,48 @@ describe('бой за деревню', () => {
     });
   });
 });
+
+describe('умения героя', () => {
+  const base = campBase(CAMPS[3]);
+  const army = { troops: { warrior: 15, archer: 10 }, level: 2, hero: 30 };
+  const troops: Deploy[] = [{ t: 0, u: 'hero', x: 12, y: -2 }, ...wave('warrior', 15, 10, -2, 1), ...wave('archer', 10, 10, -2.5, 20)];
+  const skills: Deploy[] = (['rage', 'cry', 'quake', 'guard', 'squad', 'storm'] as const).map((u, k) => ({ t: 60 + 15 * k, u, x: 0, y: 0 }));
+
+  it('открываются по уровню героя и проверяются', () => {
+    const input: BattleInput = { base, army, deploys: [...troops, ...skills], loot: LOOT, seed: 7 };
+    expect(validateDeploys(input)).toBeNull();
+    expect(validateDeploys({ ...input, army: { ...army, hero: 14 } })).toMatch(/умение/);
+    expect(validateDeploys({ ...input, deploys: [...troops, ...skills, { t: 200, u: 'rage', x: 0, y: 0 }] })).toMatch(/умение/);
+    expect(validateDeploys({ ...input, deploys: [{ t: 0, u: 'rage', x: 0, y: 0 }, ...troops] })).toMatch(/до высадки героя/);
+  });
+
+  it('детерминированы, живая игра совпадает со списком и умения помогают', () => {
+    const input: BattleInput = { base, army, deploys: [...troops, ...skills], loot: LOOT, seed: 7 };
+    const a = simulateBattle(input);
+    expect(simulateBattle(JSON.parse(JSON.stringify(input)))).toEqual(a);
+    const without = simulateBattle({ ...input, deploys: troops });
+    expect(a.destruction).toBeGreaterThanOrEqual(without.destruction);
+    // Умения не тратят войско.
+    expect(a.used).toEqual(without.used);
+
+    const live = createBattle({ ...input, deploys: [] });
+    const sorted = [...input.deploys].sort((x, y) => x.t - y.t);
+    let k = 0;
+    while (!live.done) {
+      while (k < sorted.length && sorted[k].t === live.tick) addDeploy(live, sorted[k].u, sorted[k].x, sorted[k].y), k++;
+      stepBattle(live, true);
+      if (k >= sorted.length && live.units.every((u) => !u.alive)) break;
+    }
+    const replay = simulateBattle({ ...input, deploys: live.input.deploys, endTick: live.tick });
+    expect(battleResult(live).destruction).toBe(replay.destruction);
+  });
+
+  it('дружина приводит шесть воинов, без героя умение не работает', () => {
+    const s = createBattle({ base, army, deploys: [{ t: 0, u: 'hero', x: 12, y: -2 }, { t: 1, u: 'squad', x: 0, y: 0 }], loot: LOOT, seed: 1 });
+    stepBattle(s, true);
+    stepBattle(s, true);
+    expect(s.units.filter((u) => u.u === 'warrior')).toHaveLength(6);
+    const none = createBattle({ base, army, deploys: [], loot: LOOT, seed: 1 });
+    expect(addDeploy(none, 'rage', 0, 0)).toBeNull();
+  });
+});

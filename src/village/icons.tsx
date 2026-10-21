@@ -35,3 +35,21 @@ export const Star = ({ size = 16, className }: P) => svg(size, className, <path 
 export const Trophy = ({ size = 16, className }: P) => svg(size, className, <><path d="M7 4h10v5a5 5 0 01-10 0z" /><path d="M7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3M12 14v3M8.5 20h7M9.5 17h5" /></>);
 
 export const RES_COLORS = { wood: '#c98a4b', stone: '#b9c0cc', gold: '#ffd27a' } as const;
+
+// Умения героя (shared/heroSkills.ts): ярость, клич, удар о землю, щит, дружина, молнии.
+export const SkillIcon = ({ id, size = 30, className }: P & { id: string }) => {
+  switch (id) {
+    case 'rage':
+      return svg(size, className, <><path d="M12 2.5c1 3.5 5 5.5 5 10a5 5 0 01-10 0c0-2.4 1.3-3.8 2.3-5 .3 1.6 1 2.6 2 3 0-3 .2-5.5.7-8z" fill="currentColor" stroke="none" /><path d="M10 16.5a2 2 0 004 0c0-1.3-1-2-2-3-1 1-2 1.7-2 3z" fill="#fff3c4" stroke="none" /></>);
+    case 'cry':
+      return svg(size, className, <><path d="M4 10v4h3l6 4V6L7 10z" fill="currentColor" /><path d="M16.5 9a4 4 0 010 6M19 6.5a7.5 7.5 0 010 11" /></>);
+    case 'quake':
+      return svg(size, className, <><path d="M2 19h20" /><path d="M5 19l3-4 2 2 2-5 2 4 2-2 3 5" /><path d="M12 3v5M9.5 5.5L12 8l2.5-2.5" /></>);
+    case 'guard':
+      return svg(size, className, <><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z" fill="currentColor" fillOpacity={0.25} /><path d="M8.5 12l2.5 2.5 4.5-5" /></>);
+    case 'squad':
+      return svg(size, className, <><circle cx="8" cy="8" r="2.6" /><circle cx="16" cy="8" r="2.6" /><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5M11 19c0-3 2.2-5 5-5s5 2 5 5" /></>);
+    default:
+      return svg(size, className, <path d="M13.5 2L5 13.5h6L9.5 22 19 9.5h-6z" />, true);
+  }
+};

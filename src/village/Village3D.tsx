@@ -10,8 +10,10 @@ import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './
 import { getSettings } from '../settings';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
+import { CRY, GUARD, QUAKE, SKILLS, type SkillId } from '../../shared/heroSkills';
 import { RES_COLORS } from './icons';
-import { DEFAULT_HERO, HealerAuras, HeroLook, HeroTroop, Troops, UnitBars } from './troops3d';
+import { Builders } from './Builders';
+import { DEFAULT_HERO, HealerAuras, HeroLook, HeroTroop, SkillAuras, Troops, UnitBars } from './troops3d';
 
 // Деревня в 3D: изометрия ортогональной камерой, постройки KayKit инстансами, стены собираются
 // из секций между соседними клетками. Та же сцена показывает бой: отряды — персонажи KayKit
@@ -205,6 +207,10 @@ function Model({ t, x, y, enemy }: { t: BuildingType; x: number; y: number; enem
 
 const ARROWS = 48;
 const BOOMS = 16;
+const CASTS = 8;
+// Сколько живёт эффект на экране, мс (при скорости ×1).
+const FX_MS = { shell: 1200, boom: 450, cast: 800, bolt: 450, arrow: 260, hit: 260 } as const;
+const CAST_R: Partial<Record<SkillId, number>> = { cry: CRY.radius, guard: GUARD.radius, quake: QUAKE.stunRadius };
 function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) {
   const arrows = useMemo(() => {
     const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.06, 0.45), new THREE.MeshBasicMaterial({ color: '#fff3c4' }), ARROWS);
@@ -221,7 +227,24 @@ function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) 
     m.frustumCulled = false;
     return m;
   }, []);
-  useEffect(() => () => [arrows, shells, booms].forEach((m) => m.dispose()), [arrows, shells, booms]);
+  // Умения героя: расходящееся кольцо цвета умения и столбы молний.
+  const rings = useMemo(() => {
+    const g = new THREE.RingGeometry(0.85, 1, 40);
+    g.rotateX(-Math.PI / 2);
+    const m = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), CASTS);
+    m.frustumCulled = false;
+    m.renderOrder = 3;
+    // Цвет у каждого кольца свой: буфер цветов нужен до первой отрисовки, иначе шейдер его не увидит.
+    m.setColorAt(0, new THREE.Color('#ffffff'));
+    return m;
+  }, []);
+  const bolts = useMemo(() => {
+    const m = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.3, 1, 6, 1, true), new THREE.MeshBasicMaterial({ color: '#e6deff', transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }), CASTS);
+    m.frustumCulled = false;
+    return m;
+  }, []);
+  const col = useMemo(() => new THREE.Color(), []);
+  useEffect(() => () => [arrows, shells, booms, rings, bolts].forEach((m) => m.dispose()), [arrows, shells, booms, rings, bolts]);
   const mat = useMemo(() => new THREE.Matrix4(), []);
   const q = useMemo(() => new THREE.Quaternion(), []);
   const v3 = useMemo(() => new THREE.Vector3(), []);
@@ -232,13 +255,24 @@ function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) 
     let na = 0;
     let ns = 0;
     let nb = 0;
+    let nr = 0;
+    let nl = 0;
     if (v) {
       const now = performance.now();
       const speed = 100 / v.ms;
-      v.fx = v.fx.filter((f) => now - f.born < (f.k === 'shell' ? 1200 : f.k === 'boom' ? 450 : 260) / speed);
+      v.fx = v.fx.filter((f) => now - f.born < FX_MS[f.k] / speed);
       for (const f of v.fx) {
-        const t = ((now - f.born) * speed) / (f.k === 'shell' ? 1200 : f.k === 'boom' ? 450 : 260);
-        if (f.k === 'boom' && nb < BOOMS) {
+        const t = ((now - f.born) * speed) / FX_MS[f.k];
+        if (f.k === 'cast' && f.a && nr < CASTS) {
+          const r = 0.6 + (CAST_R[f.a] ?? 2) * Math.sqrt(t);
+          mat.makeScale(r, 1, r).setPosition(W(f.x0), 0.08 + 0.3 * t, W(f.y0));
+          rings.setMatrixAt(nr, mat);
+          rings.setColorAt(nr++, col.set(SKILLS[f.a].color).multiplyScalar(1 - t));
+        } else if (f.k === 'bolt' && nl < CASTS) {
+          const flick = t < 0.5 || (t > 0.65 && t < 0.8) ? 1 : 0.05;
+          mat.makeScale(flick * (1.2 - t), 9, flick * (1.2 - t)).setPosition(W(f.x0), 4.5, W(f.y0));
+          bolts.setMatrixAt(nl++, mat);
+        } else if (f.k === 'boom' && nb < BOOMS) {
           const r = 0.4 + 1.1 * t;
           mat.makeScale(r, r * 0.6, r).setPosition(W(f.x0), 0.2, W(f.y0));
           booms.setMatrixAt(nb++, mat);
@@ -257,13 +291,18 @@ function Effects({ view }: { view: React.MutableRefObject<BattleView | null> }) 
     arrows.count = na;
     shells.count = ns;
     booms.count = nb;
-    arrows.instanceMatrix.needsUpdate = shells.instanceMatrix.needsUpdate = booms.instanceMatrix.needsUpdate = true;
+    rings.count = nr;
+    bolts.count = nl;
+    arrows.instanceMatrix.needsUpdate = shells.instanceMatrix.needsUpdate = booms.instanceMatrix.needsUpdate = rings.instanceMatrix.needsUpdate = bolts.instanceMatrix.needsUpdate = true;
+    if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
   });
   return (
     <>
       <primitive object={arrows} />
       <primitive object={shells} />
       <primitive object={booms} />
+      <primitive object={rings} />
+      <primitive object={bolts} />
     </>
   );
 }
@@ -344,6 +383,11 @@ function Scene(props: SceneProps) {
       {/* Невидимая (сжатая в точку) полоска с начала боя: её шейдер собран до первого попадания. */}
       {props.battle && <HpBar hp={1} x={0} y={0} z={0} scale={1e-4} />}
       {props.noDeploy && <NoDeploy cells={props.noDeploy} />}
+      {!props.battle && !enemy && (
+        <Suspense fallback={null}>
+          <Builders buildings={buildings} />
+        </Suspense>
+      )}
       {props.battle && (
         // Персонажи грузятся отдельно: поле боя видно сразу.
         <>
@@ -356,6 +400,7 @@ function Scene(props: SceneProps) {
         </>
       )}
       {props.battle && <HealerAuras view={props.battle} />}
+      {props.battle && <SkillAuras view={props.battle} />}
       {props.battle && <UnitBars view={props.battle} foe={!!props.foe} />}
       {props.battle && <Effects view={props.battle} />}
     </>

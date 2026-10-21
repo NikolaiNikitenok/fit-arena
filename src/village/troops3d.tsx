@@ -6,6 +6,7 @@ import { Character, type CharacterProps, type CharAnim } from '../three/Characte
 import { parseTint } from '../three/Instanced';
 import { ANIMS_URL, CharName, charUrl, preloadGltf, useGltf } from '../three/kit';
 import { GRID } from '../../shared/village';
+import { SKILLS } from '../../shared/heroSkills';
 import { DT, HEAL_RADIUS, rectDist, SimUnit, TPS, TroopId, UnitKind } from '../../shared/villageBattle';
 import { faceTo, frameOf, TroopClip, troopPose, turnToward } from './troopPose';
 import type { BattleView } from './Village3D';
@@ -707,6 +708,52 @@ export function HealerAuras({ view }: { view: React.MutableRefObject<BattleView 
     }
     mesh.count = n;
     mesh.instanceMatrix.needsUpdate = true;
+  });
+  return <primitive object={mesh} />;
+}
+
+/** Кольца под отрядами, на которых действует умение героя: ярость и клич — тёплые, щит — синий. */
+export function SkillAuras({ view }: { view: React.MutableRefObject<BattleView | null> }) {
+  const MAX = 64;
+  const mesh = useMemo(() => {
+    const geo = new THREE.RingGeometry(0.5, 0.68, 28);
+    geo.rotateX(-Math.PI / 2);
+    const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }), MAX);
+    m.frustumCulled = false;
+    m.count = 0;
+    m.renderOrder = 2;
+    m.setColorAt(0, new THREE.Color('#ffffff'));
+    return m;
+  }, []);
+  useEffect(() => () => mesh.dispose(), [mesh]);
+  const mat = useMemo(() => new THREE.Matrix4(), []);
+  const col = useMemo(() => new THREE.Color(), []);
+  useFrame(() => {
+    const v = view.current;
+    let n = 0;
+    if (v) {
+      const now = performance.now();
+      const { a } = simTime(v, now);
+      const tick = v.s.tick;
+      for (const u of v.s.units) {
+        if (!u.alive || n >= MAX - 1) continue;
+        const buffs: string[] = [];
+        if (u.rage > tick) buffs.push(SKILLS.rage.color);
+        else if (u.cry > tick) buffs.push(SKILLS.cry.color);
+        if (u.guard > tick) buffs.push(SKILLS.guard.color);
+        if (!buffs.length) continue;
+        const [x, y] = lerpUnit(v, u, a);
+        buffs.forEach((c, k) => {
+          const r = (u.u === 'giant' || u.u === 'hero' ? 1.3 : 1) * (1 + 0.3 * k) * (0.92 + 0.08 * Math.sin(now / 140 + u.n));
+          mat.makeScale(r, 1, r).setPosition(W(x), 0.06 + 0.02 * k, W(y));
+          mesh.setMatrixAt(n, mat);
+          mesh.setColorAt(n++, col.set(c));
+        });
+      }
+    }
+    mesh.count = n;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   });
   return <primitive object={mesh} />;
 }

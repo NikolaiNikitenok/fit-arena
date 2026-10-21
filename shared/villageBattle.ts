@@ -19,11 +19,15 @@
  * Цены: полный лагерь воинов на казармах 1 (20 мест) — 200 золота, около дня добычи на ратуше 1–2,
  * и набег на первые лагеря Князя окупается.
  * Великан идёт к башням, подрывник — к стенам, целитель летает над стенами и лечит соседей.
+ * Умения героя (shared/heroSkills.ts) идут в том же списке высадок: u = id умения, точка не важна.
  */
 import { BUILDINGS, Bld, BuildingType, GRID, NO_RES, Res, RES_KEYS, sizeOf, hpOf, thLevel, type Town } from './village';
+import { CRY, GUARD, isSkill, QUAKE, RAGE, SkillId, skillsFor, SQUAD, STORM } from './heroSkills';
 
 export type TroopId = 'warrior' | 'archer' | 'giant' | 'wallbreaker' | 'healer';
 export type UnitKind = TroopId | 'hero';
+// Что можно «высадить»: отряд, героя или умение героя.
+export type DeployKind = UnitKind | SkillId;
 export const TROOP_IDS: TroopId[] = ['warrior', 'archer', 'giant', 'wallbreaker', 'healer'];
 
 export interface TroopDef {
@@ -158,7 +162,7 @@ export interface BattleArmy {
 export interface Deploy {
   // Тик высадки (0..BATTLE_TICKS), отряд и точка поля в клетках (0.1 клетки точности).
   t: number;
-  u: UnitKind;
+  u: DeployKind;
   x: number;
   y: number;
 }
@@ -196,6 +200,8 @@ export interface SimBuilding extends BaseBuilding {
   alive: boolean;
   cd: number;
   target: number;
+  // До какого тика башня молчит (умения героя).
+  stun: number;
 }
 export interface SimUnit {
   n: number;
@@ -216,9 +222,15 @@ export interface SimUnit {
   cd: number;
   // Последний тик, когда атаковал: для анимации.
   hit: number;
+  // До какого тика действуют умения героя: ярость, клич, щит.
+  rage: number;
+  cry: number;
+  guard: number;
 }
 export interface Fx {
-  k: 'arrow' | 'shell' | 'boom' | 'hit';
+  k: 'arrow' | 'shell' | 'boom' | 'hit' | 'cast' | 'bolt';
+  // Какое умение (у 'cast' и 'bolt').
+  a?: SkillId;
   x0: number;
   y0: number;
   x1: number;
@@ -246,7 +258,7 @@ export interface BattleState {
   // Высадки по порядку и номер следующей.
   queue: Deploy[];
   next: number;
-  left: Partial<Record<UnitKind, number>>;
+  left: Partial<Record<DeployKind, number>>;
   used: Partial<Record<UnitKind, number>>;
   occ: Int16Array;
 }
@@ -299,7 +311,7 @@ export function createBattle(input: BattleInput): BattleState {
     .filter((b) => b.l >= 1)
     .map((b) => {
       const hp = hpOf(b.t, b.l);
-      return { ...b, size: sizeOf(b.t), hp, maxHp: hp, wall: b.t === 'wall', alive: true, cd: 0, target: -1 };
+      return { ...b, size: sizeOf(b.t), hp, maxHp: hp, wall: b.t === 'wall', alive: true, cd: 0, target: -1, stun: 0 };
     });
   const occ = new Int16Array(FIELD * FIELD).fill(-1);
   buildings.forEach((b, k) => {
@@ -307,14 +319,24 @@ export function createBattle(input: BattleInput): BattleState {
   });
   // Стабильная сортировка по тику: порядок внутри тика — как пришли.
   const queue = input.deploys.map((d, k) => ({ d, k })).sort((a, b) => a.d.t - b.d.t || a.k - b.k).map((e) => e.d);
-  const left: Partial<Record<UnitKind, number>> = { ...input.army.troops };
+  const left: Partial<Record<DeployKind, number>> = { ...input.army.troops };
   if (input.army.hero) left.hero = 1;
+  for (const k of skillsFor(input.army.hero)) left[k] = 1;
   return { input, tick: 0, buildings, units: [], shells: [], fx: [], done: false, rng: input.seed | 0, queue, next: 0, left, used: {}, occ };
 }
 
-/** Высадка во время живого боя: на текущем тике, как если бы она была в списке с начала. */
-export function addDeploy(s: BattleState, u: UnitKind, x: number, y: number): Deploy | null {
-  if (s.done || (s.left[u] ?? 0) <= 0 || !canDeploy(s.input.base, x, y)) return null;
+/** Живой герой на поле (для умений). */
+export const heroUnit = (s: BattleState): SimUnit | undefined => s.units.find((u) => u.u === 'hero' && u.alive);
+
+/** Высадка (или умение героя) во время живого боя: на текущем тике, как если бы она была в списке с начала. */
+export function addDeploy(s: BattleState, u: DeployKind, x: number, y: number): Deploy | null {
+  if (s.done || (s.left[u] ?? 0) <= 0) return null;
+  if (isSkill(u)) {
+    const h = heroUnit(s);
+    if (!h) return null;
+    x = h.x;
+    y = h.y;
+  } else if (!canDeploy(s.input.base, x, y)) return null;
   const d: Deploy = { t: s.tick, u, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   s.input = { ...s.input, deploys: [...s.input.deploys, d] };
   // Тот же порядок, что дала бы сортировка полного списка: после всех высадок с тиком не позже этого.
@@ -325,14 +347,71 @@ export function addDeploy(s: BattleState, u: UnitKind, x: number, y: number): De
 }
 
 function spawn(s: BattleState, d: Deploy) {
-  if (d.t > BATTLE_TICKS || (s.left[d.u] ?? 0) <= 0 || !canDeploy(s.input.base, d.x, d.y)) return;
+  if (d.t > BATTLE_TICKS || (s.left[d.u] ?? 0) <= 0) return;
+  if (isSkill(d.u)) {
+    s.left[d.u] = 0;
+    return castSkill(s, d.u);
+  }
+  if (!canDeploy(s.input.base, d.x, d.y)) return;
   s.left[d.u] = (s.left[d.u] ?? 0) - 1;
   s.used[d.u] = (s.used[d.u] ?? 0) + 1;
-  const def = d.u === 'hero' ? heroDef(s.input.army.hero ?? 1) : TROOPS[d.u];
-  const mul = d.u === 'hero' ? 1 : unitMul(s.input.army, d.u);
-  const hp = Math.round(def.hp * mul);
-  s.units.push({ n: s.units.length, u: d.u, x: d.x, y: d.y, hp, maxHp: hp, def, damage: Math.round(def.damage * mul * 10) / 10, alive: true, target: -1, block: -1, path: null, pi: 0, cd: 0, hit: -100 });
+  addUnit(s, d.u, d.x, d.y);
 }
+
+function addUnit(s: BattleState, u: UnitKind, x: number, y: number) {
+  const def = u === 'hero' ? heroDef(s.input.army.hero ?? 1) : TROOPS[u];
+  const mul = u === 'hero' ? 1 : unitMul(s.input.army, u);
+  const hp = Math.round(def.hp * mul);
+  s.units.push({ n: s.units.length, u, x, y, hp, maxHp: hp, def, damage: Math.round(def.damage * mul * 10) / 10, alive: true, target: -1, block: -1, path: null, pi: 0, cd: 0, hit: -100, rage: 0, cry: 0, guard: 0 });
+}
+
+// Шесть точек вокруг героя для дружины: углы по 60°, без тригонометрии.
+const RING6 = [[1, 0], [0.5, 0.866], [-0.5, 0.866], [-1, 0], [-0.5, -0.866], [0.5, -0.866]];
+
+/** Умение героя: срабатывает вокруг живого героя, если он погиб или не высажен — пропадает. */
+function castSkill(s: BattleState, a: SkillId) {
+  const h = heroUnit(s);
+  if (!h) return;
+  const near = (r: number) => s.units.filter((o) => o.alive && dist(o.x, o.y, h.x, h.y) <= r);
+  s.fx.push({ k: 'cast', a, x0: h.x, y0: h.y, x1: h.x, y1: h.y });
+  if (a === 'rage') {
+    h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * RAGE.heal));
+    h.rage = s.tick + RAGE.ticks;
+  } else if (a === 'cry') {
+    for (const o of near(CRY.radius)) o.cry = s.tick + CRY.ticks;
+  } else if (a === 'guard') {
+    for (const o of near(GUARD.radius)) o.guard = s.tick + GUARD.ticks;
+  } else if (a === 'quake') {
+    const dmg = h.damage * QUAKE.hits;
+    s.buildings.forEach((b, k) => {
+      if (!b.alive) return;
+      const d = rectDist(b, h.x, h.y);
+      if (BUILDINGS[b.t].defense && d <= QUAKE.stunRadius) b.stun = Math.max(b.stun, s.tick + QUAKE.stun);
+      if (d <= QUAKE.radius) damageBuilding(s, k, b.wall ? dmg * QUAKE.wallMul : dmg);
+    });
+    s.fx.push({ k: 'boom', x0: h.x, y0: h.y, x1: h.x, y1: h.y });
+  } else if (a === 'squad') {
+    for (let i = 0; i < SQUAD.count; i++) {
+      const [dx, dy] = RING6[i % RING6.length];
+      addUnit(s, 'warrior', Math.round((h.x + dx * SQUAD.ring) * 10) / 10, Math.round((h.y + dy * SQUAD.ring) * 10) / 10);
+    }
+  } else if (a === 'storm') {
+    const towers = s.buildings
+      .map((b, k) => ({ b, k, d: rectDist(b, h.x, h.y) }))
+      .filter((e) => e.b.alive && BUILDINGS[e.b.t].defense)
+      .sort((p, q) => p.d - q.d || p.k - q.k)
+      .slice(0, STORM.targets);
+    for (const { b, k } of towers) {
+      b.stun = Math.max(b.stun, s.tick + STORM.stun);
+      s.fx.push({ k: 'bolt', a, x0: b.x + b.size / 2, y0: b.y + b.size / 2, x1: b.x + b.size / 2, y1: b.y + b.size / 2 });
+      damageBuilding(s, k, Math.ceil(b.maxHp * STORM.share));
+    }
+  }
+}
+
+/** Сила удара и скорость отряда с учётом умений героя. */
+const dmgOf = (s: BattleState, u: SimUnit) => u.damage * (u.rage > s.tick ? RAGE.dmg : 1) * (u.cry > s.tick ? CRY.dmg : 1);
+const speedOf = (s: BattleState, u: SimUnit) => u.def.speed * (u.rage > s.tick ? RAGE.speed : 1) * (u.cry > s.tick ? CRY.speed : 1);
 
 const nonWall = (s: BattleState) => s.buildings.filter((b) => !b.wall);
 
@@ -474,7 +553,7 @@ function damageBuilding(s: BattleState, k: number, dmg: number) {
 
 function damageUnit(s: BattleState, u: SimUnit, dmg: number) {
   if (!u.alive) return;
-  u.hp -= dmg;
+  u.hp -= u.guard > s.tick ? dmg * GUARD.taken : dmg;
   if (u.hp <= 0) {
     u.hp = 0;
     u.alive = false;
@@ -484,7 +563,7 @@ function damageUnit(s: BattleState, u: SimUnit, dmg: number) {
 function explode(s: BattleState, u: SimUnit) {
   const r = u.def.splash ?? 1;
   s.buildings.forEach((b, k) => {
-    if (b.alive && rectDist(b, u.x, u.y) <= r) damageBuilding(s, k, u.damage * (b.wall ? (u.def.wallMul ?? 1) : 1));
+    if (b.alive && rectDist(b, u.x, u.y) <= r) damageBuilding(s, k, dmgOf(s, u) * (b.wall ? (u.def.wallMul ?? 1) : 1));
   });
   s.fx.push({ k: 'boom', x0: u.x, y0: u.y, x1: u.x, y1: u.y });
   u.alive = false;
@@ -498,7 +577,7 @@ function attack(s: BattleState, u: SimUnit, k: number) {
   u.cd = Math.round(u.def.every * TPS);
   u.hit = s.tick;
   if (u.def.range > 1.5) s.fx.push({ k: 'arrow', x0: u.x, y0: u.y, x1: b.x + b.size / 2, y1: b.y + b.size / 2 });
-  damageBuilding(s, k, u.damage);
+  damageBuilding(s, k, dmgOf(s, u));
 }
 
 // Целитель лечит отряды в этом радиусе (клеток); героя — вполсилы.
@@ -523,7 +602,7 @@ function stepHealer(s: BattleState, u: SimUnit) {
     const o = s.units[best];
     const d = dist(u.x, u.y, o.x, o.y);
     if (d > 1.5) {
-      const step = Math.min(d - 1.5, u.def.speed * DT);
+      const step = Math.min(d - 1.5, speedOf(s, u) * DT);
       u.x += ((o.x - u.x) / d) * step;
       u.y += ((o.y - u.y) / d) * step;
     }
@@ -557,7 +636,7 @@ function stepUnit(s: BattleState, u: SimUnit) {
     if (!u.path) u.path = [];
   }
   const path: number[] = u.path;
-  let step = u.def.speed * DT;
+  let step = speedOf(s, u) * DT;
   while (step > 1e-9) {
     let tx: number;
     let ty: number;
@@ -594,7 +673,7 @@ function stepUnit(s: BattleState, u: SimUnit) {
 
 function stepDefense(s: BattleState, b: SimBuilding) {
   const def = BUILDINGS[b.t].defense;
-  if (!def || !b.alive) return;
+  if (!def || !b.alive || b.stun > s.tick) return;
   if (b.cd > 0) b.cd--;
   const cx = b.x + b.size / 2;
   const cy = b.y + b.size / 2;
@@ -652,8 +731,8 @@ export function stepBattle(s: BattleState, live = false): BattleState {
   return s;
 }
 
-/** Есть ли ещё кого высадить. */
-export const unitsLeft = (s: BattleState) => Object.values(s.left).some((n) => (n ?? 0) > 0);
+/** Есть ли ещё кого высадить (умения не в счёт). */
+export const unitsLeft = (s: BattleState) => Object.entries(s.left).some(([k, n]) => !isSkill(k) && (n ?? 0) > 0);
 
 export function battleResult(s: BattleState): BattleResult {
   const nw = nonWall(s);
@@ -685,14 +764,20 @@ export function simulateBattle(input: BattleInput): BattleResult {
 
 /** Проверка высадок до боя (для сервера): по порядку тиков, в пределах поля и войска. */
 export function validateDeploys(input: BattleInput): string | null {
-  const left: Partial<Record<UnitKind, number>> = { ...input.army.troops, hero: input.army.hero ? 1 : 0 };
+  const left: Partial<Record<DeployKind, number>> = { ...input.army.troops, hero: input.army.hero ? 1 : 0 };
+  for (const k of skillsFor(input.army.hero)) left[k] = 1;
   if (input.deploys.length > 300) return 'слишком много высадок';
+  let heroAt = -1;
   for (const d of input.deploys) {
     if (!Number.isInteger(d.t) || d.t < 0 || d.t > BATTLE_TICKS) return 'неверный тик';
     if (!Number.isFinite(d.x) || !Number.isFinite(d.y)) return 'неверная точка';
-    if (!(d.u in UNIT_NAMES)) return 'неизвестный отряд';
-    if ((left[d.u] = (left[d.u] ?? 0) - 1) < 0) return 'отрядов больше, чем есть';
-    if (!canDeploy(input.base, d.x, d.y)) return 'высадка слишком близко к постройкам';
+    const skill = isSkill(d.u);
+    if (!skill && !Object.prototype.hasOwnProperty.call(UNIT_NAMES, d.u)) return 'неизвестный отряд';
+    if ((left[d.u] = (left[d.u] ?? 0) - 1) < 0) return skill ? 'умение не открыто или уже было' : 'отрядов больше, чем есть';
+    if (skill) {
+      if (heroAt < 0 || d.t < heroAt) return 'умение до высадки героя';
+    } else if (!canDeploy(input.base, d.x, d.y)) return 'высадка слишком близко к постройкам';
+    if (d.u === 'hero') heroAt = d.t;
   }
   return null;
 }

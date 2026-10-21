@@ -75,6 +75,8 @@ export interface HandGear {
   tint?: string;
   // Кость руки, если не та, что в наборе.
   bone?: string;
+  // Свой предмет вместо меша из набора (молоток строителя): кладётся на кость bone или правую руку.
+  make?: () => THREE.Object3D;
 }
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
@@ -201,6 +203,15 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
 function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
   const src = useGltf(charUrl(gear.source));
   useEffect(() => {
+    if (gear.make) {
+      const bone = root.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(gear.bone ?? 'handslot.r'));
+      if (!bone) return;
+      const item = gear.make();
+      bone.add(item);
+      return () => {
+        bone.remove(item);
+      };
+    }
     const node = src.scene.getObjectByName(gear.mesh);
     // Имена костей загрузчик очищает от точек: handslot.l → handslotl.
     const boneName = gear.bone ? THREE.PropertyBinding.sanitizeNodeName(gear.bone) : node?.parent?.name;
@@ -230,6 +241,6 @@ function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
     return () => {
       bone.remove(copy);
     };
-  }, [src, root, gear.mesh, gear.glow, gear.tint, gear.bone]);
+  }, [src, root, gear.mesh, gear.glow, gear.tint, gear.bone, gear.make]);
   return null;
 }
