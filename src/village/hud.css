@@ -92,5 +92,5 @@ button.hud-chip:active { transform: translateY(1px); box-shadow: inset 0 1px 0 v
 
 @media (max-width: 360px) {
   .hud-bar { width: 132px; }
-  .hud-chips { max-width: 150px; }
+  .hud-chips { max-width: 165px; }
 }

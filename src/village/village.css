@@ -3,7 +3,9 @@
 .vil-screen.battle { bottom: 0; z-index: 9; }
 .vil-view { position: absolute; inset: 0; touch-action: none; }
 /* Холст всегда во всю высоту (под меню он просто обрезан): при входе в бой, где меню нет, не меняет размер. */
-.vil-screen:not(.battle) > .vil-view { bottom: calc(-1 * (var(--nav-h) + env(safe-area-inset-bottom))); }
+.vil-screen:not(.battle) > .vil-view { bottom: calc(-1 * (var(--nav-h) + env(safe-area-inset-bottom)));
+  /* В WebView Telegram на Android overflow: hidden не всегда режет WebGL-холст, и он ложился поверх нижнего меню: режем явно. */
+  clip-path: inset(0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0); }
 .vil-view canvas { display: block; }
 
 .vil-top { position: absolute; top: calc(8px + var(--safe-top)); left: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
@@ -203,3 +205,8 @@
 .vil-theme.t-halloween { background: linear-gradient(160deg, #f08a24, #4b3466); }
 .vil-theme.on { border-color: var(--accent, #ff8a5c); box-shadow: 0 0 0 2px rgba(255, 138, 92, .35); }
 .vil-theme-note { margin-bottom: 4px; font-size: 13px; }
+
+/* Вкладки строительства: пять штук не влезают в узкий экран — листаются вбок. */
+.vil-cats { overflow-x: auto; scrollbar-width: none; flex: none; }
+.vil-cats::-webkit-scrollbar { display: none; }
+.vil-cats button { flex: 0 0 auto; padding: 9px 12px; }

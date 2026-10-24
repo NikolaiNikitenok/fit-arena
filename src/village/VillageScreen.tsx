@@ -207,6 +207,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     setBattleState(b);
     onPlaying(!!b);
   };
+  // Ушли из деревни посреди боя — нижнее меню не должно остаться спрятанным.
+  const inFight = useRef(false);
+  inFight.current = !!battle;
+  useEffect(() => () => void (inFight.current && onPlaying(false)), []); // eslint-disable-line react-hooks/exhaustive-deps
   const flash = (text: string) => {
     setToast(text);
     setTimeout(() => setToast((t) => (t === text ? null : t)), 2400);
@@ -693,9 +697,9 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               строители {builders - busy}/{builders}
             </span>
           </div>
-          <div className="tabs small">
+          <div className="tabs small vil-cats">
             {CATS.map((c) => (
-              <button key={c} className={c === cat ? 'active' : ''} onClick={() => setCat(c)}>
+              <button key={c} className={c === cat ? 'active' : ''} onClick={(e) => (setCat(c), e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }))}>
                 {c === 'decor' ? 'Украшения' : CATEGORY_LABELS[c]}
               </button>
             ))}
