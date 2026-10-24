@@ -6,7 +6,9 @@ import { Instanced, Placed } from '../three/Instanced';
 import { ribbonGeometry } from '../three/Prop';
 import { GRID, isTrap } from '../../shared/village';
 import { MARGIN } from '../../shared/villageBattle';
-import { SIZE } from './looks';
+import { type Prim, SIZE, THEME_TREE_TINT } from './looks';
+import { PrimInstances } from './looks3d';
+import type { Decor, ThemeId } from './decor';
 import type { ViewBld } from './Village3D';
 
 // Земля деревни: плато из отдельных плиток-кубиков (трава разных оттенков, под постройками — камень,
@@ -49,9 +51,11 @@ const DIRT = 1;
 const PATH = 2;
 const FOUND = 3;
 
-export function tileKinds(buildings: ViewBld[]): Uint8Array {
+export function tileKinds(buildings: ViewBld[], paths: Decor[] = []): Uint8Array {
   const k = new Uint8Array(GRID * GRID);
   const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < GRID && y < GRID ? y * GRID + x : -1);
+  // Дорожки, которые проложил игрок.
+  for (const d of paths) if (d.k === 'path' && at(d.x, d.y) >= 0) k[at(d.x, d.y)] = PATH;
   for (const b of buildings) {
     const s = SIZE[b.t];
     if (isTrap(b.t)) continue;
@@ -98,11 +102,41 @@ export function tileKinds(buildings: ViewBld[]): Uint8Array {
   return k;
 }
 
-const PAL = {
-  own: { grass: ['#7cb247', '#83b84c', '#89bd51', '#90c257'], meadow: '#71a541' },
-  enemy: { grass: ['#a1a15c', '#a7a661', '#adab66', '#b3b06b'], meadow: '#95934f' },
+interface Pal {
+  grass: string[];
+  meadow: string;
+  dirt: string[];
+  tuft: string[];
+  flower: string[];
+  // Низина: основной цвет, светлые поляны, тёмные места; вода и берег; дорога.
+  low: [string, string, string];
+  water: string;
+  sand: string;
+  road: string;
+  // Как перекрасить деревья низины.
+  tree?: string;
+}
+const OWN: Pal = {
+  grass: ['#7cb247', '#83b84c', '#89bd51', '#90c257'], meadow: '#71a541', dirt: ['#a9845a', '#b38d61', '#9e7a51'],
+  tuft: ['#5f9a35', '#6aa83d', '#77b546', '#558f30'], flower: ['#ffffff', '#ffe066', '#ff9ec7', '#9ec5ff', '#ff7a6b'],
+  low: ['#6f9e42', '#86b34c', '#55833a'], water: '#4fa6d8', sand: '#d2bb84', road: '#b8946a',
 };
-const DIRT_C = ['#a9845a', '#b38d61', '#9e7a51'];
+// Чужая деревня — выцветшая, своя — по теме деревни (src/village/decor.ts).
+const PALS: Record<'enemy' | ThemeId, Pal> = {
+  classic: OWN,
+  enemy: { ...OWN, grass: ['#a1a15c', '#a7a661', '#adab66', '#b3b06b'], meadow: '#95934f', low: ['#8f8b52', '#a39e60', '#76733f'], water: '#5f8f9e', sand: '#b9a173', road: '#a08860' },
+  winter: {
+    grass: ['#e6edf5', '#eef3f9', '#dfe7f1', '#f5f8fc'], meadow: '#dbe4ef', dirt: ['#c9bcab', '#d3c7b8', '#bfb2a1'],
+    tuft: ['#d6e1ee', '#c8d6e6', '#e3ebf4', '#bccbdd'], flower: [],
+    low: ['#e3eaf3', '#f6f9fc', '#c7d3e2'], water: '#a8d0ea', sand: '#e9eff6', road: '#c9c2b8', tree: THEME_TREE_TINT.winter,
+  },
+  halloween: {
+    grass: ['#56613a', '#5d6840', '#505b36', '#646f45'], meadow: '#4b5533', dirt: ['#7d6347', '#86694c', '#735b41'],
+    tuft: ['#47522c', '#525e33', '#3e4826', '#5c6838'], flower: ['#ff8a24', '#b06ae0', '#ffb347'],
+    low: ['#4b5433', '#5c663f', '#384024'], water: '#3d5c66', sand: '#8a7a5a', road: '#7f6a50', tree: THEME_TREE_TINT.halloween,
+  },
+};
+const palOf = (enemy: boolean, theme: ThemeId) => PALS[enemy ? 'enemy' : theme];
 const PATH_C = ['#c4a274', '#cdab7c', '#b9976a'];
 const FOUND_C = ['#a8a196', '#9c958a', '#b1aa9e'];
 const ROCK_C = ['#8a6a4a', '#7b5d40', '#94755a', '#6f5a48', '#8c8a86'];
@@ -117,9 +151,9 @@ interface Box {
   c: string;
 }
 
-function blocks(kinds: Uint8Array, enemy: boolean): Box[] {
+function blocks(kinds: Uint8Array, enemy: boolean, theme: ThemeId = 'classic'): Box[] {
   const out: Box[] = [];
-  const pal = enemy ? PAL.enemy : PAL.own;
+  const pal = palOf(enemy, theme);
   const pick = (list: string[], x: number, y: number) => list[Math.floor(hash(x, y, 3) * list.length)];
   // Тёмная земля под плитками: видна в щелях, её бока — обрыв плато.
   out.push({ x: 0, y: (UNDER_TOP + LOWLAND_Y) / 2, z: 0, sx: EDGE * 2 + 0.2, sy: UNDER_TOP - LOWLAND_Y, sz: EDGE * 2 + 0.2, c: '#6b4e33' });
@@ -132,7 +166,7 @@ function blocks(kinds: Uint8Array, enemy: boolean): Box[] {
       if (kind === FOUND) {
         c = pick(FOUND_C, cx, cy);
         top = 0;
-      } else if (kind === DIRT) c = pick(DIRT_C, cx, cy);
+      } else if (kind === DIRT) c = pick(pal.dirt, cx, cy);
       else if (kind === PATH) {
         c = pick(PATH_C, cx, cy);
         top = -0.025;
@@ -173,7 +207,7 @@ function blocks(kinds: Uint8Array, enemy: boolean): Box[] {
   for (let side = 0; side < 4; side++) {
     const along = side < 2;
     const f = side % 2 ? EDGE + 0.08 : -EDGE - 0.08;
-    out.push({ x: along ? 0 : f, y: -0.12, z: along ? f : 0, sx: along ? EDGE * 2 + 0.3 : 0.16, sy: 0.16, sz: along ? 0.16 : EDGE * 2 + 0.3, c: (enemy ? PAL.enemy : PAL.own).meadow });
+    out.push({ x: along ? 0 : f, y: -0.12, z: along ? f : 0, sx: along ? EDGE * 2 + 0.3 : 0.16, sy: 0.16, sz: along ? 0.16 : EDGE * 2 + 0.3, c: pal.meadow });
   }
   return out;
 }
@@ -213,11 +247,12 @@ interface Bit {
   r: number;
   c: string;
 }
-const TUFT_C = ['#5f9a35', '#6aa83d', '#77b546', '#558f30'];
-const FLOWER_C = ['#ffffff', '#ffe066', '#ff9ec7', '#9ec5ff', '#ff7a6b'];
 const PEBBLE_C = ['#b5b5ad', '#9d9c95', '#c8c4b8'];
 
-function bits(kinds: Uint8Array, lite: boolean, enemy: boolean) {
+function bits(kinds: Uint8Array, lite: boolean, enemy: boolean, theme: ThemeId = 'classic') {
+  const pal = palOf(enemy, theme);
+  const TUFT_C = pal.tuft;
+  const FLOWER_C = pal.flower;
   const tufts: Bit[] = [];
   const flowers: Bit[] = [];
   const pebbles: Bit[] = [];
@@ -230,7 +265,7 @@ function bits(kinds: Uint8Array, lite: boolean, enemy: boolean) {
       if (kind === GRASS) {
         const n = hash(cx, cy, 20) < 0.55 * keep ? 1 + (hash(cx, cy, 21) < 0.4 ? 1 : 0) : 0;
         for (let j = 0; j < n; j++) tufts.push({ ...at(30 + j * 3), s: 0.7 + 0.6 * hash(cx, cy, 40 + j), c: TUFT_C[Math.floor(hash(cx, cy, 41 + j) * 4)] });
-        if (!enemy && hash(cx, cy, 22) < 0.2 * keep) {
+        if (!enemy && FLOWER_C.length && hash(cx, cy, 22) < 0.2 * keep) {
           // Цветы растут кучками по 2–3.
           const c = FLOWER_C[Math.floor(hash(cx, cy, 23) * FLOWER_C.length)];
           const base = at(50);
@@ -390,7 +425,9 @@ const WINDMILL = { x: -21, z: 21 };
 const nearWater = (x: number, z: number) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 2 || RIVER.some(([rx, rz]) => Math.hypot(x - rx, z - rz) < 3.6);
 const nearRoad = (x: number, z: number) => ROAD.some(([rx, rz]) => Math.hypot(x - rx, z - rz) < 2.2) || Math.hypot(x - MILL.x, z - MILL.z) < 3 || Math.hypot(x - WINDMILL.x, z - WINDMILL.z) < 3.2;
 
-function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
+function lowland(lite: boolean, theme: ThemeId = 'classic'): { fantasy: Placed[]; village: Placed[]; prim: Prim[] } {
+  const tree = PALS[theme].tree;
+  const prim: Prim[] = [];
   const fantasy: Placed[] = [];
   const village: Placed[] = [];
   let seed = 7;
@@ -414,7 +451,7 @@ function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
       continue;
     }
     const name = big[Math.floor(rnd() * (r > 28 ? big.length : 7))];
-    fantasy.push({ name, x, y: Y, z, s: name.startsWith('mountain') ? 2.4 : name.startsWith('hills') ? 1.7 : 1 + rnd() * 0.6, ry: rnd() * 6.28 });
+    fantasy.push({ name, x, y: Y, z, s: name.startsWith('mountain') ? 2.4 : name.startsWith('hills') ? 1.7 : 1 + rnd() * 0.6, ry: rnd() * 6.28, tint: tree });
   }
   // Рощи: густые кучки деревьев, тёмные в середине, с подлеском по краю.
   const groves = lite ? 9 : 16;
@@ -432,7 +469,7 @@ function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
       if (!free(x, z)) continue;
       const edge = d > 2.6;
       if (edge && rnd() < 0.5) village.push({ name: 'bush', x, y: Y, z, s: 2 + rnd(), ry: rnd() * 6.28 });
-      else fantasy.push({ name: ['trees_A_large', 'trees_B_large', 'tree_single_A', 'tree_single_B'][Math.floor(rnd() * 4)], x, y: Y, z, s: 1.15 + rnd() * 0.5, ry: rnd() * 6.28, tint: rnd() < 0.3 ? 'mul:.85,.95,.85' : undefined });
+      else fantasy.push({ name: ['trees_A_large', 'trees_B_large', 'tree_single_A', 'tree_single_B'][Math.floor(rnd() * 4)], x, y: Y, z, s: 1.15 + rnd() * 0.5, ry: rnd() * 6.28, tint: tree ?? (rnd() < 0.3 ? 'mul:.85,.95,.85' : undefined) });
     }
   }
   // Горы у горизонта: кольцом за лесом, тонут в дымке.
@@ -441,7 +478,32 @@ function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
     const a = (k / peaks) * Math.PI * 2 + rnd() * 0.2;
     const r = 41 + rnd() * 9;
     const name = ['mountain_A', 'mountain_C_grass', 'mountain_B_grass_trees', 'mountain_A'][Math.floor(rnd() * 4)];
-    fantasy.push({ name, x: Math.cos(a) * r, y: Y - 0.3, z: Math.sin(a) * r, s: 3.6 + rnd() * 2.2, ry: rnd() * 6.28 });
+    fantasy.push({ name, x: Math.cos(a) * r, y: Y - 0.3, z: Math.sin(a) * r, s: 3.6 + rnd() * 2.2, ry: rnd() * 6.28, tint: theme === 'winter' ? 'mul:1.3,1.36,1.5' : undefined });
+  }
+  // Темы: зимой — сугробы и снеговики у подножия, на Хэллоуин — тыквы-фонари и надгробия.
+  if (theme !== 'classic') {
+    let s2 = 31;
+    const r2 = () => (s2 = (s2 * 16807) % 2147483647) / 2147483647;
+    for (let k = 0; k < (lite ? 18 : 36); k++) {
+      const a = r2() * Math.PI * 2;
+      const r = 17 + r2() * 9;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      if (!free(x, z)) continue;
+      const y = Y;
+      if (theme === 'winter') {
+        const w = 0.8 + r2() * 1.2;
+        prim.push({ k: 'ball', x, y: y + 0.05, z, sx: w * 1.6, sy: w * 0.5, sz: w, c: '#f3f7fc', ry: r2() * 3 });
+      } else if (k % 3) {
+        const s = 0.6 + r2() * 0.4;
+        prim.push({ k: 'ball', x, y: y + 0.2 * s, z, sx: 0.55 * s, sy: 0.42 * s, sz: 0.55 * s, c: '#f08a24' });
+        prim.push({ k: 'box', x: x + 0.2 * s, y: y + 0.24 * s, z: z + 0.2 * s, sx: 0.2 * s, sy: 0.06 * s, sz: 0.04, c: '#ffd36b', ry: Math.PI / 4, glow: true });
+      } else {
+        const ry = r2() * 0.6 - 0.3;
+        prim.push({ k: 'box', x, y: y + 0.4, z, sx: 0.5, sy: 0.8, sz: 0.14, c: '#8b8f96', ry: Math.PI / 4 + ry, rz: (r2() - 0.5) * 0.2 });
+        prim.push({ k: 'cyl', x, y: y + 0.8, z, sx: 0.5, sy: 0.14, sz: 0.5, c: '#8b8f96', rx: Math.PI / 2, ry: Math.PI / 4 + ry });
+      }
+    }
   }
   if (!lite) for (let k = 0; k < 14; k++) village.push({ name: k % 2 ? 'hills_C_trees' : 'hill_single_C', x: (k % 2 ? 1 : -1) * (24 + rnd() * 10), y: Y, z: 14 + rnd() * 18, s: 1.6 + rnd(), ry: rnd() * 6.28 });
   // Мост, мельница, ветряк, повозка у дороги.
@@ -460,18 +522,19 @@ function lowland(lite: boolean): { fantasy: Placed[]; village: Placed[] } {
     const b = rnd() * 6.28;
     village.push({ name: 'waterplant_B', x: LAKE.x + Math.cos(b) * (LAKE.r + 0.2), y: Y, z: LAKE.z + Math.sin(b) * (LAKE.r + 0.2), s: 3 + rnd() * 2, ry: rnd() * 6.28 });
   }
-  return { fantasy, village };
+  return { fantasy, village, prim };
 }
 
 /** Низина: трава пятнами (светлые поляны, тёмные места под лесом), без единого шва. */
-function lowlandGeometry(enemy: boolean): THREE.BufferGeometry {
+function lowlandGeometry(enemy: boolean, theme: ThemeId = 'classic'): THREE.BufferGeometry {
   const g = new THREE.PlaneGeometry(240, 240, 120, 120);
   g.rotateX(-Math.PI / 2);
   const pos = g.attributes.position;
   const col: number[] = [];
-  const base = new THREE.Color(enemy ? '#8f8b52' : '#6f9e42');
-  const light = new THREE.Color(enemy ? '#a39e60' : '#86b34c');
-  const dark = new THREE.Color(enemy ? '#76733f' : '#55833a');
+  const [b0, l0, d0] = palOf(enemy, theme).low;
+  const base = new THREE.Color(b0);
+  const light = new THREE.Color(l0);
+  const dark = new THREE.Color(d0);
   const c = new THREE.Color();
   for (let k = 0; k < pos.count; k++) {
     const x = pos.getX(k);
@@ -534,7 +597,7 @@ function lakeGeometry(r: number, y: number) {
   return g;
 }
 
-function Water({ enemy, lite }: { enemy: boolean; lite: boolean }) {
+function Water({ enemy, lite, theme }: { enemy: boolean; lite: boolean; theme: ThemeId }) {
   const geos = useMemo(
     () => ({
       bank: ribbonGeometry(RIVER, 5, LOWLAND_Y + 0.02),
@@ -552,8 +615,9 @@ function Water({ enemy, lite }: { enemy: boolean; lite: boolean }) {
     shimmer.river.uniforms.uTime.value += Math.min(dt, 0.1);
     shimmer.lake.uniforms.uTime.value += Math.min(dt, 0.1);
   });
-  const sand = enemy ? '#b9a173' : '#d2bb84';
-  const water = enemy ? '#5f8f9e' : '#4fa6d8';
+  const pal = palOf(enemy, theme);
+  const sand = pal.sand;
+  const water = pal.water;
   return (
     <>
       <mesh geometry={geos.bank} receiveShadow>
@@ -571,7 +635,7 @@ function Water({ enemy, lite }: { enemy: boolean; lite: boolean }) {
       {!lite && <mesh geometry={geos.river} material={shimmer.river} position={[0, 0.02, 0]} renderOrder={1} />}
       {!lite && <mesh geometry={geos.lake} material={shimmer.lake} position={[0, 0.02, 0]} renderOrder={1} />}
       <mesh geometry={road} receiveShadow>
-        <meshStandardMaterial color={enemy ? '#a08860' : '#b8946a'} roughness={1} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={pal.road} roughness={1} side={THREE.DoubleSide} />
       </mesh>
     </>
   );
@@ -583,18 +647,21 @@ export interface GroundProps {
   lite: boolean;
   grid?: boolean;
   ghost?: { t: ViewBld['t']; x: number; y: number; ok: boolean; id?: number } | null;
+  // Украшения: из них земле нужны дорожки.
+  paths?: Decor[];
+  theme?: ThemeId;
 }
 
-export function Ground({ buildings, enemy, lite, grid, ghost }: GroundProps) {
+export function Ground({ buildings, enemy, lite, grid, ghost, paths, theme = 'classic' }: GroundProps) {
   // Плитки пересчитываем, только когда меняется расстановка (а не уровень или таймер).
-  const layout = buildings.map((b) => `${b.t}${b.x},${b.y}`).join(';');
+  const layout = buildings.map((b) => `${b.t}${b.x},${b.y}`).join(';') + '|' + (paths ?? []).filter((d) => d.k === 'path').map((d) => `${d.x},${d.y}`).join(';');
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const kinds = useMemo(() => tileKinds(buildings), [layout]);
-  const list = useMemo(() => blocks(kinds, enemy), [kinds, enemy]);
+  const kinds = useMemo(() => tileKinds(buildings, paths), [layout]);
+  const list = useMemo(() => blocks(kinds, enemy, theme), [kinds, enemy, theme]);
   const tiles = useBoxMesh(list, !lite);
-  const small = useMemo(() => bits(kinds, lite, enemy), [kinds, lite, enemy]);
-  const far = useMemo(() => lowland(lite), [lite]);
-  const plain = useMemo(() => lowlandGeometry(enemy), [enemy]);
+  const small = useMemo(() => bits(kinds, lite, enemy, theme), [kinds, lite, enemy, theme]);
+  const far = useMemo(() => lowland(lite, enemy ? 'classic' : theme), [lite, enemy, theme]);
+  const plain = useMemo(() => lowlandGeometry(enemy, theme), [enemy, theme]);
   useEffect(() => () => plain.dispose(), [plain]);
   return (
     <>
@@ -605,8 +672,9 @@ export function Ground({ buildings, enemy, lite, grid, ghost }: GroundProps) {
       <BitMesh list={small.tufts} geo={tuftGeo} flat />
       <BitMesh list={small.flowers} geo={flowerGeo} />
       <BitMesh list={small.pebbles} geo={pebbleGeo} flat />
-      <Water enemy={enemy} lite={lite} />
+      <Water enemy={enemy} lite={lite} theme={theme} />
       <Instanced lib="fantasy" items={far.fantasy} shadows={!lite} />
+      {far.prim.length > 0 && <PrimInstances list={far.prim} shadows={false} />}
       <Instanced lib="village" items={far.village} shadows={false} />
       {grid && <GridLines />}
       {ghost && <Footprint ghost={ghost} buildings={buildings} />}

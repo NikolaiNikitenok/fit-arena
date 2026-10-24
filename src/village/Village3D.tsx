@@ -5,7 +5,10 @@ import { Canvas3D } from '../three/Canvas3D';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
-import { Anim, KitPart, Look, lookOf, Prim, SIZE, trapLook, wallLook } from './looks';
+import { Anim, decorLook, KitPart, Look, lookOf, Prim, SIZE, trapLook, wallLook } from './looks';
+import type { Decor, DecorKind, ThemeId } from './decor';
+import { DecorExtras } from './Decor3D';
+import type { CharName } from '../three/kit';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings, useSettings } from '../settings';
 import { emitFx, Particles } from './Particles';
@@ -117,7 +120,7 @@ function lookFor(b: ViewBld, enemy: boolean): Look {
 }
 
 type Moving = Anim & { ox: number; oz: number };
-function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[]>; prim: Prim[]; anim: Moving[]; blobs: [number, number, number][] } {
+function placed(list: ViewBld[], enemy: boolean, decor: Decor[] = [], theme: ThemeId = 'classic'): { kit: Record<LibName, Placed[]>; prim: Prim[]; anim: Moving[]; blobs: [number, number, number][] } {
   const out: Record<string, Placed[]> = { fantasy: [], village: [] };
   const prim: Prim[] = [];
   const anim: Moving[] = [];
@@ -141,6 +144,15 @@ function placed(list: ViewBld[], enemy: boolean): { kit: Record<LibName, Placed[
     for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x, y: m.y, z: cz + m.z, s: m.s, ry: m.ry, tint: m.tint });
     for (const p of look.prim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
     for (const a of look.anim) anim.push({ ...a, ox: cx, oz: cz });
+    if (look.blob) blobs.push([cx, cz, look.blob]);
+  }
+  for (const d of decor) {
+    if (d.k === 'path') continue;
+    const cx = W(d.x + 0.5);
+    const cz = W(d.y + 0.5);
+    const look = decorLook(d.k, theme);
+    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x, y: m.y, z: cz + m.z, s: m.s, ry: m.ry, tint: m.tint });
+    for (const p of look.prim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
     if (look.blob) blobs.push([cx, cz, look.blob]);
   }
   return { kit: out as Record<LibName, Placed[]>, prim, anim, blobs };
@@ -280,11 +292,11 @@ function Bubble({ res, x, z, h }: { res: ResKey; x: number; z: number; h: number
   );
 }
 
-/** Одна модель постройки вне инстансов: призрак при расстановке. */
-function Model({ t, x, y, enemy }: { t: BuildingType; x: number; y: number; enemy?: boolean }) {
+/** Одна модель постройки (или украшения) вне инстансов: призрак при расстановке. */
+function Model({ t, x, y, enemy, decor, theme }: { t: BuildingType; x: number; y: number; enemy?: boolean; decor?: DecorKind; theme?: ThemeId }) {
   const fantasy = useLib('fantasy');
   const village = useLib('village');
-  const group = useMemo(() => lookGroup(lookOf(t, 1, !!enemy), { fantasy, village, space: undefined, city: undefined }, { shadows: true }), [t, enemy, fantasy, village]);
+  const group = useMemo(() => lookGroup(decor ? decorLook(decor, theme) : lookOf(t, 1, !!enemy), { fantasy, village, space: undefined, city: undefined }, { shadows: true }), [t, enemy, decor, theme, fantasy, village]);
   useFrame(() => animateGroup(group, performance.now() / 1000));
   const s = SIZE[t];
   return <primitive object={group} position={[W(x + s / 2), 0, W(y + s / 2)]} />;
@@ -420,7 +432,12 @@ export interface SceneProps {
   buildings: ViewBld[];
   enemy?: boolean;
   selected?: number;
-  ghost?: { t: BuildingType; x: number; y: number; ok: boolean; id?: number } | null;
+  ghost?: { t: BuildingType; x: number; y: number; ok: boolean; id?: number; decor?: DecorKind } | null;
+  // Украшения своей деревни, её тема, флаг клана для знамён и герой для статуй.
+  decor?: Decor[];
+  theme?: ThemeId;
+  clanFlag?: string;
+  statueHero?: CharName;
   grid?: boolean;
   bubbles?: { i: number; res: ResKey }[];
   labels?: { i: number; text: string; color?: string }[];
@@ -467,13 +484,15 @@ function Scene(props: SceneProps) {
     ctlRef.current.ready = true;
   }, [ctlRef]);
   useBuildFx(buildings, fx, `${!!props.battle}${enemy}`);
-  const items = useMemo(() => placed(buildings, enemy), [buildings, enemy]);
+  const theme = props.theme ?? 'classic';
+  const decor = props.decor;
+  const items = useMemo(() => placed(buildings, enemy, decor, theme), [buildings, enemy, decor, theme]);
   const byId = useMemo(() => new Map(buildings.map((b) => [b.i, b])), [buildings]);
   const sel = props.selected != null ? byId.get(props.selected) : undefined;
   const top = (b: ViewBld) => lookFor(b, enemy).top;
   return (
     <>
-      <Ground buildings={buildings} enemy={enemy} lite={lite} grid={props.grid} ghost={props.ghost} />
+      <Ground buildings={buildings} enemy={enemy} lite={lite} grid={props.grid} ghost={props.ghost} paths={decor} theme={enemy || props.battle ? 'classic' : theme} />
       <Instanced lib="fantasy" items={items.kit.fantasy} />
       <Instanced lib="village" items={items.kit.village ?? []} />
       <PrimInstances list={items.prim} />
@@ -485,7 +504,12 @@ function Scene(props: SceneProps) {
           <meshBasicMaterial color="#ff8a5c" />
         </mesh>
       )}
-      {props.ghost && <Model t={props.ghost.t} x={props.ghost.x} y={props.ghost.y} enemy={enemy} />}
+      {props.ghost && props.ghost.decor !== 'path' && <Model t={props.ghost.t} x={props.ghost.x} y={props.ghost.y} enemy={enemy} decor={props.ghost.decor} theme={theme} />}
+      {decor && decor.some((d) => d.k.startsWith('statue') || d.k === 'clanflag') && (
+        <Suspense fallback={null}>
+          <DecorExtras decor={decor} hero={props.statueHero ?? 'Knight'} clanFlag={props.clanFlag} />
+        </Suspense>
+      )}
       {props.bubbles?.map((bb) => {
         const b = byId.get(bb.i);
         return b && <Bubble key={b.i} res={bb.res} x={W(b.x + SIZE[b.t] / 2)} z={W(b.y + SIZE[b.t] / 2)} h={top(b)} />;
@@ -557,7 +581,7 @@ export function Village3D(props: SceneProps) {
   const s = useSettings();
   // Своя деревня живёт по часам и погоде; бой и чужая деревня — всегда ясный день.
   const live = !props.battle && !props.enemy;
-  const { sky, weather } = useSky(live, s.dayNight);
+  const { sky, weather } = useSky(live, s.dayNight, props.theme);
   const fx = s.villageFx;
   const spots = useMemo(() => lampSpots(props.buildings), [props.buildings]);
   return (

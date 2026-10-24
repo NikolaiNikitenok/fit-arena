@@ -48,7 +48,7 @@ import { heroLevel, heroXp, Progress, saveProgress } from '../game/progress';
 import { spendCharge, villageOf } from '../game/resources';
 import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
 import { Bolt, Dungeon, Hammer, Move, Scroll, Star, Trophy } from './icons';
-import { Preview } from './Preview';
+import { DecorThumb, Preview } from './Preview';
 import { newPartsAt } from './looks';
 import { defenseLog, fetchInbox, fetchTop, findTarget, isOnline, OFFLINE, PvpError, revengeTarget, setPvpNotify, submitAttack, TargetView } from './pvpApi';
 import { applyInbox, applyMe, applyWin, canRevenge, markRevenged } from './pvp';
@@ -62,6 +62,7 @@ import { focusOn, type Ctl, type ViewBld } from './Village3D';
 import { useViewSlot, ViewHost } from './Viewport';
 import { TroopSheet, TroopThumb } from './TroopInfo';
 import { LabSheet } from './LabSheet';
+import { canPlaceDecor, claimTheme, DECOR, DECOR_ERRORS, DECOR_GROUPS, DECOR_KINDS, decorAt, decorCtx, decorLock, decorOf, type DecorKind, freeDecorSpot, inSeason, moveDecor, occupied, ownedThemes, placeDecor, removeDecor, setTheme, THEME_IDS, THEMES, type ThemeId } from './decor';
 import { cancelResearch, finishResearchNow, labLevel, RESEARCH_ERRORS, startResearch, troopLevel, troopLevels } from '../../shared/villageLab';
 import { preloadTroops, type HeroLook } from './troops3d';
 import { itemById } from '../game/items';
@@ -95,10 +96,13 @@ interface Placing {
   y: number;
   // Переносим уже стоящую постройку.
   id?: number;
+  // Ставим украшение (t тогда — 'wall', клетка 1×1); did — переносим стоящее украшение.
+  decor?: DecorKind;
+  did?: number;
 }
 
 const say = (npc: keyof typeof NPCS, text: string): Line => ({ who: NPCS[npc].name, text, face: npc, color: NPCS[npc].color });
-const CATS: Category[] = ['economy', 'army', 'defense', 'village'];
+const CATS: (Category | 'decor')[] = ['economy', 'army', 'defense', 'village', 'decor'];
 
 export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: Props) {
   const latest = useRef(progress);
@@ -111,7 +115,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const [selected, setSelected] = useState<number | null>(null);
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [cat, setCat] = useState<Category>('economy');
+  const [cat, setCat] = useState<Category | 'decor'>('economy');
+  const [selDecor, setSelDecor] = useState<number | null>(null);
   const [battle, setBattleState] = useState<Battle | null>(null);
   // Холст деревни и боя один и тот же: набег открывается без нового WebGL.
   const viewSlot = useViewSlot();
@@ -281,6 +286,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   // Без useMemo при переносе постройки сцена собиралась бы заново каждую секунду (тикает таймер).
   const movingId = placing?.id;
   const shown = useMemo(() => (movingId != null ? views.filter((b) => b.i !== movingId) : views), [views, movingId]);
+  // Украшения: переносимое прячем, пока его двигают (его рисует призрак).
+  const decorAll = v.decor;
+  const movingDecor = placing?.did;
+  const decorShown = useMemo(() => (decorAll ?? []).filter((d) => d.i !== movingDecor), [decorAll, movingDecor]);
+  const theme = v.theme ?? 'classic';
+  const statueHero = itemById(progress.equipped).hero;
   const bubbles = town.b
     .filter((b) => BUILDINGS[b.t].collector && b.l >= 1 && accrued(b, now) >= Math.max(5, BUILDINGS[b.t].collector!.perHour[b.l - 1] * 0.5))
     .map((b) => ({ i: b.i, res: BUILDINGS[b.t].collector!.res }));
@@ -404,8 +415,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     const cx = Math.floor(x);
     const cy = Math.floor(y);
     const b = town.b.find((v) => cx >= v.x && cx < v.x + sizeOf(v.t) && cy >= v.y && cy < v.y + sizeOf(v.t));
-    if (!b) return setSelected(null);
+    if (!b) {
+      setSelected(null);
+      const d = decorAt(decorShown, cx, cy);
+      setSelDecor(d ? d.i : null);
+      if (d) sfx('tap');
+      return;
+    }
     sfx('tap');
+    setSelDecor(null);
     setSelected(b.i);
     const s = sizeOf(b.t);
     focusOn(ctl.current, b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, window.innerHeight);
@@ -422,16 +440,50 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     } else flash('Склады полны: построй или улучши склад.');
   };
 
+  // Постройки не встают на украшения: украшение для сетки — занятая клетка.
+  const occ = occupied(town, decorAll ?? []);
   const startPlacing = (t: BuildingType) => {
     const near = { x: GRID / 2 + ctl.current.tx, y: GRID / 2 + ctl.current.tz };
-    const spot = freeSpot(town, t, near) ?? { x: 0, y: 0 };
+    const spot = freeSpot(occ, t, near) ?? { x: 0, y: 0 };
     setSheet(null);
     setSelected(null);
+    setSelDecor(null);
     setPlacing({ t, ...spot });
   };
-  const placeOk = placing ? canPlace(town, placing.t, placing.x, placing.y, placing.id) : false;
+  const startDecor = (k: DecorKind, did?: number) => {
+    const d = did != null ? decorAll?.find((x) => x.i === did) : undefined;
+    const near = { x: GRID / 2 + ctl.current.tx, y: GRID / 2 + ctl.current.tz };
+    const spot = d ? { x: d.x, y: d.y } : (freeDecorSpot(town, decorAll ?? [], near) ?? { x: 0, y: 0 });
+    setSheet(null);
+    setSelected(null);
+    setSelDecor(null);
+    setPlacing({ t: 'wall', decor: k, did, ...spot });
+  };
+  const placeOk = placing ? (placing.decor ? canPlaceDecor(town, decorAll ?? [], placing.x, placing.y, placing.did) : canPlace(occ, placing.t, placing.x, placing.y, placing.id)) : false;
   const confirmPlace = () => {
     if (!placing) return;
+    if (placing.decor) {
+      if (placing.did != null) {
+        const r = moveDecor(latest.current, placing.did, placing.x, placing.y);
+        if (!r) return flash(DECOR_ERRORS.place);
+        commit(r);
+        return setPlacing(null);
+      }
+      const r = placeDecor(latest.current, placing.decor, placing.x, placing.y, decorCtx(latest.current, Date.now()));
+      if (typeof r === 'string') return flash(DECOR_ERRORS[r]);
+      commit(r);
+      sfx('coin');
+      // Дорожки и кусты удобно ставить подряд: следующая клетка сразу рядом.
+      const k = placing.decor;
+      const left = decorOf(r).filter((d) => d.k === k).length < DECOR[k].max(th);
+      if (left && (k === 'path' || k === 'bush' || k === 'flowers')) {
+        const t2 = townOf(r);
+        const list = decorOf(r);
+        const nx = { x: placing.x + 1, y: placing.y };
+        setPlacing({ ...placing, ...(canPlaceDecor(t2, list, nx.x, nx.y) ? nx : (freeDecorSpot(t2, list, placing) ?? { x: 0, y: 0 })) });
+      } else setPlacing(null);
+      return;
+    }
     if (placing.id != null) {
       const r = move(townOf(latest.current), placing.id, placing.x, placing.y);
       if (!r) return flash(BUILD_ERRORS.place);
@@ -444,7 +496,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       if (placing.t === 'wall' && countOf(townOf(latest.current), 'wall') < maxCount('wall', th)) {
         const t2 = townOf(latest.current);
         const nx = [placing.x + 1, placing.y];
-        setPlacing(canPlace(t2, 'wall', nx[0], nx[1]) ? { t: 'wall', x: nx[0], y: nx[1] } : { t: 'wall', ...(freeSpot(t2, 'wall', { x: placing.x, y: placing.y }) ?? { x: 0, y: 0 }) });
+        const o2 = occupied(t2, decorOf(latest.current));
+        setPlacing(canPlace(o2, 'wall', nx[0], nx[1]) ? { t: 'wall', x: nx[0], y: nx[1] } : { t: 'wall', ...(freeSpot(o2, 'wall', { x: placing.x, y: placing.y }) ?? { x: 0, y: 0 }) });
       } else setPlacing(null);
     }
   };
@@ -460,7 +513,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     <div className="vil-screen">
       <ViewHost
         slot={viewSlot}
-        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id } : null, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
+        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id, decor: placing.decor } : null, decor: decorShown, theme, clanFlag: v.clanFlag, statueHero, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
       />
 
       <div className="vil-top vil-hud">
@@ -528,19 +581,56 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         <div className="vil-bottom">
           <div className="vil-card compact">
             <div className="vil-card-head">
-              <b>{placing.id != null ? 'Перенос' : 'Новая постройка'}: {BUILDINGS[placing.t].name}</b>
+              <b>{placing.decor ? `${placing.did != null ? 'Перенос' : 'Украшение'}: ${DECOR[placing.decor].name}` : `${placing.id != null ? 'Перенос' : 'Новая постройка'}: ${BUILDINGS[placing.t].name}`}</b>
               <span className={placeOk ? 'ok' : 'bad'}>{placeOk ? 'место свободно' : 'место занято'}</span>
             </div>
-            <div className="muted">Двигай постройку пальцем или коснись земли.{placing.id == null && <> Цена: <ResRow res={costOf(placing.t, 1)} /></>}</div>
+            <div className="muted">
+              Двигай {placing.decor ? 'украшение' : 'постройку'} пальцем или коснись земли.
+              {placing.decor ? placing.did == null && RES_KEYS.some((k) => (DECOR[placing.decor!].cost[k] ?? 0) > 0) && <> Цена: <ResRow res={DECOR[placing.decor].cost} /></> : placing.id == null && <> Цена: <ResRow res={costOf(placing.t, 1)} /></>}
+            </div>
             <div className="vil-actions">
               <button className="secondary" onClick={() => setPlacing(null)}>
                 Отмена
               </button>
               <button className="primary" disabled={!placeOk} onClick={confirmPlace}>
-                <Check /> {placing.id != null ? 'Сюда' : 'Построить'}
+                <Check /> {placing.id != null || placing.did != null ? 'Сюда' : placing.decor ? 'Поставить' : 'Построить'}
               </button>
             </div>
           </div>
+        </div>
+      ) : selDecor != null && decorShown.some((d) => d.i === selDecor) ? (
+        <div className="vil-bottom">
+          {(() => {
+            const d = decorShown.find((x) => x.i === selDecor)!;
+            const def = DECOR[d.k];
+            return (
+              <div className="vil-card compact">
+                <div className="vil-card-head">
+                  <b>{def.name}</b>
+                  <span className="level-tag">украшение</span>
+                  <button className="link" onClick={() => setSelDecor(null)} aria-label="Закрыть">
+                    <Cross />
+                  </button>
+                </div>
+                <div className="muted">{def.desc}</div>
+                <div className="vil-actions">
+                  <button className="secondary icon-btn" onClick={() => startDecor(d.k, d.i)} aria-label="Переместить">
+                    <Move />
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      commit(removeDecor(latest.current, d.i));
+                      setSelDecor(null);
+                      flash(RES_KEYS.some((k) => (def.cost[k] ?? 0) > 0) ? 'Убрали. Ресурсы вернулись в запасы.' : 'Убрали.');
+                    }}
+                  >
+                    Убрать
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : sel ? (
         <div className="vil-bottom">
@@ -605,10 +695,28 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           <div className="tabs small">
             {CATS.map((c) => (
               <button key={c} className={c === cat ? 'active' : ''} onClick={() => setCat(c)}>
-                {CATEGORY_LABELS[c]}
+                {c === 'decor' ? 'Украшения' : CATEGORY_LABELS[c]}
               </button>
             ))}
           </div>
+          {cat === 'decor' && (
+            <DecorShop
+              progress={progress}
+              town={town}
+              now={now}
+              onPick={(k) => startDecor(k)}
+              onTheme={(id) => {
+                const owned = ownedThemes(latest.current).includes(id);
+                if (owned) return commit(setTheme(latest.current, id));
+                const r = claimTheme(latest.current, id, Date.now());
+                if (r === 'cost') return flash('Не хватает золота.');
+                if (r === 'owned') return;
+                commit(r);
+                sfx('chest');
+                flash(`Тема «${THEMES[id].name}» — твоя!`);
+              }}
+            />
+          )}
           {BUILDING_TYPES.filter((t) => BUILDINGS[t].category === cat && t !== 'townhall').map((t) => {
             const d = BUILDINGS[t];
             const have = countOf(town, t);
@@ -1185,5 +1293,59 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
         </>
       )}
     </Sheet>
+  );
+}
+
+/** Витрина украшений: темы деревни сверху, украшения по разделам. */
+function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progress; town: Town; now: number; onPick: (k: DecorKind) => void; onTheme: (id: ThemeId) => void }) {
+  const ctx = decorCtx(progress, now);
+  const v = villageOf(progress);
+  const list = v.decor ?? [];
+  const cur = v.theme ?? 'classic';
+  const th = thLevel(town);
+  return (
+    <>
+      <div className="vil-themes">
+        {THEME_IDS.map((id) => {
+          const d = THEMES[id];
+          const owned = ctx.themes.includes(id);
+          const free = inSeason(id, now);
+          return (
+            <button key={id} className={`vil-theme t-${id} ${cur === id ? 'on' : ''}`} onClick={() => onTheme(id)}>
+              <b>{d.name}</b>
+              <small>{cur === id ? 'включена' : owned ? 'включить' : free ? 'бесплатно в сезон' : <ResRow res={d.cost} />}</small>
+            </button>
+          );
+        })}
+      </div>
+      <div className="muted vil-theme-note">{THEMES[cur].desc}{THEME_IDS.filter((id) => THEMES[id].season && !ctx.themes.includes(id)).map((id) => ` «${THEMES[id].name}» бесплатно ${THEMES[id].season!.label}.`).join('')}</div>
+      {DECOR_GROUPS.map((g) => (
+        <div key={g.id}>
+          <div className="section-title">{g.name}</div>
+          {DECOR_KINDS.filter((k) => DECOR[k].group === g.id).map((k) => {
+            const d = DECOR[k];
+            const lock = decorLock(k, ctx);
+            const have = list.filter((x) => x.k === k).length;
+            const max = d.max(th);
+            const can = !lock && have < max && affordable(town.res, { wood: 0, stone: 0, gold: 0, ...d.cost });
+            return (
+              <button key={k} className={`vil-shop ${lock ? 'locked' : ''}`} disabled={!!lock || have >= max} onClick={() => (can ? onPick(k) : undefined)}>
+                <span className="vil-shop-pic">
+                  <DecorThumb k={k} theme={cur} size={64} />
+                </span>
+                <span className="vil-shop-info">
+                  <b>{d.name}</b>
+                  <span className="muted">{lock ?? d.desc}</span>
+                  <span className="vil-shop-meta">{lock ? <Lock /> : RES_KEYS.some((r) => (d.cost[r] ?? 0) > 0) ? <ResRow res={d.cost} /> : <span className="ok">бесплатно</span>}</span>
+                </span>
+                <span className="vil-shop-count">
+                  {have}/{max}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </>
   );
 }

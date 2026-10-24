@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { track } from '../telemetry';
-import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
+import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, parseFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
 import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../shared/raid';
 import { claimClanGiftRange, claimRaid, claimWar, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
@@ -17,6 +17,7 @@ import { BAD_NAME, badName, hasProfanity } from '../../shared/profanity';
 import { muteText } from '../../shared/moderation';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
+import { syncClanFlag } from '../village/decor';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: 'глава', officer: 'заместитель', member: '' };
@@ -82,6 +83,15 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
     if (next) setProgress(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clan?.id, cl?.level]);
+
+  // Флаг клана запоминается для знамён в деревне; вышел из клана — знамёна пропадут.
+  const clanFlag = clan === undefined ? undefined : clan ? (parseFlag(clan.flag) ? clan.flag : defaultFlag(clan.tag)) : null;
+  useEffect(() => {
+    if (clanFlag === undefined) return;
+    const next = syncClanFlag(progress, clanFlag);
+    if (next) setProgress(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clanFlag]);
 
   const show = (t: string) => {
     setToast(t);

@@ -13,6 +13,7 @@ const GEO: Record<PrimKind, () => THREE.BufferGeometry> = {
   box: () => new THREE.BoxGeometry(1, 1, 1),
   cyl: () => new THREE.CylinderGeometry(0.5, 0.5, 1, 10),
   cone: () => new THREE.ConeGeometry(0.5, 1, 8),
+  ball: () => new THREE.SphereGeometry(0.5, 12, 8),
 };
 const shared = new Map<PrimKind, THREE.BufferGeometry>();
 export const primGeo = (k: PrimKind) => {
@@ -39,7 +40,7 @@ export function PrimInstances({ list, shadows = true }: { list: Prim[]; shadows?
     const mat = new THREE.Matrix4();
     const col = new THREE.Color();
     for (const glow of [false, true])
-    for (const k of ['box', 'cyl', 'cone'] as PrimKind[]) {
+    for (const k of ['box', 'cyl', 'cone', 'ball'] as PrimKind[]) {
       const items = list.filter((p) => p.k === k && !!p.glow === glow);
       if (!items.length) continue;
       const m = new THREE.InstancedMesh(primGeo(k), glow ? glowMaterial() : new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 }), items.length);

@@ -22,8 +22,20 @@ const PATTERNS: ((c: string) => React.ReactNode)[] = [
   (c) => <path d="M0 26l20 13 20-13v8L20 47 0 34z" fill={c} />,
 ];
 
+// Те же узоры контурами SVG: для знамени в 3D-деревне (рисуется на холсте).
+export const PATTERN_PATHS: string[][] = [
+  [],
+  ['M0 17h40v11H0z'],
+  ['M14.5 0h11v52h-11z'],
+  ['M0 17h40v9H0z', 'M15.5 0h9v52h-9z'],
+  ['M0 0h12l28 34v14z'],
+  ['M20 0h20v52H20z'],
+  ['M0 0h40v13H0z'],
+  ['M0 26l20 13 20-13v8L20 47 0 34z'],
+];
+
 // Символы в сетке 24×24.
-const SYMBOLS = [
+export const SYMBOLS = [
   'M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z',
   'M3 7l4.5 4.5L12 4l4.5 7.5L21 7l-2 12H5z',
   'M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 2 3 0-3-1-5 1-8z',
@@ -37,10 +49,10 @@ const SYMBOLS = [
   'M8 3h8a3.2 3.2 0 0 1 .6 6.3A7.5 7.5 0 1 1 7.4 9.3 3.2 3.2 0 0 1 8 3zm.3 2.3a.9.9 0 0 0 0 1.8h7.4a.9.9 0 0 0 0-1.8z',
   'M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zM11 .5h2v4.5h-2zM11 19h2v4.5h-2zM.5 11H5v2H.5zM19 11h4.5v2H19z',
 ];
-if (PATTERNS.length !== FLAG_PATTERNS || SYMBOLS.length !== FLAG_SYMBOLS || COLORS.length !== FLAG_COLORS) throw new Error('flag tables');
+if (PATTERNS.length !== FLAG_PATTERNS || PATTERN_PATHS.length !== FLAG_PATTERNS || SYMBOLS.length !== FLAG_SYMBOLS || COLORS.length !== FLAG_COLORS) throw new Error('flag tables');
 
 const RANK = { bronze: '#c08457', silver: '#d3dae4', gold: '#ffcf5a', legend: '#c4a1ff' };
-const SHAPE = 'M3 2h34v42.5L20 37 3 44.5z';
+export const SHAPE = 'M3 2h34v42.5L20 37 3 44.5z';
 
 /** Знамя клана. Рамка показывает ранг: бронза, серебро, золото, легенда. */
 export function Flag({ flag, tag = '', level = 1, size = 48 }: { flag: string; tag?: string; level?: number; size?: number }) {

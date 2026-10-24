@@ -1,5 +1,6 @@
 import type { LibName } from '../three/kit';
 import type { BuildingType } from '../../shared/village';
+import type { DecorKind, ThemeId } from './decor';
 
 // Как выглядит постройка на каждом уровне. Три ступени: 1–2 — дерево, 3–5 — камень, 6–8 — крепость
 // с золотой отделкой, флагами и башенками; внутри ступени каждый уровень добавляет свои детали (NEW_PARTS). Тот же вид рисуют
@@ -17,7 +18,7 @@ export interface KitPart {
   tint?: string;
 }
 
-export type PrimKind = 'box' | 'cyl' | 'cone';
+export type PrimKind = 'box' | 'cyl' | 'cone' | 'ball';
 /** Простая деталь (цоколь, золотая кайма, шпиль, труба): единичная фигура, растянутая по осям. */
 export interface Prim {
   k: PrimKind;
@@ -626,6 +627,84 @@ export function trapLook(t: 'bomb' | 'snare', l: number, sprung: boolean): Look 
     }
   }
   if (l >= 4) b.p('box', 0, 0.05, 0.33, 0.6, 0.02, 0.03, rim).p('box', 0, 0.05, -0.33, 0.6, 0.02, 0.03, rim);
+  return b.done();
+}
+
+/** Пушистые снежные шапки и тыквенно-рыжие листья: как тема перекрашивает деревья. */
+export const THEME_TREE_TINT: Record<ThemeId, string | undefined> = { classic: undefined, winter: 'mul:1.35,1.42,1.6', halloween: 'mul:1.05,0.62,0.38' };
+
+/**
+ * Украшение на клетке. Статуя и знамя клана — постамент и древко здесь, фигура героя и полотнище
+ * рисуются отдельно (src/village/Decor3D.tsx).
+ */
+export function decorLook(k: DecorKind, theme: ThemeId = 'classic'): Look {
+  const b = new Builder(false);
+  b.blob = 0;
+  b.top = 1.2;
+  const tree = THEME_TREE_TINT[theme];
+  switch (k) {
+    case 'path':
+      break;
+    case 'oak':
+      b.m('tree_single_A', 0.95, 0, 0, 0.7, 0, tree);
+      b.blob = 0.55;
+      b.top = 2.2;
+      break;
+    case 'pine':
+      b.m('tree_single_B', 0.95, 0, 0, 1.9, 0, tree);
+      b.blob = 0.5;
+      b.top = 2.2;
+      break;
+    case 'bush':
+      b.m('bush', 1.5, 0, 0, 0.4, 0, theme === 'winter' ? 'mul:1.3,1.38,1.5' : theme === 'halloween' ? 'mul:1,.7,.45' : undefined);
+      break;
+    case 'flowers':
+      b.flowers(0, -0.12, 0).flowers(0, 0.14, 0);
+      break;
+    case 'lantern':
+      b.lantern(0, 0, 0.95);
+      b.top = 1.5;
+      break;
+    case 'bench':
+      // Сиденье, спинка и ножки; стоит лицом к камере.
+      b.p('box', 0, 0.28, 0, 0.72, 0.06, 0.26, WOOD, { ry: Math.PI / 4 }).p('box', -0.07, 0.48, -0.07, 0.72, 0.3, 0.05, WOOD, { ry: Math.PI / 4 });
+      for (const s of [-1, 1]) b.p('box', s * 0.22, 0.13, -s * 0.22, 0.06, 0.26, 0.22, WOOD_D, { ry: Math.PI / 4 });
+      break;
+    case 'well':
+      b.m('building_well_blue', 0.62, 0, 0, Math.PI / 4);
+      b.top = 1.6;
+      break;
+    case 'statue1':
+    case 'statue2':
+    case 'statue3': {
+      const c = k === 'statue1' ? '#c08457' : k === 'statue2' ? '#d3dae4' : GOLD;
+      b.p('box', 0, 0.16, 0, 0.78, 0.32, 0.78, STONE_D).p('box', 0, 0.36, 0, 0.66, 0.08, 0.66, STONE).p('box', 0.4, 0.17, 0, 0.02, 0.12, 0.34, c);
+      b.blob = 0.6;
+      b.top = 2.3;
+      break;
+    }
+    case 'clanflag':
+      b.p('box', 0, 0.06, 0, 0.36, 0.12, 0.36, STONE_D).p('cyl', 0, 1.15, 0, 0.07, 2.2, 0.07, WOOD_D).p('cone', 0, 2.32, 0, 0.14, 0.18, 0.14, GOLD);
+      b.top = 2.6;
+      break;
+    case 'pumpkin': {
+      // Тыква из трёх долек, хвостик и светящаяся рожица к камере.
+      for (const [dx, dz, s] of [[0, 0, 0.5], [-0.1, 0.06, 0.4], [0.08, -0.08, 0.4]] as const) b.p('ball', dx, 0.18, dz, s, 0.36, s, '#f08a24');
+      b.p('cyl', 0, 0.42, 0, 0.05, 0.12, 0.05, '#4d7a2a');
+      for (const s of [-1, 1]) b.glow('box', 0.19 + s * 0.06, 0.24, 0.19 - s * 0.06, 0.07, 0.07, 0.03, '#ffd36b', Math.PI / 4);
+      b.glow('box', 0.21, 0.13, 0.21, 0.16, 0.04, 0.03, '#ffd36b', Math.PI / 4);
+      b.top = 0.9;
+      break;
+    }
+    case 'snowman':
+      b.p('ball', 0, 0.25, 0, 0.56, 0.5, 0.56, '#f4f8ff').p('ball', 0, 0.66, 0, 0.42, 0.4, 0.42, '#f4f8ff').p('ball', 0, 0.98, 0, 0.3, 0.3, 0.3, '#f4f8ff');
+      b.p('cone', 0.17, 0.98, 0.17, 0.06, 0.2, 0.06, '#ff8a3d', { rx: Math.PI / 2, ry: Math.PI / 4 });
+      b.p('cyl', 0, 0.82, 0, 0.36, 0.07, 0.36, '#e5484d').p('cyl', 0, 1.18, 0, 0.26, 0.14, 0.26, '#22252f').p('cyl', 0, 1.11, 0, 0.36, 0.02, 0.36, '#22252f');
+      for (const s of [-1, 1]) b.p('box', 0.13 + s * 0.05, 1.03, 0.13 - s * 0.05, 0.04, 0.04, 0.02, '#22252f', { ry: Math.PI / 4 });
+      b.blob = 0.4;
+      b.top = 1.6;
+      break;
+  }
   return b.done();
 }
 

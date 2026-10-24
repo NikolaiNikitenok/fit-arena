@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GRID, isTrap } from '../../shared/village';
 import { SIZE } from './looks';
-import { nowSky, overcast, skyAt, SkyLook, Weather } from './sky';
+import { nowSky, overcast, skyAt, SkyLook, themed, Weather } from './sky';
 import type { Ctl, ViewBld } from './Village3D';
 
 // Атмосфера деревни: свет по времени суток, дымка по краям мира, фонари у домов, дождь, снег
@@ -13,7 +13,7 @@ const W = (c: number) => c - GRID / 2;
 const DAY = skyAt(12);
 
 /** Небо сейчас: пересчитывается раз в минуту. В бою и в чужой деревне — всегда день. */
-export function useSky(live: boolean, dayNight: boolean): { sky: SkyLook; weather: Weather } {
+export function useSky(live: boolean, dayNight: boolean, theme?: string): { sky: SkyLook; weather: Weather } {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!live) return;
@@ -23,9 +23,10 @@ export function useSky(live: boolean, dayNight: boolean): { sky: SkyLook; weathe
   return useMemo(() => {
     if (!live) return { sky: DAY, weather: 'clear' as Weather };
     const { hour, weather } = nowSky();
-    return { sky: overcast(dayNight ? skyAt(hour) : DAY, weather), weather };
+    const t = themed(dayNight ? skyAt(hour) : DAY, weather, theme, Date.now());
+    return { sky: overcast(t.sky, t.weather === 'snow' && weather === 'clear' ? 'clear' : t.weather), weather: t.weather };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, dayNight, tick]);
+  }, [live, dayNight, tick, theme]);
 }
 
 /** Цвета света и фона. Солнце ниже вечером — тени длиннее. */

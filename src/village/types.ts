@@ -1,6 +1,7 @@
 // Что деревня хранит в Progress.village (кроме заряда и запасов). Короткие ключи — сохранение маленькое.
 import type { Bld, BuildingType, Res } from '../../shared/village';
 import type { BattleArmy, Deploy, TroopId } from '../../shared/villageBattle';
+import type { Decor, ThemeId } from './decor';
 
 /** Постройка в журнале набегов: [номер, тип, x, y, уровень]. */
 export type PackedBld = [number, BuildingType, number, number, number];
@@ -62,4 +63,11 @@ export interface VillageExtra {
   log?: DefenseEntry[];
   seenAt?: number;
   pvp?: PvpExtra;
+  // Украшения (src/village/decor.ts), следующий номер украшения, тема деревни и забранные темы.
+  decor?: Decor[];
+  dn?: number;
+  theme?: ThemeId;
+  themes?: ThemeId[];
+  // Флаг клана игрока для знамён в деревне (запоминает экран клана).
+  clanFlag?: string;
 }

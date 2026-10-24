@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { useLib } from '../three/kit';
 import { getSettings, useSettings } from '../settings';
 import type { BuildingType } from '../../shared/village';
-import { lookOf } from './looks';
+import { decorLook, lookOf } from './looks';
+import type { DecorKind, ThemeId } from './decor';
 import { animateGroup, lookGroup } from './looks3d';
 
 // Мини-модели построек в меню стройки и в карточке улучшения. Один общий WebGL-рендерер вне экрана
@@ -222,4 +223,29 @@ export function ModelThumb({ id, make, size = 60, label, still = false }: { id: 
   const ref = useRef<HTMLCanvasElement>(null);
   useSlot(ref, `${id}:${s.lowPower ? 1 : 0}`, make, size, still);
   return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label={label} />;
+}
+
+function DecorLive({ k, theme, size }: { k: DecorKind; theme: ThemeId; size: number }) {
+  const fantasy = useLib('fantasy');
+  const village = useLib('village');
+  const s = useSettings();
+  const ref = useRef<HTMLCanvasElement>(null);
+  const libs = { fantasy, village, space: undefined, city: undefined };
+  useSlot(ref, `decor:${k}:${theme}:${s.lowPower ? 1 : 0}`, () => {
+    // Дорожка — просто плитка мостовой.
+    const look = k === 'path' ? { kit: [], prim: [{ k: 'box' as const, x: 0, y: 0.04, z: 0, sx: 0.95, sy: 0.08, sz: 0.95, c: '#c4a274' }], anim: [], top: 0.3, blob: 0 } : decorLook(k, theme);
+    const g = lookGroup(look, libs, { lite: s.lowPower });
+    g.userData.frame = { h: Math.max(0.6, look.top * 0.8), half: k.startsWith('statue') || k === 'clanflag' ? 1.4 : 0.9 };
+    return g;
+  }, size);
+  return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label="Украшение" />;
+}
+
+/** Мини-модель украшения в витрине. */
+export function DecorThumb({ k, theme = 'classic', size = 60 }: { k: DecorKind; theme?: ThemeId; size?: number }) {
+  return (
+    <Suspense fallback={<span className="vil-swatch" style={{ width: size, height: size }} />}>
+      <DecorLive k={k} theme={theme} size={size} />
+    </Suspense>
+  );
 }

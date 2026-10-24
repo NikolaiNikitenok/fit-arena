@@ -37,7 +37,7 @@ const KEYS: Key[] = [
   { h: 24, ...NIGHT },
 ];
 
-function mixHex(a: string, b: string, t: number): string {
+export function mixHex(a: string, b: string, t: number): string {
   const pa = parseInt(a.slice(1), 16);
   const pb = parseInt(b.slice(1), 16);
   const ch = (s: number) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
@@ -85,6 +85,24 @@ export function overcast(s: SkyLook, w: Weather): SkyLook {
   const grey = w === 'snow' ? '#c9d3e0' : '#8e9aa8';
   const k = w === 'rain' ? 0.75 : 0.5;
   return { ...s, fog: mixHex(s.fog, grey, 0.6), hemiSky: mixHex(s.hemiSky, w === 'snow' ? '#e8f0ff' : '#b8c4d4', k), sun: mixHex(s.sun, '#dfe6f0', 0.5), sunI: s.sunI * (w === 'rain' ? 0.4 : 0.55), hemi: s.hemi * (w === 'rain' ? 0.95 : 1.1), lamps: Math.max(s.lamps, w === 'rain' ? 0.3 : 0.15) };
+}
+
+/**
+ * Тема деревни поверх неба: зимой вместо дождя снег и холоднее свет, на Хэллоуин — лиловые сумерки
+ * и фонари горят даже днём.
+ */
+export function themed(s: SkyLook, w: Weather, theme: string | undefined, ms: number): { sky: SkyLook; weather: Weather } {
+  if (theme === 'winter') {
+    // Снег идёт чаще: в каждом втором трёхчасовом окне.
+    const weather: Weather = w !== 'clear' || Math.floor(ms / (3 * 3600_000)) % 2 === 0 ? 'snow' : 'clear';
+    const sky = { ...s, fog: mixHex(s.fog, '#dfe9f6', 0.45), hemiSky: mixHex(s.hemiSky, '#eef4ff', 0.4), hemiGround: mixHex(s.hemiGround, '#9aa8bd', 0.5) };
+    return { sky: weather === 'snow' && w === 'clear' ? overcast(sky, 'snow') : sky, weather };
+  }
+  if (theme === 'halloween') {
+    const weather: Weather = w === 'snow' ? 'clear' : w;
+    return { sky: { ...s, fog: mixHex(s.fog, '#4b3466', 0.5), hemiSky: mixHex(s.hemiSky, '#c9a6ff', 0.3), hemiGround: mixHex(s.hemiGround, '#3a2440', 0.5), sun: mixHex(s.sun, '#ffb06b', 0.35), sunI: s.sunI * 0.8, lamps: Math.max(s.lamps, 0.55) }, weather };
+  }
+  return { sky: s, weather: w };
 }
 
 /** Часы и погода сейчас. Для проверки в разработке: ?tod=21.5&wx=rain. */
