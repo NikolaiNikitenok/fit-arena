@@ -130,7 +130,7 @@ const GLOW_VERT = /* glsl */ `
       // Светлячки: плавают и мигают.
       p += vec3(sin(uTime * 0.7 + aSeed * 6.3), 0.5 * sin(uTime * 1.3 + aSeed * 3.1), cos(uTime * 0.6 + aSeed * 4.7)) * 0.9;
       a *= 0.35 + 0.65 * smoothstep(0.2, 1.0, sin(uTime * 2.2 + aSeed * 17.0));
-    } else if (uMode > 1.5) {
+    } else if (uMode > 1.5 && uMode < 2.5) {
       // Снег: падает вокруг камеры, кружится, по кругу возвращается наверх.
       float h = 16.0;
       p.y = mod(p.y - uTime * (1.1 + aSeed * 0.8), h) - 1.0;
@@ -145,9 +145,20 @@ const GLOW_VERT = /* glsl */ `
 `;
 const GLOW_FRAG = /* glsl */ `
   uniform float uSoft;
+  uniform float uMode;
   varying vec3 vColor;
   varying float vA;
   void main() {
+    if (uMode > 2.5) {
+      // Окно: светлый прямоугольник с переплётом и мягким ореолом вокруг.
+      vec2 q = abs(gl_PointCoord - 0.5) * 2.0;
+      float pane = step(q.x, 0.42) * step(q.y, 0.6) * (1.0 - 0.75 * step(q.x, 0.05)) * (1.0 - 0.75 * step(abs(gl_PointCoord.y - 0.45) * 2.0, 0.06));
+      float halo = (1.0 - smoothstep(0.0, 1.0, length(q))) * 0.35;
+      float a = max(pane, halo) * vA;
+      if (a < 0.01) discard;
+      gl_FragColor = vec4(vColor * a, a);
+      return;
+    }
     float d = length(gl_PointCoord - 0.5) * 2.0;
     float a = (1.0 - smoothstep(uSoft, 1.0, d)) * vA;
     if (a < 0.01) discard;
@@ -282,6 +293,10 @@ export function Lamps({ spots, on, ctl, shadows }: { spots: [number, number][]; 
 }
 
 /** Окна домов ночью: тёплый свет у стен построек. */
+// Без окон: открытые площадки и мастерские; в два ряда — высокие постройки.
+const NO_WINDOWS = new Set<string>(['quarry', 'goldmine', 'lumbermill', 'storage', 'barracks']);
+const ROWS: Record<string, number[]> = { townhall: [0.75, 1.55], tower: [1.25, 2.05], lab: [0.8, 1.5] };
+
 export function Windows({ buildings, on, ctl }: { buildings: ViewBld[]; on: number; ctl: React.MutableRefObject<Ctl> }) {
   const geo = useMemo(() => {
     const list: { x: number; y: number; z: number; size: number; color: string }[] = [];
@@ -290,15 +305,43 @@ export function Windows({ buildings, on, ctl }: { buildings: ViewBld[]; on: numb
       const s = SIZE[b.t];
       const cx = W(b.x + s / 2);
       const cz = W(b.y + s / 2);
-      list.push({ x: cx + s * 0.3, y: 0.7, z: cz + s * 0.3, size: s * 1.4, color: '#ff9d4d' });
+      list.push({ x: cx + s * 0.3, y: 0.7, z: cz + s * 0.3, size: s * 1.6, color: '#ff9d4d' });
+    }
+    return pointsGeometry(list);
+  }, [buildings]);
+  // Сами окна: тёплые квадратики на двух стенах, что смотрят в камеру; у высоких построек — в два ряда.
+  const panes = useMemo(() => {
+    const list: { x: number; y: number; z: number; size: number; color: string; seed: number }[] = [];
+    for (const b of buildings) {
+      if (b.t === 'wall' || isTrap(b.t) || b.state !== 'ok' || NO_WINDOWS.has(b.t)) continue;
+      const s = SIZE[b.t];
+      const cx = W(b.x + s / 2);
+      const cz = W(b.y + s / 2);
+      const n = s >= 3 ? 2 : 1;
+      const rows = ROWS[b.t] ?? [0.65];
+      const face = b.t === 'tower' ? s * 0.46 : s * 0.36;
+      for (const y of rows)
+        for (let k = 0; k < n; k++) {
+          const off = n === 1 ? 0 : (k - (n - 1) / 2) * s * 0.34;
+          const seed = ((b.x * 31 + b.y * 17 + k * 7 + y * 13) % 10) / 10;
+          list.push({ x: cx + face, y, z: cz + off, size: 0.36, color: seed < 0.3 ? '#ffd27a' : '#ffb35c', seed });
+          list.push({ x: cx + off, y, z: cz + face, size: 0.36, color: seed > 0.7 ? '#ffd27a' : '#ffb35c', seed: 1 - seed });
+        }
     }
     return pointsGeometry(list);
   }, [buildings]);
   const mat = useMemo(() => glowMaterial(0, true, 0), []);
-  useEffect(() => () => geo.dispose(), [geo]);
-  useEffect(() => () => mat.dispose(), [mat]);
-  useGlowFrame(mat, ctl, on * 0.55);
-  return <points geometry={geo} material={mat} frustumCulled={false} renderOrder={6} />;
+  const paneMat = useMemo(() => glowMaterial(3, true, 0), []);
+  useEffect(() => () => [geo, panes].forEach((g) => g.dispose()), [geo, panes]);
+  useEffect(() => () => [mat, paneMat].forEach((m) => m.dispose()), [mat, paneMat]);
+  useGlowFrame(mat, ctl, on * 0.7);
+  useGlowFrame(paneMat, ctl, on);
+  return (
+    <>
+      <points geometry={geo} material={mat} frustumCulled={false} renderOrder={6} />
+      <points geometry={panes} material={paneMat} frustumCulled={false} renderOrder={7} />
+    </>
+  );
 }
 
 /** Светлячки над низиной у озера и леса — только ночью. */

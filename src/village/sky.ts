@@ -24,7 +24,8 @@ interface Key extends SkyLook {
   h: number;
 }
 
-const NIGHT: Omit<Key, 'h'> = { fog: '#1c2645', hemiSky: '#7387c9', hemiGround: '#1a1830', hemi: 0.72, sun: '#9fb6ff', sunI: 0.6, sunH: 0.8, lamps: 1, stars: 1 };
+// Ночь — лунная, а не чёрная: деревню должно быть видно и в полночь.
+const NIGHT: Omit<Key, 'h'> = { fog: '#2a3866', hemiSky: '#93a6e6', hemiGround: '#2c2a4a', hemi: 1.0, sun: '#b4c6ff', sunI: 0.95, sunH: 0.8, lamps: 1, stars: 1 };
 const KEYS: Key[] = [
   { h: 0, ...NIGHT },
   { h: 5, ...NIGHT },
@@ -32,7 +33,7 @@ const KEYS: Key[] = [
   { h: 8.5, fog: '#cfe7d6', hemiSky: '#ffffff', hemiGround: '#5a4a38', hemi: 1.25, sun: '#ffffff', sunI: 2.3, sunH: 1, lamps: 0, stars: 0 },
   { h: 17, fog: '#cfe7d6', hemiSky: '#ffffff', hemiGround: '#5a4a38', hemi: 1.25, sun: '#ffffff', sunI: 2.3, sunH: 1, lamps: 0, stars: 0 },
   { h: 19, fog: '#eab79a', hemiSky: '#f3e2e6', hemiGround: '#4f4040', hemi: 1.1, sun: '#ffb27a', sunI: 1.8, sunH: 0.55, lamps: 0.4, stars: 0 },
-  { h: 20.5, fog: '#4f4472', hemiSky: '#9a92d4', hemiGround: '#2a2236', hemi: 0.85, sun: '#ff9f8f', sunI: 0.9, sunH: 0.45, lamps: 1, stars: 0.4 },
+  { h: 20.5, fog: '#5a4f80', hemiSky: '#a49ce0', hemiGround: '#342c44', hemi: 1.0, sun: '#ffa898', sunI: 1.1, sunH: 0.45, lamps: 1, stars: 0.4 },
   { h: 22, ...NIGHT },
   { h: 24, ...NIGHT },
 ];
