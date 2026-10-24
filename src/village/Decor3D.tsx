@@ -13,9 +13,9 @@ import type { Decor } from './decor';
 
 const W = (c: number) => c - GRID / 2;
 const METAL: Record<string, { color: string; metalness: number; roughness: number }> = {
-  statue1: { color: '#b0713f', metalness: 0.75, roughness: 0.38 },
-  statue2: { color: '#d9e0ea', metalness: 0.85, roughness: 0.28 },
-  statue3: { color: '#ffc94a', metalness: 0.9, roughness: 0.22 },
+  statue1: { color: '#d08a50', metalness: 0.35, roughness: 0.4 },
+  statue2: { color: '#e6ecf4', metalness: 0.35, roughness: 0.3 },
+  statue3: { color: '#ffd45e', metalness: 0.4, roughness: 0.25 },
 };
 
 /** Герой на постаменте: модель героя в победной позе, целиком из металла. */
@@ -25,7 +25,7 @@ function Statue({ d, model }: { d: Decor; model: CharName }) {
   const root = useMemo(() => {
     const r = cloneSkinned(gltf.scene) as THREE.Group;
     const m = METAL[d.k];
-    const mat = new THREE.MeshStandardMaterial({ color: m.color, metalness: m.metalness, roughness: m.roughness });
+    const mat = new THREE.MeshStandardMaterial({ color: m.color, metalness: m.metalness, roughness: m.roughness, emissive: m.color, emissiveIntensity: 0.12 });
     r.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -104,7 +104,7 @@ function Banner({ d, flag }: { d: Decor; flag: string }) {
     pos.needsUpdate = true;
   });
   return (
-    <group position={[W(d.x + 0.5), 0, W(d.y + 0.5)]} rotation={[0, Math.PI / 4, 0]}>
+    <group position={[W(d.x + 0.5), 0, W(d.y + 0.5)]} rotation={[0, Math.PI / 4, 0]} scale={1.25}>
       <mesh position={[0.33, 2.16, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.025, 0.025, 0.7, 6]} />
         <meshStandardMaterial color="#6f4a2a" />

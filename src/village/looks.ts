@@ -646,12 +646,12 @@ export function decorLook(k: DecorKind, theme: ThemeId = 'classic'): Look {
     case 'path':
       break;
     case 'oak':
-      b.m('tree_single_A', 0.95, 0, 0, 0.7, 0, tree);
+      b.m('tree_single_A', 1.9, 0, 0, 0.7, 0, tree);
       b.blob = 0.55;
       b.top = 2.2;
       break;
     case 'pine':
-      b.m('tree_single_B', 0.95, 0, 0, 1.9, 0, tree);
+      b.m('tree_single_B', 1.9, 0, 0, 1.9, 0, tree);
       b.blob = 0.5;
       b.top = 2.2;
       break;
@@ -671,7 +671,7 @@ export function decorLook(k: DecorKind, theme: ThemeId = 'classic'): Look {
       for (const s of [-1, 1]) b.p('box', s * 0.22, 0.13, -s * 0.22, 0.06, 0.26, 0.22, WOOD_D, { ry: Math.PI / 4 });
       break;
     case 'well':
-      b.m('building_well_blue', 0.62, 0, 0, Math.PI / 4);
+      b.m('building_well_blue', 1.0, 0, 0, Math.PI / 4);
       b.top = 1.6;
       break;
     case 'statue1':
@@ -684,8 +684,8 @@ export function decorLook(k: DecorKind, theme: ThemeId = 'classic'): Look {
       break;
     }
     case 'clanflag':
-      b.p('box', 0, 0.06, 0, 0.36, 0.12, 0.36, STONE_D).p('cyl', 0, 1.15, 0, 0.07, 2.2, 0.07, WOOD_D).p('cone', 0, 2.32, 0, 0.14, 0.18, 0.14, GOLD);
-      b.top = 2.6;
+      b.p('box', 0, 0.06, 0, 0.36, 0.12, 0.36, STONE_D).p('cyl', 0, 1.4, 0, 0.08, 2.8, 0.08, WOOD_D).p('cone', 0, 2.9, 0, 0.16, 0.2, 0.16, GOLD);
+      b.top = 3.1;
       break;
     case 'pumpkin': {
       // Тыква из трёх долек, хвостик и светящаяся рожица к камере.

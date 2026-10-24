@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   accrued,
   Bld,
@@ -1321,7 +1321,7 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
       </div>
       <div className="muted vil-theme-note">{THEMES[cur].desc}{THEME_IDS.filter((id) => THEMES[id].season && !ctx.themes.includes(id)).map((id) => ` «${THEMES[id].name}» бесплатно ${THEMES[id].season!.label}.`).join('')}</div>
       {DECOR_GROUPS.map((g) => (
-        <div key={g.id}>
+        <Fragment key={g.id}>
           <div className="section-title">{g.name}</div>
           {DECOR_KINDS.filter((k) => DECOR[k].group === g.id).map((k) => {
             const d = DECOR[k];
@@ -1345,7 +1345,7 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
               </button>
             );
           })}
-        </div>
+        </Fragment>
       ))}
     </>
   );

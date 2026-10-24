@@ -194,6 +194,11 @@ function Live({ t, l, size, frameL }: { t: BuildingType; l: number; size: number
   const libs = { fantasy, village, space: undefined, city: undefined };
   useSlot(ref, `${t}:${l}:${frameL ?? ''}:${s.lowPower ? 1 : 0}`, () => {
     const g = lookGroup(lookOf(t, l), libs, { lite: s.lowPower });
+    // Ловушки маленькие: кадр теснее, чтобы их было видно.
+    if (t === 'bomb' || t === 'snare') {
+      g.userData.frame = { h: 0.45, half: 0.55 };
+      return g;
+    }
     // Общая рамка с уровнем frameL: рядом «сейчас → после улучшения» видно, что постройка выросла.
     if (frameL) {
       const f = frameOf(lookGroup(lookOf(t, Math.max(l, frameL)), libs, { lite: s.lowPower }));
@@ -235,7 +240,8 @@ function DecorLive({ k, theme, size }: { k: DecorKind; theme: ThemeId; size: num
     // Дорожка — просто плитка мостовой.
     const look = k === 'path' ? { kit: [], prim: [{ k: 'box' as const, x: 0, y: 0.04, z: 0, sx: 0.95, sy: 0.08, sz: 0.95, c: '#c4a274' }], anim: [], top: 0.3, blob: 0 } : decorLook(k, theme);
     const g = lookGroup(look, libs, { lite: s.lowPower });
-    g.userData.frame = { h: Math.max(0.6, look.top * 0.8), half: k.startsWith('statue') || k === 'clanflag' ? 1.4 : 0.9 };
+    const big = k.startsWith('statue') || k === 'clanflag' || k === 'oak' || k === 'pine' || k === 'snowman' || k === 'well';
+    g.userData.frame = { h: big ? Math.max(1, look.top * 0.9) : 0.5, half: big ? 1.25 : 0.62 };
     return g;
   }, size);
   return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label="Украшение" />;
