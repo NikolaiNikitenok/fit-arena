@@ -39,7 +39,7 @@ import {
 } from '../../shared/village';
 import { armyCap, BattleArmy, BattleResult, barracksLevel, Deploy, housingOf, train, TRAIN_ERRORS, TROOP_IDS, TROOPS, TroopId, untrain } from '../../shared/villageBattle';
 import { campBase, CAMP_REPEAT_SHARE, CAMPS, Camp } from '../../shared/villageCamps';
-import { sfx } from '../audio';
+import { sfx, useMusic } from '../audio';
 import { Check, Cross, Lock, Shield, Swords, Timer } from '../icons';
 import { Dialog, Portrait } from '../game/Dialog';
 import type { Line } from '../game/levels';
@@ -574,6 +574,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         )}
       </div>
       <FlyLayer ref={flyRef} bars={barEls} />
+      {town.b.some((b) => b.t === 'tavern' && b.l >= 1) && <TavernMusic />}
 
       {toast && <div className="toast vil-warn">{toast}</div>}
 
@@ -1348,4 +1349,10 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
       ))}
     </>
   );
+}
+
+/** Пока открыта деревня с таверной, оттуда слышна плясовая. */
+function TavernMusic() {
+  useMusic('tavern', 1);
+  return null;
 }

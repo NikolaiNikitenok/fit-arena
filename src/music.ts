@@ -1,6 +1,6 @@
 // Ноты фоновой музыки: темы миров как чистые функции «шаг → ноты». Звучание — в audio.ts.
 
-export type Theme = 'calm' | 'fantasy' | 'space' | 'zombie' | 'castle' | 'arena';
+export type Theme = 'calm' | 'fantasy' | 'space' | 'zombie' | 'castle' | 'arena' | 'tavern';
 export type Voice = 'pluck' | 'bell' | 'pad' | 'arp' | 'bass' | 'pulse' | 'kick' | 'snare' | 'hat' | 'tom';
 
 export interface NoteEvent {
@@ -115,6 +115,21 @@ export const THEMES: Record<Theme, ThemeDef> = {
       ...(s === 4 || s === 12 ? [ev('snare', 38, 2, 0.3)] : []),
       ...(s % 2 === 0 ? [ev('hat', 42, 1, 0.12)] : []),
       ...(bar % 2 === 1 && s >= 13 ? [ev('tom', 50 - (s - 13) * 3, 1, 0.38)] : []),
+    ],
+  },
+  // Таверна в деревне: весёлая плясовая — бас «умпа», лютня перебирает мелодию, бубен.
+  tavern: {
+    bpm: 132,
+    scale: SCALES.majorPenta,
+    root: 62,
+    chords: [0, 3, 0, 4],
+    volume: 0.75,
+    pattern: (s, bar, at) => [
+      ...(s % 4 === 0 ? [ev('bass', at(-7), 2, 0.4)] : []),
+      ...(s % 4 === 2 ? chord('pluck', at, [-3, -1], 1, 0.18) : []),
+      ...(s % 2 === 0 ? [ev('pluck', at([4, 5, 7, 5, 4, 2, 4, 0][(s / 2 + bar * 3) % 8] + (bar % 4 === 3 && s >= 8 ? 2 : 0)), 2, s % 8 === 0 ? 0.42 : 0.3)] : []),
+      ...(s % 4 === 2 ? [ev('hat', 42, 1, 0.12)] : []),
+      ...(bar % 2 === 1 && s === 14 ? [ev('bell', at(9), 2, 0.18)] : []),
     ],
   },
   // Дуэль: ровная бочка, хлопки и бас восьмыми.

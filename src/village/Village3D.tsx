@@ -18,6 +18,7 @@ import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { CRY, GUARD, QUAKE, SKILLS, type SkillId } from '../../shared/heroSkills';
 import { RES_COLORS } from './icons';
 import { Builders } from './Builders';
+import { Birds, TavernNotes, Villagers } from './Life';
 import { DEFAULT_HERO, HealerAuras, HeroLook, HeroTroop, KEEPER_FOE, SkillAuras, Troops, UnitBars } from './troops3d';
 
 // Деревня в 3D: изометрия ортогональной камерой, постройки KayKit инстансами, стены собираются
@@ -533,6 +534,11 @@ function Scene(props: SceneProps) {
           <Builders buildings={buildings} />
         </Suspense>
       )}
+      {!props.battle && !enemy && (
+        <Suspense fallback={null}>
+          <Villagers buildings={buildings} decor={decor ?? []} lite={lite} />
+        </Suspense>
+      )}
       {props.battle && (
         // Персонажи грузятся отдельно: поле боя видно сразу.
         <>
@@ -596,6 +602,8 @@ export function Village3D(props: SceneProps) {
         {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
         {live && sky.lamps > 0.01 && <Windows buildings={props.buildings} on={sky.lamps} ctl={props.ctl} />}
       </Suspense>
+      {live && fx && <Birds theme={props.theme ?? 'classic'} night={sky.lamps} />}
+      {live && fx && <TavernNotes buildings={props.buildings} />}
       {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
     </Canvas3D>
