@@ -348,8 +348,13 @@ const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env
   log: (m) => console.log(m),
 });
 /** Команды канала от админа: /channel, /channel_draft, /channel_post. */
-const channelCommand = (chatId: number, text: string): boolean =>
-  /^\/channel/.test(text.trim()) && admins.has(`tg:${chatId}`) && channel.command(chatId, text, (t) => botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t }, 15_000).catch(() => null));
+const channelCommand = (chatId: number, text: string): boolean => {
+  if (!/^\/channel/.test(text.trim())) return false;
+  const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
+  // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
+  if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
+  return channel.command(chatId, text, reply);
+};
 const clanInfo = (code: string) => {
   const c = clans.byCode(code);
   return c && { name: c.name, tag: c.tag, members: c.members.length };
