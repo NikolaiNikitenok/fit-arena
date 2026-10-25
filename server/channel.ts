@@ -1,0 +1,331 @@
+// Автопостинг в Telegram-канал (@NikitenokArena): два полезных поста в день, 10:00 и 19:00 по Москве.
+// Текст пишет Claude по рубрике; приложение упоминается естественно примерно в 1–2 постах из 5.
+// Чистая часть (расписание, выбор рубрики, промпт, разбор ответа) проверяется тестами,
+// сеть (Claude API, Bot API) — в Channel.run().
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import https from 'node:https';
+import Anthropic from '@anthropic-ai/sdk';
+
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+const MSK = 3 * HOUR;
+/** Часы выхода постов по Москве. */
+export const CHANNEL_HOURS = [10, 19];
+// Опоздали больше чем на 3 часа (сервер лежал) — слот пропускаем, чтобы не постить пачкой.
+const SLOT_LATE = 3 * HOUR;
+export const MODEL = 'claude-opus-5-5';
+
+export type Rubric = 'tip' | 'breakdown' | 'compare' | 'motivation' | 'myth' | 'app' | 'news';
+
+export const RUBRICS: Record<Rubric, string> = {
+  tip: 'Совет по тренировке или технике: одна конкретная мысль, которую можно применить сегодня же (дыхание, темп, разминка, восстановление, сон, прогрессия нагрузки).',
+  breakdown: 'Разбор одного упражнения: какие мышцы работают, правильная техника по шагам, 2–3 частые ошибки и как их исправить, вариант полегче и посложнее. Упражнения: отжимания и их вариации, приседания и вариации, скручивания и пресс, планка, выпады, берпи, подтягивания, ягодичный мост.',
+  compare: 'Сравнение двух упражнений, подходов или методик (например, планка или скручивания, много повторов или вес, утро или вечер, круговая или сплит): честно, с плюсами и минусами, и кому что подходит.',
+  motivation: 'Мотивация и привычки без пафоса: как начать и не бросить, что делать, если пропустил, маленькие шаги, серия дней. Опирайся на понятные исследования о привычках, но без занудства.',
+  myth: 'Миф или правда: разбери одно популярное заблуждение о тренировках, питании вокруг тренировок или восстановлении, объясни, как на самом деле.',
+  app: 'Как работает NikitenokArena: расскажи об одной возможности приложения из списка фактов ниже — что это, зачем и как этим пользоваться. Пиши как автор, который сам этим пользуется, а не как реклама.',
+  news: 'Честные новости обновлений NikitenokArena: по списку последних изменений ниже расскажи, что нового появилось для игрока. Выбери 2–4 самых заметных изменения, объясни простыми словами, что изменилось. Не выдумывай того, чего нет в списке; технические мелочи пропусти.',
+};
+const GENERAL: Rubric[] = ['tip', 'breakdown', 'compare', 'motivation', 'myth'];
+
+/** Факты о приложении: модель рассказывает только о том, что есть на самом деле. */
+export const APP_FACTS = `NikitenokArena — Telegram Mini App (бот @ArenaNikitenokBot). Камера телефона считает отжимания, приседания и скручивания (пресс) и засекает планку; проверяется поза, так что «читерские» повторы не засчитываются. Перед первой тренировкой камера калибруется под человека.
+- Приключение: три мира (фэнтези, космос, зомби) по 100 уровней, босс каждый 10-й уровень, финальный босс Князь Диван. Каждый повтор бьёт врага. Сила врагов подстраивается под реальную силу игрока.
+- Истории и персонажи: наставник Мастер Гром, бабушка Марфа, Лиса и другие. Жизни, серия дней с двумя днями отдыха в неделю, задание дня от персонажа.
+- Герой: уровни, оружие и щиты, зелья, питомцы, достижения и титулы, статистика «Твоя сила» с календарём и графиком за 30 дней.
+- Дуэли с живыми игроками: кубки, лиги, сезоны по 4 недели, топ-50; спарринг с тренером (Лиса, Гром, Князь Диван).
+- Кланы: чат, рейд-босс по выходным, войны кланов, уровни клана.
+- Друзья и вызовы, сезонный пропуск, ежемесячный босс-событие.
+- Программы тренировок (6 программ), голосовой тренер, напоминания от бота.
+- Дневник зала: около 270 упражнений с весами, подходы, рекорды.
+- Деревня: повторы дают заряд, им проходят подземелье «три в ряд», добывают ресурсы и строят деревню, есть набеги на деревни других игроков.`;
+
+export interface ChannelPost {
+  at: number;
+  // Слот: дата и час по Москве, например «2026-10-26 10».
+  slot: string;
+  rubric: Rubric;
+  topic: string;
+  mentionsApp: boolean;
+  messageId?: number;
+  // Последний коммит, о котором уже рассказали (для рубрики новостей).
+  commit?: string;
+}
+export interface ChannelState {
+  posts: ChannelPost[];
+}
+
+export interface Commit {
+  hash: string;
+  at: number;
+  subject: string;
+}
+
+/** «hash|ISO-дата|тема» по строке — так changelog.txt пишет деплой. */
+export function parseChangelog(text: string): Commit[] {
+  const out: Commit[] = [];
+  for (const line of text.split('\n')) {
+    const [hash, date, ...rest] = line.split('|');
+    const subject = rest.join('|').trim();
+    const at = Date.parse(date ?? '');
+    if (!hash?.trim() || !subject || Number.isNaN(at)) continue;
+    if (/^merge\b/i.test(subject)) continue;
+    out.push({ hash: hash.trim(), at, subject });
+  }
+  return out;
+}
+
+/** Слот, который пора опубликовать сейчас, или null. */
+export function dueSlot(now: number, state: ChannelState): string | null {
+  const d = new Date(now + MSK);
+  const day = d.toISOString().slice(0, 10);
+  for (const h of [...CHANNEL_HOURS].reverse()) {
+    const at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h) - MSK;
+    if (now < at) continue;
+    if (now - at > SLOT_LATE) return null;
+    const slot = `${day} ${String(h).padStart(2, '0')}`;
+    return state.posts.some((p) => p.slot === slot) ? null : slot;
+  }
+  return null;
+}
+
+/** Изменения, о которых ещё не рассказывали. */
+export function freshCommits(commits: Commit[], state: ChannelState): Commit[] {
+  const told = [...state.posts].reverse().find((p) => p.commit)?.commit;
+  const idx = told ? commits.findIndex((c) => c.hash === told) : -1;
+  // changelog.txt идёт от новых к старым.
+  return idx >= 0 ? commits.slice(0, idx) : commits;
+}
+
+/** Что публикуем: рубрика и можно ли упомянуть приложение. */
+export function planPost(now: number, state: ChannelState, commits: Commit[]): { rubric: Rubric; mentionsApp: boolean } {
+  const posts = state.posts;
+  const lastOf = (r: Rubric) => [...posts].reverse().find((p) => p.rubric === r)?.at ?? 0;
+  const evening = new Date(now + MSK).getUTCHours() >= 15;
+  // Новости — вечером, не чаще раза в 3 дня и только если накопилось хотя бы 3 изменения.
+  if (evening && freshCommits(commits, state).length >= 3 && now - lastOf('news') >= 3 * DAY) return { rubric: 'news', mentionsApp: true };
+  // Про возможности приложения — раз в неделю.
+  if (now - lastOf('app') >= 6.5 * DAY && posts.length >= 2) return { rubric: 'app', mentionsApp: true };
+  // Остальные — по кругу, давно не бывшая рубрика первой; две одинаковые подряд не ставим.
+  const rubric = [...GENERAL].sort((a, b) => lastOf(a) - lastOf(b) || GENERAL.indexOf(a) - GENERAL.indexOf(b))[0];
+  // Упоминание в обычном посте — только если в последних 4 его не было: в сумме выходит 1–2 из 5.
+  const mentionsApp = !posts.slice(-4).some((p) => p.mentionsApp);
+  return { rubric, mentionsApp };
+}
+
+export const SYSTEM_PROMPT = `Ты ведёшь Telegram-канал NikitenokArena о домашних тренировках с весом тела: отжимания, приседания, пресс, планка и всё вокруг них. Читатели — обычные люди, от новичков до любителей, тренируются дома и иногда в зале.
+
+Как писать:
+- По-русски, живо и по делу, на «ты». Польза в каждом абзаце, без воды и канцелярита.
+- Честно: никаких чудо-обещаний («кубики за неделю»), никаких медицинских диагнозов. Если тема касается боли или травм — советуй обратиться к врачу.
+- Это не реклама. Не используй призывы «скачай», «жми», «успей», не хвали приложение превосходными степенями.
+- Длина 600–1100 знаков. Короткие абзацы, можно список из 3–5 пунктов. Эмодзи — не больше 3 на пост, по смыслу.
+- Форматирование — только HTML-теги Telegram: <b>, <i>. Заголовок — первая строка в <b>…</b>. Никакого Markdown, никаких других тегов, ссылок и хэштегов.
+- Не повторяй темы из списка уже опубликованных; бери новый угол или новое упражнение.`;
+
+export function userPrompt(o: { now: number; rubric: Rubric; mentionsApp: boolean; recent: ChannelPost[]; commits: Commit[] }): string {
+  const date = new Date(o.now + MSK).toISOString().slice(0, 10);
+  const lines = [`Сегодня ${date}.`, '', `Рубрика: ${RUBRICS[o.rubric]}`, ''];
+  if (o.rubric === 'news') {
+    lines.push('Последние изменения (тема коммита, от новых к старым):', ...o.commits.slice(0, 40).map((c) => `- ${new Date(c.at + MSK).toISOString().slice(0, 10)}: ${c.subject}`), '');
+  }
+  if (o.rubric === 'app' || o.rubric === 'news' || o.mentionsApp) lines.push('Факты о приложении (ничего сверх них не придумывай):', APP_FACTS, '');
+  if (o.rubric !== 'app' && o.rubric !== 'news')
+    lines.push(
+      o.mentionsApp
+        ? 'В этом посте можно один раз естественно упомянуть NikitenokArena, если это к месту (например, что камера в приложении следит за глубиной приседа). Одно предложение в конце или по ходу, без призывов. Если к месту не выходит — не упоминай.'
+        : 'В этом посте приложение не упоминай вовсе.',
+      '',
+    );
+  lines.push(o.recent.length ? `Уже опубликованные темы (не повторяй):\n${o.recent.map((p) => `- ${p.topic}`).join('\n')}` : 'Это один из первых постов канала.');
+  lines.push('', 'Верни JSON: topic — тема поста в 3–8 словах (для списка опубликованного), text — готовый текст поста, mentions_app — упомянуто ли приложение.');
+  return lines.join('\n');
+}
+
+const ALLOWED_TAG = /^<\/?(?:b|i)>$/;
+/** Чистим текст под HTML Telegram: экранируем всё, кроме <b> и <i>, и ограничиваем длину. */
+export function telegramHtml(text: string): string {
+  const parts = text.trim().split(/(<\/?(?:b|i)>)/g);
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let html = parts.map((p) => (ALLOWED_TAG.test(p) ? p : esc(p))).join('');
+  // Пост в канале — до 4096 знаков; длиннее режем по абзацу.
+  if (html.length > 3800) html = html.slice(0, html.lastIndexOf('\n\n', 3800)).trim();
+  return html;
+}
+export const plainText = (html: string) => html.replace(/<\/?(?:b|i)>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+export interface Draft {
+  rubric: Rubric;
+  topic: string;
+  text: string;
+  mentionsApp: boolean;
+  commit?: string;
+}
+
+/** fetch через https.Agent (прокси SOCKS/HTTP из bot.ts): Anthropic, как и Telegram, может быть недоступен с сервера напрямую. */
+export function agentFetch(agent: () => https.Agent): typeof fetch {
+  return ((input: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((resolve, reject) => {
+      const url = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
+      const headers: Record<string, string> = {};
+      new Headers(init?.headers).forEach((v, k) => (headers[k] = v));
+      const req = https.request(url, { method: init?.method ?? 'GET', headers, agent: agent(), timeout: 180_000 }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          const h = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) h.set(k, Array.isArray(v) ? v.join(', ') : v);
+          resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 500, headers: h }));
+        });
+        res.on('error', reject);
+      });
+      init?.signal?.addEventListener('abort', () => req.destroy(new Error('aborted')));
+      req.on('timeout', () => req.destroy(new Error('timeout')));
+      req.on('error', reject);
+      req.end(typeof init?.body === 'string' ? init.body : init?.body ? Buffer.from(init.body as ArrayBuffer) : undefined);
+    })) as typeof fetch;
+}
+
+export interface ChannelDeps {
+  apiKey: () => string;
+  channel: string;
+  agent: () => https.Agent;
+  changelog: () => string;
+  // Отправка в Bot API; возвращает ответ Telegram.
+  bot: (method: string, body: unknown) => Promise<{ ok: boolean; result?: unknown; description?: string }>;
+  appLink: () => string;
+  log?: (msg: string) => void;
+  // Для тестов: свой fetch вместо https через прокси.
+  fetch?: typeof fetch;
+}
+
+export class Channel {
+  state: ChannelState = { posts: [] };
+  busy = false;
+  lastError: string | null = null;
+  private tries = new Map<string, number>();
+  private nextTry = 0;
+
+  constructor(
+    private file: string | null,
+    private d: ChannelDeps,
+  ) {
+    if (!file) return;
+    try {
+      this.state = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      /* первый запуск */
+    }
+  }
+
+  private save(): void {
+    if (!this.file) return;
+    mkdirSync(dirname(this.file), { recursive: true });
+    writeFileSync(`${this.file}.tmp`, JSON.stringify(this.state));
+    renameSync(`${this.file}.tmp`, this.file);
+  }
+
+  status(): string {
+    const last = this.state.posts.at(-1);
+    return [
+      `Канал: ${this.d.channel}, ключ Claude: ${this.d.apiKey() ? 'есть' : 'нет'}`,
+      `Постов: ${this.state.posts.length}${last ? `, последний ${new Date(last.at + MSK).toISOString().slice(0, 16).replace('T', ' ')} МСК — ${last.rubric}: ${last.topic}` : ''}`,
+      this.lastError ? `Последняя ошибка: ${this.lastError}` : 'Ошибок нет',
+      'Команды: /channel_draft — черновик тебе, /channel_post — опубликовать сейчас',
+    ].join('\n');
+  }
+
+  /** Раз в минуту из index.ts: публикуем, если наступил слот. До трёх попыток с паузой 10 минут. */
+  tick(now = Date.now()): void {
+    if (this.busy || now < this.nextTry || !this.d.apiKey()) return;
+    const slot = dueSlot(now, this.state);
+    if (!slot || (this.tries.get(slot) ?? 0) >= 3) return;
+    this.tries.set(slot, (this.tries.get(slot) ?? 0) + 1);
+    this.publish(slot, now).catch((e: Error) => {
+      this.lastError = e.message;
+      this.nextTry = Date.now() + 10 * 60_000;
+      this.d.log?.(`channel: ${e.message}`);
+    });
+  }
+
+  async draft(now = Date.now()): Promise<Draft> {
+    const commits = parseChangelog(this.d.changelog());
+    const plan = planPost(now, this.state, commits);
+    const fresh = freshCommits(commits, this.state);
+    const client = new Anthropic({ apiKey: this.d.apiKey(), fetch: this.d.fetch ?? agentFetch(this.d.agent), maxRetries: 2 });
+    const res = await client.beta.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: {
+        effort: 'medium',
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: { topic: { type: 'string' }, text: { type: 'string' }, mentions_app: { type: 'boolean' } },
+            required: ['topic', 'text', 'mentions_app'],
+            additionalProperties: false,
+          },
+        },
+      },
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userPrompt({ now, ...plan, recent: this.state.posts.slice(-60), commits: fresh }) }],
+    } as Anthropic.Beta.MessageCreateParamsNonStreaming);
+    if (res.stop_reason === 'refusal') throw new Error('Claude отказался писать пост');
+    if (res.stop_reason === 'max_tokens') throw new Error('Claude не уложился в лимит');
+    const block = res.content.find((b) => b.type === 'text');
+    const out = JSON.parse(block && block.type === 'text' ? block.text : '{}') as { topic?: string; text?: string; mentions_app?: boolean };
+    if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
+    return { rubric: plan.rubric, topic: out.topic.slice(0, 120), text: telegramHtml(out.text), mentionsApp: plan.mentionsApp && !!out.mentions_app, commit: plan.rubric === 'news' ? commits[0]?.hash : undefined };
+  }
+
+  /** Отправка поста в чат (канал или админу для проверки). Если HTML не прошёл — шлём простым текстом. */
+  async send(chatId: string | number, draft: Draft): Promise<number | undefined> {
+    const reply_markup = draft.mentionsApp ? { inline_keyboard: [[{ text: 'Открыть NikitenokArena', url: this.d.appLink() }]] } : undefined;
+    let r = await this.d.bot('sendMessage', { chat_id: chatId, text: draft.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup });
+    if (!r.ok && /parse|entit/i.test(r.description ?? '')) r = await this.d.bot('sendMessage', { chat_id: chatId, text: plainText(draft.text), link_preview_options: { is_disabled: true }, reply_markup });
+    if (!r.ok) throw new Error(`Telegram: ${r.description ?? 'ошибка'}`);
+    return (r.result as { message_id?: number } | undefined)?.message_id;
+  }
+
+  async publish(slot: string, now = Date.now()): Promise<ChannelPost> {
+    this.busy = true;
+    try {
+      const draft = await this.draft(now);
+      const messageId = await this.send(this.d.channel, draft);
+      const post: ChannelPost = { at: Date.now(), slot, rubric: draft.rubric, topic: draft.topic, mentionsApp: draft.mentionsApp, messageId, commit: draft.commit };
+      this.state.posts.push(post);
+      this.state.posts = this.state.posts.slice(-300);
+      this.save();
+      this.lastError = null;
+      return post;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  /** Команды админа в личке бота. Ответ приходит позже, поэтому сообщаем через reply. */
+  command(chatId: number, text: string, reply: (t: string) => void): boolean {
+    const t = text.trim();
+    if (/^\/channel_draft\b/.test(t)) {
+      reply('Пишу черновик, это займёт до минуты…');
+      this.draft()
+        .then((d) => this.send(chatId, d).then(() => reply(`Рубрика: ${d.rubric}, тема: ${d.topic}. В канал не ушло.`)))
+        .catch((e: Error) => reply(`Не вышло: ${e.message}`));
+      return true;
+    }
+    if (/^\/channel_post\b/.test(t)) {
+      if (this.busy) return reply('Пост уже готовится.'), true;
+      reply('Пишу и публикую пост…');
+      this.publish(`ручной ${new Date().toISOString()}`)
+        .then((p) => reply(`Опубликовано: ${p.rubric}, «${p.topic}».`))
+        .catch((e: Error) => reply(`Не вышло: ${(this.lastError = e.message)}`));
+      return true;
+    }
+    if (/^\/channel\b/.test(t)) return reply(this.status()), true;
+    return false;
+  }
+}

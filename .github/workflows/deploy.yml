@@ -14,8 +14,12 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       TG_PROXY: ${{ secrets.TG_PROXY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # История нужна для новостей в канале (server/channel.ts).
+          fetch-depth: 200
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -24,6 +28,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run build:server
+      # Последние изменения для рубрики новостей в канале: «hash|дата|тема», от новых к старым.
+      - run: git log -n 80 --no-merges --since="30 days ago" --format='%h|%cI|%s' > dist-server/changelog.txt
       - name: Upload to server
         # Пока секреты не добавлены, сборка проверяется, но никуда не выкладывается.
         if: env.DEPLOY_KEY != ''
@@ -42,6 +48,10 @@ jobs:
             # Прокси до Telegram (VPN на сервере), например socks5://127.0.0.1:1080.
             if [ -n "$TG_PROXY" ]; then
               printf '%s' "$TG_PROXY" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.tg-proxy'
+            fi
+            # Ключ Claude API для автопостинга в канал.
+            if [ -n "$ANTHROPIC_API_KEY" ]; then
+              printf '%s' "$ANTHROPIC_API_KEY" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.anthropic-key'
             fi
             $SSH "$DEPLOY_USER@$DEPLOY_HOST" sudo -n /usr/bin/systemctl restart arena-server
           fi

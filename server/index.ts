@@ -26,7 +26,7 @@ import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, botStatus, runBot, type Update, webhookReply, webhookSecret } from './bot';
+import { botApi, botStatus, currentAgent, runBot, type Update, webhookReply, webhookSecret } from './bot';
 import { dueReminders, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
@@ -53,6 +53,7 @@ import { adminCommand, type ModerationDeps, moderationApi } from './moderationAp
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
 import { villageApi } from './villageApi';
+import { Channel } from './channel';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -327,6 +328,22 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
 }
 
 const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
+// Автопостинг в канал (server/channel.ts): ключ Claude из секрета репозитория — файл .anthropic-key рядом с сервером.
+const ANTHROPIC_KEY_FILE = process.env.ANTHROPIC_KEY_FILE ?? join(__dirname, '.anthropic-key');
+const CHANNEL_ID = process.env.CHANNEL_ID ?? '@NikitenokArena';
+const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), {
+  // Файл читаем каждый раз: ключ можно положить без перезапуска.
+  apiKey: () => process.env.ANTHROPIC_API_KEY || readToken(ANTHROPIC_KEY_FILE),
+  channel: CHANNEL_ID,
+  agent: currentAgent,
+  changelog: () => readToken(join(__dirname, 'changelog.txt')),
+  bot: (method, body) => botApi(BOT_TOKEN)(method, body, 30_000),
+  appLink: () => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?startapp`,
+  log: (m) => console.log(m),
+});
+/** Команды канала от админа: /channel, /channel_draft, /channel_post. */
+const channelCommand = (chatId: number, text: string): boolean =>
+  /^\/channel/.test(text.trim()) && admins.has(`tg:${chatId}`) && channel.command(chatId, text, (t) => botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t }, 15_000).catch(() => null));
 const clanInfo = (code: string) => {
   const c = clans.byCode(code);
   return c && { name: c.name, tag: c.tag, members: c.members.length };
@@ -496,6 +513,7 @@ const http = createServer((req, res) => {
         if (chat?.type === 'private') saves.setBlocked(`tg:${chat.id}`, false);
         const msg = (update as unknown as Update).message;
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
+        if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, msg.text) : null;
         const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
@@ -925,7 +943,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
     },
-    (chatId, text) => adminCommand(moderationDeps, chatId, text),
+    (chatId, text) => (channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, text)),
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
 if (BOT_TOKEN)
@@ -938,6 +956,8 @@ if (BOT_TOKEN)
     for (const a of telemetry.takeAlerts()) toAdmins(alertText(a), true);
     if (admins.ids().length && telemetry.summaryDue()) toAdmins(telemetry.summaryText(), true);
   }, 60_000);
+// Канал: раз в минуту проверяем, не пора ли выпустить пост (10:00 и 19:00 по Москве).
+if (BOT_TOKEN && CHANNEL_ID !== 'off') setInterval(() => channel.tick(), 60_000);
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)

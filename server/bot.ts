@@ -144,6 +144,8 @@ const readFile = (f: string) => {
 };
 export const TG_PROXY = process.env.TG_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.ALL_PROXY || process.env.all_proxy || readFile(join(__dirname, '.tg-proxy'));
 let agent: https.Agent = TG_PROXY ? proxyAgent(TG_PROXY) : direct;
+/** Текущее соединение до внешних API (прямое или через прокси): им же ходим к Claude. */
+export const currentAgent = () => agent;
 export const useProxy = (url: string | null) => {
   agent = url ? proxyAgent(url) : direct;
   botStatus.proxy = url ? new URL(url).host : null;
@@ -229,7 +231,7 @@ async function sendWelcomePhoto(token: string, chat_id: number, url: string, cap
   }
 }
 
-/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). onCommand — свои команды (модерация): вернуть ответ или null. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
+/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). onCommand — свои команды (модерация, канал): вернуть ответ, пустую строку (ответит сам) или null. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
 export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void, onCommand?: (chatId: number, text: string) => string | null): void {
   const api = botApi(token);
   let offset = 0;
@@ -261,9 +263,10 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
           // Игрок написал боту: значит, снова можно ему писать.
           onChat?.(msg.chat.id);
           const own = onCommand?.(msg.chat.id, msg.text);
-          if (own) {
+          // Пустая строка — команда уже обработана (ответ придёт позже).
+          if (own != null) {
             botStatus.handled++;
-            await api('sendMessage', { chat_id: msg.chat.id, text: own });
+            if (own) await api('sendMessage', { chat_id: msg.chat.id, text: own });
             continue;
           }
           const reply = startReply(msg.text, appUrl, clanByCode);
