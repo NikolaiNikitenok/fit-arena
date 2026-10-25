@@ -1,0 +1,23 @@
+name: Promo to Telegram
+
+# Временный: отправляет пробный рилс владельцу через бота.
+on:
+  push:
+    branches: [claude/project-thread-3wuybz]
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send reel
+        run: |
+          check() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);console.log("ok:",r.ok,r.description??"");process.exit(r.ok?0:1)})'; }
+          curl -sS -F chat_id=991020798 -F supports_streaming=true -F width=1080 -F height=1920 -F duration=31 \
+            -F caption="NikitenokArena: пробный рилс для Instagram, 30 секунд, с озвучкой" \
+            -F video=@promo-send/nikitenok-arena-reel-01.mp4 "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" | check
+          curl -sS -F chat_id=991020798 -F title="Голоса Piper: Дмитрий, Денис, Руслан, Ирина" \
+            -F caption="Бесплатные голоса для озвучки по порядку: Дмитрий (в ролике), Денис, Руслан, Ирина" \
+            -F audio=@promo-send/voices-piper.mp3 "https://api.telegram.org/bot$BOT_TOKEN/sendAudio" | check
