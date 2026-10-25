@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import https from 'node:https';
-import { Channel, type ChannelPost, type ChannelState, dueSlot, freshCommits, parseChangelog, planPost, telegramHtml, userPrompt } from './channel';
+import { Channel, type ChannelPost, type ChannelState, dueSlot, freshCommits, parseChangelog, planPost, plainText, telegramHtml, userPrompt } from './channel';
 
 const msk = (iso: string) => Date.parse(`${iso}+03:00`);
 const post = (at: number, rubric: ChannelPost['rubric'], mentionsApp = false, extra: Partial<ChannelPost> = {}): ChannelPost => ({ at, slot: String(at), rubric, topic: `тема ${rubric}`, mentionsApp, ...extra });
@@ -64,8 +64,10 @@ describe('канал: рубрики', () => {
 });
 
 describe('канал: текст и публикация', () => {
-  it('HTML для Telegram: только <b> и <i>, остальное экранируется', () => {
+  it('HTML для Telegram: только разрешённые теги, остальное экранируется', () => {
     expect(telegramHtml('<b>Заголовок</b>\n\n5 < 10 & <script>x</script> <i>ок</i>')).toBe('<b>Заголовок</b>\n\n5 &lt; 10 &amp; &lt;script&gt;x&lt;/script&gt; <i>ок</i>');
+    expect(telegramHtml('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> <a href="x">ссылка</a>')).toBe('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> &lt;a href="x"&gt;ссылка&lt;/a&gt;');
+    expect(plainText('<blockquote>Вывод</blockquote> <u>да</u>')).toBe('Вывод да');
   });
   it('пишет пост через Claude и публикует в канал, тему запоминает', async () => {
     const bodies: Record<string, unknown>[] = [];

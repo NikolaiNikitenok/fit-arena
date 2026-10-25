@@ -128,8 +128,10 @@ export const SYSTEM_PROMPT = `Ты ведёшь Telegram-канал NikitenokAre
 - По-русски, живо и по делу, на «ты». Польза в каждом абзаце, без воды и канцелярита.
 - Честно: никаких чудо-обещаний («кубики за неделю»), никаких медицинских диагнозов. Если тема касается боли или травм — советуй обратиться к врачу.
 - Это не реклама. Не используй призывы «скачай», «жми», «успей», не хвали приложение превосходными степенями.
-- Длина 600–950 знаков (пост может уйти подписью к картинке, а там предел 1024). Короткие абзацы, можно список из 3–5 пунктов. Эмодзи — не больше 3 на пост, по смыслу.
-- Форматирование — только HTML-теги Telegram: <b>, <i>. Заголовок — первая строка в <b>…</b>. Никакого Markdown, никаких других тегов, ссылок и хэштегов.
+- Длина 600–950 знаков (пост может уйти подписью к картинке, а там предел 1024). Короткие абзацы, можно список из 3–5 пунктов.
+- Оформление — HTML-теги Telegram: <b>жирный</b> для заголовка и ключевых мыслей, <i>курсив</i> для акцентов и терминов, <blockquote>цитата</blockquote> для главного вывода, правила или короткой цитаты (одна на пост), <u>подчёркнутый</u> и <tg-spoiler>спойлер</tg-spoiler> — изредка, например для ответа в «миф или правда». Заголовок — первая строка в <b>…</b>. Оформляй умеренно: 2–4 выделения на пост, не каждое предложение.
+- Эмодзи: 3–5 на пост, по смыслу — в начале заголовка и пунктов списка (например, 💪 🔥 ✅ ❌ 💡 ⚡), не в каждой строке.
+- Никакого Markdown (звёздочек, решёток), других тегов, ссылок и хэштегов.
 - Не повторяй темы из списка уже опубликованных; бери новый угол или новое упражнение.`;
 
 export function userPrompt(o: { now: number; rubric: Rubric; mentionsApp: boolean; recent: ChannelPost[]; commits: Commit[] }): string {
@@ -160,17 +162,19 @@ export const imagesHint = (aboutApp: boolean): string =>
     ? `К посту можно приложить 1–2 скриншота приложения, если они прямо показывают то, о чём пост. Доступные скриншоты (имя — что на нём):\n${mediaCatalogText()}`
     : 'Скриншоты к этому посту не нужны: images — пустой список.';
 
-const ALLOWED_TAG = /^<\/?(?:b|i)>$/;
+// Теги HTML, которые понимает Telegram и которые разрешаем в постах.
+const TAGS = 'b|i|u|s|code|blockquote|tg-spoiler';
+const ALLOWED_TAG = new RegExp(`^</?(?:${TAGS})>$`);
 /** Чистим текст под HTML Telegram: экранируем всё, кроме <b> и <i>, и ограничиваем длину. */
 export function telegramHtml(text: string): string {
-  const parts = text.trim().split(/(<\/?(?:b|i)>)/g);
+  const parts = text.trim().split(new RegExp(`(</?(?:${TAGS})>)`, 'g'));
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let html = parts.map((p) => (ALLOWED_TAG.test(p) ? p : esc(p))).join('');
   // Пост в канале — до 4096 знаков; длиннее режем по абзацу.
   if (html.length > 3800) html = html.slice(0, html.lastIndexOf('\n\n', 3800)).trim();
   return html;
 }
-export const plainText = (html: string) => html.replace(/<\/?(?:b|i)>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+export const plainText = (html: string) => html.replace(new RegExp(`</?(?:${TAGS})>`, 'g'), '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 /** JSON из ответа модели: берём от первой { до последней }, даже если вокруг есть текст. */
 export type Written = { topic?: string; text?: string; mentions_app?: boolean; images?: unknown };
