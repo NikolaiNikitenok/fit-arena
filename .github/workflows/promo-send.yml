@@ -1,0 +1,41 @@
+name: Promo to Telegram
+
+# Временный: озвучивает рилс через SaluteSpeech, собирает и отправляет владельцу через бота.
+on:
+  push:
+    branches: [claude/project-thread-3wuybz]
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      SALUTE_SPEECH_KEY: ${{ secrets.SALUTE_SPEECH_KEY }}
+      VOICE: Bys_24000
+    defaults:
+      run:
+        working-directory: promo-send/reel
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - name: Voiceover
+        run: |
+          if [ -z "$SALUTE_SPEECH_KEY" ]; then echo "Нет секрета SALUTE_SPEECH_KEY"; exit 1; fi
+          ./synth.sh
+      - name: Build
+        run: |
+          python3 plan.py && python3 build.py
+          for v in Bys_24000 Tur_24000 Pon_24000 Nec_24000 May_24000 Ost_24000; do echo "file 'samples/$v.wav'"; echo "file 'gap.wav'"; done > list.txt
+          ffmpeg -v error -f lavfi -t 0.8 -i anullsrc=r=24000:cl=mono gap.wav
+          ffmpeg -v error -f concat -safe 0 -i list.txt -af loudnorm=I=-16 -c:a libmp3lame -b:a 128k voices.mp3
+      - uses: actions/upload-artifact@v4
+        with: { name: reel, path: "promo-send/reel/reel.mp4\npromo-send/reel/voices.mp3\npromo-send/reel/vo" }
+      - name: Send
+        run: |
+          check() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);console.log("ok:",r.ok,r.description??"");process.exit(r.ok?0:1)})'; }
+          curl -sS -F chat_id=991020798 -F supports_streaming=true -F width=1080 -F height=1920 -F duration=31 \
+            -F caption="NikitenokArena: пробный рилс, озвучка SaluteSpeech (голос Борис)" \
+            -F video=@reel.mp4 "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" | check
+          curl -sS -F chat_id=991020798 -F title="Голоса SaluteSpeech" \
+            -F caption="Голоса SaluteSpeech по порядку: Борис (в ролике), Тарас, Сергей, Наталья, Марфа, Александра" \
+            -F audio=@voices.mp3 "https://api.telegram.org/bot$BOT_TOKEN/sendAudio" | check
