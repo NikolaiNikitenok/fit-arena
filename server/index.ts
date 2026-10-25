@@ -348,7 +348,7 @@ const channelDeps: ChannelDeps = {
   bot: (method, body) => botApi(BOT_TOKEN)(method, body, 30_000),
   upload: (method, fields, files) => botUploadFiles(BOT_TOKEN, method, fields, files),
   mediaDir: mediaDir(__dirname),
-  appLink: () => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?startapp`,
+  appLink: () => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}`,
   log: (m) => console.log(m),
 };
 const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), channelDeps);

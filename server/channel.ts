@@ -404,7 +404,7 @@ export class Channel {
 
   /** Отправка поста в чат (канал или админу для проверки). Если HTML не прошёл — шлём простым текстом. */
   async send(chatId: string | number, draft: Draft): Promise<number | undefined> {
-    const reply_markup = draft.mentionsApp ? { inline_keyboard: [[{ text: 'Открыть NikitenokArena', url: this.d.appLink() }]] } : undefined;
+    const reply_markup = draft.mentionsApp ? { inline_keyboard: [[{ text: '🤖 Бот NikitenokArena', url: this.d.appLink() }]] } : undefined;
     return sendPost(this.d, chatId, draft, reply_markup);
   }
 
