@@ -26,7 +26,7 @@ import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, botStatus, currentAgent, runBot, type Update, webhookReply, webhookSecret } from './bot';
+import { botApi, botStatus, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
 import { dueReminders, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
@@ -54,6 +54,7 @@ import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
 import { villageApi } from './villageApi';
 import { Channel } from './channel';
+import { runClaudeCode } from './claudeCode';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -328,12 +329,17 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
 }
 
 const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
-// Автопостинг в канал (server/channel.ts): ключ Claude из секрета репозитория — файл .anthropic-key рядом с сервером.
+// Автопостинг в канал (server/channel.ts): подписка Claude через Claude Code или ключ API — файлы рядом с сервером из секретов репозитория.
 const ANTHROPIC_KEY_FILE = process.env.ANTHROPIC_KEY_FILE ?? join(__dirname, '.anthropic-key');
+const CLAUDE_TOKEN_FILE = process.env.CLAUDE_TOKEN_FILE ?? join(__dirname, '.claude-token');
 const CHANNEL_ID = process.env.CHANNEL_ID ?? '@NikitenokArena';
 const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), {
   // Файл читаем каждый раз: ключ можно положить без перезапуска.
   apiKey: () => process.env.ANTHROPIC_API_KEY || readToken(ANTHROPIC_KEY_FILE),
+  // Подписка: токен из `claude setup-token` (секрет CLAUDE_CODE_OAUTH_TOKEN → .claude-token).
+  claudeToken: () => process.env.CLAUDE_CODE_OAUTH_TOKEN || readToken(CLAUDE_TOKEN_FILE),
+  claudeCode: (system, prompt) =>
+    runClaudeCode({ token: process.env.CLAUDE_CODE_OAUTH_TOKEN || readToken(CLAUDE_TOKEN_FILE), system, prompt, proxy: TG_PROXY, dir: join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'claude-code') }),
   channel: CHANNEL_ID,
   agent: currentAgent,
   changelog: () => readToken(join(__dirname, 'changelog.txt')),

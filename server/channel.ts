@@ -155,6 +155,14 @@ export function telegramHtml(text: string): string {
 }
 export const plainText = (html: string) => html.replace(/<\/?(?:b|i)>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
+/** JSON из ответа модели: берём от первой { до последней }, даже если вокруг есть текст. */
+export function parseJson(text: string): { topic?: string; text?: string; mentions_app?: boolean } {
+  const a = text.indexOf('{');
+  const b = text.lastIndexOf('}');
+  if (a < 0 || b < a) throw new Error('Claude ответил не JSON');
+  return JSON.parse(text.slice(a, b + 1));
+}
+
 export interface Draft {
   rubric: Rubric;
   topic: string;
@@ -189,6 +197,10 @@ export function agentFetch(agent: () => https.Agent): typeof fetch {
 
 export interface ChannelDeps {
   apiKey: () => string;
+  // Токен подписки из `claude setup-token`: если есть, пишем через Claude Code, ключ API — запасной путь.
+  claudeToken?: () => string;
+  // Запуск Claude Code (server/claudeCode.ts): системный промпт и запрос → текст ответа.
+  claudeCode?: (system: string, prompt: string) => Promise<string>;
   channel: string;
   agent: () => https.Agent;
   changelog: () => string;
@@ -229,7 +241,7 @@ export class Channel {
   status(): string {
     const last = this.state.posts.at(-1);
     return [
-      `Канал: ${this.d.channel}, ключ Claude: ${this.d.apiKey() ? 'есть' : 'нет'}`,
+      `Канал: ${this.d.channel}, подписка Claude: ${this.d.claudeToken?.() ? 'есть' : 'нет'}, ключ API: ${this.d.apiKey() ? 'есть' : 'нет'}`,
       `Постов: ${this.state.posts.length}${last ? `, последний ${new Date(last.at + MSK).toISOString().slice(0, 16).replace('T', ' ')} МСК — ${last.rubric}: ${last.topic}` : ''}`,
       this.lastError ? `Последняя ошибка: ${this.lastError}` : 'Ошибок нет',
       'Команды: /channel_draft — черновик тебе, /channel_post — опубликовать сейчас',
@@ -238,7 +250,7 @@ export class Channel {
 
   /** Раз в минуту из index.ts: публикуем, если наступил слот. До трёх попыток с паузой 10 минут. */
   tick(now = Date.now()): void {
-    if (this.busy || now < this.nextTry || !this.d.apiKey()) return;
+    if (this.busy || now < this.nextTry || !(this.d.apiKey() || this.d.claudeToken?.())) return;
     const slot = dueSlot(now, this.state);
     if (!slot || (this.tries.get(slot) ?? 0) >= 3) return;
     this.tries.set(slot, (this.tries.get(slot) ?? 0) + 1);
@@ -253,6 +265,25 @@ export class Channel {
     const commits = parseChangelog(this.d.changelog());
     const plan = planPost(now, this.state, commits);
     const fresh = freshCommits(commits, this.state);
+    const prompt = userPrompt({ now, ...plan, recent: this.state.posts.slice(-60), commits: fresh });
+    const out = await this.generate(prompt);
+    if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
+    return { rubric: plan.rubric, topic: out.topic.slice(0, 120), text: telegramHtml(out.text), mentionsApp: plan.mentionsApp && !!out.mentions_app, commit: plan.rubric === 'news' ? commits[0]?.hash : undefined };
+  }
+
+  /** Подписка через Claude Code, если есть токен; не вышло — API-ключ, если он есть. */
+  private async generate(prompt: string): Promise<{ topic?: string; text?: string; mentions_app?: boolean }> {
+    const errors: string[] = [];
+    if (this.d.claudeToken?.() && this.d.claudeCode) {
+      try {
+        const text = await this.d.claudeCode(SYSTEM_PROMPT, `${prompt}\n\nОтветь только JSON-объектом, без пояснений и без \`\`\`.`);
+        return parseJson(text);
+      } catch (e) {
+        errors.push((e as Error).message);
+        if (!this.d.apiKey()) throw e;
+      }
+    }
+    if (!this.d.apiKey()) throw new Error('нет ни токена подписки, ни ключа API');
     const client = new Anthropic({ apiKey: this.d.apiKey(), fetch: this.d.fetch ?? agentFetch(this.d.agent), maxRetries: 2 });
     const res = await client.beta.messages.create({
       model: MODEL,
@@ -272,14 +303,13 @@ export class Channel {
         },
       },
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt({ now, ...plan, recent: this.state.posts.slice(-60), commits: fresh }) }],
+      messages: [{ role: 'user', content: prompt }],
     } as Anthropic.Beta.MessageCreateParamsNonStreaming);
     if (res.stop_reason === 'refusal') throw new Error('Claude отказался писать пост');
     if (res.stop_reason === 'max_tokens') throw new Error('Claude не уложился в лимит');
     const block = res.content.find((b) => b.type === 'text');
-    const out = JSON.parse(block && block.type === 'text' ? block.text : '{}') as { topic?: string; text?: string; mentions_app?: boolean };
-    if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
-    return { rubric: plan.rubric, topic: out.topic.slice(0, 120), text: telegramHtml(out.text), mentionsApp: plan.mentionsApp && !!out.mentions_app, commit: plan.rubric === 'news' ? commits[0]?.hash : undefined };
+    if (errors.length) this.d.log?.(`channel: подписка не сработала (${errors[0]}), пост написан через API`);
+    return parseJson(block && block.type === 'text' ? block.text : '');
   }
 
   /** Отправка поста в чат (канал или админу для проверки). Если HTML не прошёл — шлём простым текстом. */

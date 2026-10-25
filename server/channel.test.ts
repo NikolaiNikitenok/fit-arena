@@ -92,4 +92,39 @@ describe('канал: текст и публикация', () => {
     expect(ch.state.posts).toHaveLength(1);
     expect(dueSlot(msk('2026-10-26T10:05:00'), ch.state)).toBe(null);
   });
+  it('через подписку: Claude Code пишет пост, при ошибке — запасной ключ API', async () => {
+    const sent: Record<string, unknown>[] = [];
+    let apiCalls = 0;
+    const answer = JSON.stringify({ topic: 'Планка', text: '<b>Планка</b>\n\nСпина прямая.', mentions_app: false });
+    const fakeFetch = (async () => {
+      apiCalls++;
+      return new Response(JSON.stringify({ id: 'm', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: answer }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    let fail = false;
+    const deps = (apiKey: string) => ({
+      apiKey: () => apiKey,
+      claudeToken: () => 'tok',
+      claudeCode: async (system: string, prompt: string) => {
+        expect(system).toContain('NikitenokArena');
+        expect(prompt).toContain('только JSON');
+        if (fail) throw new Error('Claude Code: 401');
+        return `Вот пост:\n${answer}`;
+      },
+      channel: '@NikitenokArena',
+      agent: () => new https.Agent(),
+      changelog: () => '',
+      bot: async (method: string, body: unknown) => (sent.push({ method, ...(body as object) }), { ok: true, result: { message_id: 1 } }),
+      appLink: () => '',
+      fetch: fakeFetch,
+    });
+    const sub = new Channel(null, deps(''));
+    expect((await sub.draft()).topic).toBe('Планка');
+    expect(apiCalls).toBe(0);
+    fail = true;
+    await expect(sub.draft()).rejects.toThrow('401');
+    const both = new Channel(null, deps('sk-test'));
+    expect((await both.draft()).topic).toBe('Планка');
+    expect(apiCalls).toBe(1);
+  });
 });
+

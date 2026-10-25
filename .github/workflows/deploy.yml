@@ -15,6 +15,7 @@ jobs:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       TG_PROXY: ${{ secrets.TG_PROXY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,6 +53,10 @@ jobs:
             # Ключ Claude API для автопостинга в канал.
             if [ -n "$ANTHROPIC_API_KEY" ]; then
               printf '%s' "$ANTHROPIC_API_KEY" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.anthropic-key'
+            fi
+            # Или подписка Claude: токен из `claude setup-token`, посты пишет Claude Code на сервере.
+            if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+              printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.claude-token'
             fi
             $SSH "$DEPLOY_USER@$DEPLOY_HOST" sudo -n /usr/bin/systemctl restart arena-server
           fi
