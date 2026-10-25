@@ -2,8 +2,7 @@ name: Promo to Telegram
 
 # Временный: озвучивает рилс через SaluteSpeech, собирает и отправляет владельцу через бота.
 on:
-  push:
-    branches: [claude/project-thread-3wuybz]
+  workflow_dispatch:
 
 jobs:
   send:
