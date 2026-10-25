@@ -100,7 +100,7 @@ describe('личный канал', () => {
 describe('личный канал: тема от автора', () => {
   it('в 20:00 бот спрашивает тему, фраза админа становится темой черновика, «Другой вариант» — на ту же тему', async () => {
     const prompts: string[] = [];
-    const { ch, calls } = setup({ topic: 'Камера и поза', text: 'Текст про <a href="https://t.me/ArenaNikitenokBot?startapp">игру</a>', mentions_app: false, images: [] });
+    const { ch, calls } = setup({ topic: 'Камера и поза', text: 'Текст про <a href="https://t.me/ArenaNikitenokBot">игру</a>', mentions_app: false, images: [] });
     (ch as unknown as { d: { claudeCode: (system: string, prompt: string) => Promise<string> } }).d.claudeCode = async (_, prompt) => (prompts.push(prompt), JSON.stringify({ topic: 'Камера и поза', text: 'Текст', images: [] }));
     ch.tick(msk('2026-10-25T20:01:00'));
     await flush();

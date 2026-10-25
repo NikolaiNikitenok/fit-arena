@@ -68,7 +68,7 @@ describe('канал: текст и публикация', () => {
     expect(telegramHtml('<b>Заголовок</b>\n\n5 < 10 & <script>x</script> <i>ок</i>')).toBe('<b>Заголовок</b>\n\n5 &lt; 10 &amp; &lt;script&gt;x&lt;/script&gt; <i>ок</i>');
     expect(telegramHtml('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> <a href="x">ссылка</a>')).toBe('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> ссылка');
     // Ссылки — только https на свои адреса; чужая ссылка теряет тег, текст остаётся.
-    expect(telegramHtml('Играй в <a href="https://t.me/ArenaNikitenokBot?startapp">NikitenokArena</a>!')).toBe('Играй в <a href="https://t.me/ArenaNikitenokBot?startapp">NikitenokArena</a>!');
+    expect(telegramHtml('Играй в <a href="https://t.me/ArenaNikitenokBot">NikitenokArena</a>!')).toBe('Играй в <a href="https://t.me/ArenaNikitenokBot">NikitenokArena</a>!');
     expect(telegramHtml('<a href="https://evil.example/x">тут</a> и <a href="http://t.me/x">там</a>')).toBe('тут и там');
     expect(telegramHtml('<a href="https://t.me/NikitenokArena">канал')).toBe('<a href="https://t.me/NikitenokArena">канал</a>');
     expect(telegramHtml('a </a> b')).toBe('a &lt;/a&gt; b');
