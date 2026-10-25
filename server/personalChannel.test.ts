@@ -97,6 +97,64 @@ describe('личный канал', () => {
   });
 });
 
+describe('личный канал: тема от автора', () => {
+  it('в 20:00 бот спрашивает тему, фраза админа становится темой черновика, «Другой вариант» — на ту же тему', async () => {
+    const prompts: string[] = [];
+    const { ch, calls } = setup({ topic: 'Камера и поза', text: 'Текст про <a href="https://t.me/ArenaNikitenokBot?startapp">игру</a>', mentions_app: false, images: [] });
+    (ch as unknown as { d: { claudeCode: (system: string, prompt: string) => Promise<string> } }).d.claudeCode = async (_, prompt) => (prompts.push(prompt), JSON.stringify({ topic: 'Камера и поза', text: 'Текст', images: [] }));
+    ch.tick(msk('2026-10-25T20:01:00'));
+    await flush();
+    expect(ch.state.asking).toBeTruthy();
+    expect(ch.state.pending).toBeFalsy();
+    const q = calls.find((c) => c.method === 'sendMessage');
+    expect(String(q?.body.text)).toContain('О чём написать пост');
+    expect(JSON.stringify(q?.body.reply_markup)).toContain('pc:auto:');
+    // Кнопка меню — не тема.
+    const ignoring = setup({});
+    expect(ignoring.ch.onUpdate({ update_id: 1, message: { chat: { id: 42, type: 'private' }, text: '/channel' } }, reply, answer)).toBe(false);
+    // Фраза админа — тема.
+    expect(ch.onUpdate({ update_id: 2, message: { chat: { id: 42, type: 'private' }, text: 'как нейросеть видит позу' } }, reply, answer)).toBe(true);
+    await flush();
+    expect(ch.state.asking).toBeNull();
+    expect(ch.state.pending?.idea).toBe('как нейросеть видит позу');
+    expect(prompts[0]).toContain('Фраза автора: «как нейросеть видит позу»');
+    const id = ch.state.pending!.id;
+    expect(ch.onUpdate({ update_id: 3, callback_query: { id: 'q', from: { id: 42 }, data: `pc:redo:${id}` } }, reply, answer)).toBe(true);
+    await flush();
+    expect(prompts[1]).toContain('как нейросеть видит позу');
+    expect(ch.state.pending?.draft.rubric).toBe('idea');
+  });
+
+  it('«Пусть Claude выберет» и тишина 3 часа — тему выбирает Claude; «Сегодня без поста» — до завтра', async () => {
+    const { ch } = setup({ topic: 'Факт', text: 'Текст', images: [] });
+    await ch.ask('s1', msk('2026-10-25T20:00:00'));
+    ch.onUpdate({ update_id: 1, callback_query: { id: 'q', from: { id: 42 }, data: `pc:auto:${ch.state.asking!.id}` } }, reply, answer);
+    await flush();
+    expect(ch.state.pending?.draft.rubric).toMatch(/^(today|fact|status)$/);
+
+    const b = setup({ topic: 'Факт', text: 'Текст', images: [] });
+    await b.ch.ask('s2', msk('2026-10-25T20:00:00'));
+    b.ch.tick(msk('2026-10-25T21:00:00'));
+    expect(b.ch.state.asking).toBeTruthy();
+    b.ch.tick(msk('2026-10-25T23:01:00'));
+    await flush();
+    expect(b.ch.state.pending?.draft.rubric).toMatch(/^(today|fact|status)$/);
+
+    const c = setup({});
+    await c.ch.ask('s3', msk('2026-10-25T20:00:00'));
+    c.ch.onUpdate({ update_id: 1, callback_query: { id: 'q', from: { id: 42 }, data: `pc:none:${c.ch.state.asking!.id}` } }, reply, answer);
+    expect(c.ch.state.asking).toBeNull();
+    expect(c.ch.state.posts[0].skipped).toBe(true);
+  });
+
+  it('/channel_me фраза — сразу черновик по фразе', async () => {
+    const { ch } = setup({ topic: 'Деревня', text: 'Текст', images: [] });
+    expect(ch.command(42, '/channel_me сегодня доделал деревню', () => undefined)).toBe(true);
+    await flush();
+    expect(ch.state.pending?.idea).toBe('сегодня доделал деревню');
+  });
+});
+
 describe('картинки в постах', () => {
   it('длинный текст: альбом без подписи, потом текст с кнопкой', async () => {
     const calls: { method: string; fields: Record<string, unknown> }[] = [];

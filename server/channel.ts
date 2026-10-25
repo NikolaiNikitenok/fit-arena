@@ -131,7 +131,7 @@ export const SYSTEM_PROMPT = `Ты ведёшь Telegram-канал NikitenokAre
 - Длина 600–950 знаков (пост может уйти подписью к картинке, а там предел 1024). Короткие абзацы, можно список из 3–5 пунктов.
 - Оформление — HTML-теги Telegram: <b>жирный</b> для заголовка и ключевых мыслей, <i>курсив</i> для акцентов и терминов, <blockquote>цитата</blockquote> для главного вывода, правила или короткой цитаты (одна на пост), <u>подчёркнутый</u> и <tg-spoiler>спойлер</tg-spoiler> — изредка, например для ответа в «миф или правда». Заголовок — первая строка в <b>…</b>. Оформляй умеренно: 2–4 выделения на пост, не каждое предложение.
 - Эмодзи: 3–5 на пост, по смыслу — в начале заголовка и пунктов списка (например, 💪 🔥 ✅ ❌ 💡 ⚡), не в каждой строке.
-- Никакого Markdown (звёздочек, решёток), других тегов, ссылок и хэштегов.
+- Никакого Markdown (звёздочек, решёток), других тегов и хэштегов.
 - Не повторяй темы из списка уже опубликованных; бери новый угол или новое упражнение.`;
 
 export function userPrompt(o: { now: number; rubric: Rubric; mentionsApp: boolean; recent: ChannelPost[]; commits: Commit[] }): string {
@@ -149,7 +149,14 @@ export function userPrompt(o: { now: number; rubric: Rubric; mentionsApp: boolea
       '',
     );
   lines.push(o.recent.length ? `Уже опубликованные темы (не повторяй):\n${o.recent.map((p) => `- ${p.topic}`).join('\n')}` : 'Это один из первых постов канала.');
-  lines.push('', imagesHint(o.rubric === 'app' || o.rubric === 'news' || o.mentionsApp));
+  const aboutApp = o.rubric === 'app' || o.rubric === 'news' || o.mentionsApp;
+  lines.push(
+    '',
+    aboutApp
+      ? 'Ссылка: там, где речь о приложении, можно один раз сделать ссылку на игру — <a href="https://t.me/ArenaNikitenokBot?startapp">NikitenokArena</a>. Других ссылок не ставь.'
+      : 'Ссылок в этом посте не ставь.',
+  );
+  lines.push('', imagesHint(aboutApp));
   lines.push('', JSON_HINT);
   return lines.join('\n');
 }
@@ -165,16 +172,52 @@ export const imagesHint = (aboutApp: boolean): string =>
 // Теги HTML, которые понимает Telegram и которые разрешаем в постах.
 const TAGS = 'b|i|u|s|code|blockquote|tg-spoiler';
 const ALLOWED_TAG = new RegExp(`^</?(?:${TAGS})>$`);
-/** Чистим текст под HTML Telegram: экранируем всё, кроме <b> и <i>, и ограничиваем длину. */
+const LINK_OPEN = /^<a href="([^"<>]+)">$/;
+// Ссылки — только на свои места: модель не выдумает адрес, а чужой адрес из ответа не попадёт в канал.
+const LINK_HOSTS = ['t.me', 'arena.nikitenok.ru'];
+export const safeLink = (href: string): boolean => {
+  try {
+    const u = new URL(href);
+    return u.protocol === 'https:' && LINK_HOSTS.includes(u.hostname);
+  } catch {
+    return false;
+  }
+};
+/** Ссылки, которые можно ставить в посты: подсказка для промпта. */
+export const LINKS_HINT = `Ссылки: можно 0–1 ссылку на пост, только если она к месту, тегом <a href="адрес">текст</a>, и только эти адреса:
+- https://t.me/NikitenokArena — канал NikitenokArena
+- https://t.me/ArenaNikitenokBot?startapp — открыть игру NikitenokArena
+Другие адреса не используй.`;
+/** Чистим текст под HTML Telegram: экранируем всё, кроме разрешённых тегов и своих ссылок, и ограничиваем длину. */
 export function telegramHtml(text: string): string {
-  const parts = text.trim().split(new RegExp(`(</?(?:${TAGS})>)`, 'g'));
+  const parts = text.trim().split(new RegExp(`(</?(?:${TAGS})>|<a href="[^"<>]*">|</a>)`, 'g'));
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  let html = parts.map((p) => (ALLOWED_TAG.test(p) ? p : esc(p))).join('');
+  // Ссылку с чужим адресом убираем, текст внутри оставляем.
+  let link = 'none' as 'none' | 'kept' | 'dropped';
+  let html = parts
+    .map((p) => {
+      if (ALLOWED_TAG.test(p)) return p;
+      const a = LINK_OPEN.exec(p);
+      if (a && link === 'none') return safeLink(a[1]) ? ((link = 'kept'), `<a href="${a[1].replace(/&(?!amp;)/g, '&amp;')}">`) : ((link = 'dropped'), '');
+      if (p === '</a>' && link !== 'none') {
+        const close = link === 'kept' ? '</a>' : '';
+        link = 'none';
+        return close;
+      }
+      return esc(p);
+    })
+    .join('');
+  if (link === 'kept') html += '</a>';
   // Пост в канале — до 4096 знаков; длиннее режем по абзацу.
   if (html.length > 3800) html = html.slice(0, html.lastIndexOf('\n\n', 3800)).trim();
   return html;
 }
-export const plainText = (html: string) => html.replace(new RegExp(`</?(?:${TAGS})>`, 'g'), '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+export const plainText = (html: string) =>
+  html
+    .replace(new RegExp(`</?(?:${TAGS})>|<a href="[^"]*">|</a>`, 'g'), '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 
 /** JSON из ответа модели: берём от первой { до последней }, даже если вокруг есть текст. */
 export type Written = { topic?: string; text?: string; mentions_app?: boolean; images?: unknown };

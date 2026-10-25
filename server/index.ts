@@ -359,6 +359,7 @@ const personal = new PersonalChannel(process.env.PERSONAL_CHANNEL_FILE ?? join(d
   channel: PERSONAL_CHANNEL,
   approvers: () => admins.ids().map(Number),
   stats: () => telemetry.summaryText(),
+  ignoreText: (t) => t.trim() in ADMIN_BUTTONS,
 });
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
 const channelUpdate = (u: Update): boolean =>
@@ -389,7 +390,7 @@ const channelCommand = (chatId: number, raw: string): boolean => {
   if (!/^\/(channel|admin)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
-  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы.'), true;
+  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}`), true;

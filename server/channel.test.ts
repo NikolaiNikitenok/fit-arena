@@ -66,7 +66,13 @@ describe('канал: рубрики', () => {
 describe('канал: текст и публикация', () => {
   it('HTML для Telegram: только разрешённые теги, остальное экранируется', () => {
     expect(telegramHtml('<b>Заголовок</b>\n\n5 < 10 & <script>x</script> <i>ок</i>')).toBe('<b>Заголовок</b>\n\n5 &lt; 10 &amp; &lt;script&gt;x&lt;/script&gt; <i>ок</i>');
-    expect(telegramHtml('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> <a href="x">ссылка</a>')).toBe('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> &lt;a href="x"&gt;ссылка&lt;/a&gt;');
+    expect(telegramHtml('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> <a href="x">ссылка</a>')).toBe('<blockquote>Вывод</blockquote> <tg-spoiler>миф</tg-spoiler> ссылка');
+    // Ссылки — только https на свои адреса; чужая ссылка теряет тег, текст остаётся.
+    expect(telegramHtml('Играй в <a href="https://t.me/ArenaNikitenokBot?startapp">NikitenokArena</a>!')).toBe('Играй в <a href="https://t.me/ArenaNikitenokBot?startapp">NikitenokArena</a>!');
+    expect(telegramHtml('<a href="https://evil.example/x">тут</a> и <a href="http://t.me/x">там</a>')).toBe('тут и там');
+    expect(telegramHtml('<a href="https://t.me/NikitenokArena">канал')).toBe('<a href="https://t.me/NikitenokArena">канал</a>');
+    expect(telegramHtml('a </a> b')).toBe('a &lt;/a&gt; b');
+    expect(plainText('<a href="https://t.me/NikitenokArena">канал</a> &amp; <b>ок</b>')).toBe('канал & ок');
     expect(plainText('<blockquote>Вывод</blockquote> <u>да</u>')).toBe('Вывод да');
   });
   it('пишет пост через Claude и публикует в канал, тему запоминает', async () => {
