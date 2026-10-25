@@ -20,7 +20,7 @@ function setup(answer: Record<string, unknown>) {
     claudeCode: async () => JSON.stringify(answer),
     channel: '@nikitenokN',
     agent: () => new https.Agent(),
-    changelog: () => `a1|${new Date().toISOString()}|Деревня: ночные огни`,
+    changelog: () => ['Деревня: ночные огни', 'Дуэли: лиги', 'Питомцы: новые'].map((t, i) => `a${i}|${new Date().toISOString()}|${t}`).join('\n'),
     bot,
     upload: async (method, fields, files) => (uploads.push({ method, fields, files: files.map((f) => f.name) }), { ok: true, result: { message_id: ++id, photo: [{ file_id: 'F1' }] } }),
     mediaDir: MEDIA,
@@ -36,13 +36,18 @@ const reply = (_: number, t: string) => replies.push(t);
 const answer = () => undefined;
 
 describe('личный канал', () => {
-  it('рубрика: есть изменения за сутки — «что сделано», иначе «как дела» раз в 4 дня и «факт»', () => {
+  it('рубрика: в основном факты, «что сделано» — при 3+ изменениях за день, «как дела» — раз в неделю; работа над каналами не в счёт', () => {
     const now = msk('2026-10-25T20:00:00');
-    const fresh = parseChangelog(`x|2026-10-25T15:00:00+03:00|Канал: автопостинг`);
+    const channelWork = parseChangelog(['a|2026-10-25T15:00:00+03:00|Канал: автопостинг', 'b|2026-10-25T16:00:00+03:00|Каналы: скриншоты', 'c|2026-10-25T17:00:00+03:00|Бот: админ-клавиатура'].join('\n'));
+    expect(channelWork).toEqual([]);
+    const fresh = parseChangelog(['a|2026-10-25T15:00:00+03:00|Деревня: огни', 'b|2026-10-25T16:00:00+03:00|Дуэли: лиги', 'c|2026-10-25T17:00:00+03:00|Питомцы'].join('\n'));
     const old = parseChangelog(`x|2026-10-20T15:00:00+03:00|Деревня`);
+    const post = (rubric: string, ago: number) => ({ at: now - ago * 86400_000, slot: 's', rubric, topic: 't', mentionsApp: false });
     expect(planPersonal(now, { posts: [] }, fresh)).toBe('today');
-    expect(planPersonal(now, { posts: [] }, old)).toBe('status');
-    expect(planPersonal(now, { posts: [{ at: now - 86400_000, slot: 's', rubric: 'status', topic: 't', mentionsApp: false }] }, old)).toBe('fact');
+    expect(planPersonal(now, { posts: [] }, old)).toBe('fact');
+    const five = [1, 2, 3, 4, 5].map((d) => post('fact', d));
+    expect(planPersonal(now, { posts: five }, old)).toBe('status');
+    expect(planPersonal(now, { posts: [...five, post('status', 3)] }, old)).toBe('fact');
     const p = personalPrompt({ now, rubric: 'status', recent: [], commits: old, stats: 'Игроков: 7' });
     expect(p).toContain('Игроков: 7');
     expect(p).toContain('Деревня');

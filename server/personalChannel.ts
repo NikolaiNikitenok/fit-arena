@@ -16,7 +16,7 @@ export type PersonalRubric = 'today' | 'status' | 'fact';
 export const PERSONAL_RUBRICS: Record<PersonalRubric, string> = {
   today: 'Что сделано сегодня: по списку сегодняшних изменений расскажи, что появилось в NikitenokArena за день, зачем это и что было интересного или сложного. 2–4 главных изменения простыми словами, без технических мелочей.',
   status: 'Как дела у проекта: короткий честный отчёт — что сделано за последние дни, цифры из статистики (если есть, какие есть — без приукрашивания), что дальше по планам. Если цифры скромные, так и пиши: проект только начинается.',
-  fact: 'Интересный факт: одна любопытная вещь, на которую автор наткнулся, делая игру, — про разработку игр, Telegram Mini Apps, компьютерное зрение (как камера узнаёт позу), работу с ИИ-помощником, спорт и привычки. Факт должен быть правдой и общеизвестно проверяемым; свяжи его с проектом одной фразой.',
+  fact: 'Интересный факт про ИИ, нейросети и автоматизацию: как устроены языковые модели, компьютерное зрение (например, как камера узнаёт позу человека), история ИИ, роботы и автоматизация рутины, необычные применения нейросетей, полезные приёмы работы с ИИ. Один факт — правдивый и проверяемый, объяснённый просто и с примером. Можно одной фразой связать с личным опытом разработки, но не обязательно.',
 };
 
 export const PERSONAL_SYSTEM = `Ты пишешь посты для личного Telegram-канала Николая Никитёнка — автора игры NikitenokArena (Telegram Mini App, где камера телефона считает отжимания, приседания и пресс, а каждый повтор бьёт врага). Пиши от первого лица, как сам Николай: живо, просто, с лёгкой самоиронией, без пафоса и без рекламных призывов.
@@ -25,14 +25,16 @@ export const PERSONAL_SYSTEM = `Ты пишешь посты для личног
 - По-русски. Длина 400–900 знаков (пост может уйти подписью к картинке, а там предел 1024). Короткие абзацы, эмодзи — не больше 3.
 - Только правда: не придумывай событий из жизни автора, цифр, отзывов и планов, которых нет в данных. Чего не знаешь — не пиши.
 - Форматирование — только HTML-теги Telegram: <b>, <i>. Первая строка — заголовок в <b>…</b>. Никакого Markdown, ссылок и хэштегов.
-- Не повторяй темы из списка уже опубликованных.`;
+- Не повторяй темы из списка уже опубликованных.
+- Никогда не пиши о самом канале: что посты пишутся или публикуются автоматически, что их пишет ИИ, про ботов для постинга.`;
 
-/** Рубрика на сегодня: есть свежие изменения — «что сделано», иначе по очереди «как дела» (не чаще раза в 4 дня) и «факт». */
+/** Рубрика на сегодня: в основном «факт» про ИИ и автоматизацию, иногда «что сделано» и раз в неделю «как дела». */
 export function planPersonal(now: number, state: ChannelState, commits: Commit[]): PersonalRubric {
   const today = commits.filter((c) => now - c.at < DAY);
   const lastOf = (r: string) => [...state.posts].reverse().find((p) => p.rubric === r && !p.skipped)?.at ?? 0;
-  if (today.length >= 1) return 'today';
-  if (now - lastOf('status') >= 4 * DAY) return 'status';
+  // Основное — факты про ИИ и автоматизацию; про игру — только когда за день заметно поменялось (3+ изменения), не чаще раза в 2 дня.
+  if (today.length >= 3 && now - lastOf('today') >= 2 * DAY) return 'today';
+  if (now - lastOf('status') >= 7 * DAY && state.posts.length >= 5) return 'status';
   return 'fact';
 }
 
@@ -130,7 +132,7 @@ export class PersonalChannel {
     const prompt = personalPrompt({ now, rubric, recent: this.state.posts.filter((p) => !p.skipped).slice(-60), commits, stats: rubric === 'status' ? this.d.stats() : '' });
     const out = await writePost(this.d, PERSONAL_SYSTEM, prompt);
     if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
-    const media: MediaRef[] = this.d.upload && this.d.mediaDir ? pickMedia(out.images).slice(0, 2).map((file) => ({ file })) : [];
+    const media: MediaRef[] = rubric !== 'fact' && this.d.upload && this.d.mediaDir ? pickMedia(out.images).slice(0, 2).map((file) => ({ file })) : [];
     return { rubric, topic: out.topic.slice(0, 120), text: telegramHtml(out.text), mentionsApp: false, media };
   }
 

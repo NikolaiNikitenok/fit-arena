@@ -66,6 +66,8 @@ export interface Commit {
   subject: string;
 }
 
+const CHANNEL_WORK = /канал|автопост|channel|админ-клавиатур|меню команд/i;
+
 /** «hash|ISO-дата|тема» по строке — так changelog.txt пишет деплой. */
 export function parseChangelog(text: string): Commit[] {
   const out: Commit[] = [];
@@ -75,6 +77,8 @@ export function parseChangelog(text: string): Commit[] {
     const at = Date.parse(date ?? '');
     if (!hash?.trim() || !subject || Number.isNaN(at)) continue;
     if (/^merge\b/i.test(subject)) continue;
+    // Работа над самими каналами и автопостингом — не новость для читателей.
+    if (CHANNEL_WORK.test(subject)) continue;
     out.push({ hash: hash.trim(), at, subject });
   }
   return out;
