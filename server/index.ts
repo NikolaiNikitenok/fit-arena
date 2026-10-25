@@ -994,6 +994,25 @@ if (BOT_TOKEN)
 // Канал: раз в минуту проверяем, не пора ли выпустить пост (10:00 и 19:00 по Москве).
 if (BOT_TOKEN && CHANNEL_ID !== 'off') setInterval(() => channel.tick(), 60_000);
 if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 60_000);
+// Меню команд канала — только в личке у админов, игроки видят обычные /start и /help.
+const ADMIN_COMMANDS = [
+  { command: 'start', description: 'Начать игру' },
+  { command: 'help', description: 'Помощь и приватность' },
+  { command: 'channel', description: 'Каналы: статус и ошибки' },
+  { command: 'channel_draft', description: 'Черновик для @NikitenokArena (только тебе)' },
+  { command: 'channel_post', description: 'Опубликовать пост в @NikitenokArena сейчас' },
+  { command: 'channel_me', description: 'Черновик для личного канала с кнопками' },
+  { command: 'reports', description: 'Жалобы игроков' },
+];
+const adminMenus = new Set<string>();
+if (BOT_TOKEN)
+  setInterval(() => {
+    for (const id of admins.ids())
+      if (!adminMenus.has(id))
+        botApi(BOT_TOKEN)('setMyCommands', { commands: ADMIN_COMMANDS, scope: { type: 'chat', chat_id: Number(id) } }, 15_000)
+          .then((r) => r.ok && adminMenus.add(id))
+          .catch(() => null);
+  }, 60_000);
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
