@@ -1,6 +1,8 @@
-import json, subprocess
+import json, subprocess, wave
 lines=[l.rstrip('\n').split('\t') for l in open('lines.tsv',encoding='utf8')]
-dur=[float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',f'vo/{i+1}.wav'])) for i in range(len(lines))]
+def wdur(f):
+    with wave.open(f) as w: return w.getnframes()/w.getframerate()
+dur=[wdur(f'vo/{i+1}.wav') for i in range(len(lines))]
 GAP=0.3; t=0.25; ev=[]; subs=[]
 for i,(say,sub) in enumerate(lines):
     ev.append((i+1,t,dur[i]))
