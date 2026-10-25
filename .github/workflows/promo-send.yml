@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-      VOICE: ru-RU-DmitryNeural
+      VOICE: ru-RU-SvetlanaNeural
     defaults:
       run:
         working-directory: promo-send/reel
@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: |
           python3 plan.py && python3 build.py
-          for v in ru-RU-DmitryNeural ru-RU-SvetlanaNeural; do echo "file 'samples/$v.wav'"; echo "file 'gap.wav'"; done > list.txt
+          for v in ru-RU-SvetlanaNeural ru-RU-DmitryNeural; do [ -f samples/$v.wav ] && { echo "file 'samples/$v.wav'"; echo "file 'gap.wav'"; }; done > list.txt
           ffmpeg -v error -f lavfi -t 0.8 -i anullsrc=r=24000:cl=mono gap.wav
           ffmpeg -v error -f concat -safe 0 -i list.txt -af loudnorm=I=-16 -c:a libmp3lame -b:a 128k voices.mp3
       - uses: actions/upload-artifact@v4
@@ -35,8 +35,8 @@ jobs:
         run: |
           check() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);console.log("ok:",r.ok,r.description??"");process.exit(r.ok?0:1)})'; }
           curl -sS -F chat_id=991020798 -F supports_streaming=true -F width=1080 -F height=1920 -F duration=31 \
-            -F caption="NikitenokArena: пробный рилс, озвучка нейроголосом Microsoft (Дмитрий)" \
+            -F caption="NikitenokArena: пробный рилс, озвучка нейроголосом Microsoft (Светлана)" \
             -F video=@reel.mp4 "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" | check
           curl -sS -F chat_id=991020798 -F title="Голоса Microsoft" \
-            -F caption="Бесплатные голоса Microsoft по порядку: Дмитрий (в ролике), Светлана" \
+            -F caption="Бесплатные голоса Microsoft: Светлана (в ролике), затем Дмитрий" \
             -F audio=@voices.mp3 "https://api.telegram.org/bot$BOT_TOKEN/sendAudio" | check
