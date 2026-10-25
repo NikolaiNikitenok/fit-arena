@@ -1,0 +1,113 @@
+import { describe, expect, it } from 'vitest';
+import https from 'node:https';
+import { join } from 'node:path';
+import { parseChangelog } from './channel';
+import { sendWithMedia } from './channelMedia';
+import { PersonalChannel, personalPrompt, planPersonal } from './personalChannel';
+import type { Update } from './bot';
+
+const msk = (iso: string) => Date.parse(`${iso}+03:00`);
+const MEDIA = join(__dirname, 'media', 'channel');
+
+function setup(answer: Record<string, unknown>) {
+  const calls: { method: string; body: Record<string, unknown> }[] = [];
+  const uploads: { method: string; fields: Record<string, unknown>; files: string[] }[] = [];
+  let id = 100;
+  const bot = async (method: string, body: unknown) => (calls.push({ method, body: body as Record<string, unknown> }), { ok: true, result: { message_id: ++id } });
+  const ch = new PersonalChannel(null, {
+    apiKey: () => '',
+    claudeToken: () => 'tok',
+    claudeCode: async () => JSON.stringify(answer),
+    channel: '@nikitenokN',
+    agent: () => new https.Agent(),
+    changelog: () => `a1|${new Date().toISOString()}|Деревня: ночные огни`,
+    bot,
+    upload: async (method, fields, files) => (uploads.push({ method, fields, files: files.map((f) => f.name) }), { ok: true, result: { message_id: ++id, photo: [{ file_id: 'F1' }] } }),
+    mediaDir: MEDIA,
+    appLink: () => '',
+    approvers: () => [42],
+    stats: () => 'Игроков: 1',
+  });
+  return { ch, calls, uploads };
+}
+const flush = () => new Promise((r) => setTimeout(r, 20));
+const replies: string[] = [];
+const reply = (_: number, t: string) => replies.push(t);
+const answer = () => undefined;
+
+describe('личный канал', () => {
+  it('рубрика: есть изменения за сутки — «что сделано», иначе «как дела» раз в 4 дня и «факт»', () => {
+    const now = msk('2026-10-25T20:00:00');
+    const fresh = parseChangelog(`x|2026-10-25T15:00:00+03:00|Канал: автопостинг`);
+    const old = parseChangelog(`x|2026-10-20T15:00:00+03:00|Деревня`);
+    expect(planPersonal(now, { posts: [] }, fresh)).toBe('today');
+    expect(planPersonal(now, { posts: [] }, old)).toBe('status');
+    expect(planPersonal(now, { posts: [{ at: now - 86400_000, slot: 's', rubric: 'status', topic: 't', mentionsApp: false }] }, old)).toBe('fact');
+    const p = personalPrompt({ now, rubric: 'status', recent: [], commits: old, stats: 'Игроков: 7' });
+    expect(p).toContain('Игроков: 7');
+    expect(p).toContain('Деревня');
+    expect(p).toContain('village-night');
+  });
+
+  it('черновик приходит админу со скриншотом и кнопками, в канал — только после «Опубликовать»', async () => {
+    const { ch, calls, uploads } = setup({ topic: 'Ночная деревня', text: '<b>Сегодня</b>\n\nДобавил огни.', mentions_app: true, images: ['village-night', 'нет-такой'] });
+    await ch.propose('2026-10-25 20', msk('2026-10-25T20:00:00'));
+    expect(uploads).toEqual([{ method: 'sendPhoto', fields: expect.objectContaining({ chat_id: 42, caption: '<b>Сегодня</b>\n\nДобавил огни.', parse_mode: 'HTML' }), files: ['village-night.jpg'] }]);
+    const control = calls.find((c) => c.method === 'sendMessage');
+    expect(JSON.stringify(control?.body.reply_markup)).toContain('pc:ok:');
+    // Чужой не опубликует.
+    const data = (control!.body.reply_markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard[0][0].callback_data;
+    const cb = (from: number, d = data): Update => ({ update_id: 1, callback_query: { id: 'q', from: { id: from }, data: d } });
+    expect(ch.onUpdate(cb(7), reply, answer)).toBe(true);
+    expect(ch.state.pending).toBeTruthy();
+    // Админ публикует: картинка уже загружена, шлём file_id.
+    expect(ch.onUpdate(cb(42), reply, answer)).toBe(true);
+    await flush();
+    const sent = calls.filter((c) => c.method === 'sendPhoto');
+    expect(sent.at(-1)?.body).toMatchObject({ chat_id: '@nikitenokN', photo: 'F1' });
+    expect(ch.state.pending).toBeNull();
+    expect(ch.state.posts[0]).toMatchObject({ topic: 'Ночная деревня', rubric: 'today' });
+    expect(calls.some((c) => c.method === 'editMessageText' && String(c.body.text).includes('Опубликовано'))).toBe(true);
+  });
+
+  it('ответ своим фото заменяет картинки, «Пропустить» — без поста до завтра', async () => {
+    const { ch, calls } = setup({ topic: 'Факт', text: 'Текст', mentions_app: false, images: [] });
+    await ch.propose('2026-10-25 20', msk('2026-10-25T20:00:00'));
+    const preview = ch.state.pending!.previews[0];
+    const photo: Update = { update_id: 2, message: { message_id: 500, chat: { id: 42, type: 'private' }, photo: [{ file_id: 'small', width: 1, height: 1 }, { file_id: 'BIG', width: 9, height: 9 }], reply_to_message: { message_id: preview } } };
+    expect(ch.onUpdate(photo, reply, answer)).toBe(true);
+    expect(ch.state.pending!.draft.media).toEqual([{ fileId: 'BIG' }]);
+    await flush();
+    expect(calls.some((c) => c.method === 'sendPhoto' && c.body.photo === 'BIG')).toBe(true);
+    const id = ch.state.pending!.id;
+    expect(ch.onUpdate({ update_id: 3, callback_query: { id: 'q', from: { id: 42 }, data: `pc:skip:${id}` } }, reply, answer)).toBe(true);
+    await flush();
+    expect(ch.state.pending).toBeNull();
+    expect(ch.state.posts[0].skipped).toBe(true);
+    // Сегодня второго черновика не будет.
+    ch.tick(msk('2026-10-25T20:30:00'));
+    expect(ch.busy).toBe(false);
+    // Обычное сообщение боту — не наше.
+    expect(ch.onUpdate({ update_id: 4, message: { chat: { id: 42, type: 'private' }, text: 'привет' } }, reply, answer)).toBe(false);
+  });
+});
+
+describe('картинки в постах', () => {
+  it('длинный текст: альбом без подписи, потом текст с кнопкой', async () => {
+    const calls: { method: string; fields: Record<string, unknown> }[] = [];
+    const r = await sendWithMedia({
+      bot: async (method, body) => (calls.push({ method, fields: body as Record<string, unknown> }), { ok: true, result: { message_id: 9 } }),
+      upload: async (method, fields) => (calls.push({ method, fields }), { ok: true, result: [{ message_id: 1 }, { message_id: 2 }] }),
+      dir: MEDIA,
+      chatId: '@c',
+      html: 'x'.repeat(1200),
+      plain: 'x'.repeat(1200),
+      media: [{ file: 'cover' }, { file: 'duel' }],
+      replyMarkup: { inline_keyboard: [] },
+    });
+    expect(calls.map((c) => c.method)).toEqual(['sendMediaGroup', 'sendMessage']);
+    expect(JSON.stringify(calls[0].fields.media)).not.toContain('caption');
+    expect(calls[1].fields.reply_markup).toBeTruthy();
+    expect(r.messageId).toBe(9);
+  });
+});

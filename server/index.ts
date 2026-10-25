@@ -26,7 +26,7 @@ import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, botStatus, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
+import { botApi, botStatus, botUploadFiles, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
 import { dueReminders, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
@@ -53,7 +53,9 @@ import { adminCommand, type ModerationDeps, moderationApi } from './moderationAp
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
 import { villageApi } from './villageApi';
-import { Channel } from './channel';
+import { Channel, type ChannelDeps } from './channel';
+import { PersonalChannel } from './personalChannel';
+import { mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -333,7 +335,7 @@ const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
 const ANTHROPIC_KEY_FILE = process.env.ANTHROPIC_KEY_FILE ?? join(__dirname, '.anthropic-key');
 const CLAUDE_TOKEN_FILE = process.env.CLAUDE_TOKEN_FILE ?? join(__dirname, '.claude-token');
 const CHANNEL_ID = process.env.CHANNEL_ID ?? '@NikitenokArena';
-const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), {
+const channelDeps: ChannelDeps = {
   // Файл читаем каждый раз: ключ можно положить без перезапуска.
   apiKey: () => process.env.ANTHROPIC_API_KEY || readToken(ANTHROPIC_KEY_FILE),
   // Подписка: токен из `claude setup-token` (секрет CLAUDE_CODE_OAUTH_TOKEN → .claude-token).
@@ -344,16 +346,36 @@ const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env
   agent: currentAgent,
   changelog: () => readToken(join(__dirname, 'changelog.txt')),
   bot: (method, body) => botApi(BOT_TOKEN)(method, body, 30_000),
+  upload: (method, fields, files) => botUploadFiles(BOT_TOKEN, method, fields, files),
+  mediaDir: mediaDir(__dirname),
   appLink: () => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?startapp`,
   log: (m) => console.log(m),
+};
+const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), channelDeps);
+// Личный канал автора: черновик раз в день, публикация только по кнопке админа.
+const PERSONAL_CHANNEL = process.env.PERSONAL_CHANNEL ?? '@nikitenokN';
+const personal = new PersonalChannel(process.env.PERSONAL_CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'personal-channel.json'), {
+  ...channelDeps,
+  channel: PERSONAL_CHANNEL,
+  approvers: () => admins.ids().map(Number),
+  stats: () => telemetry.summaryText(),
 });
+/** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
+const channelUpdate = (u: Update): boolean =>
+  PERSONAL_CHANNEL !== 'off' &&
+  personal.onUpdate(
+    u,
+    (chatId, text) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null),
+    (id, text) => void botApi(BOT_TOKEN)('answerCallbackQuery', { callback_query_id: id, text }, 15_000).catch(() => null),
+  );
 /** Команды канала от админа: /channel, /channel_draft, /channel_post. */
 const channelCommand = (chatId: number, text: string): boolean => {
   if (!/^\/channel/.test(text.trim())) return false;
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
-  return channel.command(chatId, text, reply);
+  if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}`), true;
+  return personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
 };
 const clanInfo = (code: string) => {
   const c = clans.byCode(code);
@@ -523,6 +545,7 @@ const http = createServer((req, res) => {
         const chat = (update as unknown as Update).message?.chat;
         if (chat?.type === 'private') saves.setBlocked(`tg:${chat.id}`, false);
         const msg = (update as unknown as Update).message;
+        if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, msg.text) : null;
@@ -955,6 +978,7 @@ if (BOT_TOKEN)
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
     },
     (chatId, text) => (channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, text)),
+    channelUpdate,
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
 if (BOT_TOKEN)
@@ -969,6 +993,7 @@ if (BOT_TOKEN)
   }, 60_000);
 // Канал: раз в минуту проверяем, не пора ли выпустить пост (10:00 и 19:00 по Москве).
 if (BOT_TOKEN && CHANNEL_ID !== 'off') setInterval(() => channel.tick(), 60_000);
+if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 60_000);
 loadBotUsername();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)

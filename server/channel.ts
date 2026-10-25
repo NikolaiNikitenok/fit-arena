@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import https from 'node:https';
 import Anthropic from '@anthropic-ai/sdk';
+import { CHANNEL_MEDIA, mediaCatalogText, type MediaRef, pickMedia, sendWithMedia, type Upload } from './channelMedia';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -45,10 +46,13 @@ export interface ChannelPost {
   at: number;
   // Слот: дата и час по Москве, например «2026-10-26 10».
   slot: string;
-  rubric: Rubric;
+  // Рубрика: у канала игры — Rubric, у личного канала — свои (server/personalChannel.ts).
+  rubric: string;
   topic: string;
   mentionsApp: boolean;
   messageId?: number;
+  // Черновик личного канала пропущен (кнопка «Пропустить»): слот занят, но поста нет.
+  skipped?: boolean;
   // Последний коммит, о котором уже рассказали (для рубрики новостей).
   commit?: string;
 }
@@ -77,10 +81,10 @@ export function parseChangelog(text: string): Commit[] {
 }
 
 /** Слот, который пора опубликовать сейчас, или null. */
-export function dueSlot(now: number, state: ChannelState): string | null {
+export function dueSlot(now: number, state: ChannelState, hours = CHANNEL_HOURS): string | null {
   const d = new Date(now + MSK);
   const day = d.toISOString().slice(0, 10);
-  for (const h of [...CHANNEL_HOURS].reverse()) {
+  for (const h of [...hours].reverse()) {
     const at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h) - MSK;
     if (now < at) continue;
     if (now - at > SLOT_LATE) return null;
@@ -101,7 +105,7 @@ export function freshCommits(commits: Commit[], state: ChannelState): Commit[] {
 /** Что публикуем: рубрика и можно ли упомянуть приложение. */
 export function planPost(now: number, state: ChannelState, commits: Commit[]): { rubric: Rubric; mentionsApp: boolean } {
   const posts = state.posts;
-  const lastOf = (r: Rubric) => [...posts].reverse().find((p) => p.rubric === r)?.at ?? 0;
+  const lastOf = (r: string) => [...posts].reverse().find((p) => p.rubric === r)?.at ?? 0;
   const evening = new Date(now + MSK).getUTCHours() >= 15;
   // Новости — вечером, не чаще раза в 3 дня и только если накопилось хотя бы 3 изменения.
   if (evening && freshCommits(commits, state).length >= 3 && now - lastOf('news') >= 3 * DAY) return { rubric: 'news', mentionsApp: true };
@@ -120,7 +124,7 @@ export const SYSTEM_PROMPT = `Ты ведёшь Telegram-канал NikitenokAre
 - По-русски, живо и по делу, на «ты». Польза в каждом абзаце, без воды и канцелярита.
 - Честно: никаких чудо-обещаний («кубики за неделю»), никаких медицинских диагнозов. Если тема касается боли или травм — советуй обратиться к врачу.
 - Это не реклама. Не используй призывы «скачай», «жми», «успей», не хвали приложение превосходными степенями.
-- Длина 600–1100 знаков. Короткие абзацы, можно список из 3–5 пунктов. Эмодзи — не больше 3 на пост, по смыслу.
+- Длина 600–950 знаков (пост может уйти подписью к картинке, а там предел 1024). Короткие абзацы, можно список из 3–5 пунктов. Эмодзи — не больше 3 на пост, по смыслу.
 - Форматирование — только HTML-теги Telegram: <b>, <i>. Заголовок — первая строка в <b>…</b>. Никакого Markdown, никаких других тегов, ссылок и хэштегов.
 - Не повторяй темы из списка уже опубликованных; бери новый угол или новое упражнение.`;
 
@@ -139,9 +143,18 @@ export function userPrompt(o: { now: number; rubric: Rubric; mentionsApp: boolea
       '',
     );
   lines.push(o.recent.length ? `Уже опубликованные темы (не повторяй):\n${o.recent.map((p) => `- ${p.topic}`).join('\n')}` : 'Это один из первых постов канала.');
-  lines.push('', 'Верни JSON: topic — тема поста в 3–8 словах (для списка опубликованного), text — готовый текст поста, mentions_app — упомянуто ли приложение.');
+  lines.push('', imagesHint(o.rubric === 'app' || o.rubric === 'news' || o.mentionsApp));
+  lines.push('', JSON_HINT);
   return lines.join('\n');
 }
+
+export const JSON_HINT = 'Верни JSON: topic — тема поста в 3–8 словах (для списка опубликованного), text — готовый текст поста, mentions_app — упомянуто ли приложение, images — имена 0–2 скриншотов из списка (или пустой список).';
+
+/** Подсказка про скриншоты: к постам о приложении — 1–2 подходящих, к остальным — никаких. */
+export const imagesHint = (aboutApp: boolean): string =>
+  aboutApp
+    ? `К посту можно приложить 1–2 скриншота приложения, если они прямо показывают то, о чём пост. Доступные скриншоты (имя — что на нём):\n${mediaCatalogText()}`
+    : 'Скриншоты к этому посту не нужны: images — пустой список.';
 
 const ALLOWED_TAG = /^<\/?(?:b|i)>$/;
 /** Чистим текст под HTML Telegram: экранируем всё, кроме <b> и <i>, и ограничиваем длину. */
@@ -156,7 +169,8 @@ export function telegramHtml(text: string): string {
 export const plainText = (html: string) => html.replace(/<\/?(?:b|i)>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 /** JSON из ответа модели: берём от первой { до последней }, даже если вокруг есть текст. */
-export function parseJson(text: string): { topic?: string; text?: string; mentions_app?: boolean } {
+export type Written = { topic?: string; text?: string; mentions_app?: boolean; images?: unknown };
+export function parseJson(text: string): Written {
   const a = text.indexOf('{');
   const b = text.lastIndexOf('}');
   if (a < 0 || b < a) throw new Error('Claude ответил не JSON');
@@ -164,11 +178,12 @@ export function parseJson(text: string): { topic?: string; text?: string; mentio
 }
 
 export interface Draft {
-  rubric: Rubric;
+  rubric: string;
   topic: string;
   text: string;
   mentionsApp: boolean;
   commit?: string;
+  media: MediaRef[];
 }
 
 /** fetch через https.Agent (прокси SOCKS/HTTP из bot.ts): Anthropic, как и Telegram, может быть недоступен с сервера напрямую. */
@@ -207,9 +222,66 @@ export interface ChannelDeps {
   // Отправка в Bot API; возвращает ответ Telegram.
   bot: (method: string, body: unknown) => Promise<{ ok: boolean; result?: unknown; description?: string }>;
   appLink: () => string;
+  // Загрузка картинок (multipart) и папка со скриншотами.
+  upload?: Upload;
+  mediaDir?: string;
   log?: (msg: string) => void;
   // Для тестов: свой fetch вместо https через прокси.
   fetch?: typeof fetch;
+}
+
+/** Подписка через Claude Code, если есть токен; не вышло — API-ключ, если он есть. */
+export async function writePost(d: ChannelDeps, system: string, prompt: string): Promise<Written> {
+  const errors: string[] = [];
+  if (d.claudeToken?.() && d.claudeCode) {
+    try {
+      const text = await d.claudeCode(system, `${prompt}\n\nОтветь только JSON-объектом, без пояснений и без \`\`\`.`);
+      return parseJson(text);
+    } catch (e) {
+      errors.push((e as Error).message);
+      if (!d.apiKey()) throw e;
+    }
+  }
+  if (!d.apiKey()) throw new Error('нет ни токена подписки, ни ключа API');
+  const client = new Anthropic({ apiKey: d.apiKey(), fetch: d.fetch ?? agentFetch(d.agent), maxRetries: 2 });
+  const res = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: {
+      effort: 'medium',
+      format: {
+        type: 'json_schema',
+        schema: {
+          type: 'object',
+          properties: { topic: { type: 'string' }, text: { type: 'string' }, mentions_app: { type: 'boolean' }, images: { type: 'array', items: { type: 'string' } } },
+          required: ['topic', 'text', 'mentions_app', 'images'],
+          additionalProperties: false,
+        },
+      },
+    },
+    system,
+    messages: [{ role: 'user', content: prompt }],
+  } as Anthropic.Beta.MessageCreateParamsNonStreaming);
+  if (res.stop_reason === 'refusal') throw new Error('Claude отказался писать пост');
+  if (res.stop_reason === 'max_tokens') throw new Error('Claude не уложился в лимит');
+  const block = res.content.find((b) => b.type === 'text');
+  if (errors.length) d.log?.(`channel: подписка не сработала (${errors[0]}), пост написан через API`);
+  return parseJson(block && block.type === 'text' ? block.text : '');
+}
+
+/** Пост в чат: с картинками или текстом. Если HTML не прошёл — шлём простым текстом. */
+export async function sendPost(d: ChannelDeps, chatId: string | number, draft: Draft, reply_markup?: unknown): Promise<number | undefined> {
+  if (draft.media.length && d.upload && d.mediaDir) {
+    const r = await sendWithMedia({ bot: d.bot, upload: d.upload, dir: d.mediaDir, chatId, html: draft.text, plain: plainText(draft.text), media: draft.media, replyMarkup: reply_markup });
+    if (r.ok) return r.messageId;
+    d.log?.(`channel: картинки не ушли (${r.description}), шлю текстом`);
+  }
+  let r = await d.bot('sendMessage', { chat_id: chatId, text: draft.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup });
+  if (!r.ok && /parse|entit/i.test(r.description ?? '')) r = await d.bot('sendMessage', { chat_id: chatId, text: plainText(draft.text), link_preview_options: { is_disabled: true }, reply_markup });
+  if (!r.ok) throw new Error(`Telegram: ${r.description ?? 'ошибка'}`);
+  return (r.result as { message_id?: number } | undefined)?.message_id;
 }
 
 export class Channel {
@@ -266,59 +338,23 @@ export class Channel {
     const plan = planPost(now, this.state, commits);
     const fresh = freshCommits(commits, this.state);
     const prompt = userPrompt({ now, ...plan, recent: this.state.posts.slice(-60), commits: fresh });
-    const out = await this.generate(prompt);
+    const out = await writePost(this.d, SYSTEM_PROMPT, prompt);
     if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
-    return { rubric: plan.rubric, topic: out.topic.slice(0, 120), text: telegramHtml(out.text), mentionsApp: plan.mentionsApp && !!out.mentions_app, commit: plan.rubric === 'news' ? commits[0]?.hash : undefined };
-  }
-
-  /** Подписка через Claude Code, если есть токен; не вышло — API-ключ, если он есть. */
-  private async generate(prompt: string): Promise<{ topic?: string; text?: string; mentions_app?: boolean }> {
-    const errors: string[] = [];
-    if (this.d.claudeToken?.() && this.d.claudeCode) {
-      try {
-        const text = await this.d.claudeCode(SYSTEM_PROMPT, `${prompt}\n\nОтветь только JSON-объектом, без пояснений и без \`\`\`.`);
-        return parseJson(text);
-      } catch (e) {
-        errors.push((e as Error).message);
-        if (!this.d.apiKey()) throw e;
-      }
-    }
-    if (!this.d.apiKey()) throw new Error('нет ни токена подписки, ни ключа API');
-    const client = new Anthropic({ apiKey: this.d.apiKey(), fetch: this.d.fetch ?? agentFetch(this.d.agent), maxRetries: 2 });
-    const res = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: {
-        effort: 'medium',
-        format: {
-          type: 'json_schema',
-          schema: {
-            type: 'object',
-            properties: { topic: { type: 'string' }, text: { type: 'string' }, mentions_app: { type: 'boolean' } },
-            required: ['topic', 'text', 'mentions_app'],
-            additionalProperties: false,
-          },
-        },
-      },
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
-    } as Anthropic.Beta.MessageCreateParamsNonStreaming);
-    if (res.stop_reason === 'refusal') throw new Error('Claude отказался писать пост');
-    if (res.stop_reason === 'max_tokens') throw new Error('Claude не уложился в лимит');
-    const block = res.content.find((b) => b.type === 'text');
-    if (errors.length) this.d.log?.(`channel: подписка не сработала (${errors[0]}), пост написан через API`);
-    return parseJson(block && block.type === 'text' ? block.text : '');
+    const aboutApp = plan.rubric === 'app' || plan.rubric === 'news' || (plan.mentionsApp && !!out.mentions_app);
+    return {
+      rubric: plan.rubric,
+      topic: out.topic.slice(0, 120),
+      text: telegramHtml(out.text),
+      mentionsApp: plan.mentionsApp && !!out.mentions_app,
+      commit: plan.rubric === 'news' ? commits[0]?.hash : undefined,
+      media: aboutApp && this.d.upload && this.d.mediaDir ? pickMedia(out.images).slice(0, 2).map((file) => ({ file })) : [],
+    };
   }
 
   /** Отправка поста в чат (канал или админу для проверки). Если HTML не прошёл — шлём простым текстом. */
   async send(chatId: string | number, draft: Draft): Promise<number | undefined> {
     const reply_markup = draft.mentionsApp ? { inline_keyboard: [[{ text: 'Открыть NikitenokArena', url: this.d.appLink() }]] } : undefined;
-    let r = await this.d.bot('sendMessage', { chat_id: chatId, text: draft.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup });
-    if (!r.ok && /parse|entit/i.test(r.description ?? '')) r = await this.d.bot('sendMessage', { chat_id: chatId, text: plainText(draft.text), link_preview_options: { is_disabled: true }, reply_markup });
-    if (!r.ok) throw new Error(`Telegram: ${r.description ?? 'ошибка'}`);
-    return (r.result as { message_id?: number } | undefined)?.message_id;
+    return sendPost(this.d, chatId, draft, reply_markup);
   }
 
   async publish(slot: string, now = Date.now()): Promise<ChannelPost> {

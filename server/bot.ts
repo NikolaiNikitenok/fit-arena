@@ -70,9 +70,21 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
   return { text: WELCOME_TEXT, button: 'Играть', url: `${base}/`, photo: `${base}/bot/welcome.jpg` };
 }
 
+export interface TgMessage {
+  message_id?: number;
+  chat: { id: number; type: string };
+  from?: { first_name?: string; username?: string };
+  text?: string;
+  caption?: string;
+  photo?: { file_id: string; width: number; height: number }[];
+  media_group_id?: string;
+  reply_to_message?: { message_id: number };
+}
 export interface Update {
   update_id: number;
-  message?: { message_id?: number; chat: { id: number; type: string }; from?: { first_name?: string; username?: string }; text?: string };
+  message?: TgMessage;
+  // Нажатие кнопки под сообщением бота (черновики постов для канала).
+  callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; chat: { id: number } } };
 }
 
 type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number } };
@@ -156,11 +168,17 @@ export const botApi = (token: string) => (method: string, body: unknown, timeout
 
 /** Отправка файла (multipart): Telegram не всегда может сам скачать картинку с нашего сайта. */
 export function botUpload(token: string, method: string, fields: Record<string, unknown>, file: { field: string; name: string; type: string; data: Buffer }): Promise<TgReply> {
+  return botUploadFiles(token, method, fields, [file]);
+}
+
+/** Несколько файлов в одном запросе: альбом (sendMediaGroup) ссылается на них как attach://поле. */
+export function botUploadFiles(token: string, method: string, fields: Record<string, unknown>, files: { field: string; name: string; type: string; data: Buffer }[]): Promise<TgReply> {
   const boundary = `----atletia${Date.now().toString(16)}`;
   const parts: Buffer[] = [];
-  for (const [k, v] of Object.entries(fields)) parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${typeof v === 'string' ? v : JSON.stringify(v)}\r\n`));
-  parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.name}"\r\nContent-Type: ${file.type}\r\n\r\n`), file.data, Buffer.from(`\r\n--${boundary}--\r\n`));
-  return tgRequest(token, method, Buffer.concat(parts), `multipart/form-data; boundary=${boundary}`, 60_000);
+  for (const [k, v] of Object.entries(fields)) if (v !== undefined) parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${typeof v === 'string' ? v : JSON.stringify(v)}\r\n`));
+  for (const file of files) parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.name}"\r\nContent-Type: ${file.type}\r\n\r\n`), file.data, Buffer.from('\r\n'));
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return tgRequest(token, method, Buffer.concat(parts), `multipart/form-data; boundary=${boundary}`, 120_000);
 }
 
 function tgRequest(token: string, method: string, data: Buffer, contentType: string, timeoutMs: number): Promise<TgReply> {
@@ -231,8 +249,8 @@ async function sendWelcomePhoto(token: string, chat_id: number, url: string, cap
   }
 }
 
-/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). onCommand — свои команды (модерация, канал): вернуть ответ, пустую строку (ответит сам) или null. Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
-export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void, onCommand?: (chatId: number, text: string) => string | null): void {
+/** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). onCommand — свои команды (модерация, канал): вернуть ответ, пустую строку (ответит сам) или null. onUpdate — обновление разобрано целиком (кнопки черновиков). Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
+export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void, onCommand?: (chatId: number, text: string) => string | null, onUpdate?: (u: Update) => boolean): void {
   const api = botApi(token);
   let offset = 0;
   const loop = async () => {
@@ -246,7 +264,7 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
     await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Играть', web_app: { url: `${appUrl.replace(/\/$/, '')}/` } } }).catch(() => null);
     for (;;) {
       try {
-        const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message'] });
+        const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query'] });
         if (r.error_code === 409) {
           botStatus.webhook = true;
           botStatus.polling = false;
@@ -258,6 +276,11 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
         botStatus.lastError = null;
         for (const u of (r.result as Update[]) ?? []) {
           offset = u.update_id + 1;
+          // Кнопки и ответы на черновики постов разбирает index.ts.
+          if (onUpdate?.(u)) {
+            botStatus.handled++;
+            continue;
+          }
           const msg = u.message;
           if (!msg?.text || msg.chat.type !== 'private') continue;
           // Игрок написал боту: значит, снова можно ему писать.
