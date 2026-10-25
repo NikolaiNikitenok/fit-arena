@@ -369,9 +369,27 @@ const channelUpdate = (u: Update): boolean =>
     (id, text) => void botApi(BOT_TOKEN)('answerCallbackQuery', { callback_query_id: id, text }, 15_000).catch(() => null),
   );
 /** Команды канала от админа: /channel, /channel_draft, /channel_post. */
-const channelCommand = (chatId: number, text: string): boolean => {
-  if (!/^\/channel/.test(text.trim())) return false;
-  const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
+// Клавиатура админа внизу чата: кнопка шлёт свой текст, его переводим в команду.
+const ADMIN_BUTTONS: Record<string, string> = {
+  '📊 Статус каналов': '/channel',
+  '📝 Черновик Арены': '/channel_draft',
+  '📣 Пост в Арену сейчас': '/channel_post',
+  '✍️ Личный канал': '/channel_me',
+  '🚩 Жалобы': '/reports',
+};
+const ADMIN_KEYBOARD = {
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }]],
+  resize_keyboard: true,
+  is_persistent: true,
+};
+/** Текст кнопки админа → команда; остальное как есть. */
+const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
+const channelCommand = (chatId: number, raw: string): boolean => {
+  const text = adminText(chatId, raw);
+  if (!/^\/(channel|admin)/.test(text.trim())) return false;
+  const isAdmin = admins.has(`tg:${chatId}`);
+  const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
+  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}`), true;
@@ -548,7 +566,7 @@ const http = createServer((req, res) => {
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
-        const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, msg.text) : null;
+        const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text)) : null;
         const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
@@ -977,7 +995,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
     },
-    (chatId, text) => (channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, text)),
+    (chatId, text) => (channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
     channelUpdate,
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
@@ -998,6 +1016,7 @@ if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Начать игру' },
   { command: 'help', description: 'Помощь и приватность' },
+  { command: 'admin', description: 'Показать админ-клавиатуру' },
   { command: 'channel', description: 'Каналы: статус и ошибки' },
   { command: 'channel_draft', description: 'Черновик для @NikitenokArena (только тебе)' },
   { command: 'channel_post', description: 'Опубликовать пост в @NikitenokArena сейчас' },
