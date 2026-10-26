@@ -5,6 +5,7 @@ import { Portrait } from './Dialog';
 import { NPCS } from './npcs';
 import { track } from '../telemetry';
 import { openPrivacy } from '../privacy';
+import { HaveHeroButton } from '../account/Account';
 
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
 
@@ -82,6 +83,8 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
         <button className="link" onClick={() => done(false)}>
           {last ? (replay ? 'Закрыть' : 'Сначала осмотрюсь') : 'Пропустить'}
         </button>
+        {/* Уже играл на другой платформе: привязать этот вход к тому герою (src/account). */}
+        {!replay && step === 0 && <HaveHeroButton />}
       </div>
     </div>
   );

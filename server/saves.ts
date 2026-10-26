@@ -205,7 +205,7 @@ export function localTime(now: number, tz: number): { date: string; hour: number
 export function dueReminders(saves: Save[], now: number): { save: Save; date: string }[] {
   const out: { save: Save; date: string }[] = [];
   for (const s of saves) {
-    if (!s.remind || s.blocked || !s.id.startsWith('tg:')) continue;
+    if (!s.remind || s.blocked || s.id.startsWith('guest:')) continue;
     const { date, hour } = localTime(now, s.remind.tz);
     if (hour !== s.remind.hour || s.remindedOn === date) continue;
     const days = (s.progress?.days ?? {}) as Record<string, number>;

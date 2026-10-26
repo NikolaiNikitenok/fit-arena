@@ -56,7 +56,7 @@ export const num = (n: number): string => String(Math.round(n)).replace(/\B(?=(\
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-const tgMembers = (c: Clan, skip: (id: string) => boolean) => c.members.filter((m) => /^tg:\d+$/.test(m.id) && !skip(m.id));
+const tgMembers = (c: Clan, skip: (id: string) => boolean) => c.members.filter((m) => !m.id.startsWith('guest:') && !skip(m.id));
 const sent = (c: Clan, key: string, kind: RaidNoticeKind) => !!c.notices?.[key]?.includes(kind);
 
 /**
