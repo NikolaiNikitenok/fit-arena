@@ -373,6 +373,7 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .tg-id-row b { font-variant-numeric: tabular-nums; user-select: all; }
 .account-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
 .account-login { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.account-archive { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
 .account-code { display: flex; flex-direction: column; gap: 4px; }
 .account-code b { font-size: 26px; letter-spacing: 6px; font-variant-numeric: tabular-nums; user-select: all; }
 .account-notify { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
