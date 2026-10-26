@@ -6,6 +6,8 @@ import { FriendInbox } from './friends/FriendInbox';
 import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './repCounter';
 import { Banner, MapIcon, Shield, Swords } from './icons';
 import { House } from './village/icons';
+import { UpdateBanner } from './updates/UpdateBanner';
+import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 
 // Дуэль с 3D-ареной и камерой грузится, когда её открыли.
@@ -28,6 +30,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>(inviteCode() || friendsFirst ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : startTab() === 'village' ? 'village' : 'hero');
   const [exercise, setExercise] = useState<RepExercise>('pushup');
   const [playing, setPlaying] = useState(false);
+  useBusy(playing);
   const full = (tab === 'map' || tab === 'village') && !playing;
 
   return (
@@ -73,6 +76,8 @@ export function App() {
       />
 
       <PowerToast />
+
+      <UpdateBanner />
 
       {!playing && (
         <nav className="bottom-nav">

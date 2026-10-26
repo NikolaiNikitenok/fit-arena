@@ -47,6 +47,9 @@ export const Swords = ({ size = 22, className }: P) =>
     </>,
   );
 
+// Звезда Telegram: цена Pro Pass.
+export const Star = ({ size = 16, className }: P) => svg(size, className, <path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" />, true);
+
 export const Lock = ({ size = 14, className }: P) =>
   svg(
     size,
@@ -291,3 +294,90 @@ export const Plus = ({ size = 16, className }: P) => svg(size, className, <path 
 export const Search = ({ size = 16, className }: P) => svg(size, className, <path d="M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15zM16 16l5 5" />);
 
 export const Kettlebell = ({ size = 18, className }: P) => svg(size, className, <path d="M8 9.5V8a4 4 0 018 0v1.5M12 21a6.5 6.5 0 100-13 6.5 6.5 0 000 13z" />);
+
+// Топ города: дома разной высоты.
+export const City = ({ size = 18, className }: P) => svg(size, className, <path d="M3 21h18M5 21V10l5-3v14M10 21V4h7v17M19 21v-8h-2M13 8h1.5M13 11.5h1.5M13 15h1.5" />);
+
+// Коллекции обликов: альбом с карточками.
+export const Album = ({ size = 18, className }: P) => svg(size, className, <path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5zM8 8h3v4H8zM13 8h3v4h-3zM8 14h3v2.5H8zM13 14h3v2.5h-3z" />);
+
+/** Жетон праздника: тыква, снежинка, цветок или медаль. */
+export function HolidayToken({ id, size = 22 }: { id: string; size?: number }) {
+  return (
+    <svg className="icon hol-token" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      {id === 'pumpkin' && (
+        <>
+          <path d="M12 7.2c-1-2.2.2-4 2.2-4.5" fill="none" stroke="#5d8a2e" strokeWidth="2" strokeLinecap="round" />
+          <ellipse cx="7.6" cy="14" rx="5" ry="6.6" fill="#f57c00" />
+          <ellipse cx="16.4" cy="14" rx="5" ry="6.6" fill="#f57c00" />
+          <ellipse cx="12" cy="14" rx="4.6" ry="7.2" fill="#ff9800" />
+          <path d="M9.3 12.4l1.4 1.6-1.9.4zM14.7 12.4l-1.4 1.6 1.9.4zM9 16.6c1.8 1.4 4.2 1.4 6 0l-1 1.6h-4z" fill="#ffe082" />
+        </>
+      )}
+      {id === 'winter' && (
+        <g stroke="#b3e5fc" strokeWidth="2" strokeLinecap="round" fill="none">
+          <path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6" />
+          <path d="M9.6 4.2L12 6.4l2.4-2.2M9.6 19.8l2.4-2.2 2.4 2.2M4.4 10.6l3.2-.8-.8-3.1M19.6 13.4l-3.2.8.8 3.1M4.4 13.4l3.2.8-.8 3.1M19.6 10.6l-3.2-.8.8-3.1" stroke="#e1f5fe" strokeWidth="1.5" />
+        </g>
+      )}
+      {id === 'spring' && (
+        <>
+          {[0, 72, 144, 216, 288].map((a) => (
+            <ellipse key={a} cx="12" cy="6.6" rx="3.4" ry="4.6" fill="#f48fb1" transform={`rotate(${a} 12 12)`} />
+          ))}
+          <circle cx="12" cy="12" r="3" fill="#ffeb3b" />
+        </>
+      )}
+      {id === 'summer' && (
+        <>
+          <path d="M7 2.5h4l1 5-3 1zM17 2.5h-4l-1 5 3 1z" fill="#42a5f5" />
+          <circle cx="12" cy="14.5" r="7" fill="#ffca28" />
+          <circle cx="12" cy="14.5" r="4.6" fill="none" stroke="#e09b00" strokeWidth="1.4" />
+          <path d="M12 11.6l.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z" fill="#fff3c4" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+// Разделы настроек.
+export const Speaker = ({ size = 20, className }: P) => svg(size, className, <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" />);
+
+export const Camera = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M3.5 8.5A1.5 1.5 0 015 7h2.5l1.5-2.5h6L16.5 7H19a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>,
+  );
+
+export const Bell = ({ size = 20, className }: P) => svg(size, className, <path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 1.5h-15zM10 20.5a2.2 2.2 0 004 0" />);
+
+export const Sparkles = ({ size = 20, className }: P) => svg(size, className, <path d="M10 3.5c.8 4.2 2.3 5.7 6.5 6.5-4.2.8-5.7 2.3-6.5 6.5-.8-4.2-2.3-5.7-6.5-6.5 4.2-.8 5.7-2.3 6.5-6.5zM18 14.5c.4 2 1 2.6 3 3-2 .4-2.6 1-3 3-.4-2-1-2.6-3-3 2-.4 2.6-1 3-3z" />);
+
+export const UserCircle = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="10" r="3" />
+      <path d="M6.5 18.5c1.2-2.2 3.1-3.3 5.5-3.3s4.3 1.1 5.5 3.3" />
+    </>,
+  );
+
+export const Info = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.6v.1" />
+    </>,
+  );
+
+export const Wrench = ({ size = 20, className }: P) => svg(size, className, <path d="M14.5 4a5 5 0 00-4.7 6.7L4 16.5 7.5 20l5.8-5.8A5 5 0 0020 9.5l-3 3-3-1-1-3 3-3a5 5 0 00-1.5-1.5z" />);
+
+export const ChevronLeft = ({ size = 18, className }: P) => svg(size, className, <path d="M14.5 5.5L8 12l6.5 6.5" />);

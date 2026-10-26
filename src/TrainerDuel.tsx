@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { track } from './telemetry';
+import { useBusy } from './updates/busy';
 import { ArenaStage } from './ArenaStage';
 import { type Battle, MAX_HP, newBattle, type Side, strike, winner } from '../shared/battle';
 import type { FighterView } from '../shared/protocol';
@@ -63,6 +64,7 @@ interface Fight {
 export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExit: () => void }) {
   const camera = useRepCamera();
   const [phase, setPhase] = useState<Phase>('pick');
+  useBusy(phase === 'talk' || phase === 'countdown' || phase === 'fight');
   const [trainer, setTrainer] = useState<Trainer>(TRAINERS[0]);
   const [beaten, setBeaten] = useState<TrainerId[]>(loadBeaten);
   const [seed, setSeed] = useState(() => Date.now() >>> 0);

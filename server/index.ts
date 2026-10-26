@@ -9,11 +9,13 @@
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 //   FAMILY_WEBHOOK_URL, FAMILY_WEBHOOK_SECRET — отчёты о тренировках на семейный сайт (server/family.ts)
 //   PRO_IDS — id в Telegram с Pro Pass через запятую; ещё можно файлом .pro-ids рядом с сервером (PRO_FILE)
+//   PRO_PRICE, PRO_SALES_FILE — Pro Pass за звёзды Telegram: цена и покупки (server/proSales.ts)
 //   GUARD_FILE — защита от читов: забранные награды и подозрения (по умолчанию guard.json рядом с DATA_FILE, server/guard.ts)
 //   ADMIN_IDS — id админов (статистика, сводка и тревоги в боте); ещё файлом .admin-ids (ADMIN_FILE)
 //   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
 //   VILLAGES_FILE — деревни для набегов, кубки, щиты и набеги за неделю (по умолчанию villages.json рядом с DATA_FILE, server/villages.ts)
 //   MAX_BOT_TOKEN (или файл .max-token), MAX_CA_FILE — бот и мини-приложение в Max (server/maxBot.ts)
+//   YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET (или файлы .yandex-id, .yandex-secret) — вход в браузере через Яндекс ID (server/webAuth.ts)
 //   ACCOUNTS_FILE — какие входы (Telegram, потом Max и браузер) ведут в один аккаунт (server/accounts.ts)
 //   MODERATION_FILE, REPORTS_FILE — чёрный список, запреты писать и жалобы (server/moderation.ts, server/reports.ts); о жалобах бот пишет ADMIN_IDS
 import { randomUUID } from 'node:crypto';
@@ -29,7 +31,7 @@ import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
 import { botApi, botStatus, botUploadFiles, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
-import { dueReminders, SaveStore } from './saves';
+import { dueReminders, plausibleXp, SAVE_MAX_BYTES, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
 import { opponent, warTick } from './wars';
@@ -37,13 +39,14 @@ import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
 import { ProList } from './pro';
+import { giftText, invoicePayload, paidText, PRO_PRICE, ProSales, type SaleKind, saleAdminText, salesText, STARTER_PRICE } from './proSales';
 import type { ChatMessage } from '../shared/clan';
 import { FriendStore } from './friends';
 import { type FriendsDeps, friendsApi } from './friendsApi';
 import { Guard } from './guard';
 import { clanPerks } from '../shared/clanLevel';
 import { heroPower } from '../src/game/power';
-import type { Progress } from '../src/game/progress';
+import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
@@ -60,8 +63,10 @@ import { PersonalChannel } from './personalChannel';
 import { mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
+import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
+import { CityStore } from './cities';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -85,11 +90,16 @@ const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
+// Топ по городу (server/cities.ts).
+const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'cities.json'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 // Единый аккаунт: вход tg:123 → аккаунт, под которым лежит всё остальное (server/accounts.ts).
 const accounts = new AccountStore(process.env.ACCOUNTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'accounts.json'));
 // Pro и админ выдаются по id в Telegram: годится любой вход аккаунта.
-const isPro = (id: string) => pro.has(id) || accounts.logins(id).some((l) => pro.has(l));
+// Купленный за звёзды Pro лежит на аккаунте и на том, кто платил (server/proSales.ts).
+const sales = new ProSales(process.env.PRO_SALES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'pro-sales.json'));
+const proIds = (id: string) => [id, ...accounts.logins(id)];
+const isPro = (id: string) => pro.has(id) || accounts.logins(id).some((l) => pro.has(l)) || sales.active(proIds(id));
 /** Игрок вошёл через мессенджер (не гость из браузера): ему рейтинг, кланы и набеги. */
 const signedId = (id: string) => !id.startsWith('guest:');
 const telemetry = new Telemetry(process.env.TELEMETRY_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'telemetry.json'));
@@ -279,6 +289,11 @@ function cleanName(name: unknown): string {
 // Подпись у Telegram и Max устроена одинаково, ключи разные: подпись одного мессенджера другим не проверится.
 function loginOf(body: { initData?: unknown }): { login: string; name: string } | null {
   if (typeof body.initData !== 'string' || !body.initData) return null;
+  // Браузер после входа через Яндекс или Telegram присылает сессию (server/webAuth.ts).
+  if (body.initData.startsWith('session:')) {
+    const s = checkSession((t) => telemetry.sign(t), body.initData.slice(8), Date.now());
+    return s && { login: s.login, name: cleanName(s.name) };
+  }
   const tgUser = BOT_TOKEN ? verifyInitData(body.initData, BOT_TOKEN) : null;
   if (tgUser) return { login: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) };
   const maxUser = MAX_TOKEN ? verifyInitData(body.initData, MAX_TOKEN) : null;
@@ -305,7 +320,7 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > 300_000) req.destroy();
+      if (size > 1_200_000) req.destroy();
       else chunks.push(c);
     });
     req.on('end', () => {
@@ -348,11 +363,13 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? sales.offer(proIds(who.id)) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
     if (typeof body!.account === 'string' && body!.account !== who.id) return reply(409, { error: 'account changed', account: who.id });
+    // Слишком большую копию сервер не хранит: говорим об этом, а не молча оставляем старую.
+    if (JSON.stringify(body!.progress ?? null).length > SAVE_MAX_BYTES) return reply(413, { error: 'progress too large' });
     const s = saves.put(who.id, body!.progress);
     // Копия принята: обновляем снимок деревни для набегов (невозможный снимок отклоняется и отмечается).
     if (s.progress === body!.progress) villages.update(who.id, s.progress, villageName(who.id, body!));
@@ -367,6 +384,43 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
 }
 
 const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
+const YANDEX_ID = process.env.YANDEX_CLIENT_ID || readToken(join(__dirname, '.yandex-id'));
+const YANDEX_SECRET = process.env.YANDEX_CLIENT_SECRET || readToken(join(__dirname, '.yandex-secret'));
+const YANDEX_REDIRECT = `${APP_URL.replace(/\/$/, '')}/api/auth/yandex/callback`;
+
+/** Вход в браузере: GET /api/auth/yandex/start → Яндекс → /callback; POST /api/auth/telegram (данные виджета). Сессия уходит в адрес после #. */
+async function onAuthApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const now = Date.now();
+  const sign = (t: string) => telemetry.sign(t);
+  const back = (hash: string) => res.writeHead(302, { Location: `/#${hash}`, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }).end();
+  // Какие входы включены: браузер-гость без подписи узнаёт это до входа.
+  if (path === '/api/auth/options' && req.method === 'GET')
+    return res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ yandex: !!(YANDEX_ID && YANDEX_SECRET), telegram: BOT_TOKEN ? botUsername : null }));
+  if (path === '/api/auth/yandex/start' && req.method === 'GET') {
+    if (!YANDEX_ID || !YANDEX_SECRET) return back('login-error=yandex-off');
+    return res.writeHead(302, { Location: yandexAuthorizeUrl(YANDEX_ID, YANDEX_REDIRECT, oauthState(sign, now)), 'Cache-Control': 'no-store' }).end();
+  }
+  if (path === '/api/auth/yandex/callback' && req.method === 'GET') {
+    const q = new URL(req.url ?? '/', 'http://x').searchParams;
+    const code = q.get('code');
+    if (!code || !checkState(sign, q.get('state'), now) || !YANDEX_ID) return back('login-error=yandex');
+    try {
+      const u = await yandexUser(code, YANDEX_ID, YANDEX_SECRET);
+      return back(`session=${sessionToken(sign, `ya:${u.id}`, u.name, now)}`);
+    } catch (e) {
+      console.log(`yandex login: ${e instanceof Error ? e.message : e}`);
+      return back('login-error=yandex');
+    }
+  }
+  if (path === '/api/auth/telegram' && req.method === 'POST') {
+    const body = await readJson(req).catch(() => null);
+    const u = BOT_TOKEN && body ? verifyTelegramLogin(body, BOT_TOKEN, now / 1000) : null;
+    const reply = (code: number, b: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(b));
+    if (!u) return reply(401, { error: 'Telegram не подтвердил вход' });
+    return reply(200, { session: sessionToken(sign, `tg:${u.id}`, u.first_name, now) });
+  }
+  res.writeHead(404).end();
+}
 // Автопостинг в канал (server/channel.ts): подписка Claude через Claude Code или ключ API — файлы рядом с сервером из секретов репозитория.
 const ANTHROPIC_KEY_FILE = process.env.ANTHROPIC_KEY_FILE ?? join(__dirname, '.anthropic-key');
 const CLAUDE_TOKEN_FILE = process.env.CLAUDE_TOKEN_FILE ?? join(__dirname, '.claude-token');
@@ -567,6 +621,24 @@ async function onVillageApi(path: string, req: IncomingMessage, res: ServerRespo
   reply(r.status, r.body);
 }
 
+/** Топ по городу: POST /api/city (топ недели), /api/city/set ({ city } — выбрать, null — убрать себя). Только для вошедших. */
+async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const signed = body && signedIn(body);
+  // Без токена бота (сервер для разработки) — и гости, как у набегов.
+  const guest = body && !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
+  const me = signed ? { id: signed.id, name: signed.name } : guest ? { id: guest, name: cleanName(body!.name) } : null;
+  if (!me) return reply(401, { error: 'Топ города — для тех, кто вошёл через Telegram, Max или Яндекс' });
+  const now = Date.now();
+  if (path === '/api/city/set') {
+    const r = cities.set(me.id, body!.city, me.name, now);
+    if (typeof r === 'string') return reply(400, { error: r });
+  } else cities.rename(me.id, me.name);
+  reply(200, cities.board({ days: (id) => saves.get(id)?.progress?.days, level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
+}
+
 /** POST /api/delete-me: игрок стирает свои данные (кнопка в настройках). */
 async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
@@ -577,7 +649,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const now = Date.now();
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
-    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages }, id, now);
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities }, id, now);
     if (clan) {
       sendClan(clan);
       toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -590,7 +662,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 /** Убрать героя аккаунта, которого не выбрали при привязке: копия прогресса и кубки — в архив, остальное как «Удалить мои данные». */
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
-  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages }, id, Date.now());
+  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities }, id, Date.now());
   if (clan) {
     sendClan(clan);
     toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -610,6 +682,15 @@ const accountDeps: AccountDeps = {
   },
   drop: dropAccount,
   progress: (id) => saves.get(id)?.progress ?? null,
+  archivedCard: (a) => {
+    const p = a.progress as Partial<Progress> | null;
+    return { level: heroLevel(plausibleXp(p, Date.now())).level, stages: Object.keys(p?.stars ?? {}).length, cups: a.cups };
+  },
+  restore: (id, a) => {
+    dropAccount(id);
+    if (a.progress && typeof a.progress === 'object') saves.put(id, { ...(a.progress as object), savedAt: Date.now() });
+    store.restoreCups(id, a.cups);
+  },
 };
 /** Аккаунт и привязка входов: POST /api/account/… (только по подписи мессенджера, гостям — нет). */
 async function onAccountApi(path: string, req: IncomingMessage, res: ServerResponse) {
@@ -640,6 +721,86 @@ const onPlayerText = (msg: NonNullable<Update['message']>): Record<string, unkno
   return { method: 'sendMessage', chat_id: msg.chat.id, text: FEEDBACK_THANKS };
 };
 
+/**
+ * Оплата Pro звёздами: подтверждение перед оплатой и сама оплата.
+ * Вернёт метод Bot API для ответа (или null); undefined — обновление не про оплату.
+ */
+const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
+  const q = u.pre_checkout_query;
+  if (q) {
+    const error = sales.checkout(q.invoice_payload, q.currency, q.total_amount, proIds);
+    return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: !error, ...(error ? { error_message: error } : {}) };
+  }
+  const msg = u.message;
+  const pay = msg?.successful_payment;
+  if (!msg || !pay) return undefined;
+  const p = sales.paid(pay.invoice_payload, pay.telegram_payment_charge_id, `tg:${msg.chat.id}`, pay.total_amount, proIds, cleanName(msg.from?.first_name ?? '') || undefined);
+  if (!p) {
+    toAdmins(`⚠️ Оплата ${pay.total_amount} ⭐ от tg:${msg.chat.id} с непонятным счётом (${pay.invoice_payload.slice(0, 60)}). Код платежа: ${pay.telegram_payment_charge_id}`);
+    return { method: 'sendMessage', chat_id: msg.chat.id, text: 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.' };
+  }
+  toAdmins(saleAdminText(p));
+  // Подарок: другу пишет бот туда, где он играет (Telegram или Max).
+  if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name), 'Открыть пропуск', '?tab=pass');
+  return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p, p.kind === 'gift' ? friends.get(p.account)?.name : undefined), reply_markup: { inline_keyboard: [[{ text: 'Открыть пропуск', web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
+};
+
+/** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
+const proCommand = (chatId: number, text: string): boolean => {
+  const m = /^\/(?:refund_(\d+)|sales)(?:@\w+)?$/.exec(text.trim());
+  if (!m || !BOT_TOKEN || !admins.has(`tg:${chatId}`)) return false;
+  const api = botApi(BOT_TOKEN);
+  const say = (t: string, to = chatId) => api('sendMessage', { chat_id: to, text: t }, 15_000).catch(() => null);
+  if (!m[1]) return void say(salesText(sales)), true;
+  const p = sales.get(Number(m[1]));
+  if (!p) return void say('Нет такой покупки. Список: /sales'), true;
+  if (p.refunded) return void say(`Покупка #${p.n} уже возвращена.`), true;
+  api('refundStarPayment', { user_id: Number(p.payer.slice(3)), telegram_payment_charge_id: p.charge }, 15_000)
+    .then((r) => {
+      if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
+      sales.refunded(p.n);
+      const what = p.kind === 'starter' ? 'набор «Новичок»' : 'Pro Pass';
+      say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}).${p.kind === 'starter' ? ' Вещи из набора остаются в игре.' : ' Pro по ней снят.'}`);
+      say(`↩️ Мы вернули ${p.stars} ⭐ за ${what}.${p.kind === 'starter' ? '' : ' Pro по этой покупке отключён.'}`, Number(p.payer.slice(3)));
+    })
+    .catch((e) => say(`Не вышло вернуть: ${e instanceof Error ? e.message : e}`));
+  return true;
+};
+
+// Счета за звёзды: что видит игрок в окне оплаты.
+const INVOICES: Record<SaleKind, { title: string; description: string; price: () => number }> = {
+  pro: { title: 'Pro Pass на сезон', description: 'Золотая дорожка пропуска: награды каждой ступени и облик «Страж Золотого щита». Золотое имя в клане, чате и рейтинге. Действует в Telegram, Max и браузере.', price: () => PRO_PRICE },
+  gift: { title: 'Pro Pass в подарок', description: 'Pro Pass на сезон для друга: золотая дорожка пропуска, золотое имя и облик «Страж Золотого щита». Бот скажет другу, от кого подарок.', price: () => PRO_PRICE },
+  starter: { title: 'Набор «Новичок»', description: 'Облик «Искатель приключений» и сундук новичка: 1000 монет, 3 зелья бодрости и 2 свитка замены. Продаётся один раз.', price: () => STARTER_PRICE },
+};
+
+/** Покупки за звёзды из игры: POST /api/pro/status — что показать, /api/pro/invoice — ссылка на оплату в Telegram ({kind, for}). */
+async function onProApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && signedIn(body);
+  if (!who) return reply(401, { error: 'Войди через Telegram, Max или Яндекс, чтобы купить Pro' });
+  const offer = sales.offer(proIds(who.id));
+  if (path === '/api/pro/status') return reply(200, { pro: isPro(who.id), proOffer: offer, starter: sales.starter(proIds(who.id)) });
+  if (path !== '/api/pro/invoice') return reply(404, { error: 'not found' });
+  if (!BOT_TOKEN) return reply(503, { error: 'Оплата пока не работает: бот не подключён' });
+  const kind: SaleKind = body!.kind === 'gift' || body!.kind === 'starter' ? body!.kind : 'pro';
+  // Подарок — только другу из списка друзей.
+  const to = kind === 'gift' ? (typeof body!.for === 'string' ? body!.for : '') : who.id;
+  if (kind === 'gift' && (to === who.id || !friends.areFriends(who.id, to))) return reply(403, { error: 'Подарить Pro можно только другу' });
+  const why = sales.why(kind, proIds(to));
+  if (why) return reply(409, { error: why });
+  const inv = INVOICES[kind];
+  const r = await botApi(BOT_TOKEN)(
+    'createInvoiceLink',
+    { title: inv.title, description: inv.description, payload: invoicePayload(to, kind), currency: 'XTR', prices: [{ label: inv.title, amount: inv.price() }] },
+    20_000,
+  ).catch((e: Error) => ({ ok: false, description: e.message }) as { ok: boolean; result?: unknown; description?: string });
+  if (!r.ok || typeof r.result !== 'string') return reply(502, { error: 'Telegram не выдал счёт, попробуй ещё раз' });
+  reply(200, { url: r.result });
+}
+
 const http = createServer((req, res) => {
   if (req.url === '/api/activity' && req.method === 'POST') {
     handleActivity(req, res);
@@ -655,6 +816,9 @@ const http = createServer((req, res) => {
         const chat = (update as unknown as Update).message?.chat;
         if (chat?.type === 'private') saves.setBlocked(accounts.resolve(`tg:${chat.id}`), false);
         const msg = (update as unknown as Update).message;
+        const pay = payUpdate(update as unknown as Update);
+        if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
+        if (proCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
@@ -664,6 +828,10 @@ const http = createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
       })
       .catch(() => res.writeHead(400).end());
+    return;
+  }
+  if (path.startsWith('/api/pro/')) {
+    onProApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
@@ -699,8 +867,16 @@ const http = createServer((req, res) => {
       .catch(() => (res.headersSent ? null : res.writeHead(400).end()));
     return;
   }
+  if (path.startsWith('/api/auth/')) {
+    onAuthApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
   if (path.startsWith('/api/account/')) {
     onAccountApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/city' || path === '/api/city/set') {
+    onCityApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/delete-me') {
@@ -1105,8 +1281,16 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
     },
-    (chatId, text) => (channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
-    channelUpdate,
+    (chatId, text) => (proCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
+    (u) => {
+      const pay = payUpdate(u);
+      if (pay === undefined) return channelUpdate(u);
+      if (pay) {
+        const { method, ...params } = pay;
+        botApi(BOT_TOKEN)(String(method), params, 15_000).catch(() => null);
+      }
+      return true;
+    },
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
 if (ANY_BOT)
@@ -1126,12 +1310,14 @@ if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Начать игру' },
   { command: 'help', description: 'Помощь и приватность' },
+  { command: 'paysupport', description: 'Вопрос об оплате' },
   { command: 'admin', description: 'Показать админ-клавиатуру' },
   { command: 'channel', description: 'Каналы: статус и ошибки' },
   { command: 'channel_draft', description: 'Черновик для @NikitenokArena (только тебе)' },
   { command: 'channel_post', description: 'Опубликовать пост в @NikitenokArena сейчас' },
   { command: 'channel_me', description: 'Черновик для личного канала с кнопками' },
   { command: 'reports', description: 'Жалобы игроков' },
+  { command: 'sales', description: 'Покупки Pro Pass и возвраты' },
   { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
 ];
 const adminMenus = new Set<string>();
@@ -1152,11 +1338,13 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     clans.flush();
     saves.flush();
     friends.flush();
+    cities.flush();
     guard.flush();
     telemetry.flush();
     mod.flush();
     reports.flush();
     villages.flush();
     accounts.flush();
+    sales.flush();
     process.exit(0);
   });

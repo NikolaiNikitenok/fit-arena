@@ -1,6 +1,7 @@
 // Снаряжение героя. Предметы меняют внешность и дают игровые бонусы, но не снижают цели по повторам:
 // тренировка остаётся честной.
 import type { CharName } from '../three/kit';
+import { holidayOutfits } from './holidayDefs';
 
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 
@@ -51,6 +52,10 @@ export interface Item {
   event?: boolean;
   // Только за пройденную программу тренировок (src/game/programs.ts).
   program?: boolean;
+  // Только из набора «Новичок» за звёзды (src/game/starter.ts): в сундуках не выпадает.
+  paid?: boolean;
+  // Только с дорожки праздника этого года (src/game/holidays.ts): ключ праздника, после него больше не выдаётся.
+  holiday?: string;
 }
 
 export const ITEMS: Item[] = [
@@ -65,6 +70,7 @@ export const ITEMS: Item[] = [
   { id: 'dragon', hero: 'Barbarian', name: 'Драконоборец', rarity: 'legendary', color: '#d84315', glow: '#ff3d00', tint: 'mul:1.3,0.75,0.6', coinBonus: 0.3, price: 0, inShop: false },
   { id: 'pass-silver', hero: 'Knight', name: 'Серый страж', rarity: 'epic', color: '#cfd8dc', glow: '#b0bec5', tint: 'mul:0.95,1.0,1.1', coinBonus: 0.15, price: 0, inShop: false, pass: true },
   { id: 'pass-gold', hero: 'Knight', name: 'Страж Золотого щита', rarity: 'legendary', color: '#ffd54a', glow: '#ffc400', tint: 'mul:1.5,1.2,0.5', coinBonus: 0.3, price: 0, inShop: false, pass: true },
+  { id: 'explorer', hero: 'Rogue', name: 'Искатель приключений', rarity: 'epic', color: '#26a69a', glow: '#64ffda', tint: 'mul:0.75,1.15,1.05', coinBonus: 0.1, price: 0, inShop: false, paid: true },
   { id: 'gold', hero: 'Knight', name: 'Золотой чемпион', rarity: 'legendary', color: '#ffc400', glow: '#ffea00', tint: 'mul:1.45,1.15,0.45', coinBonus: 0.3, price: 5000, inShop: true },
   // Облики боссов события выходных (src/game/event.ts): у каждого месяца свой.
   ...([
@@ -86,6 +92,8 @@ export const ITEMS: Item[] = [
   { id: 'prog-bogatyr', hero: 'Barbarian', name: 'Богатырь', rarity: 'epic', color: '#ffb46b', glow: '#ffa726', tint: 'mul:1.25,1.05,0.7', coinBonus: 0.15, price: 0, inShop: false, program: true },
   { id: 'prog-stone', hero: 'Knight', name: 'Каменный страж', rarity: 'epic', color: '#a8a29e', glow: '#c4b5fd', tint: 'mul:0.8,0.78,0.85', coinBonus: 0.15, price: 0, inShop: false, program: true },
   { id: 'prog-champion', hero: 'Knight', name: 'Чемпион Грома', rarity: 'legendary', color: '#ffd27a', glow: '#ff8a5c', tint: 'mul:1.4,0.95,0.6', coinBonus: 0.25, price: 0, inShop: false, program: true },
+  // Облики праздников (src/game/holidayDefs.ts): у каждого праздника каждого года свой.
+  ...holidayOutfits().map(({ id, key, name, hero, color, glow, tint }): Item => ({ id, hero, name, rarity: 'legendary', color, glow, tint, coinBonus: 0.25, price: 0, inShop: false, holiday: key })),
 ];
 
 export const itemById = (id: string): Item => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
@@ -189,12 +197,12 @@ export const GEAR: Gear[] = [
   O('aegis', 'Эгида', 'Badge_Shield', 'Knight', 'legendary', 3, 0.2, 11500, 22, { glow: '#ffd54a', tint: 'mul:1.45,1.15,0.5' }),
   O('void-tome', 'Книга Бездны', 'Spellbook', 'Mage', 'legendary', 0, 0.35, 13000, 24, { glow: '#b388ff', tint: 'mul:0.55,0.45,0.9' }),
   O('flame-twin', 'Пламенный клинок', '1H_Sword_Offhand', 'Knight', 'legendary', 1, 0.3, 15000, 26, { glow: '#ff3d00', tint: 'mul:1.35,0.75,0.5' }),
-  // Оружие Золотого щита: только на Pro-дорожке пропуска.
+  // Оружие Золотого щита: только на Pro-дорожке пропуска. Pro продаётся за звёзды, поэтому сильнее лучшего из магазина оно не бывает.
   W('pass-dagger', 'Кинжал стража', 'Knife', 'Rogue', 'epic', 14, 0, 0, { pct: 0.05, pass: true, glow: '#ffd54a', tint: 'mul:1.5,1.2,0.5' }),
   W('pass-wand', 'Жезл Золотого щита', '1H_Wand', 'Mage', 'epic', 18, 0, 0, { pct: 0.05, pass: true, glow: '#ffd54a', tint: 'mul:1.5,1.2,0.5' }),
   W('pass-crossbow', 'Солнечный арбалет', '1H_Crossbow', 'Rogue', 'legendary', 22, 0, 0, { pct: 0.08, pass: true, glow: '#ffc400', tint: 'mul:1.5,1.2,0.5' }),
-  W('pass-axe', 'Топор Золотого льва', '1H_Axe', 'Barbarian', 'legendary', 26, 0, 0, { pct: 0.1, pass: true, glow: '#ffc400', tint: 'mul:1.5,1.2,0.5' }),
-  W('pass-sword', 'Меч Золотого щита', '1H_Sword', 'Knight', 'legendary', 30, 0, 0, { pct: 0.12, pass: true, glow: '#ffea00', tint: 'mul:1.55,1.25,0.5' }),
+  W('pass-axe', 'Топор Золотого льва', '1H_Axe', 'Barbarian', 'legendary', 24, 0, 0, { pct: 0.1, pass: true, glow: '#ffc400', tint: 'mul:1.5,1.2,0.5' }),
+  W('pass-sword', 'Меч Золотого щита', '1H_Sword', 'Knight', 'legendary', 25, 0, 0, { pct: 0.1, pass: true, glow: '#ffea00', tint: 'mul:1.55,1.25,0.5' }),
   O('pass-shield', 'Щит Золотого стража', 'Badge_Shield', 'Knight', 'legendary', 2, 0.2, 0, 0, { pass: true, glow: '#ffea00', tint: 'mul:1.55,1.25,0.5' }),
 ];
 
@@ -229,7 +237,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && !i.holiday && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };

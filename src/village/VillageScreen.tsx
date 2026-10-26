@@ -47,10 +47,13 @@ import { NPCS } from '../game/npcs';
 import { heroLevel, heroXp, Progress, saveProgress } from '../game/progress';
 import { spendCharge, villageOf } from '../game/resources';
 import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
-import { Bolt, Dungeon, Hammer, Move, Scroll, Star, Trophy } from './icons';
+import { Bolt, Dungeon, Hammer, Move, RES_COLORS, Scroll, Star, Trophy } from './icons';
+import { emitFx } from './Particles';
+import { pulse } from '../three/pulse';
 import { DecorThumb, Preview } from './Preview';
 import { newPartsAt } from './looks';
-import { defenseLog, fetchInbox, fetchTop, findTarget, isOnline, OFFLINE, PvpError, revengeTarget, setPvpNotify, submitAttack, TargetView } from './pvpApi';
+import { clearPending, defenseLog, fetchInbox, fetchTop, findTarget, isOnline, isTransient, loadPending, NO_SERVER, OFFLINE, type PendingAttack, pingServer, PvpError, revengeTarget, savePending, setPvpNotify, submitWithRetry, TargetView } from './pvpApi';
+import type { AttackOutcome } from '../../shared/villagePvp';
 import { applyInbox, applyMe, applyWin, canRevenge, markRevenged } from './pvp';
 import { type PvpTopRow, SCOUT_SECONDS, VILLAGE_LEAGUES, villageLeague } from '../../shared/villagePvp';
 import { cloudState } from '../cloud';
@@ -59,6 +62,8 @@ import { fmtNum, fmtTime, foundTown, hasTown, tickTown, townOf, unpackBase, with
 import { claimTask, openTasks, taskDone, taskProgress, TASKS } from './tasks';
 import type { DefenseEntry } from './types';
 import { focusOn, type Ctl, type ViewBld } from './Village3D';
+import { adviceCount, builderAdvice, upgradeNow } from './advice';
+import { Curtain, type CurtainPhase } from './Curtain';
 import { useViewSlot, ViewHost } from './Viewport';
 import { TroopSheet, TroopThumb } from './TroopInfo';
 import { LabSheet } from './LabSheet';
@@ -70,7 +75,8 @@ import { heroHands } from '../game/power';
 import './village.css';
 import { Sheet } from '../Sheet';
 import { BarKey, FlyApi, FlyLayer, ResBar } from './Hud';
-import { getSettings } from '../settings';
+import { getSettings, useSettings } from '../settings';
+import { nowSky, skyAt } from './sky';
 import { CHARGE_MAX } from '../game/resources';
 
 // Пролёт над деревней уже был в этом запуске приложения.
@@ -85,7 +91,7 @@ interface Props {
   onDungeon?: () => void;
 }
 
-type Sheet = 'build' | 'army' | 'lab' | 'attack' | 'tasks' | 'log' | 'top' | null;
+type Sheet = 'build' | 'army' | 'lab' | 'attack' | 'tasks' | 'log' | 'top' | 'advice' | null;
 type Battle =
   | { kind: 'camp'; camp: Camp }
   | { kind: 'pvp'; target: TargetView; revengeOf?: string }
@@ -122,12 +128,30 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const viewSlot = useViewSlot();
   const inBattle = (el: ReactNode) => (
     <div className="vil-screen battle">
+      <BattleMusic />
+      <Curtain phase={curtain.phase} text={curtain.text} />
       <ViewHost slot={viewSlot}>{el}</ViewHost>
     </div>
   );
   const [toast, setToast] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Line[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // Облака между деревнями: съехались → работа (поиск, смена экрана) → разошлись.
+  const [curtain, setCurtain] = useState<{ phase: CurtainPhase; text?: string }>({ phase: 'off' });
+  const cover = async (text: string, work: () => Promise<void> | void) => {
+    setCurtain({ phase: 'in', text });
+    sfx('whoosh');
+    await new Promise((r) => setTimeout(r, 560));
+    setCurtain({ phase: 'shut', text });
+    try {
+      await work();
+    } finally {
+      // Кадр-другой на то, чтобы новая сцена встала за облаками.
+      await new Promise((r) => setTimeout(r, 250));
+      setCurtain({ phase: 'out' });
+      setTimeout(() => setCurtain((c) => (c.phase === 'out' ? { phase: 'off' } : c)), 700);
+    }
+  };
   // Набеги на игроков: есть ли сеть, что сказал сервер о последнем набеге, топ, «бот пишет о нападениях».
   const [online, setOnline] = useState(isOnline);
   const [pvpNote, setPvpNote] = useState<ReactNode>(null);
@@ -266,21 +290,83 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     return true;
   };
 
+  // Итог набега с сервера: добыча, кубки, месть. Возвращает, сколько кубков дали.
+  const applyOutcome = (out: AttackOutcome, revengeOf?: string): number => {
+    let p = out.win ? applyWin(latest.current, out.win) : latest.current;
+    if (out.me) p = applyMe(p, out.me, Date.now());
+    if (revengeOf) p = markRevenged(p, revengeOf);
+    commit(p);
+    clearPending();
+    setPendingAttack(null);
+    return out.win?.trophies ?? 0;
+  };
+  // Не отправленный из-за связи набег: повторяем при входе в деревню, при появлении сети и по кнопке.
+  const [pendingAttack, setPendingAttack] = useState<PendingAttack | null>(() => loadPending());
+  const retrying = useRef(false);
+  const retryPending = async () => {
+    const a = loadPending();
+    if (!a || retrying.current) return;
+    retrying.current = true;
+    try {
+      const out = await submitWithRetry(a, undefined, 2);
+      const cups = applyOutcome(out, a.revengeOf);
+      const text = `Набег засчитан: ${cups >= 0 ? '+' : '−'}${Math.abs(cups)} кубков${out.win ? ', добыча в хранилище' : ''}.`;
+      flash(text);
+      setPvpNote((n) => (n ? text : n));
+    } catch (e) {
+      if (!isTransient(e)) {
+        // Сервер отказал окончательно: если бой всё же засчитан, победа придёт с журналом набегов.
+        clearPending();
+        setPendingAttack(null);
+        flash(e instanceof PvpError ? e.message : 'Набег не засчитан.');
+      } else flash(`${NO_SERVER}. Попробуем ещё раз позже.`);
+    } finally {
+      retrying.current = false;
+    }
+  };
+  useEffect(() => {
+    if (pendingAttack) void retryPending();
+    const on = () => loadPending() && void retryPending();
+    window.addEventListener('online', on);
+    const id = window.setInterval(on, 30_000);
+    return () => {
+      window.removeEventListener('online', on);
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Связь с сервером — проверяем, когда открыт выбор набега: чтобы знать до боя, засчитается ли он.
+  const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const checkServer = () => {
+    setServerOk(null);
+    void pingServer().then(setServerOk);
+  };
+  useEffect(() => {
+    if (sheet === 'attack') checkServer();
+  }, [sheet, online]);
+
   // Набег на игрока: поиск (или месть), бронь цели и бой. Без сети — только лагеря Князя.
   const startPvp = async (revengeOf?: string) => {
     if (!isOnline()) return flash(OFFLINE);
+    if (searching) return;
     setSearching(true);
-    try {
-      const target = revengeOf ? await revengeTarget(revengeOf) : await findTarget();
-      setSheet(null);
-      setPvpNote(null);
-      setBattle({ kind: 'pvp', target, revengeOf });
-    } catch (e) {
-      flash(e instanceof PvpError ? e.message : 'Соперник не нашёлся. Попробуй позже.');
-    } finally {
-      setSearching(false);
-    }
+    let error: string | null = null;
+    await cover('Ищем соперника', async () => {
+      try {
+        const target = revengeOf ? await revengeTarget(revengeOf) : await findTarget();
+        setSheet(null);
+        setPvpNote(null);
+        setBattle({ kind: 'pvp', target, revengeOf });
+      } catch (e) {
+        error = e instanceof PvpError ? e.message : 'Соперник не нашёлся. Попробуй позже.';
+      }
+    });
+    setSearching(false);
+    if (error) flash(error);
   };
+  // Домой из боя — тоже через облака.
+  const leaveBattle = () => void cover('Возвращаемся домой', () => setBattle(null));
   const pvp = v.pvp ?? {};
   const trophies = pvp.trophies ?? 0;
   const league = villageLeague(trophies);
@@ -333,15 +419,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       if (battle.kind === 'pvp') {
         // Добыча и кубки — только по ответу сервера: он сам считает этот же бой.
         const t = battle.target;
+        const sub: PendingAttack = { targetId: t.id, token: t.token, seed: t.seed, army, deploys, endTick, at: Date.now(), revengeOf: battle.revengeOf };
         setPvpNote('Сервер проверяет набег…');
         try {
-          const out = await submitAttack({ targetId: t.id, token: t.token, seed: t.seed, army, deploys, endTick });
-          let p = out.win ? applyWin(latest.current, out.win) : latest.current;
-          if (out.me) p = applyMe(p, out.me, Date.now());
-          if (battle.revengeOf) p = markRevenged(p, battle.revengeOf);
-          commit(p);
-          const cups = out.win?.trophies ?? 0;
+          const out = await submitWithRetry(sub, (k) => setPvpNote(`Связь с сервером прерывается — отправляем ещё раз (${k + 1}/4)…`));
           const same = RES_KEYS.every((k) => out.result.loot[k] === r.loot[k]);
+          const cups = applyOutcome(out, battle.revengeOf);
           setPvpNote(
             <>
               <span className={cups >= 0 ? 'ok' : 'bad'}>
@@ -352,7 +435,19 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </>,
           );
         } catch (e) {
-          setPvpNote(<span className="bad">{e instanceof PvpError ? e.message : 'Набег не засчитан.'} Добыча не засчитана, войско цело.</span>);
+          if (isTransient(e)) {
+            // Бой сохранён на телефоне: отправим, как только связь вернётся (сервер ждёт ещё 15 минут).
+            savePending(sub);
+            setPendingAttack(sub);
+            setPvpNote(
+              <span className="bad">
+                {NO_SERVER}. Итог боя сохранён на телефоне — засчитаем добычу и кубки, как только связь вернётся.{' '}
+                <button className="small-btn accent" onClick={() => void retryPending()}>
+                  Отправить ещё раз
+                </button>
+              </span>,
+            );
+          } else setPvpNote(<span className="bad">{e instanceof PvpError ? e.message : 'Набег не засчитан.'} Добыча не засчитана, войско цело.</span>);
         }
         return;
       }
@@ -371,7 +466,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       const c = battle.camp;
       const repeat = (v.camps?.[c.id] ?? 0) > 0;
       const loot = repeat ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot;
-      return inBattle(<BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />);
+      return inBattle(<BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={leaveBattle} />);
     }
     if (battle.kind === 'pvp') {
       const t = battle.target;
@@ -383,6 +478,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           title={`${t.name}, ратуша ${t.level}`}
           note={
             <>
+              {!online && <span className="bad">Нет сети — итог отправим, когда она вернётся · </span>}
               {t.revenge ? 'Месть · ' : t.bot ? 'Деревня-бот · ' : ''}
               <Trophy size={12} /> {t.trophies ?? 0}
               {offer && (
@@ -401,14 +497,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           mode="attack"
           enemy
           scout={t.token ? SCOUT_SECONDS : undefined}
-          onSkip={battle.revengeOf || searching ? undefined : () => void startPvp()}
+          onSkip={battle.revengeOf ? undefined : () => void startPvp()}
+          skipBusy={searching}
           onFinish={finish}
-          onClose={() => setBattle(null)}
+          onClose={leaveBattle}
         />,
       );
     }
     const e = battle.entry;
-    return inBattle(<BattleScreen heroLook={heroLook} title={e.who} base={{ ...unpackBase(e.base ?? []), hero: e.hero }} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />);
+    return inBattle(<BattleScreen heroLook={heroLook} title={e.who} base={{ ...unpackBase(e.base ?? []), hero: e.hero }} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={leaveBattle} />);
   }
 
   const tap = (x: number, y: number) => {
@@ -427,9 +524,16 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       return;
     }
     sfx('tap');
+    pick(b);
+  };
+  // Открыть карточку постройки и подвести к ней камеру.
+  const pick = (b: Bld) => {
     setSelDecor(null);
     setSelected(b.i);
     const s = sizeOf(b.t);
+    // Отклик: постройка пружинит, по земле расходится кольцо.
+    pulse(b.i, 'tap');
+    if (getSettings().villageFx) emitFx('tap', b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, s, '#ffe6b0');
     focusOn(ctl.current, b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, window.innerHeight);
   };
 
@@ -439,6 +543,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     if (r.got > 0) {
       commit(withTown(latest.current, r.town));
       sfx('coin');
+      const b = townOf(latest.current).b.find((v) => v.i === i);
+      if (b) {
+        const s = sizeOf(b.t);
+        pulse(i, 'collect');
+        if (getSettings().villageFx && r.res) emitFx('coins', b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, s, RES_COLORS[r.res]);
+      }
       if (r.res && x != null && y != null && getSettings().villageFx) flyRef.current?.fly(r.res, x, y, r.got);
       else flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
     } else flash('Склады полны: построй или улучши склад.');
@@ -510,6 +620,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const tasksReady = tasks.filter((t) => taskDone(progress, t)).length;
   const builders = buildersAt(th);
   const busy = busyBuilders(town);
+  // Советы строителя и стрелки над тем, что можно улучшить сейчас.
+  const advice = builderAdvice(town);
+  const adviceOk = adviceCount(advice);
+  const ups = upgradeNow(advice);
   const bonus = villageBonus(town.b);
   const queue = town.q;
 
@@ -517,7 +631,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     <div className="vil-screen">
       <ViewHost
         slot={viewSlot}
-        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id, decor: placing.decor } : null, decor: decorShown, theme, clanFlag: v.clanFlag, statueHero, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
+        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id, decor: placing.decor } : null, decor: decorShown, theme, clanFlag: v.clanFlag, statueHero, grid: !!placing, bubbles: placing ? [] : bubbles, ups: placing ? [] : ups, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
       />
 
       <div className="vil-top vil-hud">
@@ -543,10 +657,11 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               {trophies}
               <small>{league.name}</small>
             </button>
-            <span className={`hud-chip ${busy >= builders ? 'empty' : ''}`} title="Свободные строители">
+            <button className={`hud-chip ${busy >= builders ? 'empty' : ''}`} onClick={() => setSheet('advice')} aria-label="Советы строителя">
               <Hammer />
               {builders - busy}/{builders}
-            </span>
+              {adviceOk > 0 && busy < builders && <span className="hud-badge">{adviceOk > 9 ? '9+' : adviceOk}</span>}
+            </button>
             {shieldLeft > 0 && (
               <span className="hud-chip mint" title="Щит: на деревню нельзя напасть">
                 <Shield size={14} />
@@ -578,7 +693,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         )}
       </div>
       <FlyLayer ref={flyRef} bars={barEls} />
-      {town.b.some((b) => b.t === 'tavern' && b.l >= 1) && <TavernMusic />}
+      <VillageMusic tavern={town.b.some((b) => b.t === 'tavern' && b.l >= 1)} />
+      <Curtain phase={curtain.phase} text={curtain.text} />
 
       {toast && <div className="toast vil-warn">{toast}</div>}
 
@@ -659,6 +775,9 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               if (r.got <= 0) return flash(accrued(sel, now) > 0 ? 'Склады полны: построй или улучши склад.' : 'Пока пусто.');
               commit(withTown(latest.current, r.town));
               sfx('coin');
+              const s = sizeOf(sel.t);
+              pulse(sel.i, 'collect');
+              if (getSettings().villageFx && r.res) emitFx('coins', sel.x + s / 2 - GRID / 2, sel.y + s / 2 - GRID / 2, s, RES_COLORS[r.res]);
             }}
             onArmy={() => setSheet('army')}
             onLab={() => setSheet('lab')}
@@ -687,6 +806,48 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </div>
           )}
         </div>
+      )}
+
+      {sheet === 'advice' && (
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">
+            Советы строителя
+            <span className="muted">
+              свободно {builders - busy} из {builders}
+            </span>
+          </div>
+          <div className="vil-advice-say">
+            <Portrait line={say('boris', '')} size={48} />
+            <span>{advice.length === 0 ? 'Всё построено и улучшено, что позволяет ратуша. Копи на следующую!' : busy >= builders ? 'Все мои ребята заняты. Вот что сделаем, как освободятся:' : advice.some((a) => a.ok) ? 'Вот что можно сделать прямо сейчас — зелёным:' : 'Пока не хватает запасов. Вот что ближе всего:'}</span>
+          </div>
+          {advice.slice(0, 10).map((a) => (
+            <button
+              key={a.kind === 'up' ? `u${a.id}` : `b${a.t}`}
+              className={`vil-shop vil-advice ${a.ok ? 'ok' : ''}`}
+              onClick={() => {
+                if (a.kind === 'build') {
+                  if (!a.ok) return flash(BUILD_ERRORS[a.why ?? 'cost']);
+                  return startPlacing(a.t);
+                }
+                const b = town.b.find((x) => x.i === a.id);
+                setSheet(null);
+                if (b) pick(b);
+              }}
+            >
+              <span className="vil-shop-pic">
+                <Preview t={a.t} l={a.kind === 'up' ? a.l : 1} size={56} />
+              </span>
+              <span className="vil-shop-info">
+                <b>{a.kind === 'build' ? `Построить: ${BUILDINGS[a.t].name}` : `Улучшить: ${BUILDINGS[a.t].name}`}</b>
+                <span className="muted">{a.kind === 'build' ? `есть ${a.have} из ${a.max}` : `уровень ${a.l} → ${a.l + 1}`}{a.why && a.why !== 'cost' ? ` · ${BUILD_ERRORS[a.why].toLowerCase().replace(/\.$/, '')}` : ''}</span>
+                <span className="vil-shop-meta">
+                  <ResRow res={a.cost} />
+                </span>
+              </span>
+              <span className="vil-advice-go">{a.ok ? (a.kind === 'up' ? '↑' : '+') : ''}</span>
+            </button>
+          ))}
+        </Sheet>
       )}
 
       {sheet === 'build' && (
@@ -816,11 +977,32 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </span>
           </div>
           {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
-          <button className="vil-pvp" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp()}>
-            <Swords size={26} />
+          <div className={`vil-link ${serverOk === false ? 'bad' : serverOk ? 'ok' : ''}`}>
+            <span className="vil-link-dot" />
             <span>
+              {serverOk === null ? 'Проверяем связь с сервером…' : serverOk ? 'Сервер на связи: добыча и кубки засчитаются' : `${NO_SERVER}: набег на игрока сейчас не засчитается`}
+            </span>
+            {serverOk === false && (
+              <button className="small-btn accent" onClick={checkServer}>
+                Переподключиться
+              </button>
+            )}
+          </div>
+          {pendingAttack && (
+            <div className="vil-note">
+              Прошлый набег ещё не засчитан — нет связи.{' '}
+              <button className="small-btn accent" onClick={() => void retryPending()}>
+                Отправить
+              </button>
+            </div>
+          )}
+          <button className="vil-pvp" disabled={searching || !online || serverOk === false || troopCount(town.army) === 0} onClick={() => void startPvp()}>
+            <span className="vil-pvp-icon">
+              <Swords size={30} />
+            </span>
+            <span className="vil-pvp-text">
               <b>{!online ? OFFLINE : searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
-              <span className="muted">
+              <span>
                 {online ? (
                   <>
                     Деревня игрока твоего уровня · <Trophy size={12} /> {trophies} {league.name}
@@ -843,15 +1025,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 disabled={!open || troopCount(town.army) === 0}
                 onClick={() => {
                   setSheet(null);
-                  setBattle({ kind: 'camp', camp: c });
+                  void cover('Идём к лагерю', () => setBattle({ kind: 'camp', camp: c }));
                 }}
               >
                 <span className="vil-camp-num">{c.id}</span>
                 <span className="vil-shop-info">
                   <b>{c.name}</b>
                   <span className="muted">{open ? c.hint : th < c.th ? `Нужна ратуша ${c.th}` : 'Сначала разгроми предыдущий лагерь'}</span>
-                  <span className="vil-shop-meta">
-                    <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
+                  <span className="vil-camp-loot">
+                    <span>Добыча</span> <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
                   </span>
                 </span>
                 <span className="vil-stars">
@@ -1355,8 +1537,21 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
   );
 }
 
-/** Пока открыта деревня с таверной, оттуда слышна плясовая. */
-function TavernMusic() {
-  useMusic('tavern', 1);
+/** Днём в деревне светлый марш, а вечером и ночью из таверны (если она есть) слышна плясовая. */
+function VillageMusic({ tavern }: { tavern: boolean }) {
+  const s = useSettings();
+  const [hour, setHour] = useState(() => nowSky().hour);
+  useEffect(() => {
+    const id = window.setInterval(() => setHour(nowSky().hour), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const evening = s.dayNight && skyAt(hour).lamps > 0.5;
+  useMusic(tavern && evening ? 'tavern' : 'village', 1);
+  return null;
+}
+
+/** Набег, защита и повтор боя — боевая тема. */
+function BattleMusic() {
+  useMusic('battle', 2);
   return null;
 }

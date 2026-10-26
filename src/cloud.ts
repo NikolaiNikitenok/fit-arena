@@ -1,7 +1,8 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
-import { loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
+import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
 import { guestId, setMaxBot, tg } from './telegram';
+import { reportError } from './telemetry';
 
 const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId() });
 
@@ -28,11 +29,53 @@ const storeAccount = (id: string) => {
   }
 };
 
+const BACKUP_KEY = 'fit-arena-adventure-backup';
+const isEmpty = (p: Partial<Progress> | null | undefined) => !hasHero(p);
+
+/** Копия героя этого телефона до смены аккаунта: если выбор при привязке оказался не тем, её можно вернуть. */
+export function localBackup(): { progress: Progress; at: number; level: number; stages: number } | null {
+  try {
+    const b = JSON.parse(localStorage.getItem(BACKUP_KEY) ?? 'null') as { progress: Progress; at: number } | null;
+    if (!b || isEmpty(b.progress)) return null;
+    return { ...b, level: heroLevel(heroXp({ ...loadProgress(), ...b.progress })).level, stages: Object.keys(b.progress.stars ?? {}).length };
+  } catch {
+    return null;
+  }
+}
+
+/** Вернуть героя из копии этого телефона: он становится героем аккаунта, сервер получает его как самую свежую копию. */
+export async function restoreLocalBackup(): Promise<void> {
+  const b = localBackup();
+  if (!b) return;
+  const p = { ...b.progress, savedAt: Date.now() };
+  // Нынешний герой этого телефона ложится в копию на его место: ничего не теряется.
+  const now = loadProgress();
+  await post('/api/progress/save', { progress: p, account: cloud?.account });
+  replaceProgress(p);
+  freezeProgress();
+  try {
+    if (isEmpty(now)) localStorage.removeItem(BACKUP_KEY);
+    else localStorage.setItem(BACKUP_KEY, JSON.stringify({ progress: now, at: Date.now() }));
+  } catch {
+    // Нет хранилища.
+  }
+  location.reload();
+}
+
 /** Вход привязан к другому герою: берём его прогресс (или чистый лист) и перезапускаем игру. */
 export function switchAccount(id: string, progress: Progress | null): void {
   stopped = true;
   pending = null;
+  const before = loadProgress();
+  if (!isEmpty(before) && JSON.stringify(before.stars) !== JSON.stringify(progress?.stars ?? {})) {
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ progress: before, at: Date.now() }));
+    } catch {
+      // Нет хранилища.
+    }
+  }
   replaceProgress(progress ?? ({} as Progress));
+  freezeProgress();
   storeAccount(id);
   location.reload();
 }
@@ -46,7 +89,18 @@ export interface Remind {
 // raidNotify — бот пишет о рейде клана (по умолчанию да).
 // admin — видит статистику (список админов на сервере).
 // account — id аккаунта на сервере; linkable — вошёл через мессенджер, можно привязывать другие входы.
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
+// proOffer — Pro за звёзды: до когда оплачен, можно ли купить ещё и цена (null — гость, купить нельзя).
+export interface ProOffer {
+  until: number | null;
+  canBuy: boolean;
+  price: number;
+}
+// starter — набор «Новичок» за звёзды: цена и куплен ли (null — гость).
+export interface StarterOffer {
+  price: number;
+  bought: boolean;
+}
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -70,6 +124,14 @@ const push = (keepalive = false) => {
   if (p) post('/api/progress/save', { progress: p, account: cloud?.account }, keepalive).catch((e) => (onSaveError(e) ? null : (pending ??= p)));
 };
 
+// Сервер не принял копию (слишком большая): сообщаем разработчику один раз за запуск.
+let tooLargeReported = false;
+const onTooLarge = (e: { status?: number }) => {
+  if (e.status !== 413 || tooLargeReported) return;
+  tooLargeReported = true;
+  reportError('error', new Error('progress save rejected: too large'), String(JSON.stringify(loadProgress()).length));
+};
+
 /** Отправить копию прогресса сейчас и дождаться ответа (перед набегом сервер должен знать войско). */
 export async function syncNow(p?: Progress): Promise<void> {
   if (stopped) return;
@@ -86,6 +148,7 @@ export async function syncNow(p?: Progress): Promise<void> {
 
 /** Сервер не принял копию: вход теперь ведёт в другой аккаунт. Тогда перезагружаемся на его прогресс. */
 function onSaveError(e: { status?: number; body?: { account?: string } }): boolean {
+  onTooLarge(e);
   if (e.status !== 409 || !e.body?.account) return false;
   const id = e.body.account;
   stopped = true;
@@ -109,6 +172,8 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       bot: boolean;
       telegram: boolean;
       pro?: boolean;
+      proOffer?: ProOffer | null;
+      starter?: StarterOffer | null;
       raidNotify?: boolean;
       admin?: boolean;
       account?: string;
@@ -116,7 +181,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       maxBot?: string | null;
     };
     setMaxBot(r.maxBot);
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();
@@ -125,7 +190,12 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
     const local = loadProgress();
     // Новый телефон: своего прогресса нет, берём серверный, даже если игра уже успела что-то сохранить.
     const empty = !Object.keys(local.stars).length && !Object.keys(local.days).length;
-    if (r.progress && (empty || (r.progress.savedAt ?? 0) > (local.savedAt ?? 0))) {
+    // На сервере пустая копия, а здесь герой (её затёрли с другого устройства): возвращаем героя этого телефона.
+    // Не трогаем только настоящий «Начать заново», сделанный позже.
+    if (r.progress && !hasHero(r.progress) && hasHero(local) && !((r.progress.resetAt ?? 0) > (local.savedAt ?? 0))) {
+      pending = { ...local, savedAt: Date.now() };
+      push();
+    } else if (r.progress && (empty || (r.progress.savedAt ?? 0) > (local.savedAt ?? 0))) {
       replaceProgress(r.progress);
       onRemote(loadProgress());
     } else if (!r.progress || (local.savedAt ?? 0) > (r.progress.savedAt ?? 0)) {
@@ -145,6 +215,36 @@ export function usePro(): boolean {
   const [pro, setPro] = useState(() => !!cloud?.pro);
   useEffect(() => onCloud((c) => setPro(c.pro)), []);
   return pro;
+}
+
+/** Предложение Pro за звёзды (null — до ответа сервера или гость). */
+export function useProOffer(): ProOffer | null {
+  const [offer, setOffer] = useState(() => cloud?.proOffer ?? null);
+  useEffect(() => onCloud((c) => setOffer(c.proOffer)), []);
+  return offer;
+}
+
+/** Спросить сервер о Pro заново (после оплаты). */
+export async function refreshPro(): Promise<{ pro: boolean; proOffer: ProOffer; starter: StarterOffer }> {
+  const r = (await post('/api/pro/status', {})) as { pro: boolean; proOffer: ProOffer; starter: StarterOffer };
+  if (cloud) {
+    cloud = { ...cloud, pro: r.pro, proOffer: r.proOffer, starter: r.starter };
+    listeners.forEach((fn) => fn(cloud!));
+  }
+  return r;
+}
+
+/** Набор «Новичок» (null — до ответа сервера или гость). */
+export function useStarter(): StarterOffer | null {
+  const [s, setS] = useState(() => cloud?.starter ?? null);
+  useEffect(() => onCloud((c) => setS(c.starter)), []);
+  return s;
+}
+
+/** Ссылка на оплату звёздами (только в Telegram): Pro себе, Pro в подарок другу (for — его id) или набор «Новичок». */
+export async function proInvoice(kind: 'pro' | 'gift' | 'starter' = 'pro', forId?: string): Promise<string> {
+  const r = (await post('/api/pro/invoice', { kind, for: forId })) as { url: string };
+  return r.url;
 }
 
 /** Админ ли игрок (по ответу сервера): до ответа — нет. */

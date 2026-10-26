@@ -1,0 +1,42 @@
+/* Плашка обновления: выезжает сверху поверх всего, кроме заставки. */
+.upd { position: fixed; top: calc(10px + var(--safe-top)); left: 12px; right: 12px; z-index: 60; display: flex; justify-content: center; pointer-events: none; animation: upd-in .55s cubic-bezier(.2, 1.35, .4, 1) both; }
+.upd.out { animation: upd-out .22s ease-in both; }
+@keyframes upd-in { from { transform: translateY(calc(-100% - 40px)); opacity: 0; } }
+@keyframes upd-out { to { transform: translateY(calc(-100% - 40px)); opacity: 0; } }
+.upd-card { pointer-events: auto; width: 100%; max-width: 456px; display: flex; flex-direction: column; gap: 12px; padding: 14px 14px 12px; border-radius: 20px; position: relative; overflow: hidden;
+  background: radial-gradient(120% 90% at 0% 0%, rgba(255, 150, 95, .2), transparent 55%), linear-gradient(180deg, rgba(34, 38, 56, .97), rgba(20, 23, 34, .97));
+  border: 1px solid rgba(255, 160, 110, .38); box-shadow: 0 18px 44px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .03) inset;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+/* Блик пробегает по плашке один раз, когда она появилась. */
+.upd-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 230, 200, .14) 50%, transparent 65%); transform: translateX(-100%); animation: upd-shine 1.4s .45s ease-out both; pointer-events: none; }
+@keyframes upd-shine { to { transform: translateX(100%); } }
+.upd-head { display: flex; align-items: center; gap: 12px; }
+.upd-badge { width: 42px; height: 42px; border-radius: 14px; flex: none; display: grid; place-items: center; background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 6px 18px rgba(255, 122, 89, .45); animation: upd-pop .6s .25s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes upd-pop { from { transform: scale(.4) rotate(-20deg); } }
+.upd-titles { flex: 1; min-width: 0; }
+.upd-kicker { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.upd-title { font-size: 18px; font-weight: 900; line-height: 1.2; }
+.upd-x { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .07); color: var(--hint); display: grid; place-items: center; }
+.upd-list { display: flex; flex-direction: column; gap: 10px; max-height: min(42vh, 320px); overflow-y: auto; }
+.upd-entry { display: flex; flex-direction: column; gap: 6px; }
+.upd-entry-title { font-weight: 800; font-size: 14px; color: var(--gold); }
+.upd-item { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.35; color: var(--text); }
+.upd-item .icon { margin-top: 2px; color: var(--mint); }
+.upd-list .upd-item { animation: upd-item .35s ease-out both; }
+.upd-list .upd-item:nth-child(1) { animation-delay: .3s; }
+.upd-list .upd-item:nth-child(2) { animation-delay: .38s; }
+.upd-list .upd-item:nth-child(3) { animation-delay: .46s; }
+.upd-list .upd-item:nth-child(n + 4) { animation-delay: .54s; }
+@keyframes upd-item { from { opacity: 0; transform: translateX(-8px); } }
+.upd-plain { font-size: 14px; color: var(--hint); line-height: 1.35; }
+.upd-actions { display: flex; gap: 8px; }
+.upd-actions button { flex: 1; height: 44px; border-radius: 14px; border: 0; font-weight: 900; font-size: 15px; }
+.upd-later { background: rgba(255, 255, 255, .07); color: var(--text); flex: 0 0 34% !important; }
+.upd-go { background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 6px 18px rgba(255, 122, 89, .35); }
+.upd-go:disabled { opacity: .7; }
+.upd-history { display: flex; flex-direction: column; gap: 16px; }
+.upd-history-entry { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.upd-history-entry:last-child { border-bottom: 0; }
+.upd-history-date { font-size: 12px; color: var(--hint); }
+.upd-history-title { font-weight: 900; font-size: 16px; }
+@media (prefers-reduced-motion: reduce) { .upd, .upd-card::after, .upd-badge, .upd-list .upd-item { animation: none; } }

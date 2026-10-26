@@ -1,4 +1,4 @@
-import { lazy, ReactNode, Suspense, useEffect, useState } from 'react';
+import { type CSSProperties, lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { amountText, EXERCISE_LABELS } from '../repCounter';
 import { PetFace } from './PetEntry';
 import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
@@ -6,11 +6,15 @@ import { BASE_DAMAGE, heroPower } from './power';
 import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
 import { AchBadge } from './Achievements';
-import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
+import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
-import { Bag, Check, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
+import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
+import { HOLIDAY_GOAL, holidayAt, holidayOutfit, holidayTokens, tokenWord } from './holidays';
+import { collectionDone, visibleCollections } from './collections';
+import { OutfitFace } from './EventScreen';
+import './holiday.css';
 import { gymOf, todayTemplate } from '../gym/gym';
 import { PASS_TIERS, passTier } from './pass';
 import { passOf } from './progress';
@@ -69,6 +73,10 @@ interface Props {
   onDungeon: () => void;
   // Друзья: экран во вкладке дуэли.
   onFriends: () => void;
+  // Праздник Атлетии, коллекции обликов и топ города.
+  onHoliday: () => void;
+  onCollections: () => void;
+  onCity: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -88,6 +96,41 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
 /** Метка на плитке: точка или число. */
 const Dot = ({ n }: { n: number | boolean }) => (n ? <span className="hb-dot">{typeof n === 'number' && n > 1 ? n : ''}</span> : null);
 
+/** Большая карточка раздела под героем: значок, название, состояние и полоска прогресса в цвете раздела. */
+function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; onClick: () => void }) {
+  return (
+    <button className={`hb-feat ${cls}`} style={{ ['--fc' as string]: color }} onClick={onClick}>
+      <span className={`hb-feat-icon ${iconCls}`}>{icon}</span>
+      <span className="hb-feat-chev" aria-hidden>
+        ›
+      </span>
+      <b>{title}</b>
+      <small>{sub}</small>
+      {bar !== undefined && (
+        <span className="hb-feat-bar">
+          <span style={{ width: `${Math.max(4, Math.min(100, bar * 100))}%` }} />
+        </span>
+      )}
+      <Dot n={dot ?? 0} />
+    </button>
+  );
+}
+
+type Tone = 'accent' | 'gold' | 'mint' | 'teal' | 'blue' | 'violet' | 'rose' | 'pet';
+/** Плитка сетки «Ещё»: яркий значок-«иконка приложения» и подпись. */
+function More({ title, sub, icon, tone, dot, cls = '', style, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; onClick: () => void }) {
+  return (
+    <button className={`hb-more-item ${cls}`} style={style} onClick={onClick}>
+      <span className={`hb-more-icon ${tone}`}>{icon}</span>
+      <span className="hb-more-text">
+        <b>{title}</b>
+        <small>{sub}</small>
+      </span>
+      <Dot n={dot ?? 0} />
+    </button>
+  );
+}
+
 /** Часы раз в 30 секунд: отсчёт события на плитке. */
 function useNow(ms = 30000) {
   const [now, setNow] = useState(Date.now);
@@ -99,7 +142,7 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity } = props;
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -134,23 +177,23 @@ export function HeroHome(props: Props) {
   const ev = eventOf(progress, now);
   const bossFace = eventBossSay(boss, '');
 
-  const achGot = ACHIEVEMENTS.filter((a) => achDone(a, progress, now));
+  const achAll = visibleAchievements(progress, now);
+  const achGot = achAll.filter((a) => achDone(a, progress, now));
   const lastAch = achGot[achGot.length - 1];
+
+  // Праздник: полоса под заданием дня, пока он идёт.
+  const hol = holidayAt(now);
+  const holTokens = hol.live ? holidayTokens(progress, hol) : 0;
+  // За неделю до начала полоса уже видна: анонс.
+  const holShown = hol.live || hol.start - now < 7 * 86_400_000;
+  const cols = visibleCollections(now);
+  const colsDone = cols.filter((c) => collectionDone(c, progress)).length;
 
   const pet = progress.pets?.active;
   const petLvl = pet ? petLevel(petXp(progress, pet)).level : 0;
 
-  const achTile = (
-    <button className="hb-tile" onClick={onAchievements}>
-      <span className="hb-tile-icon">
-        <AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={34} />
-      </span>
-      <b>Достижения</b>
-      <small>
-        {achGot.length} из {ACHIEVEMENTS.length}
-      </small>
-      <Dot n={badges.achievements} />
-    </button>
+  const achFeat = (
+    <Feat color="#ffd27a" onClick={onAchievements} title="Достижения" sub={`${achGot.length} из ${achAll.length}`} bar={achAll.length ? achGot.length / achAll.length : 0} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={44} />} />
   );
 
   return (
@@ -210,122 +253,46 @@ export function HeroHome(props: Props) {
 
       <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
 
-      <div className="hb-tiles">
-        <button className={`hb-tile hb-dungeon ${unfinished || floors ? 'ready' : ''}`} style={{ ['--la' as string]: land.accent }} onClick={onDungeon}>
-          <span className="hb-tile-icon">
-            <MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={36} />
-          </span>
-          <b>Подземелье</b>
-          <small>{unfinished ? `этаж ${floor.id} не доигран` : floors ? `этаж ${floor.id} · ×${floors}` : `ещё ${FLOOR_COST - charge} повт.`}</small>
-          <Dot n={badges.dungeon} />
-        </button>
-        <button className="hb-tile" onClick={onPrograms}>
-          <span className="hb-tile-icon hb-prog">
-            <Plan size={24} />
-          </span>
-          <b>Программы</b>
-          <small>{prog && run ? (av === 'ready' ? `день ${run.day} сегодня` : `день ${run.day} из ${prog.days}`) : 'выбрать план'}</small>
-          <Dot n={badges.programs} />
-        </button>
-        <button className={`hb-tile ${pro ? 'pro' : ''}`} onClick={onPass}>
-          <span className="hb-tile-icon">
-            <PassShield size={32} gold={pro} label={passT.tier} />
-          </span>
-          <b>Пропуск</b>
-          <small>
-            ступень {passT.tier}/{PASS_TIERS}
-          </small>
-          <Dot n={badges.pass} />
-        </button>
-        {w.live ? (
-          <button className={`hb-tile hb-event ${ev.won ? 'won' : ''}`} style={{ ['--eg' as string]: boss.glow }} onClick={onEvent}>
-            <span className="hb-tile-icon">
-              <Portrait line={bossFace} size={36} />
+      {holShown && (
+        <button className="hb-holiday" style={{ ['--hs1' as string]: hol.def.sky[0], ['--hs2' as string]: hol.def.sky[1], ['--hg' as string]: hol.def.glow }} onClick={onHoliday}>
+          <HolidayToken id={hol.def.id} size={30} />
+          <span className="hb-holiday-text">
+            <b>{hol.def.name}</b>
+            <small>{hol.live ? `${holTokens.toLocaleString('ru')} ${tokenWord(hol.def, holTokens)} · ещё ${fmtLeft(hol.end - now)}` : `праздник ${fmtDays(daysUntil({ ...hol, live: false }, now))}`}</small>
+            <span className="hb-holiday-bar">
+              <span style={{ width: `${Math.min(100, (holTokens / HOLIDAY_GOAL) * 100)}%` }} />
             </span>
-            <b>Событие</b>
-            <small>{ev.won ? 'повержен!' : `ещё ${fmtLeft(w.end - now)}`}</small>
-            <Dot n={badges.event} />
-          </button>
+          </span>
+          <OutfitFace id={holidayOutfit(hol).id} size={34} />
+          <Dot n={badges.holiday} />
+        </button>
+      )}
+
+      <div className="hb-feats">
+        <Feat cls={`hb-dungeon ${unfinished || floors ? 'ready' : ''}`} color={land.accent} onClick={onDungeon} title="Подземелье" sub={unfinished ? `этаж ${floor.id} не доигран` : floors ? `этаж ${floor.id} · ×${floors}` : `ещё ${FLOOR_COST - charge} повт.`} bar={unfinished || floors ? 1 : charge / FLOOR_COST} dot={badges.dungeon} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={44} />} />
+        <Feat color="#ff8a5c" onClick={onPrograms} title="Программы" sub={prog && run ? (av === 'ready' ? `день ${run.day} сегодня` : `день ${run.day} из ${prog.days}`) : 'выбрать план'} bar={prog && run ? (run.day - 1) / prog.days : undefined} dot={badges.programs} icon={<Plan size={28} />} iconCls="hb-prog" />
+        <Feat cls={pro ? 'pro' : ''} color={pro ? '#ffd27a' : '#8fb3ff'} onClick={onPass} title="Пропуск" sub={`ступень ${passT.tier} из ${PASS_TIERS}`} bar={passT.into / passT.need} dot={badges.pass} icon={<PassShield size={40} gold={pro} label={passT.tier} />} />
+        {w.live ? (
+          <Feat cls={`hb-event ${ev.won ? 'won' : ''}`} color={boss.glow} onClick={onEvent} title="Событие" sub={ev.won ? 'босс повержен!' : `ещё ${fmtLeft(w.end - now)}`} dot={badges.event} icon={<Portrait line={bossFace} size={46} />} />
         ) : (
-          achTile
+          achFeat
         )}
       </div>
 
       <div className="hb-more-title">Ещё</div>
       <div className="hb-more">
-        <button className="hb-more-item" onClick={onPets}>
-          {pet ? <PetFace id={pet} size={28} /> : <span className="pet-entry-egg hb-egg" />}
-          <span>
-            <b>{pet ? petName(progress, pet) : 'Питомец'}</b>
-            <small>{pet ? `ур. ${petLvl}` : 'яйцо ждёт'}</small>
-          </span>
-          <Dot n={badges.pets} />
-        </button>
-        <button className="hb-more-item" onClick={() => setHeroOpen(true)}>
-          <span className="hb-more-icon">
-            <Swords size={18} />
-          </span>
-          <span>
-            <b>Вещи</b>
-            <small>и зелья</small>
-          </span>
-        </button>
-        <button className="hb-more-item" onClick={() => onShop()}>
-          <span className="hb-more-icon gold">
-            <Bag size={18} />
-          </span>
-          <span>
-            <b>Лавка</b>
-            <small>Фёдора</small>
-          </span>
-        </button>
-        <button className="hb-more-item" onClick={onStrength}>
-          <span className="hb-more-icon mint">
-            <Dumbbell size={18} />
-          </span>
-          <span>
-            <b>Сила</b>
-            <small>рекорды</small>
-          </span>
-        </button>
-        <button className="hb-more-item" onClick={onGym}>
-          <span className="hb-more-icon mint">
-            <Kettlebell size={18} />
-          </span>
-          <span>
-            <b>Зал</b>
-            <small>{gym.run ? 'идёт' : gymToday ? 'сегодня' : 'дневник'}</small>
-          </span>
-          <Dot n={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} />
-        </button>
-        <button className="hb-more-item" onClick={onFriends}>
-          <span className="hb-more-icon blue">
-            <Users size={18} />
-          </span>
-          <span>
-            <b>Друзья</b>
-            <small>и вызовы</small>
-          </span>
-        </button>
+        <More onClick={onPets} title={pet ? petName(progress, pet) : 'Питомец'} sub={pet ? `ур. ${petLvl}` : 'яйцо ждёт'} dot={badges.pets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} tone="pet" />
+        <More onClick={() => setHeroOpen(true)} title="Вещи" sub="и зелья" icon={<Swords size={22} />} tone="accent" />
+        <More onClick={() => onShop()} title="Лавка" sub="Фёдора" icon={<Bag size={22} />} tone="gold" />
+        <More onClick={onStrength} title="Сила" sub="рекорды" icon={<Dumbbell size={22} />} tone="mint" />
+        <More onClick={onGym} title="Зал" sub={gym.run ? 'идёт' : gymToday ? 'сегодня' : 'дневник'} dot={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} icon={<Kettlebell size={22} />} tone="teal" />
+        <More onClick={onCollections} title="Коллекции" sub={`${colsDone} из ${cols.length}`} icon={<Album size={22} />} tone="violet" />
+        <More onClick={onCity} title="Мой город" sub="топ недели" icon={<City size={22} />} tone="blue" />
+        <More onClick={onFriends} title="Друзья" sub="и вызовы" icon={<Users size={22} />} tone="rose" />
         {w.live ? (
-          <button className="hb-more-item" onClick={onAchievements}>
-            <AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={28} />
-            <span>
-              <b>Достижения</b>
-              <small>
-                {achGot.length} из {ACHIEVEMENTS.length}
-              </small>
-            </span>
-            <Dot n={badges.achievements} />
-          </button>
+          <More onClick={onAchievements} title="Достижения" sub={`${achGot.length} из ${achAll.length}`} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} tone="pet" />
         ) : (
-          <button className="hb-more-item hb-event-soon" style={{ ['--eg' as string]: boss.glow }} onClick={onEvent}>
-            <Portrait line={bossFace} size={28} />
-            <span>
-              <b>Событие</b>
-              <small>{fmtDays(daysUntil(w, now))}</small>
-            </span>
-          </button>
+          <More onClick={onEvent} cls="hb-event-soon" style={{ ['--eg' as string]: boss.glow }} title="Событие" sub={fmtDays(daysUntil(w, now))} icon={<Portrait line={bossFace} size={40} />} tone="pet" />
         )}
       </div>
 

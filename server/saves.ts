@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { LEVEL_COUNT } from '../src/game/levels';
-import { heroLevel, type Progress, XP_PER_LEVEL_WON } from '../src/game/progress';
+import { hasHero, heroLevel, type Progress, XP_PER_LEVEL_WON } from '../src/game/progress';
 
 const DAY = 86_400_000;
 // Больше повторов в день не засчитываем в уровень, который видят другие.
@@ -48,7 +48,7 @@ export interface Save {
   pub?: { xp: number; cap: number; day: string };
 }
 
-export const SAVE_MAX_BYTES = 200_000;
+export const SAVE_MAX_BYTES = 1_000_000;
 
 export class SaveStore {
   private saves = new Map<string, Save>();
@@ -85,7 +85,9 @@ export class SaveStore {
     const s = this.touch(id);
     const p = progress as { savedAt?: unknown } | null;
     const at = Number(p?.savedAt) || 0;
-    if (p && typeof p === 'object' && at > s.savedAt && JSON.stringify(p).length <= SAVE_MAX_BYTES) {
+    // Пустая копия поверх героя — почти всегда ошибка устройства (сброс без отметки resetAt): не принимаем.
+    const wipe = hasHero(s.progress) && !hasHero(p) && !(Number((p as { resetAt?: unknown } | null)?.resetAt) > s.savedAt);
+    if (p && typeof p === 'object' && at > s.savedAt && !wipe && JSON.stringify(p).length <= SAVE_MAX_BYTES) {
       s.progress = p as Record<string, unknown>;
       s.savedAt = at;
       this.publish(s, now);

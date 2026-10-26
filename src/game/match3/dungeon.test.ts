@@ -31,6 +31,8 @@ import {
   runStars,
   startRun,
   swordDamage,
+  finaleRun,
+  FINALE_MAX,
 } from './dungeon';
 
 const NOW = new Date(2026, 9, 20, 12).getTime();
@@ -274,5 +276,39 @@ describe('незаконченная партия', () => {
     const check = checkSavedRun(p1, NOW);
     expect(check.kind).toBe('none');
     expect(dungeonOf(check.progress).run).toBeUndefined();
+  });
+});
+
+describe('финальный салют', () => {
+  const wonRun = (): Run => {
+    for (let seed = 1; seed < 60; seed++) {
+      const r = playOut(startRun(floorDef(1), 13, seed));
+      if (r.status === 'won' && r.moves > 0) return r;
+    }
+    throw new Error('нет победы');
+  };
+
+  it('лучи из оставшихся ходов, добыча растёт, ходы и звёзды прежние', () => {
+    const r = wonRun();
+    const out = finaleRun(r)!;
+    expect(out).not.toBeNull();
+    expect(out.finale.marked.length).toBe(Math.min(FINALE_MAX, r.moves));
+    expect(out.finale.marked.every((m) => m.gem.special === 'lineH' || m.gem.special === 'lineV')).toBe(true);
+    expect(out.run.moves).toBe(r.moves);
+    expect(runStars(out.run)).toBe(runStars(r));
+    const sum = (x: Run) => x.loot.wood + x.loot.stone + x.loot.gold;
+    expect(sum(out.run)).toBeGreaterThan(sum(r));
+    expect(findRuns(out.run.board)).toEqual([]);
+  });
+
+  it('без победы или без ходов салюта нет', () => {
+    const r = wonRun();
+    expect(finaleRun({ ...r, status: 'lost' })).toBeNull();
+    expect(finaleRun({ ...r, moves: 0 })).toBeNull();
+  });
+
+  it('одинаковый при одинаковой доске', () => {
+    const r = wonRun();
+    expect(finaleRun(r)!.run.loot).toEqual(finaleRun(r)!.run.loot);
   });
 });

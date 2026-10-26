@@ -6,7 +6,8 @@ import { fairShare, RAID_TIERS, raidBoss, raidReward, raidTier } from '../../sha
 import { claimClanGiftRange, claimRaid, claimWar, recordActivity, recordRaidAttack, clanGiftsDue, clearClanPending, heroLevel, heroXp, Progress, syncClanGift } from '../game/progress';
 import { Banner, Coin, Flask, Lock, Send, Swords } from '../icons';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
-import { clanInviteCode, clanInviteLink, share } from '../telegram';
+import { clanInviteCode, clanInviteLink, platform, share } from '../telegram';
+import { WebLoginButtons } from '../account/WebLogin';
 import { RaidFight, RaidScene } from './RaidFight';
 import { Flag, FlagPicker } from './Flag';
 import { useClan } from './useClan';
@@ -176,10 +177,15 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
         <div className="clan-intro">
           <Banner size={28} />
           <div>
-            <div className="claim-title">Кланы живут в Telegram</div>
-            <div className="muted">Открой NikitenokArena в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.</div>
+            <div className="claim-title">{platform === 'web' ? 'Клан — для тех, кто вошёл' : 'Кланы живут в Telegram'}</div>
+            <div className="muted">
+              {platform === 'web'
+                ? 'Войди через Яндекс или Telegram, чтобы играть в клане под своим именем. Или открой NikitenokArena в Telegram.'
+                : 'Открой NikitenokArena в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.'}
+            </div>
           </div>
         </div>
+        <WebLoginButtons />
         <a className="primary btn-link" href={invite.current ? clanInviteLink(invite.current, api.bot) : `https://t.me/${api.bot.username}`}>
           Открыть в Telegram
         </a>

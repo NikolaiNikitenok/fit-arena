@@ -14,6 +14,7 @@ import { LOOK } from './look';
 import { Scenery } from './Scenery';
 import { generateWorld, levelZ, pathX, WorldLayout } from './worldgen';
 import { Canvas3D } from '../three/Canvas3D';
+import { SeasonFall, seasonNow } from '../three/SeasonFall';
 import { getSettings } from '../settings';
 
 // 3D-карта мира из моделей KayKit: остров с дорогой через десять земель, деревни, леса, реки,
@@ -136,6 +137,7 @@ export function WorldMap3D(props: WorldMapProps) {
   const layout = useMemo(() => generateWorld(props.levels), [props.levels]);
   const look = LOOK[layout.world];
   const sun = useRef<THREE.DirectionalLight>(null);
+  const season = seasonNow();
   return (
     <Canvas3D camera={{ position: [0, 7.5, 8.5], fov: 48, far: 400 }} gl={{ antialias: true }}>
       <Sky top={look.top} horizon={look.horizon} stars={look.stars} planet={look.planet} />
@@ -143,6 +145,20 @@ export function WorldMap3D(props: WorldMapProps) {
       <hemisphereLight args={['#ffffff', '#4a4038', layout.world === 0 ? 1.3 : 1.0]} />
       <directionalLight ref={sun} intensity={look.light} castShadow shadow-mapSize={[1024, 1024]} shadow-camera-left={-14} shadow-camera-right={14} shadow-camera-top={14} shadow-camera-bottom={-14} shadow-bias={-0.0005} />
       <CameraRig focus={props.focus} layout={layout} sun={sun} />
+      {season && layout.lib !== 'space' && getSettings().villageFx && (
+        <SeasonFall
+          season={season}
+          perspective
+          lite={getSettings().lowPower}
+          box={22}
+          height={8}
+          scale={0.22}
+          center={(v) => {
+            const z = levelZ(props.focus.current);
+            v.set(pathX(z, layout.world), 0, z - 1);
+          }}
+        />
+      )}
       <Suspense fallback={null}>
         <MapContent key={layout.world} {...props} layout={layout} />
       </Suspense>

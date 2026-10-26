@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { ResIcon } from './BattleScreen';
-import { Bolt } from './icons';
+import { ChunkyRes } from './icons';
 import { fmtNum } from './state';
 import type { ResKey } from '../../shared/village';
 import './hud.css';
@@ -55,7 +55,7 @@ export const ResBar = forwardRef<HTMLDivElement, { k: BarKey; value: number; cap
         </b>
         <small>{full ? 'полно' : k === 'charge' ? `/${cap}` : `/${fmtNum(cap)}`}</small>
       </div>
-      <span className="hud-ico">{k === 'charge' ? <Bolt size={18} /> : <ResIcon r={k} size={19} />}</span>
+      <span className="hud-ico">{k === 'charge' ? <ChunkyRes r="charge" size={22} /> : <ResIcon r={k} size={20} />}</span>
     </div>
   );
 });
@@ -113,7 +113,7 @@ export const FlyLayer = forwardRef<FlyApi, { bars: React.RefObject<Partial<Recor
             } as React.CSSProperties;
             return (
               <span key={j} className="hud-coin" style={style}>
-                <span>{f.k === 'charge' ? <Bolt size={20} /> : <ResIcon r={f.k} size={26} />}</span>
+                <span>{f.k === 'charge' ? <ChunkyRes r="charge" size={24} /> : <ResIcon r={f.k} size={26} />}</span>
               </span>
             );
           })}

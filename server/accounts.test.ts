@@ -84,8 +84,19 @@ describe('accountApi', () => {
   const setup = (cards: Record<string, HeroCard | null>) => {
     const accounts = new AccountStore(null);
     const dropped: string[] = [];
-    const d: AccountDeps = { accounts, card: (id) => cards[id] ?? null, drop: (id) => dropped.push(id), progress: (id) => ({ of: id }) };
-    return { accounts, dropped, d };
+    const restored: string[] = [];
+    const d: AccountDeps = {
+      accounts,
+      card: (id) => cards[id] ?? null,
+      drop: (id) => {
+        dropped.push(id);
+        accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: { of: id }, cups: 0 });
+      },
+      progress: (id) => ({ of: id }),
+      archivedCard: (a) => ({ level: 1, stages: 0, cups: a.cups }),
+      restore: (id, a) => restored.push(`${a.account}→${id}`),
+    };
+    return { accounts, dropped, restored, d };
   };
   const hero = (level: number): HeroCard => ({ level, stages: level, cups: 0 });
 
@@ -118,11 +129,41 @@ describe('accountApi', () => {
     expect(accounts.logins('tg:2')).toEqual(['tg:2', 'tg:1']);
   });
 
+  it('сервер не видел героя телефона: верим телефону и не затираем его пустым', () => {
+    const { accounts, dropped, d } = setup({});
+    const { code } = accounts.code('ya:2');
+    const me = { id: 'tg:1', login: 'tg:1' };
+    // На сервере обе копии пустые, но в телефоне Telegram герой 5 уровня.
+    const r = accountApi(d, '/api/account/link', me, { code, local: { level: 5, stages: 0, days: 12 } });
+    expect(r.body).toMatchObject({ ok: true, id: 'tg:1' });
+    expect(dropped).toEqual(['ya:2']);
+    // Без описания телефона пустой здешний уступил бы пустому тому.
+    const c2 = accounts.code('ya:3').code;
+    expect(accountApi(d, '/api/account/link', { id: 'tg:4', login: 'tg:4' }, { code: c2 }).body).toMatchObject({ id: 'ya:3' });
+  });
+
   it('свой код и чужой неверный код не проходят', () => {
     const { accounts, d } = setup({});
     const { code } = accounts.code('tg:1');
     expect(accountApi(d, '/api/account/link', { id: 'tg:1', login: 'tg:1' }, { code }).status).toBe(400);
     expect(accountApi(d, '/api/account/link', { id: 'tg:1', login: 'tg:1' }, { code: 'ZZZZZZ' }).status).toBe(400);
+  });
+
+  it('отложенного при привязке героя можно вернуть', () => {
+    const { accounts, restored, d } = setup({ 'tg:1': hero(30), 'ya:2': hero(1) });
+    const { code } = accounts.code('ya:2');
+    const me = { id: 'tg:1', login: 'tg:1' };
+    // Игрок выбрал не того героя: tg:1 ушёл в архив, вход tg:1 теперь ведёт в ya:2.
+    accountApi(d, '/api/account/link', me, { code, keep: 'there' });
+    expect(accounts.resolve('tg:1')).toBe('ya:2');
+    const st = accountApi(d, '/api/account/status', { id: 'ya:2', login: 'tg:1' }, {}).body as { archived: { at: number }[] };
+    expect(st.archived).toHaveLength(1);
+    const r = accountApi(d, '/api/account/restore', { id: 'ya:2', login: 'tg:1' }, { at: st.archived[0].at });
+    expect(r.body).toMatchObject({ ok: true, id: 'ya:2' });
+    expect(restored).toEqual(['tg:1→ya:2']);
+    expect(accountApi(d, '/api/account/restore', { id: 'ya:2', login: 'tg:1' }, { at: st.archived[0].at }).status).toBe(400);
+    // Чужой архив не виден.
+    expect((accountApi(d, '/api/account/status', { id: 'tg:9', login: 'tg:9' }, {}).body as { archived: unknown[] }).archived).toEqual([]);
   });
 
   it('вход, с которого играешь, отвязать нельзя', () => {
@@ -131,5 +172,17 @@ describe('accountApi', () => {
     expect(accountApi(d, '/api/account/unlink', { id: 'tg:1', login: 'tg:1' }, { login: 'tg:1' }).status).toBe(400);
     const r = accountApi(d, '/api/account/unlink', { id: 'tg:1', login: 'tg:1' }, { login: 'tg:2' });
     expect(r.body).toMatchObject({ logins: [{ login: 'tg:1', platform: 'tg' }] });
+  });
+});
+
+describe('копия героя не затирается пустой', () => {
+  it('пустая копия без «Начать заново» не ложится поверх героя', async () => {
+    const { SaveStore } = await import('./saves');
+    const s = new SaveStore(null);
+    s.put('tg:1', { savedAt: 10, stars: { 1: 3 }, days: { '2026-10-25': 50 } });
+    s.put('tg:1', { savedAt: 20, stars: {}, days: {} });
+    expect(Object.keys((s.get('tg:1')!.progress as { stars: object }).stars)).toEqual(['1']);
+    s.put('tg:1', { savedAt: 30, stars: {}, days: {}, resetAt: 30 });
+    expect(s.get('tg:1')!.progress).toMatchObject({ resetAt: 30 });
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { LibName, useLib } from './kit';
+import { type PulseTarget, track, usePulses } from './pulse';
 
 // Тысячи одинаковых предметов (гексы, деревья, дома) рисуем инстансами: один вызов отрисовки на меш.
 
@@ -13,6 +14,10 @@ export interface Placed {
   s?: number;
   // Оттенок, умножается на текстуру: снег, песок, пепел. Цвет или множители 'mul:r,g,b' (можно больше 1).
   tint?: string;
+  // Постройка, к которой относится деталь, и её центр: чтобы качнуть её целиком (pulse.ts).
+  g?: number;
+  gx?: number;
+  gz?: number;
 }
 
 export function Instanced({ lib, items, shadows = true }: { lib: LibName; items: Placed[]; shadows?: boolean }) {
@@ -27,6 +32,7 @@ export function Instanced({ lib, items, shadows = true }: { lib: LibName; items:
       byName.set(it.name, list);
     }
     const out: THREE.InstancedMesh[] = [];
+    const targets: PulseTarget[] = [];
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -34,27 +40,31 @@ export function Instanced({ lib, items, shadows = true }: { lib: LibName; items:
     for (const [name, list] of byName) {
       for (const part of parts.get(name)!.meshes) {
         const mesh = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+        const target: PulseTarget = { mesh, groups: new Map() };
         list.forEach((it, i) => {
           q.setFromAxisAngle(up, it.ry ?? 0);
           const s = it.s ?? 1;
           m.compose(new THREE.Vector3(it.x, it.y ?? 0, it.z), q, new THREE.Vector3(s, s, s)).multiply(part.matrix);
           mesh.setMatrixAt(i, m);
           mesh.setColorAt(i, parseTint(it.tint, color));
+          track(target, it.g, it.gx ?? it.x, it.gz ?? it.z, i, m, color);
         });
+        if (target.groups.size) targets.push(target);
         mesh.castShadow = shadows;
         mesh.receiveShadow = true;
         mesh.computeBoundingSphere();
         out.push(mesh);
       }
     }
-    return out;
+    return { out, targets };
   }, [parts, items, shadows]);
 
-  useEffect(() => () => meshes.forEach((m) => m.dispose()), [meshes]);
+  useEffect(() => () => meshes.out.forEach((m) => m.dispose()), [meshes]);
+  usePulses(meshes.targets);
 
   return (
     <>
-      {meshes.map((m) => (
+      {meshes.out.map((m) => (
         <primitive key={m.uuid} object={m} />
       ))}
     </>

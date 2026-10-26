@@ -1,7 +1,7 @@
 // Аккаунт игрока: POST /api/account/status, /code, /link, /unlink (server/accounts.ts).
 // Привязка: на одной платформе берёшь код, на другой вводишь. Если герои есть с обеих сторон,
 // сервер сначала присылает обе карточки (conflict), и игрок выбирает, кого оставить: keep 'here' — этого, 'there' — того, чей код.
-import { type AccountStore, platformOf } from './accounts';
+import { type AccountStore, type Archived, platformOf } from './accounts';
 
 export interface HeroCard {
   level: number;
@@ -17,6 +17,17 @@ export interface AccountDeps {
   /** Отложить героя в архив и стереть его с сервера (клан, кубки, деревня, друзья). */
   drop: (account: string) => void;
   progress: (account: string) => unknown;
+  /** Карточка героя из архива. */
+  archivedCard: (a: Archived) => HeroCard;
+  /** Вернуть героя из архива: нынешний уходит в архив, аккаунт получает прогресс и кубки отложенного. */
+  restore: (account: string, a: Archived) => void;
+}
+
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), 1e6) : 0);
+function localHero(v: unknown): HeroCard | null {
+  const l = (v ?? {}) as { level?: unknown; stages?: unknown; days?: unknown };
+  if (!num(l.stages) && !num(l.days) && num(l.level) <= 1) return null;
+  return { level: Math.max(1, num(l.level)), stages: num(l.stages), cups: 0 };
 }
 
 type Reply = { status: number; body: unknown };
@@ -32,6 +43,7 @@ export function accountApi(d: AccountDeps, path: string, me: { id: string; login
         logins: d.accounts.logins(me.id).map((l) => ({ login: l, platform: platformOf(l) })),
         card: d.card(me.id),
         notify: d.accounts.notifyChoice(me.id),
+        archived: d.accounts.archivedFor(me.id).map((a) => ({ at: a.at, card: d.archivedCard(a) })),
       },
     };
   if (path === '/api/account/code') return { status: 200, body: d.accounts.code(me.id) };
@@ -40,7 +52,8 @@ export function accountApi(d: AccountDeps, path: string, me: { id: string; login
     const there = d.accounts.codeOwner(code);
     if (!there) return fail('Код не подошёл или истёк. Возьми новый в настройках на другой платформе.');
     if (there === me.id) return fail('Это код этого же аккаунта: он уже здесь.');
-    const here = d.card(me.id);
+    // Сервер мог не получить копию героя с этого телефона: тогда верим описанию телефона, чтобы не затереть героя пустым.
+    const here = d.card(me.id) ?? localHero(body.local);
     const other = d.card(there);
     let keep = body.keep === 'here' || body.keep === 'there' ? body.keep : null;
     if (!keep) {
@@ -52,6 +65,12 @@ export function accountApi(d: AccountDeps, path: string, me: { id: string; login
     d.drop(from);
     d.accounts.merge(from, to, code);
     return { status: 200, body: { ok: true, id: to, progress: d.progress(to) ?? null } };
+  }
+  if (path === '/api/account/restore') {
+    const a = d.accounts.unarchive(me.id, Number(body.at));
+    if (!a) return fail('Этого героя в архиве уже нет.');
+    d.restore(me.id, a);
+    return { status: 200, body: { ok: true, id: me.id, progress: d.progress(me.id) ?? null } };
   }
   if (path === '/api/account/notify') {
     const p = body.platform === 'tg' || body.platform === 'max' ? body.platform : null;

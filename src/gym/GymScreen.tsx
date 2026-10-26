@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Cross, Dumbbell, Medal, Pencil, Plus, Search, Timer, Trash } from '../icons';
+import { useBusy } from '../updates/busy';
 import { sfx } from '../audio';
 import { reportGym } from '../family';
 import { Remark } from '../game/Dialog';
 import type { Line } from '../game/levels';
 import { NPCS } from '../game/npcs';
 import { dayKey, type Progress } from '../game/progress';
-import { hapticRep, tg } from '../telegram';
+import { hapticRep, platform } from '../telegram';
 import { customId, GYM_EXERCISES, gymExercise, type Muscle, MUSCLES, searchGym } from './catalog';
 import {
   bestOf,
@@ -111,7 +112,7 @@ export function GymScreen({ progress, update, onClose }: Props) {
             )}
           />
         )}
-        {view.fresh && tg?.initData && <div className="muted gym-note">Отметка «тренировка сделана» ушла в NikitenokFamily, раздел «Спорт».</div>}
+        {view.fresh && platform === 'tg' && <div className="muted gym-note">Отметка «тренировка сделана» ушла в NikitenokFamily, раздел «Спорт».</div>}
         <button className="primary" onClick={() => setView({ kind: 'home' })}>
           Готово
         </button>
@@ -361,6 +362,8 @@ function NumInput({ value, onChange, placeholder, step = 1 }: { value?: number; 
 const REST_DEFAULT = 90;
 
 function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: Progress; update: Props['update']; onFinish: () => void }) {
+  // Тренировка в зале идёт (таймер отдыха): обновление игры подождёт.
+  useBusy(true);
   const g = gymOf(progress);
   const [now, setNow] = useState(Date.now());
   const [picker, setPicker] = useState(false);

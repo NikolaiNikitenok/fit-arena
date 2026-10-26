@@ -1,7 +1,10 @@
 // Ноты фоновой музыки: темы миров как чистые функции «шаг → ноты». Звучание — в audio.ts.
 
-export type Theme = 'calm' | 'fantasy' | 'space' | 'zombie' | 'castle' | 'arena' | 'tavern';
-export type Voice = 'pluck' | 'bell' | 'pad' | 'arp' | 'bass' | 'pulse' | 'kick' | 'snare' | 'hat' | 'tom';
+export type Theme = 'calm' | 'fantasy' | 'space' | 'zombie' | 'castle' | 'arena' | 'tavern' | 'village' | 'battle';
+// Синтезатор: pluck … tom. Живые инструменты (записи нот, src/samples.ts): harp … trumpet.
+export type Voice =
+  | 'pluck' | 'bell' | 'pad' | 'arp' | 'bass' | 'pulse' | 'kick' | 'snare' | 'hat' | 'tom'
+  | 'harp' | 'pizz' | 'strings' | 'horn' | 'flute' | 'timp' | 'guitar' | 'glock' | 'accordion' | 'trumpet';
 
 export interface NoteEvent {
   voice: Voice;
@@ -13,6 +16,7 @@ export interface NoteEvent {
 }
 
 export const SCALES = {
+  major: [0, 2, 4, 5, 7, 9, 11],
   majorPenta: [0, 2, 4, 7, 9],
   dorian: [0, 2, 3, 5, 7, 9, 10],
   minor: [0, 2, 3, 5, 7, 8, 10],
@@ -40,37 +44,94 @@ interface ThemeDef {
   chords: number[];
   // Множитель общей громкости музыки.
   volume: number;
-  // Ноты шага s (0..15) такта bar; at(d) — нота ступени d от корня аккорда.
-  pattern: (s: number, bar: number, at: (d: number) => number) => NoteEvent[];
+  // Ноты шага s (0..15) такта bar; at(d) — нота ступени d от корня аккорда, key(d) — от тоники.
+  pattern: (s: number, bar: number, at: (d: number) => number, key: (d: number) => number) => NoteEvent[];
 }
 
 const ev = (voice: Voice, midi: number, len: number, vel: number): NoteEvent => ({ voice, midi, len, vel });
 const chord = (voice: Voice, at: (d: number) => number, degrees: number[], len: number, vel: number) => degrees.map((d) => ev(voice, at(d), len, vel));
 
+// Мелодия восьмыми: в такте 8 клеток, число — ступень лада от тоники, null — тянуть
+// предыдущую ноту, R — пауза.
+const R = 'r';
+type Cell = number | null | typeof R;
+function tune(bars: Cell[][], voice: Voice, vel: number, s: number, bar: number, key: (d: number) => number, shift = 0): NoteEvent[] {
+  if (s % 2) return [];
+  const cells = bars[bar % bars.length];
+  const v = cells[s / 2];
+  if (v === null || v === R) return [];
+  let len = 2;
+  for (let i = s / 2 + 1; i < 8 && cells[i] === null; i++) len += 2;
+  return [ev(voice, key(v) + shift, len, s === 0 ? Math.min(1, vel * 1.1) : vel)];
+}
+
+// Деревня: светлая походная мелодия; первые 8 тактов — флейта, следующие 8 — валторна.
+const VILLAGE_TUNE: Cell[][] = [
+  [2, null, 2, 3, 4, null, 2, null],
+  [1, null, 1, 2, 3, null, 1, null],
+  [0, null, 2, 4, 5, null, 4, null],
+  [3, null, 5, null, 7, null, 5, null],
+  [4, null, 4, 5, 4, 3, 2, null],
+  [3, null, 5, null, 3, null, 0, null],
+  [1, 2, 3, 4, 6, null, 4, null],
+  [7, null, null, null, 4, null, R, R],
+];
+// Бой: героическая тема медных.
+const BATTLE_TUNE: Cell[][] = [
+  [0, null, null, 2, 4, null, null, null],
+  [5, null, 4, null, 2, null, null, null],
+  [6, null, null, 4, 1, null, null, null],
+  [0, null, null, null, R, R, 4, 6],
+  [7, null, 7, 8, 9, null, 7, null],
+  [8, null, 7, null, 5, null, 3, null],
+  [4, null, 5, null, 6, null, 8, null],
+  [7, null, null, null, null, null, R, R],
+];
+// Таверна: плясовая на аккордеоне.
+const TAVERN_TUNE: Cell[][] = [
+  [4, 2, 4, 7, 4, 2, 0, 2],
+  [1, 3, 4, 6, 4, 3, 1, null],
+  [2, 4, 7, null, 9, 7, 4, null],
+  [6, null, 4, 3, 1, null, R, R],
+  [3, 5, 7, 5, 3, 5, 7, 8],
+  [9, 7, 4, 2, 4, null, 2, null],
+  [1, null, 3, null, 4, null, 6, null],
+  [7, null, 4, null, 0, null, R, R],
+];
+// Королевство: флейта над арфой.
+const FANTASY_TUNE: Cell[][] = [
+  [R, R, R, R, 4, null, 5, null],
+  [7, null, null, 5, 4, null, null, null],
+  [R, R, R, R, 2, null, 4, null],
+  [5, null, 4, null, 2, null, null, null],
+];
+
 export const THEMES: Record<Theme, ThemeDef> = {
-  // Дом героя и клан: медленные колокольчики над мягким пэдом.
+  // Дом героя и клан: арфа перебирает аккорд, струнные тянут, изредка — колокольчики.
   calm: {
-    bpm: 72,
+    bpm: 76,
     scale: SCALES.majorPenta,
     root: 60,
     chords: [0, -2, 3, 1],
-    volume: 0.9,
+    volume: 0.95,
     pattern: (s, bar, at) => [
-      ...(s === 0 ? [...chord('pad', at, [-5, -3, -1], 16, 0.5), ev('pluck', at(-5), 8, 0.3)] : []),
-      ...(s % 6 === 0 && s < 16 ? [ev('bell', at(5 + ((bar * 3 + s / 6) % 4)), 6, 0.3)] : []),
+      ...(s === 0 ? chord('strings', at, [-5, -3, -1], 16, 0.32) : []),
+      ...(s % 2 === 0 ? [ev('harp', at([0, 2, 4, 5, 7, 5, 4, 2][s / 2] - 5), 4, s === 0 ? 0.42 : 0.3)] : []),
+      ...(bar % 2 === 1 && s === 8 ? [ev('glock', at(10), 6, 0.16)] : []),
     ],
   },
-  // Королевство: лютня перебирает пентатонику восьмыми.
+  // Королевство: арфа восьмыми, струнные и флейта.
   fantasy: {
     bpm: 96,
     scale: SCALES.majorPenta,
     root: 62,
     chords: [0, -1, -2, 1],
     volume: 1,
-    pattern: (s, bar, at) => [
-      ...(s === 0 ? chord('pad', at, [-5, -3, -1], 16, 0.4) : []),
-      ...(s % 2 === 0 ? [ev('pluck', at([0, 2, 4, 5, 7, 5, 4, 2][s / 2]), 3, s === 0 ? 0.5 : 0.38)] : []),
-      ...(bar % 2 === 1 && (s === 4 || s === 12) ? [ev('bell', at(s === 4 ? 7 : 6), 6, 0.22)] : []),
+    pattern: (s, bar, at, key) => [
+      ...(s === 0 ? chord('strings', at, [-5, -3, -1], 16, 0.3) : []),
+      ...(s % 2 === 0 ? [ev('harp', at([0, 2, 4, 5, 7, 5, 4, 2][s / 2] - 5), 3, s === 0 ? 0.42 : 0.32)] : []),
+      ...(s === 0 || s === 8 ? [ev('pizz', at(-10), 4, 0.4)] : []),
+      ...tune(FANTASY_TUNE, 'flute', 0.4, s, bar, key, 12),
     ],
   },
   // Космос: синтезаторное арпеджио шестнадцатыми и воздушный пэд.
@@ -86,7 +147,7 @@ export const THEMES: Record<Theme, ThemeDef> = {
       ...(s === 0 || s === 6 || s === 10 ? [ev('bass', at(-7), 3, 0.42)] : []),
     ],
   },
-  // Зомби-город: низкий пульс, редкие тревожные звоны.
+  // Зомби-город: низкий пульс, тревожные струнные, редкие звоны.
   zombie: {
     bpm: 80,
     scale: SCALES.harmonicMinor,
@@ -94,57 +155,92 @@ export const THEMES: Record<Theme, ThemeDef> = {
     chords: [0, 0, 5, 4],
     volume: 0.95,
     pattern: (s, bar, at) => [
-      ...(s === 0 ? chord('pad', at, [0, 2], 16, 0.3) : []),
+      ...(s === 0 ? chord('strings', at, [0, 2], 16, 0.28) : []),
       ...(s % 2 === 0 ? [ev('pulse', at(-7), 1, s % 8 === 0 ? 0.5 : 0.32)] : []),
-      ...(s === 0 || s === 8 ? [ev('kick', 36, 2, 0.4)] : []),
+      ...(s === 0 || s === 8 ? [ev('timp', at(-7), 4, 0.45)] : []),
       ...(s === 4 && bar % 2 === 0 ? [ev('bell', at(9), 8, 0.2)] : []),
       ...(s === 12 && bar % 4 === 3 ? [ev('bell', at(8), 4, 0.2)] : []),
     ],
   },
-  // Замок и боссы: тревожные барабаны и остинато баса.
+  // Замок и боссы: литавры, низкие струнные остинато и валторны.
   castle: {
     bpm: 112,
     scale: SCALES.harmonicMinor,
     root: 50,
     chords: [0, 0, 5, 4],
-    volume: 0.9,
+    volume: 0.95,
     pattern: (s, bar, at) => [
-      ...(s === 0 ? chord('pad', at, [0, 2, 4], 16, 0.32) : []),
-      ...(s % 2 === 0 ? [ev('bass', at(-7 + [0, 0, 0, 1, 0, 0, 2, 1][s / 2]), 1, 0.4)] : []),
-      ...([0, 6, 8, 14].includes(s) ? [ev('kick', 36, 2, 0.5)] : []),
-      ...(s === 4 || s === 12 ? [ev('snare', 38, 2, 0.3)] : []),
-      ...(s % 2 === 0 ? [ev('hat', 42, 1, 0.12)] : []),
-      ...(bar % 2 === 1 && s >= 13 ? [ev('tom', 50 - (s - 13) * 3, 1, 0.38)] : []),
+      ...(s === 0 ? chord('strings', at, [0, 2, 4], 16, 0.26) : []),
+      ...(s % 2 === 0 ? [ev('pizz', at(-7 + [0, 0, 0, 1, 0, 0, 2, 1][s / 2]), 2, 0.45)] : []),
+      ...([0, 6, 8, 14].includes(s) ? [ev('timp', at(-7), 3, 0.55)] : []),
+      ...(s === 4 || s === 12 ? [ev('snare', 38, 2, 0.26)] : []),
+      ...(bar % 2 === 1 && s === 0 ? chord('horn', at, [0, 2], 8, 0.36) : []),
+      ...(bar % 2 === 1 && s >= 13 ? [ev('timp', at(-7) + (s - 13) * 2, 1, 0.4)] : []),
     ],
   },
-  // Таверна в деревне: весёлая плясовая — бас «умпа», лютня перебирает мелодию, бубен.
+  // Таверна: аккордеон ведёт плясовую, гитара бьёт аккорды, щипковый бас «умпа», бубен.
   tavern: {
     bpm: 132,
-    scale: SCALES.majorPenta,
+    scale: SCALES.major,
     root: 62,
-    chords: [0, 3, 0, 4],
-    volume: 0.75,
-    pattern: (s, bar, at) => [
-      ...(s % 4 === 0 ? [ev('bass', at(-7), 2, 0.4)] : []),
-      ...(s % 4 === 2 ? chord('pluck', at, [-3, -1], 1, 0.18) : []),
-      ...(s % 2 === 0 ? [ev('pluck', at([4, 5, 7, 5, 4, 2, 4, 0][(s / 2 + bar * 3) % 8] + (bar % 4 === 3 && s >= 8 ? 2 : 0)), 2, s % 8 === 0 ? 0.42 : 0.3)] : []),
-      ...(s % 4 === 2 ? [ev('hat', 42, 1, 0.12)] : []),
-      ...(bar % 2 === 1 && s === 14 ? [ev('bell', at(9), 2, 0.18)] : []),
+    chords: [0, 4, 0, 4, 3, 0, 4, 0],
+    volume: 0.85,
+    pattern: (s, bar, at, key) => [
+      ...(s % 8 === 0 ? [ev('pizz', at(-7), 2, 0.55)] : []),
+      ...(s % 8 === 4 ? [ev('pizz', at(-3), 2, 0.45)] : []),
+      ...(s % 4 === 2 ? chord('guitar', at, [-7, -5, -3], 2, 0.22) : []),
+      ...tune(TAVERN_TUNE, 'accordion', 0.42, s, bar, key),
+      ...(s % 4 === 2 ? [ev('hat', 42, 1, 0.14)] : []),
     ],
   },
-  // Дуэль: ровная бочка, хлопки и бас восьмыми.
+  // Дуэль: ровная бочка, хлопки, бас и короткие удары медных.
   arena: {
     bpm: 124,
     scale: SCALES.minor,
     root: 45,
     chords: [0, 0, 5, 6],
-    volume: 0.85,
+    volume: 0.9,
     pattern: (s, bar, at) => [
       ...(s % 4 === 0 ? [ev('kick', 36, 2, 0.55)] : []),
       ...(s === 4 || s === 12 ? [ev('snare', 38, 2, 0.32)] : []),
       ...(s % 4 === 2 ? [ev('hat', 42, 1, 0.2)] : []),
-      ...(s % 2 === 0 ? [ev('bass', at(s % 8 === 6 ? 7 : 0), 1, 0.36)] : []),
-      ...(bar % 4 === 3 && s >= 13 ? [ev('tom', 52 - (s - 13) * 4, 1, 0.4)] : []),
+      ...(s % 2 === 0 ? [ev('pizz', at(s % 8 === 6 ? 7 : 0), 2, 0.42)] : []),
+      ...((s === 0 || s === 3) && bar % 2 === 0 ? chord('trumpet', at, [7, 9], 2, 0.32) : []),
+      ...(bar % 4 === 3 && s >= 13 ? [ev('timp', 40 + (s - 13) * 3, 1, 0.45)] : []),
+    ],
+  },
+  // Своя деревня: светлый марш. Струнные держат аккорд, щипковый бас шагает, арфа
+  // перебирает, мелодию ведёт флейта, потом валторна; колокольчики в начале фразы.
+  village: {
+    bpm: 100,
+    scale: SCALES.major,
+    root: 60,
+    chords: [0, 4, 5, 3, 0, 3, 4, 0, 0, 4, 5, 3, 0, 3, 4, 0],
+    volume: 1,
+    pattern: (s, bar, at, key) => [
+      ...(s === 0 ? chord('strings', at, [-7, -5, -3], 16, 0.24) : []),
+      ...(s === 0 || s === 8 ? [ev('pizz', at(s === 0 ? -14 : -10), 4, 0.5)] : []),
+      ...(s % 4 === 2 ? [ev('harp', at([-7, -5, -3, -5][s / 4 - 0.5]), 3, 0.24)] : []),
+      ...tune(VILLAGE_TUNE, bar % 16 < 8 ? 'flute' : 'horn', bar % 16 < 8 ? 0.4 : 0.42, s, bar, key, bar % 16 < 8 ? 12 : 0),
+      ...(bar % 8 === 0 && s === 0 ? [ev('glock', key(14), 6, 0.2), ev('glock', key(16), 6, 0.14)] : []),
+      ...(s === 12 && bar % 4 === 3 ? [ev('snare', 38, 1, 0.12), ev('snare', 38, 1, 0.1)] : []),
+    ],
+  },
+  // Набег: литавры и малый барабан, струнные режут остинато, медные трубят тему.
+  battle: {
+    bpm: 126,
+    scale: SCALES.minor,
+    root: 57,
+    chords: [0, 5, 6, 0, 0, 3, 4, 0],
+    volume: 1,
+    pattern: (s, bar, at, key) => [
+      ...(s === 0 || s === 8 ? [ev('timp', at(-7), 3, 0.6)] : []),
+      ...(s === 4 || s === 12 ? [ev('snare', 38, 2, 0.34)] : []),
+      ...(s % 2 === 1 && s > 12 ? [ev('snare', 38, 1, 0.18)] : []),
+      ...(s % 2 === 0 ? [ev('pizz', at(s % 4 === 0 ? -7 : 0), 2, 0.42)] : []),
+      ...(s === 0 ? chord('strings', at, [-7, -5, -3], 16, 0.22) : []),
+      ...tune(BATTLE_TUNE, bar % 8 < 4 ? 'horn' : 'trumpet', 0.46, s, bar, key),
+      ...(bar % 8 === 7 && s >= 12 ? [ev('timp', at(-7) + (s - 12), 1, 0.5)] : []),
     ],
   },
 };
@@ -154,7 +250,7 @@ export function themeStep(theme: Theme, step: number): NoteEvent[] {
   const def = THEMES[theme];
   const bar = Math.floor(step / STEPS_PER_BAR);
   const root = def.chords[bar % def.chords.length];
-  return def.pattern(step % STEPS_PER_BAR, bar, (d) => scaleNote(def.scale, def.root, root + d));
+  return def.pattern(step % STEPS_PER_BAR, bar, (d) => scaleNote(def.scale, def.root, root + d), (d) => scaleNote(def.scale, def.root, d));
 }
 
 /** Тема миссии: финал и боссы — барабаны замка, иначе музыка своего мира. */

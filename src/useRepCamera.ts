@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker, loadVision } from './pose';
+import { useBusy } from './updates/busy';
 import { frameRotations, enableOrientation } from './orientation';
 import { Counter, Exercise, PlankTimer, RepCounter } from './repCounter';
 import { getSettings } from './settings';
@@ -41,6 +42,8 @@ export function useRepCamera(preload = true) {
   const lastRepsReset = useRef(false);
   const [hint, setHint] = useState<string | null>(null);
   const [active, setActive] = useState(false);
+  // Камера включена — идёт подход, обновление игры подождёт.
+  useBusy(active);
   const [angle, setAngle] = useState<number | null>(null);
   const [limits, setLimits] = useState<{ down: number; up: number } | null>(null);
   // Калибровка перед подходом: пока она идёт, повторы не считаются и onFrame не вызывается.

@@ -72,9 +72,24 @@
 .b-lumbermill { color: #c98a4b; } .b-quarry { color: #b9c0cc; } .b-goldmine { color: #ffd27a; } .b-storage { color: #d8bf8a; }
 .b-barracks { color: #6aa6ff; } .b-forge { color: #ff8a5c; } .b-tavern { color: #f48fb1; } .b-market { color: #81c784; }
 .b-tower { color: #9575cd; } .b-catapult { color: #ff6b81; } .b-wall { color: #98a0b3; }
-.vil-pvp { background: linear-gradient(135deg, rgba(255,180,107,.18), rgba(255,122,89,.1)); border-color: rgba(255,138,92,.35); }
-.vil-pvp > .icon { color: var(--accent); }
-.vil-camp-num { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #3a2350; color: #e3c6ff; font-weight: 900; }
+.vil-camp:disabled { opacity: .55; }
+/* «Найти соперника» — главная кнопка листа набега: крупная, в акцентном градиенте. */
+.vil-pvp { flex: none; width: 100%; min-height: 86px; padding: 14px 16px; gap: 14px; border: 0; background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 10px 26px rgba(255, 122, 89, .35); transition: transform .12s ease; }
+.vil-pvp:active { transform: scale(.98); }
+.vil-pvp:disabled { opacity: .6; filter: saturate(.5); box-shadow: none; }
+.vil-pvp-icon { flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.28); box-shadow: inset 0 -3px 0 rgba(0,0,0,.12); }
+.vil-pvp-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vil-pvp-text b { font-size: 20px; line-height: 1.15; }
+.vil-pvp-text > span { font-size: 13px; font-weight: 700; opacity: .8; }
+.vil-pvp-text .icon { vertical-align: -2px; }
+/* Лагеря Князя: тёмно-фиолетовые карточки с номером, добыча крупно. */
+.vil-camp { flex: none; width: 100%; min-height: 74px; background: linear-gradient(135deg, #3b2556, #2a2140); border-color: rgba(190,140,255,.28); }
+.vil-camp.locked { background: var(--surface-2); border-color: var(--line); }
+.vil-camp b { font-size: 16px; }
+.vil-camp-num { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(160deg, #ffd27a, #f0a63a); color: #3a2350; font-size: 19px; font-weight: 900; box-shadow: inset 0 -3px 0 rgba(0,0,0,.15); }
+.vil-camp.locked .vil-camp-num { background: #3a3f52; color: var(--hint); }
+.vil-camp-loot { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.25); align-self: flex-start; font-size: 14px; }
+.vil-camp-loot > span:first-child { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: var(--hint); }
 .vil-stars { display: inline-flex; gap: 2px; color: rgba(255,255,255,.22); }
 .vil-stars .on { color: var(--gold); }
 .vil-stars .on.bad { color: var(--rose); }
@@ -93,15 +108,21 @@
 .vil-battle-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .vil-battle-head > div:first-child { flex: 1; min-width: 0; }
 .vil-battle-head b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vil-pct { font-size: 22px; font-weight: 900; display: flex; flex-direction: column; align-items: flex-end; line-height: 1; font-variant-numeric: tabular-nums; }
-.vil-pct small { font-size: 12px; color: var(--hint); margin-top: 3px; }
-.vil-battle-loot { align-self: flex-start; display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; background: var(--glass); font-size: 13px; }
-.vil-battle-loot .muted { font-size: 12.5px; }
+.vil-pct { font-size: 24px; font-weight: 900; text-shadow: 1.6px 0px 0 #1c1208, -1.6px 0px 0 #1c1208, 0px 1.6px 0 #1c1208, 0px -1.6px 0 #1c1208, 1.12px 1.12px 0 #1c1208, -1.12px 1.12px 0 #1c1208, 1.12px -1.12px 0 #1c1208, -1.12px -1.12px 0 #1c1208, 0 3.6px 0 #1c1208; display: flex; flex-direction: column; align-items: flex-end; line-height: 1; font-variant-numeric: tabular-nums; }
+.vil-pct small { font-size: 12px; color: var(--hint); margin-top: 3px; text-shadow: none; }
+.vil-loot-panel { align-self: stretch; margin-right: 56px; display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.vil-loot-title { flex: none; max-width: 64px; font-size: 11px; font-weight: 900; line-height: 1.15; text-transform: uppercase; letter-spacing: .4px; color: var(--gold); }
+.vil-loot-cell { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.vil-loot-num { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.vil-loot-num b { font-size: 18px; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 1.4px 0px 0 #1c1208, -1.4px 0px 0 #1c1208, 0px 1.4px 0 #1c1208, 0px -1.4px 0 #1c1208, 0.98px 0.98px 0 #1c1208, -0.98px 0.98px 0 #1c1208, 0.98px -0.98px 0 #1c1208, -0.98px -0.98px 0 #1c1208, 0 3.4px 0 #1c1208; }
+.vil-loot-num small { font-size: 11px; font-weight: 800; color: var(--c); line-height: 1; }
+.vil-loot-bar { display: block; height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.vil-loot-bar > i { display: block; height: 100%; background: var(--c); border-radius: 3px; transition: width .3s ease; }
 .vil-hint { padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); color: #eef1f6; font-size: 13px; text-align: center; backdrop-filter: blur(6px); }
 .vil-troops { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 env(safe-area-inset-bottom); scrollbar-width: none; }
 .vil-troop { position: relative; flex: none; width: 70px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 6px; border-radius: var(--r-md); border: 2px solid rgba(255,255,255,.08); background: rgba(16,18,28,.9); color: var(--text); font-size: 11.5px; font-weight: 800; transition: transform .12s; }
 .vil-troop-face { width: 52px; height: 52px; display: grid; place-items: center; border-radius: var(--r-sm); background: radial-gradient(circle at 50% 70%, color-mix(in srgb, currentColor 38%, transparent), rgba(255,255,255,.03) 72%); }
-.vil-troop-n { position: absolute; top: 3px; right: 4px; min-width: 22px; padding: 1px 5px; border-radius: 9px; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; font-weight: 900; line-height: 16px; }
+.vil-troop-n { position: absolute; top: 3px; right: 4px; min-width: 22px; padding: 1px 5px; border-radius: 9px; background: none; color: #fff; font-size: 15px; font-weight: 900; line-height: 16px; text-shadow: 1.4px 0px 0 #1c1208, -1.4px 0px 0 #1c1208, 0px 1.4px 0 #1c1208, 0px -1.4px 0 #1c1208, 0.98px 0.98px 0 #1c1208, -0.98px 0.98px 0 #1c1208, 0.98px -0.98px 0 #1c1208, -0.98px -0.98px 0 #1c1208, 0 3.4px 0 #1c1208; }
 .vil-troop-lv { position: absolute; top: 3px; left: 4px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--mint); color: #10241a; font-size: 11px; font-weight: 900; }
 .vil-troop-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hint); }
 .vil-troop.active { border-color: var(--accent); background: rgba(40,26,22,.95); transform: translateY(-4px); box-shadow: 0 6px 18px rgba(255,122,89,.28); }
@@ -125,7 +146,12 @@
 .vil-res .pill.vil-shield { color: var(--mint); }
 .vil-battle-note { font-size: 12px; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vil-battle-note .icon, .vil-shop-info .icon, .vil-top-cups .icon { vertical-align: -2px; }
-.vil-skip { align-self: center; background: var(--glass); color: var(--text); border: 1px solid var(--glass-line); }
+.vil-next-foe { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 10px 18px; border: 0; border-radius: var(--r-md); background: linear-gradient(135deg, #5b8cff, #8a5bff); color: #fff; text-align: left; box-shadow: 0 10px 24px rgba(91, 108, 255, .35); transition: transform .12s ease; }
+.vil-next-foe > span { display: flex; flex-direction: column; gap: 2px; }
+.vil-next-foe b { font-size: 18px; }
+.vil-next-foe small { font-size: 12px; font-weight: 700; opacity: .85; }
+.vil-next-foe:active { transform: scale(.98); }
+.vil-next-foe:disabled { opacity: .7; }
 .vil-result-note { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
 .vil-result-note .ok, .vil-task .ok { color: var(--mint); }
 .vil-result-note .bad, .vil-task .bad { color: var(--rose); }
@@ -210,3 +236,62 @@
 .vil-cats { overflow-x: auto; scrollbar-width: none; flex: none; }
 .vil-cats::-webkit-scrollbar { display: none; }
 .vil-cats button { flex: 0 0 auto; padding: 9px 12px; }
+
+/* Советы строителя. */
+.vil-advice-say { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); font-size: 13.5px; }
+.vil-advice.ok { box-shadow: inset 0 0 0 2px rgba(110, 231, 120, .55); }
+.vil-advice-go { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; font-weight: 900; color: #fff; }
+.vil-advice.ok .vil-advice-go { background: linear-gradient(#7fe25f, #2fa83a); }
+
+/* Связь с сервером перед набегом. */
+.vil-link { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); font-size: 13px; color: var(--hint); }
+.vil-link > span:nth-child(2) { flex: 1; }
+.vil-link-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #9aa3b5; animation: vil-link-pulse 1.2s ease-in-out infinite; }
+.vil-link.ok { color: var(--text); }
+.vil-link.ok .vil-link-dot { background: #5fd36a; box-shadow: 0 0 8px #5fd36a; animation: none; }
+.vil-link.bad { color: #ffb3b3; }
+.vil-link.bad .vil-link-dot { background: #ff6b6b; box-shadow: 0 0 8px #ff6b6b; animation: none; }
+@keyframes vil-link-pulse { 50% { opacity: .35; } }
+
+/* Цифры с тёмной обводкой — читаются поверх любой картинки. */
+.num-outline { font-weight: 900; color: #fff; text-shadow: 1.6px 0px 0 #1c1208, -1.6px 0px 0 #1c1208, 0px 1.6px 0 #1c1208, 0px -1.6px 0 #1c1208, 1.12px 1.12px 0 #1c1208, -1.12px 1.12px 0 #1c1208, 1.12px -1.12px 0 #1c1208, -1.12px -1.12px 0 #1c1208, 0 3.6px 0 #1c1208; letter-spacing: .02em; }
+
+/* «Ратуша пала!» во время замедления. */
+.vil-thfell { position: absolute; left: 0; right: 0; top: 34%; z-index: 6; text-align: center; pointer-events: none; font-size: 40px; font-weight: 900; color: #ffe08a; text-shadow: 3px 0px 0 #2b1606, -3px 0px 0 #2b1606, 0px 3px 0 #2b1606, 0px -3px 0 #2b1606, 2.1px 2.1px 0 #2b1606, -2.1px 2.1px 0 #2b1606, 2.1px -2.1px 0 #2b1606, -2.1px -2.1px 0 #2b1606, 0 5px 0 #2b1606, 0 0 28px rgba(255,170,60,.7); animation: vil-thfell 1.7s ease-out both; }
+@keyframes vil-thfell { 0% { transform: scale(2.4); opacity: 0; } 14% { transform: scale(.92); opacity: 1; } 22% { transform: scale(1.05); } 30%, 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1) translateY(-16px); opacity: 0; } }
+
+/* Итог набега. */
+.vr { overflow: hidden; }
+.vr-rays { position: absolute; left: 50%; top: 30%; width: 760px; height: 760px; margin: -380px 0 0 -380px; pointer-events: none; opacity: .5; background: repeating-conic-gradient(from 0deg, rgba(255,214,110,.22) 0 9deg, transparent 9deg 22.5deg); mask: radial-gradient(circle, #000 0, transparent 62%); -webkit-mask: radial-gradient(circle, #000 0, transparent 62%); animation: vr-spin 18s linear infinite, vr-fade .8s ease-out both; }
+.vr.bad .vr-rays { display: none; }
+@keyframes vr-spin { to { transform: rotate(360deg); } }
+@keyframes vr-fade { from { opacity: 0; } }
+.vr > * { position: relative; }
+.vr-title { font-size: 34px; font-weight: 900; text-shadow: 2.6px 0px 0 #1c1208, -2.6px 0px 0 #1c1208, 0px 2.6px 0 #1c1208, 0px -2.6px 0 #1c1208, 1.82px 1.82px 0 #1c1208, -1.82px 1.82px 0 #1c1208, 1.82px -1.82px 0 #1c1208, -1.82px -1.82px 0 #1c1208, 0 4.6px 0 #1c1208; color: #fff; animation: vr-pop .45s cubic-bezier(.2,1.6,.4,1) both; }
+.vr.good .vr-title { color: #ffe08a; }
+@keyframes vr-pop { from { transform: scale(.4); opacity: 0; } }
+.vr-stars { display: flex; align-items: flex-end; gap: 4px; margin: 6px 0 2px; }
+.vr-star { display: inline-flex; color: rgba(255,255,255,.16); filter: drop-shadow(0 3px 0 rgba(0,0,0,.45)); }
+.vr-star.s1 { transform: translateY(-14px); }
+.vr-star svg { stroke: #1c1208; stroke-width: 1.6px; paint-order: stroke; }
+.vr-star.on { color: #ffd24a; animation: vr-star .5s cubic-bezier(.2,1.5,.4,1) both; filter: drop-shadow(0 3px 0 #6a3f00) drop-shadow(0 0 14px rgba(255,200,80,.85)); }
+.vr-star.s1.on { animation-name: vr-star1; }
+@keyframes vr-star { 0% { transform: scale(2.6) rotate(-40deg); opacity: 0; } 60% { transform: scale(.9) rotate(6deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+@keyframes vr-star1 { 0% { transform: translateY(-14px) scale(2.6) rotate(-40deg); opacity: 0; } 60% { transform: translateY(-14px) scale(.9) rotate(6deg); opacity: 1; } 100% { transform: translateY(-14px) scale(1); } }
+.vr-pct { font-size: 15px; font-weight: 800; color: rgba(255,255,255,.85); }
+.vr-pct b { font-size: 22px; margin: 0 2px; }
+.vr-loot { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 10px 16px; border-radius: 18px; background: rgba(15,18,30,.6); border: 2px solid rgba(255,214,110,.35); box-shadow: 0 4px 0 rgba(0,0,0,.35); opacity: 0; transform: translateY(16px) scale(.9); transition: opacity .3s, transform .4s cubic-bezier(.2,1.5,.4,1); }
+.vr-loot.in { opacity: 1; transform: none; }
+.vr-loot-list { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.vr-loot-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.6); }
+.vr-loot-cell { display: flex; align-items: center; gap: 8px; font-size: 22px; }
+.vr-chest { flex: none; overflow: visible; }
+.vr-loot.in .vr-chest { animation: vr-chest .6s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes vr-chest { 0% { transform: translateY(-40px) scale(.6); } 55% { transform: translateY(4px) scale(1.08, .9); } 100% { transform: none; } }
+.vr-chest-lid { transform-origin: 10px 42px; transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+.vr-chest.open .vr-chest-lid { transform: rotate(-18deg) translate(-2px, -6px); }
+.vr-chest-light { opacity: 0; transition: opacity .3s; }
+.vr-chest.open .vr-chest-light { opacity: 1; animation: vr-glow 1.2s ease-in-out infinite alternate; }
+@keyframes vr-glow { to { opacity: .55; } }
+.vr-note, .vr-btn { opacity: 0; transform: translateY(10px); transition: opacity .3s, transform .3s; }
+.vr-note.in, .vr-btn.in { opacity: 1; transform: none; }

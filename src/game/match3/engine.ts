@@ -378,9 +378,13 @@ export function trySwap(input: Board, a: Pos, c: Pos): SwapResult | null {
     if (matchThrough(b, a.x, a.y) < 3 && matchThrough(b, c.x, c.y) < 3) return null;
   }
 
+  return cascade(b, seed, [ic, ia]);
+}
+
+/** Волны: первая — от хода (или салюта), дальше — каскады, пока есть совпадения. Меняет доску. */
+function cascade(b: Board, seed: Seed, prefer: number[]): SwapResult {
   const steps: Step[] = [];
   const counts = noCounts();
-  let prefer = [ic, ia];
   let first: Seed | null = seed;
   for (let combo = 1; combo < 50; combo++) {
     const groups = groupRuns(findRuns(b));
@@ -397,6 +401,34 @@ export function trySwap(input: Board, a: Pos, c: Pos): SwapResult | null {
     reshuffled = true;
   }
   return { board: b, steps, counts, combo: steps.length, reshuffled };
+}
+
+export interface Finale {
+  // Какие самоцветы стали лучами и доска с ними — до взрыва.
+  marked: (Pos & { gem: Gem })[];
+  start: Board;
+  result: SwapResult;
+}
+
+/**
+ * Финальный салют после победы: n случайных обычных самоцветов становятся лучами, и все особые
+ * на доске взрываются разом. null — взрывать нечего. Доска на входе не меняется.
+ */
+export function finale(input: Board, n: number): Finale | null {
+  const b = cloneBoard(input);
+  const plain = b.cells.map((c, i) => (c.gem && !c.gem.special ? i : -1)).filter((i) => i >= 0);
+  const marked: Finale['marked'] = [];
+  for (let k = 0; k < n && plain.length; k++) {
+    const i = plain.splice(Math.floor(rand(b) * plain.length), 1)[0];
+    const gem = { ...b.cells[i].gem!, special: (rand(b) < 0.5 ? 'lineH' : 'lineV') as Special };
+    b.cells[i].gem = gem;
+    marked.push({ ...posOf(b, i), gem });
+  }
+  const seed: Seed = { clear: new Set(), blasts: [], used: new Set() };
+  b.cells.forEach((c, i) => c.gem?.special && seed.clear.add(i));
+  if (!seed.clear.size) return null;
+  const start = cloneBoard(b);
+  return { marked, start, result: cascade(b, seed, []) };
 }
 
 interface Seed {

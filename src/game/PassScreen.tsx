@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Chest, Coin, Flask, Lock, PassShield, Swords } from '../icons';
+import { Check, Chest, Coin, Flask, Lock, PassShield, Star, Swords } from '../icons';
 import { gearIcon, itemById, potionById } from './items';
 import { portraitUrl } from './npcs';
 import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';
 import { sfx } from '../audio';
+import { useProOffer } from '../cloud';
+import { payStars } from '../payments';
+import { openPassInTelegram, platform } from '../telegram';
 
 // Пропуск сезона: два щита — серый бесплатный и золотой Pro, ступени наград и задания.
 
@@ -95,15 +98,7 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
             <div style={{ width: `${(t.into / t.need) * 100}%` }} />
           </div>
         </div>
-        {pro ? (
-          <div className="pass-pro-note">
-            <span className="pro-name">Pro Pass активен</span> · золотые награды открыты, имя светится золотом
-          </div>
-        ) : (
-          <div className="pass-pro-note">
-            <Lock size={12} /> <b>Pro Pass скоро</b> · золотая дорожка, золотое имя в клане и рейтинге, золотой щит за героем
-          </div>
-        )}
+        <ProBuy pro={pro} now={now} onPaid={(text) => (sfx('chest'), show(text))} />
       </div>
 
       <div className="tabs">
@@ -171,6 +166,68 @@ function RewardIcon({ reward }: { reward: PassReward }) {
   }
 }
 
+const DAY = 86_400_000;
+const fmtDay = (t: number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+
+/** Pro Pass за звёзды Telegram: покупка в Telegram, в Max и браузере — ссылка в бота. Pro действует по аккаунту везде. */
+function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text: string) => void }) {
+  const offer = useProOffer();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const price = offer?.price;
+  const late = passEndsAt(now) - now < 7 * DAY;
+  const buy = async () => {
+    if (platform !== 'tg') return openPassInTelegram();
+    setBusy(true);
+    setNote(null);
+    const before = offer?.until ?? 0;
+    let until = 0;
+    const r = await payStars('pro', (s) => s.pro && (until = s.proOffer?.until ?? 0) > before);
+    setBusy(false);
+    if (r === 'done') onPaid(`Pro Pass активен до ${fmtDay(until)}!`);
+    else if (r === 'late') setNote('Оплата прошла, Pro включится через минуту. Если нет — напиши боту /paysupport.');
+    else if (r !== 'cancelled') setNote(r.error);
+  };
+  const cost = price ? (
+    <span className="btn-cost">
+      {price} <Star size={13} />
+    </span>
+  ) : null;
+  if (pro)
+    return (
+      <div className="pass-pro-box">
+        <div className="pass-pro-note">
+          <span className="pro-name">Pro Pass активен</span>
+          {offer?.until ? ` до ${fmtDay(offer.until)}` : ''} · золотые награды открыты, имя светится золотом
+        </div>
+        {offer?.until && offer.canBuy && late && (
+          <button className="pass-buy ghost" disabled={busy} onClick={buy}>
+            Продлить на следующий сезон {cost}
+          </button>
+        )}
+        {note && <div className="pass-buy-note">{note}</div>}
+      </div>
+    );
+  return (
+    <div className="pass-pro-box">
+      <div className="pass-pro-note">
+        <b>Pro Pass на сезон</b> · золотая дорожка наград, облик «Страж Золотого щита», золотое имя в клане и рейтинге. Силы в дуэлях не прибавляет: там решают только твои повторы.
+      </div>
+      <button className="pass-buy primary" disabled={busy} onClick={buy}>
+        {platform === 'tg' ? 'Купить Pro' : 'Купить в Telegram'} {cost}
+      </button>
+      <div className="pass-buy-note">
+        {note ??
+          (platform === 'tg'
+            ? late
+              ? 'До конца сезона меньше недели: покупка сразу включает и следующий сезон.'
+              : 'Награды всех уже пройденных ступеней можно забрать сразу.'
+            : 'Оплата звёздами в Telegram. Pro будет работать и здесь, если этот вход привязан к тому же герою.')}
+      </div>
+    </div>
+  );
+}
+
 function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassReward; gold?: boolean; state: 'got' | 'ready' | 'locked' | 'pro'; onClaim: () => void }) {
   return (
     <button className={`pass-reward ${gold ? 'gold' : ''} ${state}`} disabled={state !== 'ready'} onClick={onClaim}>
@@ -187,7 +244,7 @@ function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassRewa
           'Забрать'
         ) : state === 'pro' ? (
           <>
-            <Lock size={11} /> скоро
+            <Lock size={11} /> Pro
           </>
         ) : (
           <Lock size={11} />

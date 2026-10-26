@@ -13,7 +13,7 @@ describe('метки главного экрана', () => {
   it('новичку без прогресса нечего забирать', () => {
     const p = base();
     const b = homeBadges(p, dailyTask(dayKey(TUE), p.baseline), false, TUE);
-    expect(b).toEqual({ daily: false, dungeon: false, programs: false, pass: 0, achievements: 0, pets: 0, event: false });
+    expect(b).toEqual({ daily: false, dungeon: false, programs: false, pass: 0, achievements: 0, pets: 0, event: false, holiday: 0 });
   });
 
   it('задание дня: метка, пока награда не забрана', () => {

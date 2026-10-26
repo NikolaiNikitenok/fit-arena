@@ -1,8 +1,9 @@
 // Единый аккаунт: какие входы привязаны, код для другой платформы и ввод кода (server/accountApi.ts).
 import { useEffect, useState } from 'react';
-import { cloudState, onCloud, post, switchAccount } from '../cloud';
-import type { Progress } from '../game/progress';
+import { cloudState, localBackup, onCloud, post, restoreLocalBackup, switchAccount, syncNow } from '../cloud';
+import { heroLevel, heroXp, loadProgress, type Progress } from '../game/progress';
 import { Sheet } from '../Sheet';
+import { WebLogoutButton } from './WebLogin';
 
 interface HeroCard {
   level: number;
@@ -13,11 +14,20 @@ interface HeroCard {
 interface Status {
   id: string;
   login: string;
-  logins: { login: string; platform: 'tg' | 'max' | null }[];
+  logins: { login: string; platform: 'tg' | 'max' | 'ya' | null }[];
   notify: 'tg' | 'max' | null;
+  archived?: { at: number; card: HeroCard }[];
 }
 
-const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max' };
+/** Герой этого телефона: сервер мог не успеть получить его копию, поэтому сообщаем о нём при привязке. */
+const localCard = () => {
+  const p = loadProgress();
+  return { level: heroLevel(heroXp(p)).level, stages: Object.keys(p.stars ?? {}).length, days: Object.keys(p.days ?? {}).length };
+};
+/** Сначала отдаём серверу свою копию героя, чтобы он сравнивал настоящих героев. */
+const pushLocal = () => syncNow(loadProgress()).catch(() => {});
+
+const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: 'Яндекс' };
 const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? 'Вход'} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
 const errText = (e: { body?: { error?: string } }) => e.body?.error ?? 'Не получилось связаться с сервером. Попробуй ещё раз.';
 
@@ -35,6 +45,8 @@ export function AccountRow() {
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [enter, setEnter] = useState(false);
   const [error, setError] = useState('');
+  const [sure, setSure] = useState<number | null>(null);
+  const [backup] = useState(localBackup);
   useEffect(() => {
     if (linkable) post('/api/account/status', {}).then(setStatus, () => null);
   }, [linkable]);
@@ -44,6 +56,14 @@ export function AccountRow() {
       (s: Status) => setStatus(s),
       (e) => setError(errText(e)),
     );
+  const restore = (a: { at: number; card: HeroCard }) => {
+    // Второе нажатие подтверждает: confirm() в части клиентов Telegram не показывается.
+    if (sure !== a.at) return setSure(a.at);
+    post('/api/account/restore', { at: a.at }).then(
+      (r: { ok?: boolean; id?: string; progress?: Progress | null }) => r.ok && r.id && switchAccount(r.id, r.progress ?? null),
+      (e) => setError(errText(e)),
+    );
+  };
   return (
     <div className="toggle-row account-row">
       <div className="account-body">
@@ -88,13 +108,46 @@ export function AccountRow() {
           </div>
         ) : null}
         <div className="account-actions">
-          <button className="small-btn ghost" onClick={() => post('/api/account/code', {}).then(setCode, (e) => setError(errText(e)))}>
+          <button className="small-btn ghost" onClick={() => pushLocal().then(() => post('/api/account/code', {})).then(setCode, (e) => setError(errText(e)))}>
             {code ? 'Новый код' : 'Получить код'}
           </button>
           <button className="small-btn ghost" onClick={() => setEnter(true)}>
             Ввести код
           </button>
+          <WebLogoutButton />
         </div>
+        {backup && (
+          <div className="account-archive">
+            <div className="toggle-title">Копия героя на этом телефоне</div>
+            <div className="muted">Игра сохранила её перед сменой аккаунта.</div>
+            <div className="account-login">
+              <span>
+                Герой {backup.level} уровня · {backup.stages} уровней пройдено
+                <span className="muted"> · {new Date(backup.at).toLocaleDateString('ru-RU')}</span>
+              </span>
+              <button className="small-btn" onClick={() => (sure === -1 ? restoreLocalBackup().catch((e) => setError(errText(e))) : setSure(-1))}>
+                {sure === -1 ? 'Точно вернуть?' : 'Вернуть'}
+              </button>
+            </div>
+          </div>
+        )}
+        {!!status?.archived?.length && (
+          <div className="account-archive">
+            <div className="toggle-title">Прежние герои</div>
+            <div className="muted">Герои, которых не выбрали при привязке, хранятся 30 дней. Можно вернуть любого: нынешний тогда уйдёт сюда же.</div>
+            {status.archived.map((a) => (
+              <div key={a.at} className="account-login">
+                <span>
+                  {cardText(a.card)}
+                  <span className="muted"> · отложен {new Date(a.at).toLocaleDateString('ru-RU')}</span>
+                </span>
+                <button className="small-btn" onClick={() => restore(a)}>
+                  {sure === a.at ? 'Точно вернуть?' : 'Вернуть'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {error && <div className="muted">{error}</div>}
       </div>
       {enter && <LinkSheet onClose={() => setEnter(false)} />}
@@ -125,13 +178,18 @@ export function LinkSheet({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState<{ here: HeroCard; there: HeroCard } | null>(null);
+  const [sure, setSure] = useState<'here' | 'there' | null>(null);
   const link = (keep?: 'here' | 'there') => {
     setBusy(true);
     setError('');
-    post('/api/account/link', { code, keep })
+    pushLocal()
+      .then(() => post('/api/account/link', { code, keep, local: localCard() }))
       .then((r: { ok?: boolean; id?: string; progress?: Progress | null; conflict?: { here: HeroCard; there: HeroCard } }) => {
         if (r.conflict) return setConflict(r.conflict), setBusy(false);
-        if (r.ok && r.id) switchAccount(r.id, r.progress ?? null);
+        if (!r.ok || !r.id) return;
+        // Остался герой этого телефона: его копия здесь самая свежая, серверную не берём.
+        if (r.id === cloudState()?.account) return location.reload();
+        switchAccount(r.id, r.progress ?? null);
       })
       .catch((e) => {
         setError(errText(e));
@@ -153,22 +211,26 @@ export function LinkSheet({ onClose }: { onClose: () => void }) {
         </>
       ) : (
         <>
-          <div className="muted">Герой есть и здесь, и там. Объединить их нельзя: выбери, кем играть дальше. Второй пропадёт из игры (копия его прогресса хранится 30 дней).</div>
+          <div className="muted">Герой есть и здесь, и там. Объединить их нельзя: выбери, кем играть дальше. Второй уйдёт в архив: его можно вернуть в «Настройки» → «Аккаунт» в течение 30 дней.</div>
           <div className="account-choice">
-            <div className="settings-note">
-              <b>Тот, чей код</b>
-              <div>{cardText(conflict.there)}</div>
-              <button className="small-btn" disabled={busy} onClick={() => link('there')}>
-                Играть им
-              </button>
-            </div>
-            <div className="settings-note">
-              <b>Этот, здесь</b>
-              <div>{cardText(conflict.here)}</div>
-              <button className="small-btn ghost" disabled={busy} onClick={() => link('here')}>
-                Оставить этого
-              </button>
-            </div>
+            {(['there', 'here'] as const).map((side) => {
+              const c = conflict[side];
+              const other = conflict[side === 'here' ? 'there' : 'here'];
+              const stronger = c.level > other.level || (c.level === other.level && c.stages >= other.stages);
+              return (
+                <div key={side} className="settings-note">
+                  <b>{side === 'there' ? 'Герой с платформы, где брал код' : 'Герой на этой платформе'}</b>
+                  <div>{cardText(c)}</div>
+                  <button
+                    className={stronger ? 'small-btn' : 'small-btn ghost'}
+                    disabled={busy}
+                    onClick={() => (sure === side ? link(side) : setSure(side))}
+                  >
+                    {sure === side ? `Точно? Герой ${other.level} ур. уйдёт в архив` : 'Оставить этого'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { track } from './telemetry';
+import { useBusy } from './updates/busy';
 import { ArenaStage } from './ArenaStage';
 import { MAX_HP } from '../shared/battle';
 import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
@@ -71,6 +72,8 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
   const camera = useRepCamera(false);
   const ws = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
+  // Ждём соперника или бьёмся: обновление игры подождёт.
+  useBusy(phase === 'room' || phase === 'countdown' || phase === 'fight');
   useEffect(() => {
     if (phase === 'room' || phase === 'countdown') void preloadPose().catch(() => {});
   }, [phase]);

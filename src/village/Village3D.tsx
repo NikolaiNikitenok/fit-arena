@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Canvas3D } from '../three/Canvas3D';
+import { StylePass } from '../three/StylePass';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
@@ -12,7 +13,10 @@ import type { CharName } from '../three/kit';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings, useSettings } from '../settings';
 import { emitFx, Particles } from './Particles';
-import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, Windows } from './Atmosphere';
+import { HitFx } from './HitFx';
+import { Skyline } from './Skyline';
+import { SeasonFall, seasonNow } from '../three/SeasonFall';
+import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, WindowGlow } from './Atmosphere';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { CRY, GUARD, QUAKE, SKILLS, type SkillId } from '../../shared/heroSkills';
@@ -61,6 +65,8 @@ export interface Ctl {
   intro?: boolean;
   // Сцена с моделями на экране (до этого пролёт ждёт).
   ready?: boolean;
+  // Тряска камеры (падение ратуши): сила и сколько уже трясёт, мс.
+  shake?: { amp: number; t: number } | null;
 }
 
 interface CamPose {
@@ -121,6 +127,9 @@ function lookFor(b: ViewBld, enemy: boolean): Look {
 }
 
 type Moving = Anim & { ox: number; oz: number };
+/** Во сколько раз постройки крупнее, чем в превью и карточках. */
+const BIG = 1.1;
+
 function placed(list: ViewBld[], enemy: boolean, decor: Decor[] = [], theme: ThemeId = 'classic'): { kit: Record<LibName, Placed[]>; prim: Prim[]; anim: Moving[]; blobs: [number, number, number][] } {
   const out: Record<string, Placed[]> = { fantasy: [], village: [] };
   const prim: Prim[] = [];
@@ -135,16 +144,20 @@ function placed(list: ViewBld[], enemy: boolean, decor: Decor[] = [], theme: The
       // Столб в клетке и секции к соседям справа и снизу; с 6 уровня на столбе золотая шапка.
       // Вид столба по уровню — wallLook в looks.ts, тот же в превью.
       const { tint, cs, prim: trim } = wallLook(b.l);
-      out.fantasy.push({ name: 'column', x: cx, z: cz, s: cs, tint });
-      for (const p of trim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
-      if (walls.has(`${b.x + 1},${b.y}`)) out.fantasy.push({ name: 'wall_straight', x: cx + 0.5, z: cz, s: 0.5, tint });
-      if (walls.has(`${b.x},${b.y + 1}`)) out.fantasy.push({ name: 'wall_straight', x: cx, z: cz + 0.5, s: 0.5, ry: Math.PI / 2, tint });
+      const g = { g: b.i, gx: cx, gz: cz };
+      out.fantasy.push({ name: 'column', x: cx, z: cz, s: cs, tint, ...g });
+      for (const p of trim) prim.push({ ...p, x: cx + p.x, z: cz + p.z, ...g });
+      if (walls.has(`${b.x + 1},${b.y}`)) out.fantasy.push({ name: 'wall_straight', x: cx + 0.5, z: cz, s: 0.5, tint, ...g });
+      if (walls.has(`${b.x},${b.y + 1}`)) out.fantasy.push({ name: 'wall_straight', x: cx, z: cz + 0.5, s: 0.5, ry: Math.PI / 2, tint, ...g });
       continue;
     }
     const look = lookFor(b, enemy);
-    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x, y: m.y, z: cz + m.z, s: m.s, ry: m.ry, tint: m.tint });
-    for (const p of look.prim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
-    for (const a of look.anim) anim.push({ ...a, ox: cx, oz: cz });
+    // Постройки чуть крупнее своей клетки — «пухлые», как в больших стратегиях.
+    const K = BIG;
+    const g = { g: b.i, gx: cx, gz: cz };
+    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x * K, y: m.y * K, z: cz + m.z * K, s: m.s * K, ry: m.ry, tint: m.tint, ...g });
+    for (const p of look.prim) prim.push({ ...p, x: cx + p.x * K, y: p.y * K, z: cz + p.z * K, sx: p.sx * K, sy: p.sy * K, sz: p.sz * K, ...g });
+    for (const a of look.anim) anim.push({ ...a, x: a.x * K, y: a.y * K, z: a.z * K, s: a.s * K, ox: cx, oz: cz });
     if (look.blob) blobs.push([cx, cz, look.blob]);
   }
   for (const d of decor) {
@@ -196,8 +209,17 @@ function Rig({ ctl, sun, sunH = 1 }: { ctl: React.MutableRefObject<Ctl>; sun: Re
     if (import.meta.env.DEV) Object.assign(window, { __vil: c, __fx: emitFx });
     const cam = camera as THREE.OrthographicCamera;
     off.copy(OFF).applyAxisAngle(UP, c.yaw ?? 0);
-    camera.position.set(c.tx + off.x, OFF.y, c.tz + off.z);
-    camera.lookAt(c.tx, 0, c.tz);
+    let sx = 0;
+    let sz = 0;
+    if (c.shake) {
+      c.shake.t += dt * 1000;
+      const k = c.shake.amp * Math.max(0, 1 - c.shake.t / 700) ** 2;
+      sx = Math.sin(c.shake.t * 0.09) * k;
+      sz = Math.cos(c.shake.t * 0.071) * k;
+      if (c.shake.t > 700) c.shake = null;
+    }
+    camera.position.set(c.tx + sx + off.x, OFF.y, c.tz + sz + off.z);
+    camera.lookAt(c.tx + sx, 0, c.tz + sz);
     if (last.current !== c.zoom) {
       cam.zoom = c.zoom;
       cam.updateProjectionMatrix();
@@ -279,6 +301,57 @@ function bubbleTex(res: ResKey): THREE.Texture {
   t.colorSpace = THREE.SRGBColorSpace;
   bubbleCache.set(res, t);
   return t;
+}
+
+let upTex: THREE.Texture | null = null;
+/** Зелёный кружок со стрелкой вверх: «можно улучшить». */
+function upTexture(): THREE.Texture {
+  if (upTex) return upTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(0,0,0,.28)';
+  g.beginPath();
+  g.arc(48, 52, 38, 0, Math.PI * 2);
+  g.fill();
+  const grad = g.createLinearGradient(0, 10, 0, 86);
+  grad.addColorStop(0, '#8af06a');
+  grad.addColorStop(1, '#2fa83a');
+  g.fillStyle = grad;
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(48, 46, 36, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.moveTo(48, 22);
+  g.lineTo(70, 46);
+  g.lineTo(57, 46);
+  g.lineTo(57, 68);
+  g.lineTo(39, 68);
+  g.lineTo(39, 46);
+  g.lineTo(26, 46);
+  g.closePath();
+  g.fill();
+  upTex = new THREE.CanvasTexture(c);
+  upTex.colorSpace = THREE.SRGBColorSpace;
+  return upTex;
+}
+
+function UpArrow({ x, z, h }: { x: number; z: number; h: number }) {
+  const ref = useRef<THREE.Sprite>(null);
+  useFrame(() => {
+    if (!ref.current) return;
+    const t = performance.now() / 1000;
+    ref.current.position.y = h + 0.18 * Math.abs(Math.sin(t * 2.4 + x));
+  });
+  return (
+    <sprite ref={ref} position={[x, h, z]} scale={[0.85, 0.85, 1]} renderOrder={6}>
+      <spriteMaterial map={upTexture()} depthTest={false} depthWrite={false} />
+    </sprite>
+  );
 }
 
 function Bubble({ res, x, z, h }: { res: ResKey; x: number; z: number; h: number }) {
@@ -441,6 +514,8 @@ export interface SceneProps {
   statueHero?: CharName;
   grid?: boolean;
   bubbles?: { i: number; res: ResKey }[];
+  // Постройки, которые можно улучшить прямо сейчас: зелёная стрелка над ними.
+  ups?: number[];
   labels?: { i: number; text: string; color?: string }[];
   battle?: React.MutableRefObject<BattleView | null>;
   noDeploy?: number[];
@@ -515,6 +590,12 @@ function Scene(props: SceneProps) {
         const b = byId.get(bb.i);
         return b && <Bubble key={b.i} res={bb.res} x={W(b.x + SIZE[b.t] / 2)} z={W(b.y + SIZE[b.t] / 2)} h={top(b)} />;
       })}
+      {props.ups?.map((i) => {
+        const b = byId.get(i);
+        if (!b || props.bubbles?.some((bb) => bb.i === i)) return null;
+        const s = SIZE[b.t];
+        return <UpArrow key={i} x={W(b.x + s * 0.85)} z={W(b.y + s * 0.85)} h={top(b) * BIG * 0.8} />;
+      })}
       {props.labels?.map((l) => {
         const b = byId.get(l.i);
         return b && <Label key={b.i} text={l.text} color={l.color} x={W(b.x + SIZE[b.t] / 2)} z={W(b.y + SIZE[b.t] / 2)} h={top(b) - 0.6} />;
@@ -559,6 +640,7 @@ function Scene(props: SceneProps) {
       {props.battle && <SkillAuras view={props.battle} />}
       {props.battle && <UnitBars view={props.battle} foe={!!props.foe} />}
       {props.battle && <Effects view={props.battle} />}
+      {props.battle && <HitFx view={props.battle} fx={fx} />}
       {fx && <Particles lite={lite} />}
     </>
   );
@@ -590,6 +672,8 @@ export function Village3D(props: SceneProps) {
   const { sky, weather } = useSky(live, s.dayNight, props.theme);
   const fx = s.villageFx;
   const spots = useMemo(() => lampSpots(props.buildings), [props.buildings]);
+  // Зимняя тема — своя погода (снег): листьев и лепестков в ней нет.
+  const season = props.theme === 'winter' ? null : seasonNow();
   return (
     <Canvas3D orthographic camera={{ position: [OFF.x, OFF.y, OFF.z], zoom: 14, near: 1, far: 260 }} gl={{ antialias: true }}>
       <hemisphereLight ref={hemi} args={['#ffffff', '#5a4a38', 1.25]} />
@@ -600,12 +684,15 @@ export function Village3D(props: SceneProps) {
       <Suspense fallback={null}>
         <Scene {...props} />
         {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
-        {live && sky.lamps > 0.01 && <Windows buildings={props.buildings} on={sky.lamps} ctl={props.ctl} />}
+        <WindowGlow on={live ? sky.lamps : 0} />
+        {live && fx && <Skyline ctl={props.ctl} lite={s.lowPower} />}
       </Suspense>
       {live && fx && <Birds theme={props.theme ?? 'classic'} night={sky.lamps} />}
       {live && fx && <TavernNotes buildings={props.buildings} />}
       {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
+      {live && fx && weather !== 'snow' && season && <SeasonFall season={season} lite={s.lowPower} center={(v) => v.set(props.ctl.current.tx, 0, props.ctl.current.tz)} zoom={() => props.ctl.current.zoom} />}
+      {!s.lowPower && <StylePass />}
     </Canvas3D>
   );
 }
