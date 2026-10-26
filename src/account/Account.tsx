@@ -13,10 +13,11 @@ interface HeroCard {
 interface Status {
   id: string;
   login: string;
-  logins: { login: string; platform: 'tg' | null }[];
+  logins: { login: string; platform: 'tg' | 'max' | null }[];
+  notify: 'tg' | 'max' | null;
 }
 
-const PLATFORM: Record<string, string> = { tg: 'Telegram' };
+const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max' };
 const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? 'Вход'} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
 const errText = (e: { body?: { error?: string } }) => e.body?.error ?? 'Не получилось связаться с сервером. Попробуй ещё раз.';
 
@@ -62,6 +63,24 @@ export function AccountRow() {
             )}
           </div>
         ))}
+        {status && new Set(status.logins.map((l) => l.platform)).size > 1 && (
+          <label className="account-notify">
+            <span>Напоминания и вести от бота</span>
+            <select
+              value={status.notify ?? ''}
+              onChange={(e) =>
+                post('/api/account/notify', { platform: e.target.value || null }).then(
+                  (s: Status) => setStatus(s),
+                  (err) => setError(errText(err)),
+                )
+              }
+            >
+              <option value="">Где заходил последним</option>
+              <option value="tg">Telegram</option>
+              <option value="max">Max</option>
+            </select>
+          </label>
+        )}
         {code ? (
           <div className="account-code">
             <b>{code.code}</b>

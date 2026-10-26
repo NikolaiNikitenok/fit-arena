@@ -1,7 +1,7 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
 import { loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
-import { guestId, tg } from './telegram';
+import { guestId, setMaxBot, tg } from './telegram';
 
 const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId() });
 
@@ -113,7 +113,9 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       admin?: boolean;
       account?: string;
       linkable?: boolean;
+      maxBot?: string | null;
     };
+    setMaxBot(r.maxBot);
     cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.

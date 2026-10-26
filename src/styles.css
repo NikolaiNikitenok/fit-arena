@@ -375,6 +375,8 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .account-login { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
 .account-code { display: flex; flex-direction: column; gap: 4px; }
 .account-code b { font-size: 26px; letter-spacing: 6px; font-variant-numeric: tabular-nums; user-select: all; }
+.account-notify { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.account-notify select { padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; }
 .account-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .account-choice { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .account-choice .settings-note { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }

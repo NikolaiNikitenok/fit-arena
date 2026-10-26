@@ -224,14 +224,14 @@ function RemindRow() {
   return (
     <div className="toggle-row remind-row">
       <div>
-        <div className="toggle-title">Напоминание в Telegram</div>
+        <div className="toggle-title">Напоминание в боте</div>
         <div className="muted">
           {!cloud
             ? 'Подключаюсь к серверу…'
             : !cloud.bot
-              ? 'Пока недоступно: сервер не может сам писать в Telegram. Заработает, когда подключим пересылку.'
+              ? 'Пока недоступно: сервер не может сам писать в мессенджер. Заработает, когда подключим пересылку.'
               : !cloud.telegram
-                ? 'Работает, когда приложение открыто из Telegram.'
+                ? 'Работает, когда приложение открыто из Telegram или Max.'
                 : 'Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.'}
         </div>
         {hour != null && (

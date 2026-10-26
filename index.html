@@ -95,6 +95,19 @@
         var w = window.Telegram && window.Telegram.WebApp;
         if (w) { w.ready(); w.expand(); w.setHeaderColor && w.setHeaderColor('#0d0f17'); w.setBackgroundColor && w.setBackgroundColor('#0d0f17'); }
       } catch (e) {}
+      // Не Telegram: может быть Max. Его скрипт (window.WebApp) грузим без блокировки страницы,
+      // игра ждёт его не дольше 2,5 секунды (src/telegram.ts, detectPlatform).
+      (function () {
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) return;
+        window.__maxReady = new Promise(function (done) {
+          var sc = document.createElement('script');
+          sc.src = 'https://st.max.ru/js/max-web-app.js';
+          sc.async = true;
+          sc.onload = sc.onerror = function () { done(); };
+          document.head.appendChild(sc);
+          setTimeout(done, 2500);
+        });
+      })();
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

@@ -20,13 +20,61 @@ interface TelegramWebApp {
   shareToStory?(mediaUrl: string, params?: { text?: string; widget_link?: { url: string; name?: string } }): void;
 }
 
+// Max (https://dev.max.ru/docs/webapps/bridge): window.WebApp из st.max.ru/js/max-web-app.js. Его index.html подключает,
+// только когда игра открыта не из Telegram. Подпись initData у Max такая же, сервер сам узнаёт, чья она.
+interface MaxWebApp {
+  initData: string;
+  initDataUnsafe?: { user?: { id: number; first_name: string; username?: string }; start_param?: unknown };
+  ready?(): void;
+  openLink?(url: string): void;
+  downloadFile?(url: string, fileName: string): void;
+  HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy'): void };
+}
+
 declare global {
   interface Window {
     Telegram?: { WebApp: TelegramWebApp };
+    WebApp?: MaxWebApp;
+    __maxReady?: Promise<void>;
   }
 }
 
-export const tg: TelegramWebApp | undefined = window.Telegram?.WebApp;
+/** Параметр запуска Max: строка start_param или ?WebAppStartParam= в адресе. */
+const maxStartParam = (m: MaxWebApp): string | undefined => {
+  const p = m.initDataUnsafe?.start_param;
+  if (typeof p === 'string' && p) return p;
+  return new URLSearchParams(location.search).get('WebAppStartParam') ?? undefined;
+};
+
+/** Max в виде того же интерфейса, что Telegram: остальной код не различает мессенджеры. */
+function fromMax(m: MaxWebApp): TelegramWebApp {
+  return {
+    ready: () => m.ready?.(),
+    expand: () => {},
+    initData: m.initData,
+    initDataUnsafe: { user: m.initDataUnsafe?.user, start_param: maxStartParam(m) },
+    HapticFeedback: m.HapticFeedback,
+    openLink: m.openLink && ((url: string) => m.openLink!(url)),
+    downloadFile: m.downloadFile && ((p, cb) => (m.downloadFile!(p.url, p.file_name), cb?.(true))),
+  } as TelegramWebApp;
+}
+
+const telegramApp = (): TelegramWebApp | undefined => window.Telegram?.WebApp;
+const maxApp = (): TelegramWebApp | undefined => (!telegramApp()?.initData && window.WebApp?.initData ? fromMax(window.WebApp) : undefined);
+
+// Мессенджер, из которого открыта игра: Telegram, Max или обычный браузер (tg без initData или undefined).
+export let tg: TelegramWebApp | undefined = maxApp() ?? telegramApp();
+export let platform: 'tg' | 'max' | 'web' = maxApp() ? 'max' : telegramApp()?.initData ? 'tg' : 'web';
+
+/** Подождать скрипт Max (index.html), чтобы узнать, открыта ли игра из Max. Не дольше пары секунд. */
+export async function detectPlatform(): Promise<void> {
+  await window.__maxReady?.catch(() => {});
+  const max = maxApp();
+  if (max) {
+    tg = max;
+    platform = 'max';
+  }
+}
 
 export function initTelegram(): void {
   tg?.ready();
@@ -86,17 +134,30 @@ export function clanInviteCode(): string | null {
 /** Приглашение в друзья: startapp=friend-ТОКЕН или ?friend=ТОКЕН (кнопка бота). */
 export const friendInviteCode = (): string | null => friendParam(startParam(), location.search);
 
-export const friendInviteLink = (token: string, bot: { username: string | null; running: boolean }): string => friendLink(token, bot, BOT_USERNAME, location.origin);
+export const friendInviteLink = (token: string, bot: { username: string | null; running: boolean }): string => maxLink(`friend-${token}`) ?? friendLink(token, bot, BOT_USERNAME, location.origin);
 
 /** Вкладка из адреса: кнопки бота о рейде открывают клан (?tab=clan), о друзьях — друзей (?tab=friends). */
-export const startTab = (): string | null => new URLSearchParams(location.search).get('tab');
+export const startTab = (): string | null => {
+  // В Max кнопка бота передаёт вкладку параметром запуска: tab-clan.
+  const p = startParam();
+  if (p?.startsWith('tab-')) return p.slice(4);
+  return new URLSearchParams(location.search).get('tab');
+};
 
 // Имя бота известно и без токена на сервере: ссылки-приглашения всегда ведут в Telegram.
 export const BOT_USERNAME = 'ArenaNikitenokBot';
 
+// Имя бота в Max: сервер узнаёт его у Max (/me) и присылает с прогрессом (src/cloud.ts).
+let maxBot: string | null = null;
+export const setMaxBot = (name: string | null | undefined) => (maxBot = name || null);
+/** В Max приглашения ведут в мини-приложение Max: max.ru/<бот>?startapp=… */
+const maxLink = (param: string) => (platform === 'max' && maxBot ? `https://max.ru/${maxBot}?startapp=${param}` : null);
+
 // Пока на сервере нет токена, бот не отвечает на /start, поэтому ссылка сразу открывает
 // мини-приложение (startapp). Когда бот запущен, ссылка ведёт в бота, и он присылает кнопку входа.
 const link = (param: string, bot: { username: string | null; running: boolean }) => {
+  const max = maxLink(param);
+  if (max) return max;
   const name = bot.username || BOT_USERNAME;
   return name ? `https://t.me/${name}?${bot.running ? 'start' : 'startapp'}=${param}` : null;
 };

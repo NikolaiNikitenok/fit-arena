@@ -13,6 +13,7 @@
 //   ADMIN_IDS — id админов (статистика, сводка и тревоги в боте); ещё файлом .admin-ids (ADMIN_FILE)
 //   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
 //   VILLAGES_FILE — деревни для набегов, кубки, щиты и набеги за неделю (по умолчанию villages.json рядом с DATA_FILE, server/villages.ts)
+//   MAX_BOT_TOKEN (или файл .max-token), MAX_CA_FILE — бот и мини-приложение в Max (server/maxBot.ts)
 //   ACCOUNTS_FILE — какие входы (Telegram, потом Max и браузер) ведут в один аккаунт (server/accounts.ts)
 //   MODERATION_FILE, REPORTS_FILE — чёрный список, запреты писать и жалобы (server/moderation.ts, server/reports.ts); о жалобах бот пишет ADMIN_IDS
 import { randomUUID } from 'node:crypto';
@@ -47,7 +48,7 @@ import { handleTelemetry, Telemetry } from './telemetry';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
 import { deletePlayer } from './deleteMe';
-import { alertText, FEEDBACK_THANKS, feedbackText } from './adminBot';
+import { alertText, FEEDBACK_THANKS, feedbackLimit, feedbackText } from './adminBot';
 import { ModerationStore } from './moderation';
 import { ReportStore } from './reports';
 import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
@@ -61,6 +62,7 @@ import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
+import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -274,9 +276,13 @@ function cleanName(name: unknown): string {
 }
 
 /** Вход по подписи мессенджера: 'tg:123' и имя оттуда. Max и браузер добавятся сюда же. */
+// Подпись у Telegram и Max устроена одинаково, ключи разные: подпись одного мессенджера другим не проверится.
 function loginOf(body: { initData?: unknown }): { login: string; name: string } | null {
-  const tgUser = BOT_TOKEN && typeof body.initData === 'string' ? verifyInitData(body.initData, BOT_TOKEN) : null;
-  return tgUser ? { login: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) } : null;
+  if (typeof body.initData !== 'string' || !body.initData) return null;
+  const tgUser = BOT_TOKEN ? verifyInitData(body.initData, BOT_TOKEN) : null;
+  if (tgUser) return { login: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) };
+  const maxUser = MAX_TOKEN ? verifyInitData(body.initData, MAX_TOKEN) : null;
+  return maxUser ? { login: `max:${maxUser.id}`, name: cleanName(maxUser.first_name) } : null;
 }
 
 /** Игрок по подписи: его аккаунт (server/accounts.ts), вход и имя. */
@@ -318,6 +324,13 @@ function villageName(id: string, body: Record<string, unknown>): string | undefi
   return loginOf(body)?.name ?? friends.get(id)?.name;
 }
 
+/** Может ли бот сейчас написать игроку: мессенджер, куда пойдут напоминания, отвечает серверу. */
+const botReady = (id: string) => {
+  const t = accounts.target(id);
+  if (t?.platform === 'max') return !!MAX_TOKEN && maxStatus.lastOkAt != null;
+  return !!BOT_TOKEN && botStatus.lastOkAt != null;
+};
+
 /** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind, /api/raid-notify. */
 async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => {
@@ -335,7 +348,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: !!BOT_TOKEN && botStatus.lastOkAt != null, telegram: accounts.tgChat(who.id) !== null, pro: isPro(who.id), raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -430,13 +443,24 @@ const clanInfo = (code: string) => {
 };
 
 // Друзья (server/friendsApi.ts): только игроки Telegram; без токена бота (разработка) — и гости.
-const sendFriendBot = (to: string, text: string, button: string, query: string) => {
-  const chat = accounts.tgChat(to);
-  if (!BOT_TOKEN || chat === null) return;
-  botApi(BOT_TOKEN)('sendMessage', { chat_id: chat, text, reply_markup: { inline_keyboard: [[{ text: button, web_app: { url: `${APP_URL.replace(/\/$/, '')}/${query}` } }]] } }, 15_000)
-    .then((r) => r.error_code === 403 && saves.setBlocked(to, true))
-    .catch(() => null);
-};
+/**
+ * Сообщение игроку от бота туда, где он сейчас (server/accounts.ts: выбор в настройках или последний вход).
+ * query — адрес в приложении для кнопки (?tab=clan, ?friend=…). Telegram ответил 403 — игрок остановил бота.
+ */
+async function notifyPlayer(to: string, text: string, button: string, query: string): Promise<{ status?: number; retryAfter?: number } | null> {
+  const t = accounts.target(to);
+  const url = `${APP_URL.replace(/\/$/, '')}/${query.replace(/^\//, '')}`;
+  if (t?.platform === 'max') {
+    if (!MAX_TOKEN) return null;
+    const r = await maxSend(t.id, text, { text: button, url }).catch(() => null);
+    return r && { status: r.status };
+  }
+  if (!BOT_TOKEN || !t) return null;
+  const r = await botApi(BOT_TOKEN)('sendMessage', { chat_id: t.id, text, reply_markup: { inline_keyboard: [[{ text: button, web_app: { url } }]] } }, 15_000).catch(() => null);
+  if (r?.error_code === 403) saves.setBlocked(to, true);
+  return r && { status: r.ok ? 200 : r.error_code, retryAfter: r.parameters?.retry_after };
+}
+const sendFriendBot = (to: string, text: string, button: string, query: string) => void notifyPlayer(to, text, button, query);
 const friendsDeps: FriendsDeps = {
   friends,
   now: Date.now,
@@ -655,6 +679,26 @@ const http = createServer((req, res) => {
     onAdminApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
+  if (path === '/api/max' && req.method === 'POST') {
+    if (!MAX_TOKEN || req.headers['x-max-bot-api-secret'] !== maxWebhookSecret()) return void res.writeHead(403).end();
+    // Max ждёт 200 не дольше 30 секунд: отвечаем сразу, сообщение игроку уходит отдельным запросом.
+    readJson(req)
+      .then((u) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        return onMaxUpdate(u as MaxUpdate, {
+          appUrl: APP_URL,
+          clanByCode: clanInfo,
+          onUser: (id) => saves.setBlocked(accounts.resolve(`max:${id}`), false),
+          onText: (from, text) => {
+            if (!feedbackLimit.take(`max:${from.id}`, Date.now())) return null;
+            toAdmins(`✉️ Сообщение от игрока в Max ${[from.name, from.username && `@${from.username}`].filter(Boolean).join(' ')} (id max:${from.id}):\n\n${text.slice(0, 2000)}`);
+            return FEEDBACK_THANKS;
+          },
+        });
+      })
+      .catch(() => (res.headersSent ? null : res.writeHead(400).end()));
+    return;
+  }
   if (path.startsWith('/api/account/')) {
     onAccountApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
@@ -674,7 +718,7 @@ const http = createServer((req, res) => {
   }
   if (req.url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size, bot: { token: TOKEN_SOURCE, username: botUsername, ...botStatus } }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, bot: { token: TOKEN_SOURCE, username: botUsername, ...botStatus }, max: maxStatus }));
     return;
   }
   res.writeHead(404).end();
@@ -989,12 +1033,12 @@ setInterval(() => {
 
 http.listen(PORT, () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
 // Напоминания: раз в несколько минут ищем тех, у кого наступил их час, а тренировки сегодня ещё не было.
-if (BOT_TOKEN)
+// Пишет игрокам хотя бы один бот: Telegram или Max.
+const ANY_BOT = !!(BOT_TOKEN || MAX_TOKEN);
+if (ANY_BOT)
   setInterval(() => {
-    const api = botApi(BOT_TOKEN);
     for (const { save, date } of dueReminders(saves.all(), Date.now())) {
-      const chat = accounts.tgChat(save.id);
-      if (chat === null) continue;
+      if (!accounts.target(save.id)) continue;
       saves.markReminded(save.id, date);
       const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
       const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
@@ -1002,15 +1046,10 @@ if (BOT_TOKEN)
         p?.dailyDone === date
           ? 'Мастер Гром: «Сегодня ещё ни одного повтора. Пять минут — и день не потерян!»'
           : `${npcName(task.npc)}: «${task.ask}»\n\nЗадание дня: ${goalText(task.exercise, task.target)}. Награда: ${task.coins} монет.`;
-      api('sendMessage', { chat_id: chat, text, reply_markup: { inline_keyboard: [[{ text: 'Тренироваться', web_app: { url: `${APP_URL}/` } }]] } })
-        .then((r) => {
-          // Игрок остановил бота: больше не пишем.
-          if (r.error_code === 403) {
-            saves.setRemind(save.id, null);
-            saves.setBlocked(save.id, true);
-          }
-        })
-        .catch(() => null);
+      void notifyPlayer(save.id, text, 'Тренироваться', '').then((r) => {
+        // Игрок остановил бота: больше не пишем.
+        if (r?.status === 403) saves.setRemind(save.id, null);
+      });
     }
   }, 5 * 60_000);
 // Рейд клана: раз в минуту смотрим, кому пора написать (начало, напоминание, итог).
@@ -1018,23 +1057,19 @@ if (BOT_TOKEN)
 // Шлём по одному, не больше 20 сообщений в секунду (у Telegram предел около 30).
 let raidSending = false;
 async function sendRaidNotices(list: RaidNotice[]): Promise<void> {
-  const api = botApi(BOT_TOKEN);
   for (const n of list) {
-    const chat = accounts.tgChat(n.playerId);
-    if (saves.raidMuted(n.playerId) || chat === null) continue;
-    const body = { chat_id: chat, text: n.text, reply_markup: { inline_keyboard: [[{ text: n.button, web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=clan` } }]] } };
+    if (saves.raidMuted(n.playerId) || !accounts.target(n.playerId)) continue;
     for (let attempt = 0; attempt < 2; attempt++) {
       const started = Date.now();
-      const r = await api('sendMessage', body, 15_000).catch(() => null);
-      if (r?.error_code === 403) saves.setBlocked(n.playerId, true);
-      // Telegram просит подождать (429): ждём столько, сколько сказал, и пробуем ещё раз.
-      const retry = r?.error_code === 429 ? (r.parameters?.retry_after ?? 1) : 0;
+      const r = await notifyPlayer(n.playerId, n.text, n.button, '?tab=clan');
+      // Мессенджер просит подождать (429): ждём столько, сколько сказал, и пробуем ещё раз.
+      const retry = r?.status === 429 ? (r.retryAfter ?? 1) : 0;
       await new Promise((res) => setTimeout(res, retry ? retry * 1000 : Math.max(0, 50 - (Date.now() - started))));
       if (!retry) break;
     }
   }
 }
-if (BOT_TOKEN)
+if (ANY_BOT)
   setInterval(() => {
     if (raidSending) return;
     const muted = (id: string) => saves.raidMuted(id);
@@ -1056,7 +1091,7 @@ setInterval(() => {
   }
 }, 30_000);
 // Несрочные сообщения о друзьях (заявки): раз в минуту, ночью копятся до утра.
-if (BOT_TOKEN)
+if (ANY_BOT)
   setInterval(() => {
     for (const n of friends.takeNotices()) if (!saves.get(n.to)?.blocked) sendFriendBot(n.to, n.text, n.button, n.query);
   }, 60_000);
@@ -1074,7 +1109,7 @@ if (BOT_TOKEN)
     channelUpdate,
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
-if (BOT_TOKEN)
+if (ANY_BOT)
   setInterval(() => {
     for (const n of villages.takeNotices()) sendFriendBot(n.to, n.text, 'Отомстить', '?tab=village');
   }, 60_000);
@@ -1109,6 +1144,7 @@ if (BOT_TOKEN)
           .catch(() => null);
   }, 60_000);
 loadBotUsername();
+void startMaxBot(APP_URL);
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
   process.on(signal, () => {

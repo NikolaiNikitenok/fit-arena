@@ -49,6 +49,27 @@ describe('accounts', () => {
     expect(a.logins(a.resolve('tg:1'))).toEqual(['tg:1']);
   });
 
+  it('бот пишет туда, где заходил последним, или куда выбрал игрок', () => {
+    const a = new AccountStore(null);
+    a.merge('max:9', 'tg:1');
+    a.seen('max:9');
+    expect(a.target('tg:1')).toEqual({ platform: 'max', id: 9 });
+    a.seen('tg:1');
+    expect(a.target('tg:1')).toEqual({ platform: 'tg', id: 1 });
+    a.setNotify('tg:1', 'max');
+    expect(a.target('tg:1')).toEqual({ platform: 'max', id: 9 });
+    a.setNotify('tg:1', null);
+    expect(a.target('tg:1')).toEqual({ platform: 'tg', id: 1 });
+    expect(a.target('guest:x')).toBeNull();
+  });
+
+  it('новый вход Max — сам себе аккаунт', () => {
+    const a = new AccountStore(null);
+    expect(a.seen('max:5')).toBe('max:5');
+    expect(a.target('max:5')).toEqual({ platform: 'max', id: 5 });
+    expect(a.tgChat('max:5')).toBeNull();
+  });
+
   it('удаление данных снимает привязки', () => {
     const a = new AccountStore(null);
     a.merge('tg:2', 'tg:1');

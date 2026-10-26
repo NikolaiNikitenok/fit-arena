@@ -12,8 +12,8 @@ export const ARCHIVE_DAYS = 30;
 // Без похожих букв и цифр (0/O, 1/I/L), чтобы код легко переписать с другого экрана.
 const CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-export type Platform = 'tg';
-export const LOGIN_RE = /^tg:\d{1,20}$/;
+export type Platform = 'tg' | 'max';
+export const LOGIN_RE = /^(tg|max):\d{1,20}$/;
 export const platformOf = (login: string): Platform | null => (LOGIN_RE.test(login) ? (login.slice(0, login.indexOf(':')) as Platform) : null);
 
 export interface Archived {
@@ -29,12 +29,15 @@ interface Data {
   links: Record<string, string>;
   // Аккаунт → последний вход: туда пишет бот.
   last: Record<string, string>;
+  // Аккаунт → куда писать, если игрок выбрал сам (иначе — туда, где заходил последним).
+  notify?: Record<string, Platform>;
   archive: Archived[];
 }
 
 export class AccountStore {
   private links = new Map<string, string>();
   private last = new Map<string, string>();
+  private notifyPref = new Map<string, Platform>();
   private archive: Archived[] = [];
   private codes = new Map<string, { account: string; exp: number }>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -48,6 +51,7 @@ export class AccountStore {
       const d = JSON.parse(readFileSync(file, 'utf8')) as Data;
       this.links = new Map(Object.entries(d.links ?? {}));
       this.last = new Map(Object.entries(d.last ?? {}));
+      this.notifyPref = new Map(Object.entries(d.notify ?? {}));
       this.archive = d.archive ?? [];
     } catch {
       // Файла ещё нет: все входы сами себе аккаунты.
@@ -89,6 +93,27 @@ export class AccountStore {
     return l ? Number(l.slice(3)) : null;
   }
 
+  /** Куда писать игроку: выбранный мессенджер, иначе где заходил последним, иначе любой привязанный. */
+  target(account: string): { platform: Platform; id: number } | null {
+    const logins = this.logins(account);
+    const pick = (p?: Platform) => (p ? logins.find((l) => platformOf(l) === p) : undefined);
+    const last = this.last.get(account);
+    const l = pick(this.notifyPref.get(account)) ?? (last && logins.includes(last) ? last : undefined) ?? logins[0];
+    if (!l) return null;
+    return { platform: platformOf(l)!, id: Number(l.slice(l.indexOf(':') + 1)) };
+  }
+
+  notifyChoice(account: string): Platform | null {
+    return this.notifyPref.get(account) ?? null;
+  }
+
+  /** Выбор в настройках: null — туда, где заходил последним. */
+  setNotify(account: string, p: Platform | null): void {
+    if (p) this.notifyPref.set(account, p);
+    else this.notifyPref.delete(account);
+    this.save();
+  }
+
   /** Одноразовый код привязки на CODE_TTL: новый заменяет прежний. */
   code(account: string): { code: string; expiresAt: number } {
     const now = this.now();
@@ -122,6 +147,7 @@ export class AccountStore {
     const last = this.last.get(from);
     this.last.delete(from);
     if (last && !this.last.has(to)) this.last.set(to, last);
+    this.notifyPref.delete(from);
     if (raw) this.codes.delete(raw.toUpperCase().replace(/[^A-Z0-9]/g, ''));
     for (const [c, v] of this.codes) if (v.account === from) this.codes.delete(c);
     this.save();
@@ -157,6 +183,7 @@ export class AccountStore {
     const logins = this.logins(account);
     for (const l of logins) this.links.delete(l);
     this.last.delete(account);
+    this.notifyPref.delete(account);
     this.archive = this.archive.filter((x) => x.account !== account && !x.logins.some((l) => logins.includes(l)));
     for (const [c, v] of this.codes) if (v.account === account) this.codes.delete(c);
     this.save();
@@ -172,7 +199,7 @@ export class AccountStore {
     this.timer = null;
     if (!this.file) return;
     mkdirSync(dirname(this.file), { recursive: true });
-    const d: Data = { links: Object.fromEntries(this.links), last: Object.fromEntries(this.last), archive: this.archive };
+    const d: Data = { links: Object.fromEntries(this.links), last: Object.fromEntries(this.last), notify: Object.fromEntries(this.notifyPref), archive: this.archive };
     writeFileSync(`${this.file}.tmp`, JSON.stringify(d));
     renameSync(`${this.file}.tmp`, this.file);
   }

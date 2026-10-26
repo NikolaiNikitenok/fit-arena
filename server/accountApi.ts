@@ -26,7 +26,13 @@ export function accountApi(d: AccountDeps, path: string, me: { id: string; login
   if (path === '/api/account/status')
     return {
       status: 200,
-      body: { id: me.id, login: me.login, logins: d.accounts.logins(me.id).map((l) => ({ login: l, platform: platformOf(l) })), card: d.card(me.id) },
+      body: {
+        id: me.id,
+        login: me.login,
+        logins: d.accounts.logins(me.id).map((l) => ({ login: l, platform: platformOf(l) })),
+        card: d.card(me.id),
+        notify: d.accounts.notifyChoice(me.id),
+      },
     };
   if (path === '/api/account/code') return { status: 200, body: d.accounts.code(me.id) };
   if (path === '/api/account/link') {
@@ -46,6 +52,12 @@ export function accountApi(d: AccountDeps, path: string, me: { id: string; login
     d.drop(from);
     d.accounts.merge(from, to, code);
     return { status: 200, body: { ok: true, id: to, progress: d.progress(to) ?? null } };
+  }
+  if (path === '/api/account/notify') {
+    const p = body.platform === 'tg' || body.platform === 'max' ? body.platform : null;
+    if (p && !d.accounts.logins(me.id).some((l) => platformOf(l) === p)) return fail('Этот мессенджер не привязан');
+    d.accounts.setNotify(me.id, p);
+    return accountApi(d, '/api/account/status', me, {});
   }
   if (path === '/api/account/unlink') {
     const login = typeof body.login === 'string' ? body.login : '';
