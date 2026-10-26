@@ -40,14 +40,21 @@ for j, a, b in bands:
     ins += ['-i', f'band_{j:02d}.png']; fc += f"[{prev}][{idx}:v]overlay=0:0:enable='between(t,{a:.3f},{b:.3f})'[o{j}];"; prev = f'o{j}'; idx += 1
 ins += ['-loop', '1', '-t', f'{HOOK:.3f}', '-i', 'hook.png']
 fc += f'[{idx}:v]format=rgba,fade=t=out:st={HOOK - 0.15:.3f}:d=0.15:alpha=1[hk];[{prev}][hk]overlay=0:0:eof_action=pass[oh];'; prev = 'oh'; idx += 1
-ins += ['-i', S]; mi = idx; idx += 1; vo = []
+# Музыка из библиотеки (music/<id>.m4a), по умолчанию — бодрый бит.
+music = os.path.join(D, 'music', f"{s.get('music', 'energy')}.m4a")
+if not os.path.exists(music): music = os.path.join(D, 'music', 'energy.m4a')
+ins += ['-stream_loop', '-1', '-i', music]; mi = idx; idx += 1; vo = []
 for i in range(n):
     ms = int(starts[i] * 1000); ins += ['-i', f'vo/{i + 1}.wav']
     fc += f'[{idx}:a]aresample=48000,adelay={ms}|{ms}[v{i}];'; vo.append(f'[v{i}]'); idx += 1
-fc += ''.join(vo) + f'amix=inputs={n}:normalize=0,apad,atrim=0:{END:.3f},highpass=f=80,acompressor=threshold=-20dB:ratio=3,asplit=2[voice][sc];'
+fc += ''.join(vo) + f'amix=inputs={n}:normalize=0,apad,atrim=0:{END:.3f},highpass=f=80,acompressor=threshold=-20dB:ratio=3,asplit=3[voice][sc][vonly];'
 fc += f'[{mi}:a]atrim=0:{END:.3f},volume=0.45,afade=t=out:st={END - 1.2:.3f}:d=1.2[mus];[mus][sc]sidechaincompress=threshold=0.03:ratio=5:attack=20:release=250[duck];'
-fc += '[voice][duck]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1.5[a]'
+fc += '[voice][duck]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1.5[a];[vonly]loudnorm=I=-14:TP=-1.5,aresample=48000[av]'
 subprocess.run(['ffmpeg', '-y', '-v', 'error', *ins, '-filter_complex', fc, '-map', f'[{prev}]', '-map', '[a]', '-t', f'{END:.3f}',
                 '-c:v', 'libx264', '-crf', '14', '-preset', 'slow', '-profile:v', 'high', '-level', '4.2', '-maxrate', '25M', '-bufsize', '50M',
-                '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', 'reel.mp4'], check=True)
-print(f'reel.mp4 {END:.1f} с')
+                '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', 'reel.mp4',
+                '-map', '[av]', '-c:a', 'pcm_s16le', 'voice.wav'], check=True)
+# Вторая версия: тот же видеоряд, только голос — под трендовый трек из библиотеки Instagram.
+subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', 'reel.mp4', '-i', 'voice.wav', '-map', '0:v', '-map', '1:a', '-c:v', 'copy',
+                '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart', 'reel-voice.mp4'], check=True)
+print(f'reel.mp4 {END:.1f} с, музыка {os.path.basename(music)}')

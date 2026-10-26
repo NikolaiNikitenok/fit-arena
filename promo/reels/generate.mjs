@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const catalog = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.url), 'utf8'));
+const music = JSON.parse(readFileSync(new URL('./music/library.json', import.meta.url), 'utf8'));
 const n = Number(process.argv[2] ?? 0) || 0;
 const topic = (process.argv[3] ?? '').trim().slice(0, 300);
 
@@ -52,8 +53,11 @@ ${clips}
 Титры (поле subs): та же реплика, разбитая на 1–3 куска по 2–4 слова (до 24 символов в куске), цифрами где удобно; название в титрах пиши NikitenokArena, Telegram — латиницей.
 Хук-карточка (hook) на весь экран в начале: top — 2–4 слова белым, accent — 1–3 слова цветом (самое цепляющее), sub — короткая подводка до 30 символов или пусто.
 
+Фоновая музыка — выбери один трек из библиотеки по настроению хука и сценария:
+${Object.entries(music).map(([id, about]) => `- ${id}: ${about}`).join('\n')}
+
 Ответь только JSON без пояснений и без markdown:
-{"hook":{"top":"...","accent":"...","sub":"..."},"lines":[{"say":"...","subs":["..."],"clip":"..."}],"caption":"подпись для Instagram: 3–6 коротких строк, с эмодзи, вопрос для комментариев и «ссылка в профиле»","hashtags":["#..."]}
+{"hook":{"top":"...","accent":"...","sub":"..."},"lines":[{"say":"...","subs":["..."],"clip":"..."}],"caption":"подпись для Instagram: 3–6 коротких строк, с эмодзи, вопрос для комментариев и «ссылка в профиле»","hashtags":["#..."],"music":"id трека"}
 Первая реплика в lines — озвучка хука (её subs не показываются). Всего 6–8 реплик, 40–55 слов в say суммарно (это примерно 22 секунды озвучки), каждая реплика до 9 слов. Хэштегов 8–12, по-русски и пара английских.`;
 }
 
@@ -93,6 +97,7 @@ export function problems(s) {
   });
   if (L.at(-1).clip !== 'cta') out.push('последний клип должен быть cta');
   if (!/Никитёнок Арен/i.test(L.at(-1).say ?? '')) out.push('в призыве нет «Никитёнок Арена»');
+  if (!music[s.music]) out.push(`нет трека ${s.music} в библиотеке`);
   return out;
 }
 
