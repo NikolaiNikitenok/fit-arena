@@ -6,7 +6,7 @@ os.makedirs('vo', exist_ok=True)
 for i, l in enumerate(s['lines'], 1):
     mp3 = f'vo/{i}.mp3'
     for n in range(1, 6):  # сервис изредка не отвечает — повторяем
-        r = subprocess.run(['edge-tts', '--voice', voice, '--rate=+10%', '--text', l['say'], '--write-media', mp3], capture_output=True)
+        r = subprocess.run(['edge-tts', '--voice', voice, '--rate=+15%', '--text', l['say'], '--write-media', mp3], capture_output=True)
         if r.returncode == 0 and os.path.getsize(mp3) > 0: break
         print(f'повтор {n}: {l["say"]}'); time.sleep(n * 3)
     else:
