@@ -294,3 +294,48 @@ export const Plus = ({ size = 16, className }: P) => svg(size, className, <path 
 export const Search = ({ size = 16, className }: P) => svg(size, className, <path d="M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15zM16 16l5 5" />);
 
 export const Kettlebell = ({ size = 18, className }: P) => svg(size, className, <path d="M8 9.5V8a4 4 0 018 0v1.5M12 21a6.5 6.5 0 100-13 6.5 6.5 0 000 13z" />);
+
+// Топ города: дома разной высоты.
+export const City = ({ size = 18, className }: P) => svg(size, className, <path d="M3 21h18M5 21V10l5-3v14M10 21V4h7v17M19 21v-8h-2M13 8h1.5M13 11.5h1.5M13 15h1.5" />);
+
+// Коллекции обликов: альбом с карточками.
+export const Album = ({ size = 18, className }: P) => svg(size, className, <path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5zM8 8h3v4H8zM13 8h3v4h-3zM8 14h3v2.5H8zM13 14h3v2.5h-3z" />);
+
+/** Жетон праздника: тыква, снежинка, цветок или медаль. */
+export function HolidayToken({ id, size = 22 }: { id: string; size?: number }) {
+  return (
+    <svg className="icon hol-token" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      {id === 'pumpkin' && (
+        <>
+          <path d="M12 7.2c-1-2.2.2-4 2.2-4.5" fill="none" stroke="#5d8a2e" strokeWidth="2" strokeLinecap="round" />
+          <ellipse cx="7.6" cy="14" rx="5" ry="6.6" fill="#f57c00" />
+          <ellipse cx="16.4" cy="14" rx="5" ry="6.6" fill="#f57c00" />
+          <ellipse cx="12" cy="14" rx="4.6" ry="7.2" fill="#ff9800" />
+          <path d="M9.3 12.4l1.4 1.6-1.9.4zM14.7 12.4l-1.4 1.6 1.9.4zM9 16.6c1.8 1.4 4.2 1.4 6 0l-1 1.6h-4z" fill="#ffe082" />
+        </>
+      )}
+      {id === 'winter' && (
+        <g stroke="#b3e5fc" strokeWidth="2" strokeLinecap="round" fill="none">
+          <path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6" />
+          <path d="M9.6 4.2L12 6.4l2.4-2.2M9.6 19.8l2.4-2.2 2.4 2.2M4.4 10.6l3.2-.8-.8-3.1M19.6 13.4l-3.2.8.8 3.1M4.4 13.4l3.2.8-.8 3.1M19.6 10.6l-3.2-.8.8-3.1" stroke="#e1f5fe" strokeWidth="1.5" />
+        </g>
+      )}
+      {id === 'spring' && (
+        <>
+          {[0, 72, 144, 216, 288].map((a) => (
+            <ellipse key={a} cx="12" cy="6.6" rx="3.4" ry="4.6" fill="#f48fb1" transform={`rotate(${a} 12 12)`} />
+          ))}
+          <circle cx="12" cy="12" r="3" fill="#ffeb3b" />
+        </>
+      )}
+      {id === 'summer' && (
+        <>
+          <path d="M7 2.5h4l1 5-3 1zM17 2.5h-4l-1 5 3 1z" fill="#42a5f5" />
+          <circle cx="12" cy="14.5" r="7" fill="#ffca28" />
+          <circle cx="12" cy="14.5" r="4.6" fill="none" stroke="#e09b00" strokeWidth="1.4" />
+          <path d="M12 11.6l.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z" fill="#fff3c4" />
+        </>
+      )}
+    </svg>
+  );
+}

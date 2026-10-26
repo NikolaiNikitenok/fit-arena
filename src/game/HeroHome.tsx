@@ -6,11 +6,15 @@ import { BASE_DAMAGE, heroPower } from './power';
 import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
 import { AchBadge } from './Achievements';
-import { achDone, ACHIEVEMENTS, heroBadge } from './achievements';
+import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
-import { Bag, Check, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
+import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
+import { HOLIDAY_GOAL, holidayAt, holidayOutfit, holidayTokens, tokenWord } from './holidays';
+import { collectionDone, visibleCollections } from './collections';
+import { OutfitFace } from './EventScreen';
+import './holiday.css';
 import { gymOf, todayTemplate } from '../gym/gym';
 import { PASS_TIERS, passTier } from './pass';
 import { passOf } from './progress';
@@ -69,6 +73,10 @@ interface Props {
   onDungeon: () => void;
   // Друзья: экран во вкладке дуэли.
   onFriends: () => void;
+  // Праздник Атлетии, коллекции обликов и топ города.
+  onHoliday: () => void;
+  onCollections: () => void;
+  onCity: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -99,7 +107,7 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity } = props;
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -134,8 +142,17 @@ export function HeroHome(props: Props) {
   const ev = eventOf(progress, now);
   const bossFace = eventBossSay(boss, '');
 
-  const achGot = ACHIEVEMENTS.filter((a) => achDone(a, progress, now));
+  const achAll = visibleAchievements(progress, now);
+  const achGot = achAll.filter((a) => achDone(a, progress, now));
   const lastAch = achGot[achGot.length - 1];
+
+  // Праздник: полоса под заданием дня, пока он идёт.
+  const hol = holidayAt(now);
+  const holTokens = hol.live ? holidayTokens(progress, hol) : 0;
+  // За неделю до начала полоса уже видна: анонс.
+  const holShown = hol.live || hol.start - now < 7 * 86_400_000;
+  const cols = visibleCollections(now);
+  const colsDone = cols.filter((c) => collectionDone(c, progress)).length;
 
   const pet = progress.pets?.active;
   const petLvl = pet ? petLevel(petXp(progress, pet)).level : 0;
@@ -147,7 +164,7 @@ export function HeroHome(props: Props) {
       </span>
       <b>Достижения</b>
       <small>
-        {achGot.length} из {ACHIEVEMENTS.length}
+        {achGot.length} из {achAll.length}
       </small>
       <Dot n={badges.achievements} />
     </button>
@@ -209,6 +226,21 @@ export function HeroHome(props: Props) {
       </button>
 
       <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
+
+      {holShown && (
+        <button className="hb-holiday" style={{ ['--hs1' as string]: hol.def.sky[0], ['--hs2' as string]: hol.def.sky[1], ['--hg' as string]: hol.def.glow }} onClick={onHoliday}>
+          <HolidayToken id={hol.def.id} size={30} />
+          <span className="hb-holiday-text">
+            <b>{hol.def.name}</b>
+            <small>{hol.live ? `${holTokens.toLocaleString('ru')} ${tokenWord(hol.def, holTokens)} · ещё ${fmtLeft(hol.end - now)}` : `праздник ${fmtDays(daysUntil({ ...hol, live: false }, now))}`}</small>
+            <span className="hb-holiday-bar">
+              <span style={{ width: `${Math.min(100, (holTokens / HOLIDAY_GOAL) * 100)}%` }} />
+            </span>
+          </span>
+          <OutfitFace id={holidayOutfit(hol).id} size={34} />
+          <Dot n={badges.holiday} />
+        </button>
+      )}
 
       <div className="hb-tiles">
         <button className={`hb-tile hb-dungeon ${unfinished || floors ? 'ready' : ''}`} style={{ ['--la' as string]: land.accent }} onClick={onDungeon}>
@@ -298,6 +330,26 @@ export function HeroHome(props: Props) {
           </span>
           <Dot n={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} />
         </button>
+        <button className="hb-more-item" onClick={onCollections}>
+          <span className="hb-more-icon blue">
+            <Album size={18} />
+          </span>
+          <span>
+            <b>Коллекции</b>
+            <small>
+              {colsDone} из {cols.length}
+            </small>
+          </span>
+        </button>
+        <button className="hb-more-item" onClick={onCity}>
+          <span className="hb-more-icon gold">
+            <City size={18} />
+          </span>
+          <span>
+            <b>Мой город</b>
+            <small>топ недели</small>
+          </span>
+        </button>
         <button className="hb-more-item" onClick={onFriends}>
           <span className="hb-more-icon blue">
             <Users size={18} />
@@ -313,7 +365,7 @@ export function HeroHome(props: Props) {
             <span>
               <b>Достижения</b>
               <small>
-                {achGot.length} из {ACHIEVEMENTS.length}
+                {achGot.length} из {achAll.length}
               </small>
             </span>
             <Dot n={badges.achievements} />
