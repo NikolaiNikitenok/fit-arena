@@ -14,7 +14,7 @@ import type { ViewBld } from './Village3D';
 
 const W = (c: number) => c - GRID / 2;
 const N = GRID * GRID;
-const HEIGHT = 1.35;
+const HEIGHT = 1.6;
 // Клеток в секунду: прогулочный шаг.
 const SPEED = 1.05;
 

@@ -9,6 +9,9 @@ import { GRID } from '../../shared/village';
 import { SKILLS } from '../../shared/heroSkills';
 import { DT, HEAL_RADIUS, rectDist, SimUnit, TPS, TroopId, UnitKind } from '../../shared/villageBattle';
 import { faceTo, frameOf, TroopClip, troopPose, turnToward } from './troopPose';
+
+/** Во сколько раз войска в бою крупнее роста из таблицы. */
+const TROOP_BIG = 1.3;
 import type { BattleView } from './Village3D';
 
 // Отряды в бою — настоящие персонажи KayKit. Персонажей с костями на поле десятки, и у каждого
@@ -307,8 +310,9 @@ export function* bakeSteps(rig: TroopRig, char: THREE.Object3D, animations: THRE
   idle?.computeBoundingBox();
   if (idle?.boundingBox) box.copy(idle.boundingBox);
   const h = Math.max(0.5, box.max.y - Math.min(0, box.min.y));
-  const scale = rig.height / h;
-  return { clips, materials, scale, top: rig.height + (rig.fly ?? 0), verts };
+  // Войска крупнее, чем по росту в таблице: в бою их должно быть хорошо видно.
+  const scale = (rig.height * TROOP_BIG) / h;
+  return { clips, materials, scale, top: rig.height * TROOP_BIG + (rig.fly ?? 0), verts };
 }
 
 export function disposeBaked(b: BakedTroop) {
@@ -592,7 +596,7 @@ export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<B
 }
 
 export type HeroLook = Pick<CharacterProps, 'model' | 'tint' | 'glow' | 'hands'>;
-export const HERO_HEIGHT = 1.6;
+export const HERO_HEIGHT = 2;
 // Герой без своего снаряжения (повтор чужого набега).
 export const DEFAULT_HERO: HeroLook = { model: 'Knight', glow: '#ff8a5c', tint: 'mul:0.95,0.85,0.8' };
 

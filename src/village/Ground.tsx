@@ -7,6 +7,7 @@ import { ribbonGeometry } from '../three/Prop';
 import { GRID, isTrap } from '../../shared/village';
 import { MARGIN } from '../../shared/villageBattle';
 import { type Prim, SIZE, THEME_TREE_TINT } from './looks';
+import { mixHex } from './sky';
 import { PrimInstances } from './looks3d';
 import type { Decor, ThemeId } from './decor';
 import type { ViewBld } from './Village3D';
@@ -117,7 +118,7 @@ interface Pal {
   tree?: string;
 }
 const OWN: Pal = {
-  grass: ['#7cb247', '#83b84c', '#89bd51', '#90c257'], meadow: '#71a541', dirt: ['#a9845a', '#b38d61', '#9e7a51'],
+  grass: ['#62a83c', '#69ae40', '#70b345', '#77b84a'], meadow: '#5c9c37', dirt: ['#a9845a', '#b38d61', '#9e7a51'],
   tuft: ['#5f9a35', '#6aa83d', '#77b546', '#558f30'], flower: ['#ffffff', '#ffe066', '#ff9ec7', '#9ec5ff', '#ff7a6b'],
   low: ['#6f9e42', '#86b34c', '#55833a'], water: '#4fa6d8', sand: '#d2bb84', road: '#b8946a',
 };
@@ -138,7 +139,7 @@ const PALS: Record<'enemy' | ThemeId, Pal> = {
 };
 const palOf = (enemy: boolean, theme: ThemeId) => PALS[enemy ? 'enemy' : theme];
 const PATH_C = ['#c4a274', '#cdab7c', '#b9976a'];
-const FOUND_C = ['#a8a196', '#9c958a', '#b1aa9e'];
+const FOUND_C = ['#bdb4a4', '#b1a898', '#c6bdad', '#aaa192'];
 const ROCK_C = ['#8a6a4a', '#7b5d40', '#94755a', '#6f5a48', '#8c8a86'];
 
 interface Box {
@@ -162,20 +163,27 @@ function blocks(kinds: Uint8Array, enemy: boolean, theme: ThemeId = 'classic'): 
       const inside = cx >= 0 && cy >= 0 && cx < GRID && cy < GRID;
       const kind = inside ? kinds[cy * GRID + cx] : GRASS;
       let c: string;
-      let top = -0.018 * hash(cx, cy, 1);
+      let top = 0;
+      let size = 1;
+      // Газон как в больших стратегиях: сплошной, без щелей, со «следами газонокосилки» —
+      // клетки через одну чуть светлее. Возле построек трава чуть темнее, будто примята.
+      const stripe = (cx + cy) % 2 === 0 ? 0.045 : 0;
       if (kind === FOUND) {
+        // Площадка под постройкой — брусчатка: швы между камнями видны.
         c = pick(FOUND_C, cx, cy);
-        top = 0;
-      } else if (kind === DIRT) c = pick(pal.dirt, cx, cy);
+        size = 0.95;
+      }
       else if (kind === PATH) {
         c = pick(PATH_C, cx, cy);
-        top = -0.025;
+        top = -0.02;
+        size = 0.97;
       } else if (inside) {
-        // Пятна светлой и тёмной травы плюс разброс по плитке.
-        const n = noise(cx / 4.5, cy / 4.5);
-        c = pal.grass[Math.min(3, Math.floor(n * 3.2 + hash(cx, cy, 2) * 0.9))];
-      } else c = hash(cx, cy, 4) < 0.5 ? pal.meadow : pal.grass[2];
-      out.push({ x: W(cx + 0.5), y: top - TILE_H / 2, z: W(cy + 0.5), sx: 0.94, sy: TILE_H, sz: 0.94, c });
+        const n = noise(cx / 5.5, cy / 5.5);
+        c = pal.grass[Math.min(3, Math.floor(n * 3.4 + hash(cx, cy, 2) * 0.5))];
+        if (kind === DIRT) c = mixHex(c, '#000000', 0.06);
+        c = mixHex(c, '#ffffff', stripe);
+      } else c = mixHex(hash(cx, cy, 4) < 0.5 ? pal.meadow : pal.grass[2], '#ffffff', stripe * 0.6);
+      out.push({ x: W(cx + 0.5), y: top - TILE_H / 2, z: W(cy + 0.5), sx: size, sy: TILE_H, sz: size, c });
     }
   // Каменный бордюр вокруг места для стройки.
   const H = GRID / 2;
@@ -208,6 +216,30 @@ function blocks(kinds: Uint8Array, enemy: boolean, theme: ThemeId = 'classic'): 
     const along = side < 2;
     const f = side % 2 ? EDGE + 0.08 : -EDGE - 0.08;
     out.push({ x: along ? 0 : f, y: -0.12, z: along ? f : 0, sx: along ? EDGE * 2 + 0.3 : 0.16, sy: 0.16, sz: along ? 0.16 : EDGE * 2 + 0.3, c: pal.meadow });
+  }
+  return out;
+}
+
+/** Площадка под каждой постройкой: тёмная каменная кайма и светлая брусчатка сверху, чуть над газоном. */
+function pads(buildings: ViewBld[]): Box[] {
+  const out: Box[] = [];
+  for (const b of buildings) {
+    if (b.t === 'wall' || isTrap(b.t)) continue;
+    const s = SIZE[b.t];
+    const cx = W(b.x + s / 2);
+    const cz = W(b.y + s / 2);
+    out.push({ x: cx, y: 0.025, z: cz, sx: s - 0.06, sy: 0.05, sz: s - 0.06, c: '#857c6f' });
+    // Брусчатка — плитками по клетке, со швами.
+    for (let i = 0; i < s; i++)
+      for (let j = 0; j < s; j++) {
+        const c = FOUND_C[Math.floor(hash(b.x + i, b.y + j, 41) * FOUND_C.length)];
+        const inset = (k: number) => (k === 0 ? 0.13 : 0.02);
+        const x0 = W(b.x + i) + inset(i);
+        const x1 = W(b.x + i + 1) - (i === s - 1 ? 0.13 : 0.02);
+        const z0 = W(b.y + j) + inset(j);
+        const z1 = W(b.y + j + 1) - (j === s - 1 ? 0.13 : 0.02);
+        out.push({ x: (x0 + x1) / 2, y: 0.035, z: (z0 + z1) / 2, sx: x1 - x0, sy: 0.07, sz: z1 - z0, c });
+      }
   }
   return out;
 }
@@ -263,16 +295,16 @@ function bits(kinds: Uint8Array, lite: boolean, enemy: boolean, theme: ThemeId =
       const kind = inside ? kinds[cy * GRID + cx] : GRASS;
       const at = (k: number) => ({ x: W(cx + 0.15 + 0.7 * hash(cx, cy, k)), z: W(cy + 0.15 + 0.7 * hash(cx, cy, k + 1)), r: hash(cx, cy, k + 2) * 6.28 });
       if (kind === GRASS) {
-        const n = hash(cx, cy, 20) < 0.55 * keep ? 1 + (hash(cx, cy, 21) < 0.4 ? 1 : 0) : 0;
+        const n = hash(cx, cy, 20) < 0.22 * keep ? 1 + (hash(cx, cy, 21) < 0.4 ? 1 : 0) : 0;
         for (let j = 0; j < n; j++) tufts.push({ ...at(30 + j * 3), s: 0.7 + 0.6 * hash(cx, cy, 40 + j), c: TUFT_C[Math.floor(hash(cx, cy, 41 + j) * 4)] });
-        if (!enemy && FLOWER_C.length && hash(cx, cy, 22) < 0.2 * keep) {
+        if (!enemy && FLOWER_C.length && hash(cx, cy, 22) < 0.09 * keep) {
           // Цветы растут кучками по 2–3.
           const c = FLOWER_C[Math.floor(hash(cx, cy, 23) * FLOWER_C.length)];
           const base = at(50);
           for (let j = 0; j < 3; j++) flowers.push({ x: base.x + (hash(cx, cy, 60 + j) - 0.5) * 0.3, z: base.z + (hash(cx, cy, 63 + j) - 0.5) * 0.3, s: 0.8 + 0.4 * hash(cx, cy, 66 + j), r: 0, c });
         }
       }
-      if ((kind === GRASS || kind === DIRT || kind === PATH) && hash(cx, cy, 24) < (kind === GRASS ? 0.12 : 0.3) * keep) pebbles.push({ ...at(70), s: 0.6 + 0.8 * hash(cx, cy, 73), c: PEBBLE_C[Math.floor(hash(cx, cy, 74) * 3)] });
+      if ((kind === GRASS || kind === DIRT || kind === PATH) && hash(cx, cy, 24) < (kind === GRASS ? 0.05 : 0.2) * keep) pebbles.push({ ...at(70), s: 0.6 + 0.8 * hash(cx, cy, 73), c: PEBBLE_C[Math.floor(hash(cx, cy, 74) * 3)] });
     }
   return { tufts, flowers, pebbles };
 }
@@ -657,7 +689,9 @@ export function Ground({ buildings, enemy, lite, grid, ghost, paths, theme = 'cl
   const layout = buildings.map((b) => `${b.t}${b.x},${b.y}`).join(';') + '|' + (paths ?? []).filter((d) => d.k === 'path').map((d) => `${d.x},${d.y}`).join(';');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const kinds = useMemo(() => tileKinds(buildings, paths), [layout]);
-  const list = useMemo(() => blocks(kinds, enemy, theme), [kinds, enemy, theme]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const list = useMemo(() => [...blocks(kinds, enemy, theme), ...pads(buildings)], [kinds, enemy, theme]);
   const tiles = useBoxMesh(list, !lite);
   const small = useMemo(() => bits(kinds, lite, enemy, theme), [kinds, lite, enemy, theme]);
   const far = useMemo(() => lowland(lite, enemy ? 'classic' : theme), [lite, enemy, theme]);

@@ -10,7 +10,7 @@ import { turnToward } from './troopPose';
 import type { ViewBld } from './Village3D';
 
 const W = (c: number) => c - GRID / 2;
-const HEIGHT = 1.5;
+const HEIGHT = 1.7;
 // Цикл строителя: бежит вокруг стройки, потом стучит молотком, потом снова бежит.
 const RUN_S = 2.6;
 const KNOCKS = 4;

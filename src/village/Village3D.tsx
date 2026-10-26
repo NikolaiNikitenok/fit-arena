@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Canvas3D } from '../three/Canvas3D';
+import { StylePass } from '../three/StylePass';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
@@ -121,6 +122,9 @@ function lookFor(b: ViewBld, enemy: boolean): Look {
 }
 
 type Moving = Anim & { ox: number; oz: number };
+/** Во сколько раз постройки крупнее, чем в превью и карточках. */
+const BIG = 1.1;
+
 function placed(list: ViewBld[], enemy: boolean, decor: Decor[] = [], theme: ThemeId = 'classic'): { kit: Record<LibName, Placed[]>; prim: Prim[]; anim: Moving[]; blobs: [number, number, number][] } {
   const out: Record<string, Placed[]> = { fantasy: [], village: [] };
   const prim: Prim[] = [];
@@ -142,9 +146,11 @@ function placed(list: ViewBld[], enemy: boolean, decor: Decor[] = [], theme: The
       continue;
     }
     const look = lookFor(b, enemy);
-    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x, y: m.y, z: cz + m.z, s: m.s, ry: m.ry, tint: m.tint });
-    for (const p of look.prim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
-    for (const a of look.anim) anim.push({ ...a, ox: cx, oz: cz });
+    // Постройки чуть крупнее своей клетки — «пухлые», как в больших стратегиях.
+    const K = BIG;
+    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x * K, y: m.y * K, z: cz + m.z * K, s: m.s * K, ry: m.ry, tint: m.tint });
+    for (const p of look.prim) prim.push({ ...p, x: cx + p.x * K, y: p.y * K, z: cz + p.z * K, sx: p.sx * K, sy: p.sy * K, sz: p.sz * K });
+    for (const a of look.anim) anim.push({ ...a, x: a.x * K, y: a.y * K, z: a.z * K, s: a.s * K, ox: cx, oz: cz });
     if (look.blob) blobs.push([cx, cz, look.blob]);
   }
   for (const d of decor) {
@@ -606,6 +612,7 @@ export function Village3D(props: SceneProps) {
       {live && fx && <TavernNotes buildings={props.buildings} />}
       {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
+      {!s.lowPower && <StylePass />}
     </Canvas3D>
   );
 }
