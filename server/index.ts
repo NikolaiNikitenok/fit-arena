@@ -30,7 +30,7 @@ import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
 import { botApi, botStatus, botUploadFiles, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
-import { dueReminders, plausibleXp, SaveStore } from './saves';
+import { dueReminders, plausibleXp, SAVE_MAX_BYTES, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
 import { opponent, warTick } from './wars';
@@ -312,7 +312,7 @@ function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > 300_000) req.destroy();
+      if (size > 1_200_000) req.destroy();
       else chunks.push(c);
     });
     req.on('end', () => {
@@ -360,6 +360,8 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
     if (typeof body!.account === 'string' && body!.account !== who.id) return reply(409, { error: 'account changed', account: who.id });
+    // Слишком большую копию сервер не хранит: говорим об этом, а не молча оставляем старую.
+    if (JSON.stringify(body!.progress ?? null).length > SAVE_MAX_BYTES) return reply(413, { error: 'progress too large' });
     const s = saves.put(who.id, body!.progress);
     // Копия принята: обновляем снимок деревни для набегов (невозможный снимок отклоняется и отмечается).
     if (s.progress === body!.progress) villages.update(who.id, s.progress, villageName(who.id, body!));

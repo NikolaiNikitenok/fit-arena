@@ -23,6 +23,13 @@ export interface AccountDeps {
   restore: (account: string, a: Archived) => void;
 }
 
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), 1e6) : 0);
+function localHero(v: unknown): HeroCard | null {
+  const l = (v ?? {}) as { level?: unknown; stages?: unknown; days?: unknown };
+  if (!num(l.stages) && !num(l.days) && num(l.level) <= 1) return null;
+  return { level: Math.max(1, num(l.level)), stages: num(l.stages), cups: 0 };
+}
+
 type Reply = { status: number; body: unknown };
 const fail = (error: string, status = 400): Reply => ({ status, body: { error } });
 
@@ -45,7 +52,8 @@ export function accountApi(d: AccountDeps, path: string, me: { id: string; login
     const there = d.accounts.codeOwner(code);
     if (!there) return fail('Код не подошёл или истёк. Возьми новый в настройках на другой платформе.');
     if (there === me.id) return fail('Это код этого же аккаунта: он уже здесь.');
-    const here = d.card(me.id);
+    // Сервер мог не получить копию героя с этого телефона: тогда верим описанию телефона, чтобы не затереть героя пустым.
+    const here = d.card(me.id) ?? localHero(body.local);
     const other = d.card(there);
     let keep = body.keep === 'here' || body.keep === 'there' ? body.keep : null;
     if (!keep) {

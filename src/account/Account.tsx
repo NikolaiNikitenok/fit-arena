@@ -1,7 +1,7 @@
 // Единый аккаунт: какие входы привязаны, код для другой платформы и ввод кода (server/accountApi.ts).
 import { useEffect, useState } from 'react';
-import { cloudState, onCloud, post, switchAccount } from '../cloud';
-import type { Progress } from '../game/progress';
+import { cloudState, localBackup, onCloud, post, restoreLocalBackup, switchAccount, syncNow } from '../cloud';
+import { heroLevel, heroXp, loadProgress, type Progress } from '../game/progress';
 import { Sheet } from '../Sheet';
 import { WebLogoutButton } from './WebLogin';
 
@@ -18,6 +18,14 @@ interface Status {
   notify: 'tg' | 'max' | null;
   archived?: { at: number; card: HeroCard }[];
 }
+
+/** Герой этого телефона: сервер мог не успеть получить его копию, поэтому сообщаем о нём при привязке. */
+const localCard = () => {
+  const p = loadProgress();
+  return { level: heroLevel(heroXp(p)).level, stages: Object.keys(p.stars ?? {}).length, days: Object.keys(p.days ?? {}).length };
+};
+/** Сначала отдаём серверу свою копию героя, чтобы он сравнивал настоящих героев. */
+const pushLocal = () => syncNow(loadProgress()).catch(() => {});
 
 const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: 'Яндекс' };
 const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? 'Вход'} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
@@ -38,6 +46,7 @@ export function AccountRow() {
   const [enter, setEnter] = useState(false);
   const [error, setError] = useState('');
   const [sure, setSure] = useState<number | null>(null);
+  const [backup] = useState(localBackup);
   useEffect(() => {
     if (linkable) post('/api/account/status', {}).then(setStatus, () => null);
   }, [linkable]);
@@ -99,7 +108,7 @@ export function AccountRow() {
           </div>
         ) : null}
         <div className="account-actions">
-          <button className="small-btn ghost" onClick={() => post('/api/account/code', {}).then(setCode, (e) => setError(errText(e)))}>
+          <button className="small-btn ghost" onClick={() => pushLocal().then(() => post('/api/account/code', {})).then(setCode, (e) => setError(errText(e)))}>
             {code ? 'Новый код' : 'Получить код'}
           </button>
           <button className="small-btn ghost" onClick={() => setEnter(true)}>
@@ -107,6 +116,21 @@ export function AccountRow() {
           </button>
           <WebLogoutButton />
         </div>
+        {backup && (
+          <div className="account-archive">
+            <div className="toggle-title">Копия героя на этом телефоне</div>
+            <div className="muted">Игра сохранила её перед сменой аккаунта.</div>
+            <div className="account-login">
+              <span>
+                Герой {backup.level} уровня · {backup.stages} уровней пройдено
+                <span className="muted"> · {new Date(backup.at).toLocaleDateString('ru-RU')}</span>
+              </span>
+              <button className="small-btn" onClick={() => (sure === -1 ? restoreLocalBackup().catch((e) => setError(errText(e))) : setSure(-1))}>
+                {sure === -1 ? 'Точно вернуть?' : 'Вернуть'}
+              </button>
+            </div>
+          </div>
+        )}
         {!!status?.archived?.length && (
           <div className="account-archive">
             <div className="toggle-title">Прежние герои</div>
@@ -158,10 +182,14 @@ export function LinkSheet({ onClose }: { onClose: () => void }) {
   const link = (keep?: 'here' | 'there') => {
     setBusy(true);
     setError('');
-    post('/api/account/link', { code, keep })
+    pushLocal()
+      .then(() => post('/api/account/link', { code, keep, local: localCard() }))
       .then((r: { ok?: boolean; id?: string; progress?: Progress | null; conflict?: { here: HeroCard; there: HeroCard } }) => {
         if (r.conflict) return setConflict(r.conflict), setBusy(false);
-        if (r.ok && r.id) switchAccount(r.id, r.progress ?? null);
+        if (!r.ok || !r.id) return;
+        // Остался герой этого телефона: его копия здесь самая свежая, серверную не берём.
+        if (r.id === cloudState()?.account) return location.reload();
+        switchAccount(r.id, r.progress ?? null);
       })
       .catch((e) => {
         setError(errText(e));
