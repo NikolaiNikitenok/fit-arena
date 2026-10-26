@@ -1,0 +1,52 @@
+name: Carousel
+
+# Карусель для Instagram по кнопкам «🖼 Карусель: советы / приложение» в боте: сервер запускает этот workflow
+# (server/reels.ts), Claude пишет слайды, Playwright рисует картинки 1080×1350, бот присылает их админу.
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id: { description: 'Кому прислать (Telegram ID)', required: true }
+      n: { description: 'Номер карусели (темы по кругу)', required: true, default: '1' }
+      kind: { description: 'tips — советы, app — про приложение', required: true, default: 'tips' }
+      topic: { description: 'Тема (необязательно)', required: false, default: '' }
+
+concurrency: { group: carousel, cancel-in-progress: false }
+
+jobs:
+  carousel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CHAT: ${{ inputs.chat_id }}
+      N: ${{ inputs.n }}
+      KIND: ${{ inputs.kind }}
+      TOPIC: ${{ inputs.topic }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Tools
+        run: |
+          npm i -g @anthropic-ai/claude-code > /dev/null
+          npm i --prefix $HOME/pw playwright@1.63.0 > /dev/null
+          ln -s $HOME/pw/node_modules promo/carousel/node_modules
+          $HOME/pw/node_modules/.bin/playwright install --with-deps chromium > /dev/null
+          mkdir -p out
+      - name: Text
+        working-directory: out
+        run: node ../promo/carousel/generate.mjs "$N" "$KIND" "$TOPIC"
+      - name: Slides
+        working-directory: out
+        run: node ../promo/carousel/render.mjs
+      - uses: actions/upload-artifact@v4
+        with: { name: carousel, path: "out/slide_*.jpg\nout/carousel.json", retention-days: 7 }
+      - name: Send
+        working-directory: out
+        run: node ../promo/carousel/send.mjs "$CHAT"
+      - name: Report failure
+        if: failure()
+        working-directory: out
+        run: node ../promo/carousel/send.mjs "$CHAT" "ошибка в GitHub Actions (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"

@@ -61,7 +61,7 @@ ${Object.entries(music).map(([id, about]) => `- ${id}: ${about}`).join('\n')}
 Первая реплика в lines — озвучка хука (её subs не показываются). Всего 6–8 реплик, 40–55 слов в say суммарно (это примерно 22 секунды озвучки), каждая реплика до 9 слов. Хэштегов 8–12, по-русски и пара английских.`;
 }
 
-function askClaude(text) {
+export function askClaude(text) {
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     const r = spawnSync('claude', ['-p', '--model', 'opus', '--output-format', 'text'], { input: text, encoding: 'utf8', timeout: 240_000, maxBuffer: 4 << 20 });
     if (r.status !== 0) throw new Error(`claude: ${(r.stderr || r.stdout || '').slice(0, 500)}`);
@@ -70,7 +70,7 @@ function askClaude(text) {
   throw new Error('нет CLAUDE_CODE_OAUTH_TOKEN');
 }
 
-async function askApi(text) {
+export async function askApi(text) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
