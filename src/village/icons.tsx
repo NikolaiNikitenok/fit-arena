@@ -53,3 +53,71 @@ export const SkillIcon = ({ id, size = 30, className }: P & { id: string }) => {
       return svg(size, className, <path d="M13.5 2L5 13.5h6L9.5 22 19 9.5h-6z" />, true);
   }
 };
+
+// Пухлые иконки запасов: заливка с бликом и тёмный контур, как в больших стратегиях. Их рисует
+// ResIcon во всей деревне — в полосах запасов, добыче и итогах набега.
+const OUT = '#2a1608';
+let uid = 0;
+export function ChunkyRes({ r, size = 18 }: { r: 'wood' | 'stone' | 'gold' | 'charge'; size?: number }) {
+  // Свой id градиентов у каждой иконки: в одном документе их много.
+  const id = `cr${(uid = (uid + 1) % 1e6)}`;
+  return (
+    <svg className="icon chunky" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      {r === 'wood' && (
+        <>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#d9954f" />
+              <stop offset="1" stopColor="#8a4b1c" />
+            </linearGradient>
+          </defs>
+          <path d="M5 6.5h11.5a5.5 5.5 0 010 11H5a5.5 5.5 0 010-11z" fill={`url(#${id})`} stroke={OUT} strokeWidth="1.8" />
+          <path d="M5.5 9.5h7M4.5 13h6M7 15.5h6" stroke="#6b3812" strokeWidth="1.2" strokeLinecap="round" />
+          <ellipse cx="17" cy="12" rx="4" ry="5" fill="#f6dcaa" stroke={OUT} strokeWidth="1.6" />
+          <ellipse cx="17" cy="12" rx="1.8" ry="2.4" fill="none" stroke="#b07a3e" strokeWidth="1.1" />
+          <path d="M6 7.8h8" stroke="#f3c48a" strokeWidth="1.2" strokeLinecap="round" opacity=".8" />
+        </>
+      )}
+      {r === 'stone' && (
+        <>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#e4e8ef" />
+              <stop offset="1" stopColor="#7c8494" />
+            </linearGradient>
+          </defs>
+          <path d="M3 17.5l2.6-7.2 5.4-4.6 6.4 1.8 3.4 6.4-3 4.6H6.4z" fill={`url(#${id})`} stroke={OUT} strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M11 5.7l1.2 5.3 5.2-3.5M12.2 11l-6.6-.7M12.2 11l1.6 7.5M12.2 11l8.6 3" stroke="#5d6473" strokeWidth="1" strokeLinejoin="round" fill="none" opacity=".75" />
+          <path d="M6.6 10.6l4.2-3.6" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity=".85" />
+        </>
+      )}
+      {r === 'gold' && (
+        <>
+          <defs>
+            <radialGradient id={id} cx=".38" cy=".32" r=".8">
+              <stop offset="0" stopColor="#fff2a6" />
+              <stop offset=".55" stopColor="#ffc93c" />
+              <stop offset="1" stopColor="#d48a12" />
+            </radialGradient>
+          </defs>
+          <circle cx="12" cy="12" r="9.2" fill={`url(#${id})`} stroke={OUT} strokeWidth="1.8" />
+          <circle cx="12" cy="12" r="6" fill="none" stroke="#b9730c" strokeWidth="1.3" />
+          <path d="M12 8.2l1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.2-2.3 1.2.5-2.5-1.8-1.7 2.5-.3z" fill="#e59a17" />
+          <path d="M7.2 8.6a5.6 5.6 0 012.8-2.6" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" opacity=".9" fill="none" />
+        </>
+      )}
+      {r === 'charge' && (
+        <>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#d6f7ff" />
+              <stop offset="1" stopColor="#36b5ea" />
+            </linearGradient>
+          </defs>
+          <path d="M13.8 1.8L4.6 13.6h6.2L9.2 22.2l10.2-12.8h-6.2z" fill={`url(#${id})`} stroke={OUT} strokeWidth="1.7" strokeLinejoin="round" />
+          <path d="M12.6 4.8l-5 6.6" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" opacity=".9" />
+        </>
+      )}
+    </svg>
+  );
+}

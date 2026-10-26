@@ -13,6 +13,9 @@ import type { CharName } from '../three/kit';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings, useSettings } from '../settings';
 import { emitFx, Particles } from './Particles';
+import { HitFx } from './HitFx';
+import { Skyline } from './Skyline';
+import { SeasonFall, seasonNow } from '../three/SeasonFall';
 import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, WindowGlow } from './Atmosphere';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
@@ -62,6 +65,8 @@ export interface Ctl {
   intro?: boolean;
   // Сцена с моделями на экране (до этого пролёт ждёт).
   ready?: boolean;
+  // Тряска камеры (падение ратуши): сила и сколько уже трясёт, мс.
+  shake?: { amp: number; t: number } | null;
 }
 
 interface CamPose {
@@ -139,17 +144,19 @@ function placed(list: ViewBld[], enemy: boolean, decor: Decor[] = [], theme: The
       // Столб в клетке и секции к соседям справа и снизу; с 6 уровня на столбе золотая шапка.
       // Вид столба по уровню — wallLook в looks.ts, тот же в превью.
       const { tint, cs, prim: trim } = wallLook(b.l);
-      out.fantasy.push({ name: 'column', x: cx, z: cz, s: cs, tint });
-      for (const p of trim) prim.push({ ...p, x: cx + p.x, z: cz + p.z });
-      if (walls.has(`${b.x + 1},${b.y}`)) out.fantasy.push({ name: 'wall_straight', x: cx + 0.5, z: cz, s: 0.5, tint });
-      if (walls.has(`${b.x},${b.y + 1}`)) out.fantasy.push({ name: 'wall_straight', x: cx, z: cz + 0.5, s: 0.5, ry: Math.PI / 2, tint });
+      const g = { g: b.i, gx: cx, gz: cz };
+      out.fantasy.push({ name: 'column', x: cx, z: cz, s: cs, tint, ...g });
+      for (const p of trim) prim.push({ ...p, x: cx + p.x, z: cz + p.z, ...g });
+      if (walls.has(`${b.x + 1},${b.y}`)) out.fantasy.push({ name: 'wall_straight', x: cx + 0.5, z: cz, s: 0.5, tint, ...g });
+      if (walls.has(`${b.x},${b.y + 1}`)) out.fantasy.push({ name: 'wall_straight', x: cx, z: cz + 0.5, s: 0.5, ry: Math.PI / 2, tint, ...g });
       continue;
     }
     const look = lookFor(b, enemy);
     // Постройки чуть крупнее своей клетки — «пухлые», как в больших стратегиях.
     const K = BIG;
-    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x * K, y: m.y * K, z: cz + m.z * K, s: m.s * K, ry: m.ry, tint: m.tint });
-    for (const p of look.prim) prim.push({ ...p, x: cx + p.x * K, y: p.y * K, z: cz + p.z * K, sx: p.sx * K, sy: p.sy * K, sz: p.sz * K });
+    const g = { g: b.i, gx: cx, gz: cz };
+    for (const m of look.kit) (out[m.lib] ??= []).push({ name: m.name, x: cx + m.x * K, y: m.y * K, z: cz + m.z * K, s: m.s * K, ry: m.ry, tint: m.tint, ...g });
+    for (const p of look.prim) prim.push({ ...p, x: cx + p.x * K, y: p.y * K, z: cz + p.z * K, sx: p.sx * K, sy: p.sy * K, sz: p.sz * K, ...g });
     for (const a of look.anim) anim.push({ ...a, x: a.x * K, y: a.y * K, z: a.z * K, s: a.s * K, ox: cx, oz: cz });
     if (look.blob) blobs.push([cx, cz, look.blob]);
   }
@@ -202,8 +209,17 @@ function Rig({ ctl, sun, sunH = 1 }: { ctl: React.MutableRefObject<Ctl>; sun: Re
     if (import.meta.env.DEV) Object.assign(window, { __vil: c, __fx: emitFx });
     const cam = camera as THREE.OrthographicCamera;
     off.copy(OFF).applyAxisAngle(UP, c.yaw ?? 0);
-    camera.position.set(c.tx + off.x, OFF.y, c.tz + off.z);
-    camera.lookAt(c.tx, 0, c.tz);
+    let sx = 0;
+    let sz = 0;
+    if (c.shake) {
+      c.shake.t += dt * 1000;
+      const k = c.shake.amp * Math.max(0, 1 - c.shake.t / 700) ** 2;
+      sx = Math.sin(c.shake.t * 0.09) * k;
+      sz = Math.cos(c.shake.t * 0.071) * k;
+      if (c.shake.t > 700) c.shake = null;
+    }
+    camera.position.set(c.tx + sx + off.x, OFF.y, c.tz + sz + off.z);
+    camera.lookAt(c.tx + sx, 0, c.tz + sz);
     if (last.current !== c.zoom) {
       cam.zoom = c.zoom;
       cam.updateProjectionMatrix();
@@ -624,6 +640,7 @@ function Scene(props: SceneProps) {
       {props.battle && <SkillAuras view={props.battle} />}
       {props.battle && <UnitBars view={props.battle} foe={!!props.foe} />}
       {props.battle && <Effects view={props.battle} />}
+      {props.battle && <HitFx view={props.battle} fx={fx} />}
       {fx && <Particles lite={lite} />}
     </>
   );
@@ -655,6 +672,8 @@ export function Village3D(props: SceneProps) {
   const { sky, weather } = useSky(live, s.dayNight, props.theme);
   const fx = s.villageFx;
   const spots = useMemo(() => lampSpots(props.buildings), [props.buildings]);
+  // Зимняя тема — своя погода (снег): листьев и лепестков в ней нет.
+  const season = props.theme === 'winter' ? null : seasonNow();
   return (
     <Canvas3D orthographic camera={{ position: [OFF.x, OFF.y, OFF.z], zoom: 14, near: 1, far: 260 }} gl={{ antialias: true }}>
       <hemisphereLight ref={hemi} args={['#ffffff', '#5a4a38', 1.25]} />
@@ -666,11 +685,13 @@ export function Village3D(props: SceneProps) {
         <Scene {...props} />
         {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
         <WindowGlow on={live ? sky.lamps : 0} />
+        {live && fx && <Skyline ctl={props.ctl} lite={s.lowPower} />}
       </Suspense>
       {live && fx && <Birds theme={props.theme ?? 'classic'} night={sky.lamps} />}
       {live && fx && <TavernNotes buildings={props.buildings} />}
       {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
+      {live && fx && weather !== 'snow' && season && <SeasonFall season={season} lite={s.lowPower} center={(v) => v.set(props.ctl.current.tx, 0, props.ctl.current.tz)} zoom={() => props.ctl.current.zoom} />}
       {!s.lowPower && <StylePass />}
     </Canvas3D>
   );

@@ -47,7 +47,9 @@ import { NPCS } from '../game/npcs';
 import { heroLevel, heroXp, Progress, saveProgress } from '../game/progress';
 import { spendCharge, villageOf } from '../game/resources';
 import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
-import { Bolt, Dungeon, Hammer, Move, Scroll, Star, Trophy } from './icons';
+import { Bolt, Dungeon, Hammer, Move, RES_COLORS, Scroll, Star, Trophy } from './icons';
+import { emitFx } from './Particles';
+import { pulse } from '../three/pulse';
 import { DecorThumb, Preview } from './Preview';
 import { newPartsAt } from './looks';
 import { clearPending, defenseLog, fetchInbox, fetchTop, findTarget, isOnline, isTransient, loadPending, NO_SERVER, OFFLINE, type PendingAttack, pingServer, PvpError, revengeTarget, savePending, setPvpNotify, submitWithRetry, TargetView } from './pvpApi';
@@ -529,6 +531,9 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     setSelDecor(null);
     setSelected(b.i);
     const s = sizeOf(b.t);
+    // Отклик: постройка пружинит, по земле расходится кольцо.
+    pulse(b.i, 'tap');
+    if (getSettings().villageFx) emitFx('tap', b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, s, '#ffe6b0');
     focusOn(ctl.current, b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, window.innerHeight);
   };
 
@@ -538,6 +543,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     if (r.got > 0) {
       commit(withTown(latest.current, r.town));
       sfx('coin');
+      const b = townOf(latest.current).b.find((v) => v.i === i);
+      if (b) {
+        const s = sizeOf(b.t);
+        pulse(i, 'collect');
+        if (getSettings().villageFx && r.res) emitFx('coins', b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, s, RES_COLORS[r.res]);
+      }
       if (r.res && x != null && y != null && getSettings().villageFx) flyRef.current?.fly(r.res, x, y, r.got);
       else flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
     } else flash('Склады полны: построй или улучши склад.');
@@ -764,6 +775,9 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               if (r.got <= 0) return flash(accrued(sel, now) > 0 ? 'Склады полны: построй или улучши склад.' : 'Пока пусто.');
               commit(withTown(latest.current, r.town));
               sfx('coin');
+              const s = sizeOf(sel.t);
+              pulse(sel.i, 'collect');
+              if (getSettings().villageFx && r.res) emitFx('coins', sel.x + s / 2 - GRID / 2, sel.y + s / 2 - GRID / 2, s, RES_COLORS[r.res]);
             }}
             onArmy={() => setSheet('army')}
             onLab={() => setSheet('lab')}

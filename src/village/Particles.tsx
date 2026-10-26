@@ -6,13 +6,15 @@ import * as THREE from 'three';
 // салют над ратушей нового уровня. Пулы фиксированного размера: сколько бы ни взрывалось, памяти
 // больше не берём, а самые старые частицы просто уступают место новым.
 
-export type FxKind = 'ruin' | 'built' | 'fireworks';
+// tap — кольцо по земле от касания, coins — монетки (или щепки, камешки) при сборе урожая,
+// hit — искры от удара, smoke — дымок над побитой постройкой.
+export type FxKind = 'ruin' | 'built' | 'fireworks' | 'tap' | 'coins' | 'hit' | 'smoke';
 
-type Emit = (kind: FxKind, x: number, z: number, size: number) => void;
+type Emit = (kind: FxKind, x: number, z: number, size: number, color?: string, y?: number) => void;
 const subs = new Set<Emit>();
 /** Пустить эффект в точке сцены (x, z — мировые координаты, size — размер постройки в клетках). */
-export function emitFx(kind: FxKind, x: number, z: number, size = 2) {
-  for (const f of subs) f(kind, x, z, size);
+export function emitFx(kind: FxKind, x: number, z: number, size = 2, color?: string, y?: number) {
+  for (const f of subs) f(kind, x, z, size, color, y);
 }
 
 const VERT = /* glsl */ `
@@ -160,6 +162,16 @@ interface Chunk {
   s: number;
 }
 
+const COINS = 40;
+const RINGS = 6;
+interface Ring {
+  x: number;
+  z: number;
+  r: number;
+  age: number;
+  color: THREE.Color;
+}
+
 const tmpC = new THREE.Color();
 export function Particles({ lite }: { lite: boolean }) {
   const dpr = useThree((s) => s.viewport.dpr);
@@ -171,13 +183,26 @@ export function Particles({ lite }: { lite: boolean }) {
     chunks.count = 0;
     chunks.frustumCulled = false;
     chunks.setColorAt(0, new THREE.Color('#8a7a66'));
-    return { dust, sparks, chunks, bits: [] as Chunk[] };
+    // Монетки: пухлые диски с ободком, цвет — как у ресурса.
+    const coins = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.5, 0.22, 14), new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.5, emissive: '#3a2400', emissiveIntensity: 0.4 }), COINS);
+    coins.count = 0;
+    coins.frustumCulled = false;
+    coins.setColorAt(0, new THREE.Color('#ffd24a'));
+    const ringGeo = new THREE.RingGeometry(0.8, 1, 48).rotateX(-Math.PI / 2);
+    const rings = new THREE.InstancedMesh(ringGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }), RINGS);
+    rings.count = 0;
+    rings.frustumCulled = false;
+    rings.renderOrder = 3;
+    rings.setColorAt(0, new THREE.Color('#ffffff'));
+    return { dust, sparks, chunks, bits: [] as Chunk[], coins, coinBits: [] as (Chunk & { c: THREE.Color })[], rings, ringList: [] as Ring[] };
   }, [lite]);
   useEffect(() => () => {
     sys.dust.dispose();
     sys.sparks.dispose();
-    sys.chunks.geometry.dispose();
-    (sys.chunks.material as THREE.Material).dispose();
+    for (const m of [sys.chunks, sys.coins, sys.rings]) {
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    }
   }, [sys]);
 
   useEffect(() => {
@@ -202,7 +227,36 @@ export function Particles({ lite }: { lite: boolean }) {
         sys.sparks.add({ x, y, z, vx: r * Math.cos(a) * sp, vy: u * sp, vz: r * Math.sin(a) * sp, age: 0, life: life * (0.8 + rnd() * 0.4), size, grow: -0.5, g: 2.2, drag: 1.4, r: tmpC.r, gc: tmpC.g, b: tmpC.b });
       }
     };
-    const emit: Emit = (kind, x, z, size) => {
+    const emit: Emit = (kind, x, z, size, color, y) => {
+      if (kind === 'tap') {
+        if (sys.ringList.length >= RINGS) sys.ringList.shift();
+        sys.ringList.push({ x, z, r: size * 0.62, age: 0, color: new THREE.Color(color ?? '#ffffff') });
+        return;
+      }
+      if (kind === 'coins') {
+        const n = lite ? 6 : 10;
+        const c = new THREE.Color(color ?? '#ffd24a');
+        for (let k = 0; k < n; k++) {
+          if (sys.coinBits.length >= COINS) sys.coinBits.shift();
+          const a = (k / n) * Math.PI * 2 + rnd() * 0.5;
+          const sp = 1.2 + rnd() * 1.6;
+          sys.coinBits.push({ x, y: (y ?? size * 0.8) + rnd() * 0.3, z, vx: Math.cos(a) * sp, vy: 6 + rnd() * 3, vz: Math.sin(a) * sp, rx: rnd() * 6, rz: rnd() * 6, spin: 8 + rnd() * 10, age: 0, life: 1.1 + rnd() * 0.4, s: 0.32 + rnd() * 0.08, c });
+        }
+        sparkle(x, (y ?? size * 0.8) + 0.4, z, lite ? 8 : 16, color ?? '#ffe28a', 3.2, 0.6, 0.26);
+        return;
+      }
+      if (kind === 'hit') {
+        // Удар: короткая вспышка искр и щепок там, где попали.
+        const h = y ?? size * 0.5;
+        sparkle(x + (rnd() - 0.5) * size * 0.5, h, z + (rnd() - 0.5) * size * 0.5, lite ? 5 : 10, color ?? '#ffd27a', 4.2, 0.32, 0.24);
+        return;
+      }
+      if (kind === 'smoke') {
+        tmpC.set(color ?? '#5d5650');
+        const c = 0.85 + rnd() * 0.25;
+        sys.dust.add({ x: x + (rnd() - 0.5) * size * 0.5, y: y ?? size * 0.7, z: z + (rnd() - 0.5) * size * 0.5, vx: 0.3 + rnd() * 0.2, vy: 0.9 + rnd() * 0.5, vz: -0.1, age: 0, life: 1.6 + rnd() * 0.6, size: 0.6 + rnd() * 0.4, grow: 1.8, g: -0.1, drag: 0.6, r: tmpC.r * c, gc: tmpC.g * c, b: tmpC.b * c });
+        return;
+      }
       if (kind === 'ruin') {
         puff(x, z, size, lite ? 10 : 22, '#9a8f80');
         sparkle(x, 0.8, z, lite ? 8 : 16, '#ffb35c', 3, 0.5, 0.25);
@@ -242,6 +296,47 @@ export function Particles({ lite }: { lite: boolean }) {
   const v = useMemo(() => new THREE.Vector3(), []);
   const sc = useMemo(() => new THREE.Vector3(), []);
   const chunkColor = useMemo(() => [new THREE.Color('#8a7a66'), new THREE.Color('#6b5a48'), new THREE.Color('#a39a8c')], []);
+  // Монетки взлетают, падают, подпрыгивают и тают; кольца расходятся от касания.
+  const stepCoins = (dt: number) => {
+    if (sys.coinBits.length || sys.coins.count) {
+      sys.coinBits = sys.coinBits.filter((b) => (b.age += dt) < b.life);
+      sys.coinBits.forEach((b, i) => {
+        b.vy -= 16 * dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.z += b.vz * dt;
+        if (b.y < b.s * 0.2) {
+          b.y = b.s * 0.2;
+          b.vy = Math.abs(b.vy) * 0.45;
+          b.vx *= 0.5;
+          b.vz *= 0.5;
+        }
+        b.rx += b.spin * dt;
+        const t = b.age / b.life;
+        const k = Math.min(1, t * 10) * (t > 0.75 ? 1 - (t - 0.75) * 4 : 1);
+        q.setFromEuler(e.set(b.rx, b.rz, 0.4));
+        m.compose(v.set(b.x, b.y, b.z), q, sc.setScalar(b.s * k));
+        sys.coins.setMatrixAt(i, m);
+        sys.coins.setColorAt(i, b.c);
+      });
+      sys.coins.count = sys.coinBits.length;
+      sys.coins.instanceMatrix.needsUpdate = true;
+      if (sys.coins.instanceColor) sys.coins.instanceColor.needsUpdate = true;
+    }
+    if (sys.ringList.length || sys.rings.count) {
+      sys.ringList = sys.ringList.filter((r) => (r.age += dt) < 0.55);
+      sys.ringList.forEach((r, i) => {
+        const t = r.age / 0.55;
+        const rad = r.r * (0.85 + 0.6 * (1 - (1 - t) ** 3));
+        m.makeScale(rad, 1, rad).setPosition(r.x, 0.06, r.z);
+        sys.rings.setMatrixAt(i, m);
+        sys.rings.setColorAt(i, tmpC.copy(r.color).multiplyScalar(1 - t));
+      });
+      sys.rings.count = sys.ringList.length;
+      sys.rings.instanceMatrix.needsUpdate = true;
+      if (sys.rings.instanceColor) sys.rings.instanceColor.needsUpdate = true;
+    }
+  };
   useFrame((_, raw) => {
     const dt = Math.min(raw, 0.05);
     const zoom = (camera as THREE.OrthographicCamera).zoom ?? 14;
@@ -255,6 +350,7 @@ export function Particles({ lite }: { lite: boolean }) {
         pool.step(dt, burst);
       }
     }
+    stepCoins(dt);
     const bits = sys.bits;
     if (!bits.length && !sys.chunks.count) return;
     sys.bits = bits.filter((b) => (b.age += dt) < b.life);
@@ -288,6 +384,8 @@ export function Particles({ lite }: { lite: boolean }) {
       <primitive object={sys.dust.points} />
       <primitive object={sys.sparks.points} />
       <primitive object={sys.chunks} />
+      <primitive object={sys.coins} />
+      <primitive object={sys.rings} />
     </>
   );
 }

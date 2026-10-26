@@ -108,13 +108,13 @@
 .vil-battle-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .vil-battle-head > div:first-child { flex: 1; min-width: 0; }
 .vil-battle-head b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vil-pct { font-size: 22px; font-weight: 900; display: flex; flex-direction: column; align-items: flex-end; line-height: 1; font-variant-numeric: tabular-nums; }
-.vil-pct small { font-size: 12px; color: var(--hint); margin-top: 3px; }
+.vil-pct { font-size: 24px; font-weight: 900; text-shadow: 1.6px 0px 0 #1c1208, -1.6px 0px 0 #1c1208, 0px 1.6px 0 #1c1208, 0px -1.6px 0 #1c1208, 1.12px 1.12px 0 #1c1208, -1.12px 1.12px 0 #1c1208, 1.12px -1.12px 0 #1c1208, -1.12px -1.12px 0 #1c1208, 0 3.6px 0 #1c1208; display: flex; flex-direction: column; align-items: flex-end; line-height: 1; font-variant-numeric: tabular-nums; }
+.vil-pct small { font-size: 12px; color: var(--hint); margin-top: 3px; text-shadow: none; }
 .vil-loot-panel { align-self: stretch; margin-right: 56px; display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .vil-loot-title { flex: none; max-width: 64px; font-size: 11px; font-weight: 900; line-height: 1.15; text-transform: uppercase; letter-spacing: .4px; color: var(--gold); }
 .vil-loot-cell { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .vil-loot-num { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.vil-loot-num b { font-size: 17px; line-height: 1; font-variant-numeric: tabular-nums; }
+.vil-loot-num b { font-size: 18px; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 1.4px 0px 0 #1c1208, -1.4px 0px 0 #1c1208, 0px 1.4px 0 #1c1208, 0px -1.4px 0 #1c1208, 0.98px 0.98px 0 #1c1208, -0.98px 0.98px 0 #1c1208, 0.98px -0.98px 0 #1c1208, -0.98px -0.98px 0 #1c1208, 0 3.4px 0 #1c1208; }
 .vil-loot-num small { font-size: 11px; font-weight: 800; color: var(--c); line-height: 1; }
 .vil-loot-bar { display: block; height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
 .vil-loot-bar > i { display: block; height: 100%; background: var(--c); border-radius: 3px; transition: width .3s ease; }
@@ -122,7 +122,7 @@
 .vil-troops { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 env(safe-area-inset-bottom); scrollbar-width: none; }
 .vil-troop { position: relative; flex: none; width: 70px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 6px; border-radius: var(--r-md); border: 2px solid rgba(255,255,255,.08); background: rgba(16,18,28,.9); color: var(--text); font-size: 11.5px; font-weight: 800; transition: transform .12s; }
 .vil-troop-face { width: 52px; height: 52px; display: grid; place-items: center; border-radius: var(--r-sm); background: radial-gradient(circle at 50% 70%, color-mix(in srgb, currentColor 38%, transparent), rgba(255,255,255,.03) 72%); }
-.vil-troop-n { position: absolute; top: 3px; right: 4px; min-width: 22px; padding: 1px 5px; border-radius: 9px; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; font-weight: 900; line-height: 16px; }
+.vil-troop-n { position: absolute; top: 3px; right: 4px; min-width: 22px; padding: 1px 5px; border-radius: 9px; background: none; color: #fff; font-size: 15px; font-weight: 900; line-height: 16px; text-shadow: 1.4px 0px 0 #1c1208, -1.4px 0px 0 #1c1208, 0px 1.4px 0 #1c1208, 0px -1.4px 0 #1c1208, 0.98px 0.98px 0 #1c1208, -0.98px 0.98px 0 #1c1208, 0.98px -0.98px 0 #1c1208, -0.98px -0.98px 0 #1c1208, 0 3.4px 0 #1c1208; }
 .vil-troop-lv { position: absolute; top: 3px; left: 4px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--mint); color: #10241a; font-size: 11px; font-weight: 900; }
 .vil-troop-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hint); }
 .vil-troop.active { border-color: var(--accent); background: rgba(40,26,22,.95); transform: translateY(-4px); box-shadow: 0 6px 18px rgba(255,122,89,.28); }
@@ -252,3 +252,46 @@
 .vil-link.bad { color: #ffb3b3; }
 .vil-link.bad .vil-link-dot { background: #ff6b6b; box-shadow: 0 0 8px #ff6b6b; animation: none; }
 @keyframes vil-link-pulse { 50% { opacity: .35; } }
+
+/* Цифры с тёмной обводкой — читаются поверх любой картинки. */
+.num-outline { font-weight: 900; color: #fff; text-shadow: 1.6px 0px 0 #1c1208, -1.6px 0px 0 #1c1208, 0px 1.6px 0 #1c1208, 0px -1.6px 0 #1c1208, 1.12px 1.12px 0 #1c1208, -1.12px 1.12px 0 #1c1208, 1.12px -1.12px 0 #1c1208, -1.12px -1.12px 0 #1c1208, 0 3.6px 0 #1c1208; letter-spacing: .02em; }
+
+/* «Ратуша пала!» во время замедления. */
+.vil-thfell { position: absolute; left: 0; right: 0; top: 34%; z-index: 6; text-align: center; pointer-events: none; font-size: 40px; font-weight: 900; color: #ffe08a; text-shadow: 3px 0px 0 #2b1606, -3px 0px 0 #2b1606, 0px 3px 0 #2b1606, 0px -3px 0 #2b1606, 2.1px 2.1px 0 #2b1606, -2.1px 2.1px 0 #2b1606, 2.1px -2.1px 0 #2b1606, -2.1px -2.1px 0 #2b1606, 0 5px 0 #2b1606, 0 0 28px rgba(255,170,60,.7); animation: vil-thfell 1.7s ease-out both; }
+@keyframes vil-thfell { 0% { transform: scale(2.4); opacity: 0; } 14% { transform: scale(.92); opacity: 1; } 22% { transform: scale(1.05); } 30%, 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1) translateY(-16px); opacity: 0; } }
+
+/* Итог набега. */
+.vr { overflow: hidden; }
+.vr-rays { position: absolute; left: 50%; top: 30%; width: 760px; height: 760px; margin: -380px 0 0 -380px; pointer-events: none; opacity: .5; background: repeating-conic-gradient(from 0deg, rgba(255,214,110,.22) 0 9deg, transparent 9deg 22.5deg); mask: radial-gradient(circle, #000 0, transparent 62%); -webkit-mask: radial-gradient(circle, #000 0, transparent 62%); animation: vr-spin 18s linear infinite, vr-fade .8s ease-out both; }
+.vr.bad .vr-rays { display: none; }
+@keyframes vr-spin { to { transform: rotate(360deg); } }
+@keyframes vr-fade { from { opacity: 0; } }
+.vr > * { position: relative; }
+.vr-title { font-size: 34px; font-weight: 900; text-shadow: 2.6px 0px 0 #1c1208, -2.6px 0px 0 #1c1208, 0px 2.6px 0 #1c1208, 0px -2.6px 0 #1c1208, 1.82px 1.82px 0 #1c1208, -1.82px 1.82px 0 #1c1208, 1.82px -1.82px 0 #1c1208, -1.82px -1.82px 0 #1c1208, 0 4.6px 0 #1c1208; color: #fff; animation: vr-pop .45s cubic-bezier(.2,1.6,.4,1) both; }
+.vr.good .vr-title { color: #ffe08a; }
+@keyframes vr-pop { from { transform: scale(.4); opacity: 0; } }
+.vr-stars { display: flex; align-items: flex-end; gap: 4px; margin: 6px 0 2px; }
+.vr-star { display: inline-flex; color: rgba(255,255,255,.16); filter: drop-shadow(0 3px 0 rgba(0,0,0,.45)); }
+.vr-star.s1 { transform: translateY(-14px); }
+.vr-star svg { stroke: #1c1208; stroke-width: 1.6px; paint-order: stroke; }
+.vr-star.on { color: #ffd24a; animation: vr-star .5s cubic-bezier(.2,1.5,.4,1) both; filter: drop-shadow(0 3px 0 #6a3f00) drop-shadow(0 0 14px rgba(255,200,80,.85)); }
+.vr-star.s1.on { animation-name: vr-star1; }
+@keyframes vr-star { 0% { transform: scale(2.6) rotate(-40deg); opacity: 0; } 60% { transform: scale(.9) rotate(6deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+@keyframes vr-star1 { 0% { transform: translateY(-14px) scale(2.6) rotate(-40deg); opacity: 0; } 60% { transform: translateY(-14px) scale(.9) rotate(6deg); opacity: 1; } 100% { transform: translateY(-14px) scale(1); } }
+.vr-pct { font-size: 15px; font-weight: 800; color: rgba(255,255,255,.85); }
+.vr-pct b { font-size: 22px; margin: 0 2px; }
+.vr-loot { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 10px 16px; border-radius: 18px; background: rgba(15,18,30,.6); border: 2px solid rgba(255,214,110,.35); box-shadow: 0 4px 0 rgba(0,0,0,.35); opacity: 0; transform: translateY(16px) scale(.9); transition: opacity .3s, transform .4s cubic-bezier(.2,1.5,.4,1); }
+.vr-loot.in { opacity: 1; transform: none; }
+.vr-loot-list { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.vr-loot-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.6); }
+.vr-loot-cell { display: flex; align-items: center; gap: 8px; font-size: 22px; }
+.vr-chest { flex: none; overflow: visible; }
+.vr-loot.in .vr-chest { animation: vr-chest .6s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes vr-chest { 0% { transform: translateY(-40px) scale(.6); } 55% { transform: translateY(4px) scale(1.08, .9); } 100% { transform: none; } }
+.vr-chest-lid { transform-origin: 10px 42px; transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+.vr-chest.open .vr-chest-lid { transform: rotate(-18deg) translate(-2px, -6px); }
+.vr-chest-light { opacity: 0; transition: opacity .3s; }
+.vr-chest.open .vr-chest-light { opacity: 1; animation: vr-glow 1.2s ease-in-out infinite alternate; }
+@keyframes vr-glow { to { opacity: .55; } }
+.vr-note, .vr-btn { opacity: 0; transform: translateY(10px); transition: opacity .3s, transform .3s; }
+.vr-note.in, .vr-btn.in { opacity: 1; transform: none; }

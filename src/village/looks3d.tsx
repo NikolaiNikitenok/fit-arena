@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { type PulseTarget, track, usePulses } from '../three/pulse';
 import type { LibName, Part } from '../three/kit';
 import { parseTint } from '../three/Instanced';
 import type { Anim, AnimKind, Look, Prim, PrimKind } from './looks';
@@ -37,6 +38,7 @@ const glowMaterial = () => new THREE.MeshBasicMaterial({ toneMapped: false });
 export function PrimInstances({ list, shadows = true }: { list: Prim[]; shadows?: boolean }) {
   const meshes = useMemo(() => {
     const out: THREE.InstancedMesh[] = [];
+    const targets: PulseTarget[] = [];
     const mat = new THREE.Matrix4();
     const col = new THREE.Color();
     for (const glow of [false, true])
@@ -44,28 +46,32 @@ export function PrimInstances({ list, shadows = true }: { list: Prim[]; shadows?
       const items = list.filter((p) => p.k === k && !!p.glow === glow);
       if (!items.length) continue;
       const m = new THREE.InstancedMesh(primGeo(k), glow ? glowMaterial() : new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 }), items.length);
+      const target: PulseTarget = { mesh: m, groups: new Map() };
       items.forEach((p, i) => {
         m.setMatrixAt(i, primMatrix(p, mat));
         m.setColorAt(i, col.set(p.c));
+        track(target, p.g, p.gx ?? p.x, p.gz ?? p.z, i, mat, col);
       });
+      if (target.groups.size) targets.push(target);
       m.castShadow = shadows && !glow;
       m.receiveShadow = !glow;
       m.computeBoundingSphere();
       out.push(m);
     }
-    return out;
+    return { out, targets };
   }, [list, shadows]);
   useEffect(
     () => () =>
-      meshes.forEach((m) => {
+      meshes.out.forEach((m) => {
         (m.material as THREE.Material).dispose();
         m.dispose();
       }),
     [meshes],
   );
+  usePulses(meshes.targets);
   return (
     <>
-      {meshes.map((m) => (
+      {meshes.out.map((m) => (
         <primitive key={m.uuid} object={m} />
       ))}
     </>

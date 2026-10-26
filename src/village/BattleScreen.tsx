@@ -1,19 +1,22 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Res, RES_KEYS } from '../../shared/village';
+import { GRID, Res, RES_KEYS } from '../../shared/village';
 import { addDeploy, BATTLE_TICKS, BattleArmy, BattleBase, BattleResult, battleResult, createBattle, Deploy, heroUnit, noDeployCells, stepBattle, TPS, TROOPS, UNIT_NAMES, UnitKind, unitsLeft } from '../../shared/villageBattle';
 import { sfx } from '../audio';
 import { BattleSounds } from '../gameSounds';
-import { Coin, Cross, Lock } from '../icons';
-import { RES_COLORS, SkillIcon, Star, Stone, Wood } from './icons';
+import { Cross, Lock } from '../icons';
+import { ChunkyRes, RES_COLORS, SkillIcon, Star } from './icons';
 import { nextSkill, SKILLS, skillsFor, type SkillId } from '../../shared/heroSkills';
 import { fmtNum } from './state';
-import type { BattleView, Ctl, ViewBld } from './Village3D';
+import { animateTo, type BattleView, type Ctl, type ViewBld } from './Village3D';
 import { useHostedView } from './Viewport';
 import { DEFAULT_HERO, type HeroLook } from './troops3d';
 import { HeroThumb, TroopThumb } from './TroopInfo';
+import { ResultCard } from './ResultCard';
 
 export const ResIcon = ({ r, size = 15 }: { r: keyof Res; size?: number }) => (
-  <span style={{ color: RES_COLORS[r], display: 'inline-flex' }}>{r === 'wood' ? <Wood size={size} /> : r === 'stone' ? <Stone size={size} /> : <Coin size={size} />}</span>
+  <span style={{ color: RES_COLORS[r], display: 'inline-flex' }}>
+    <ChunkyRes r={r} size={Math.round(size * 1.12)} />
+  </span>
 );
 
 export const ResRow = ({ res, plus = false }: { res: Partial<Res>; plus?: boolean }) => (
@@ -80,6 +83,23 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
   const sounds = useRef<BattleSounds | null>(null);
   sounds.current ??= new BattleSounds(view.current.s);
 
+  const slowUntil = useRef(0);
+  const [thFell, setThFell] = useState(false);
+  // Ратуша пала: замедление, камера наезжает и вздрагивает, надпись на весь экран.
+  const townhallDown = (x: number, y: number) => {
+    slowUntil.current = performance.now() + 1600;
+    const c = ctl.current;
+    const back = { tx: c.tx, tz: c.tz, zoom: c.zoom };
+    animateTo(c, { tx: x - GRID / 2, tz: y - GRID / 2, zoom: c.zoom * 1.25 }, 600);
+    c.shake = { amp: 0.35, t: 0 };
+    sfx('roar');
+    setThFell(true);
+    window.setTimeout(() => {
+      setThFell(false);
+      animateTo(ctl.current, back, 700);
+    }, 1700);
+  };
+
   const finish = (endTick?: number) => {
     if (finished.current) return;
     finished.current = true;
@@ -109,19 +129,24 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
         last = now;
         return;
       }
-      acc += (now - last) * speedRef.current;
+      // Ратуша рушится в замедленной съёмке: полторы секунды бой идёт вчетверо медленнее.
+      const slow = now < slowUntil.current ? 0.25 + 0.75 * Math.max(0, 1 - (slowUntil.current - now) / 1600) ** 3 : 1;
+      acc += (now - last) * speedRef.current * slow;
       last = now;
       let stepped = false;
       while (acc >= 100 && !v.s.done) {
         acc -= 100;
+        const thAlive = v.s.buildings.some((b) => b.t === 'townhall' && b.alive);
         v.prev = new Map(v.s.units.map((u) => [u.n, [u.x, u.y]]));
         if (v.s.keeper) v.prev.set(v.s.keeper.n, [v.s.keeper.x, v.s.keeper.y]);
         stepBattle(v.s, mode === 'attack');
         sounds.current!.collect(v.s);
         for (const f of v.s.fx) v.fx.push({ ...f, born: now });
         v.at = now;
-        v.ms = 100 / speedRef.current;
+        v.ms = 100 / (speedRef.current * slow);
         stepped = true;
+        const th = v.s.buildings.find((b) => b.t === 'townhall');
+        if (thAlive && th && !th.alive) townhallDown(th.x + th.size / 2, th.y + th.size / 2);
       }
       if (stepped) {
         sounds.current!.play();
@@ -241,6 +266,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
         )}
       </div>
       {warn && <div className="toast vil-warn">{warn}</div>}
+      {thFell && <div className="vil-thfell">Ратуша пала!</div>}
       {mode === 'attack' && !result && (
         <div className="vil-bottom">
           {!started.current && <div className="vil-hint">Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки{scouting ? ` или через ${scoutLeft} с` : ''}.</div>}
@@ -288,27 +314,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
           )}
         </div>
       )}
-      {result && (
-        <div className="result vil-result">
-          <div className="level-tag">{title}</div>
-          <div className="result-title">{result.stars ? (result.stars === 3 ? 'Полный разгром!' : 'Победа!') : mode === 'replay' ? 'Набег отбит!' : 'Не вышло'}</div>
-          <div className="vil-stars big">
-            {[0, 1, 2].map((k) => (
-              <Star key={k} size={40} className={k < result.stars ? 'on' : ''} />
-            ))}
-          </div>
-          <div className="muted light">Разрушено {result.destruction}%{result.townhall ? ', ратуша пала' : ''}</div>
-          {RES_KEYS.some((k) => result.loot[k] > 0) && (
-            <div className="vil-loot-big">
-              {mode === 'replay' ? 'Унесли' : 'Добыча'}: <ResRow res={result.loot} plus={mode !== 'replay'} />
-            </div>
-          )}
-          {resultNote && <div className="vil-result-note">{resultNote}</div>}
-          <button className="primary" onClick={onClose}>
-            В деревню
-          </button>
-        </div>
-      )}
+      {result && <ResultCard title={title} result={result} mode={mode} note={resultNote} onClose={onClose} />}
     </div>
   );
 }
