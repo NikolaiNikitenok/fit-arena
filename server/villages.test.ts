@@ -1,3 +1,5 @@
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { lootAvailable } from '../shared/village';
 import { baseOf, type Deploy, simulateBattle } from '../shared/villageBattle';
@@ -146,21 +148,48 @@ describe('набег', () => {
     expect(v.inbox('tg:1').wins).toEqual([]);
   });
 
-  it('бронь: одна попытка, только своя, истекает через LOCK_MS', () => {
+  it('бронь: только своя; итог можно прислать и после брони, но не позже чем через 15 минут', () => {
     const { v, clock } = setup();
     v.update('tg:1', testProgress(2));
     v.update('tg:2', testProgress(2));
     v.update('tg:3', testProgress(2));
     const t = target(v.find('tg:1', 'Я'));
     expect(isFail(v.submit('tg:3', { token: t.token, army: ARMY, deploys: WIN }))).toBe(true);
-    clock.now += LOCK_MS + 1;
+    clock.now += LOCK_MS + 15 * 60_000 + 1;
     const late = v.submit('tg:1', { token: t.token, army: ARMY, deploys: WIN });
     expect(isFail(late) && late.error).toBe('Время набега вышло');
     // После брони цель снова доступна.
     expect(v.candidates('tg:3', clock.now).length).toBeGreaterThan(0);
+    // Связь пропала, итог дошёл через пару минут после конца брони — засчитывается.
     const t2 = target(v.find('tg:1', 'Я'));
-    expect(isFail(v.submit('tg:1', { token: t2.token, army: ARMY, deploys: WIN }))).toBe(false);
-    expect(isFail(v.submit('tg:1', { token: t2.token, army: ARMY, deploys: WIN }))).toBe(true);
+    clock.now += LOCK_MS + 2 * 60_000;
+    const first = v.submit('tg:1', { token: t2.token, army: ARMY, deploys: WIN });
+    if (isFail(first)) throw new Error(first.error);
+    // Ответ не дошёл, телефон прислал тот же бой ещё раз — тот же итог, без второй награды.
+    const again = v.submit('tg:1', { token: t2.token, army: ARMY, deploys: WIN });
+    if (isFail(again)) throw new Error(again.error);
+    expect(again.win!.id).toBe(first.win!.id);
+    expect(again.result.loot).toEqual(first.result.loot);
+    expect(again.me!.trophies).toBe(first.me!.trophies);
+    // Чужой токен чужого боя не отдаём.
+    expect(isFail(v.submit('tg:3', { token: t2.token, army: ARMY, deploys: WIN }))).toBe(true);
+  });
+
+  it('бронь переживает перезапуск сервера', () => {
+    const file = `${tmpdir()}/villages-${process.pid}-${Date.now()}.json`;
+    const clock = { now: T0 };
+    const deps = { now: () => clock.now, random: () => 0.42, heroLevel: () => 10 };
+    const a = new VillageStore(file, deps);
+    a.update('tg:1', testProgress(2), 'Я');
+    a.update('tg:2', testProgress(2), 'Боря');
+    const t = target(a.find('tg:1', 'Я'));
+    a.flush();
+    clock.now += 90_000;
+    const b = new VillageStore(file, deps);
+    const r = b.submit('tg:1', { token: t.token, seed: t.seed, army: ARMY, deploys: WIN });
+    if (isFail(r)) throw new Error(r.error);
+    expect(r.result.stars).toBe(3);
+    rmSync(file, { force: true });
   });
 
   it('подделанное войско и высадки не проходят и отмечаются', () => {

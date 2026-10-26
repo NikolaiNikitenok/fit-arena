@@ -50,7 +50,8 @@ import { BattleScreen, ResIcon, ResRow } from './BattleScreen';
 import { Bolt, Dungeon, Hammer, Move, Scroll, Star, Trophy } from './icons';
 import { DecorThumb, Preview } from './Preview';
 import { newPartsAt } from './looks';
-import { defenseLog, fetchInbox, fetchTop, findTarget, isOnline, OFFLINE, PvpError, revengeTarget, setPvpNotify, submitAttack, TargetView } from './pvpApi';
+import { clearPending, defenseLog, fetchInbox, fetchTop, findTarget, isOnline, isTransient, loadPending, NO_SERVER, OFFLINE, type PendingAttack, pingServer, PvpError, revengeTarget, savePending, setPvpNotify, submitWithRetry, TargetView } from './pvpApi';
+import type { AttackOutcome } from '../../shared/villagePvp';
 import { applyInbox, applyMe, applyWin, canRevenge, markRevenged } from './pvp';
 import { type PvpTopRow, SCOUT_SECONDS, VILLAGE_LEAGUES, villageLeague } from '../../shared/villagePvp';
 import { cloudState } from '../cloud';
@@ -287,6 +288,62 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     return true;
   };
 
+  // Итог набега с сервера: добыча, кубки, месть. Возвращает, сколько кубков дали.
+  const applyOutcome = (out: AttackOutcome, revengeOf?: string): number => {
+    let p = out.win ? applyWin(latest.current, out.win) : latest.current;
+    if (out.me) p = applyMe(p, out.me, Date.now());
+    if (revengeOf) p = markRevenged(p, revengeOf);
+    commit(p);
+    clearPending();
+    setPendingAttack(null);
+    return out.win?.trophies ?? 0;
+  };
+  // Не отправленный из-за связи набег: повторяем при входе в деревню, при появлении сети и по кнопке.
+  const [pendingAttack, setPendingAttack] = useState<PendingAttack | null>(() => loadPending());
+  const retrying = useRef(false);
+  const retryPending = async () => {
+    const a = loadPending();
+    if (!a || retrying.current) return;
+    retrying.current = true;
+    try {
+      const out = await submitWithRetry(a, undefined, 2);
+      const cups = applyOutcome(out, a.revengeOf);
+      const text = `Набег засчитан: ${cups >= 0 ? '+' : '−'}${Math.abs(cups)} кубков${out.win ? ', добыча в хранилище' : ''}.`;
+      flash(text);
+      setPvpNote((n) => (n ? text : n));
+    } catch (e) {
+      if (!isTransient(e)) {
+        // Сервер отказал окончательно: если бой всё же засчитан, победа придёт с журналом набегов.
+        clearPending();
+        setPendingAttack(null);
+        flash(e instanceof PvpError ? e.message : 'Набег не засчитан.');
+      } else flash(`${NO_SERVER}. Попробуем ещё раз позже.`);
+    } finally {
+      retrying.current = false;
+    }
+  };
+  useEffect(() => {
+    if (pendingAttack) void retryPending();
+    const on = () => loadPending() && void retryPending();
+    window.addEventListener('online', on);
+    const id = window.setInterval(on, 30_000);
+    return () => {
+      window.removeEventListener('online', on);
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Связь с сервером — проверяем, когда открыт выбор набега: чтобы знать до боя, засчитается ли он.
+  const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const checkServer = () => {
+    setServerOk(null);
+    void pingServer().then(setServerOk);
+  };
+  useEffect(() => {
+    if (sheet === 'attack') checkServer();
+  }, [sheet, online]);
+
   // Набег на игрока: поиск (или месть), бронь цели и бой. Без сети — только лагеря Князя.
   const startPvp = async (revengeOf?: string) => {
     if (!isOnline()) return flash(OFFLINE);
@@ -360,15 +417,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       if (battle.kind === 'pvp') {
         // Добыча и кубки — только по ответу сервера: он сам считает этот же бой.
         const t = battle.target;
+        const sub: PendingAttack = { targetId: t.id, token: t.token, seed: t.seed, army, deploys, endTick, at: Date.now(), revengeOf: battle.revengeOf };
         setPvpNote('Сервер проверяет набег…');
         try {
-          const out = await submitAttack({ targetId: t.id, token: t.token, seed: t.seed, army, deploys, endTick });
-          let p = out.win ? applyWin(latest.current, out.win) : latest.current;
-          if (out.me) p = applyMe(p, out.me, Date.now());
-          if (battle.revengeOf) p = markRevenged(p, battle.revengeOf);
-          commit(p);
-          const cups = out.win?.trophies ?? 0;
+          const out = await submitWithRetry(sub, (k) => setPvpNote(`Связь с сервером прерывается — отправляем ещё раз (${k + 1}/4)…`));
           const same = RES_KEYS.every((k) => out.result.loot[k] === r.loot[k]);
+          const cups = applyOutcome(out, battle.revengeOf);
           setPvpNote(
             <>
               <span className={cups >= 0 ? 'ok' : 'bad'}>
@@ -379,7 +433,19 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </>,
           );
         } catch (e) {
-          setPvpNote(<span className="bad">{e instanceof PvpError ? e.message : 'Набег не засчитан.'} Добыча не засчитана, войско цело.</span>);
+          if (isTransient(e)) {
+            // Бой сохранён на телефоне: отправим, как только связь вернётся (сервер ждёт ещё 15 минут).
+            savePending(sub);
+            setPendingAttack(sub);
+            setPvpNote(
+              <span className="bad">
+                {NO_SERVER}. Итог боя сохранён на телефоне — засчитаем добычу и кубки, как только связь вернётся.{' '}
+                <button className="small-btn accent" onClick={() => void retryPending()}>
+                  Отправить ещё раз
+                </button>
+              </span>,
+            );
+          } else setPvpNote(<span className="bad">{e instanceof PvpError ? e.message : 'Набег не засчитан.'} Добыча не засчитана, войско цело.</span>);
         }
         return;
       }
@@ -410,6 +476,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           title={`${t.name}, ратуша ${t.level}`}
           note={
             <>
+              {!online && <span className="bad">Нет сети — итог отправим, когда она вернётся · </span>}
               {t.revenge ? 'Месть · ' : t.bot ? 'Деревня-бот · ' : ''}
               <Trophy size={12} /> {t.trophies ?? 0}
               {offer && (
@@ -896,7 +963,26 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </span>
           </div>
           {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
-          <button className="vil-pvp" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp()}>
+          <div className={`vil-link ${serverOk === false ? 'bad' : serverOk ? 'ok' : ''}`}>
+            <span className="vil-link-dot" />
+            <span>
+              {serverOk === null ? 'Проверяем связь с сервером…' : serverOk ? 'Сервер на связи: добыча и кубки засчитаются' : `${NO_SERVER}: набег на игрока сейчас не засчитается`}
+            </span>
+            {serverOk === false && (
+              <button className="small-btn accent" onClick={checkServer}>
+                Переподключиться
+              </button>
+            )}
+          </div>
+          {pendingAttack && (
+            <div className="vil-note">
+              Прошлый набег ещё не засчитан — нет связи.{' '}
+              <button className="small-btn accent" onClick={() => void retryPending()}>
+                Отправить
+              </button>
+            </div>
+          )}
+          <button className="vil-pvp" disabled={searching || !online || serverOk === false || troopCount(town.army) === 0} onClick={() => void startPvp()}>
             <span className="vil-pvp-icon">
               <Swords size={30} />
             </span>

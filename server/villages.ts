@@ -17,7 +17,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { applyLoss, lootAvailable, type Res, RES_KEYS, thLevel, type Town } from '../shared/village';
-import { baseOf, type BattleArmy, type BattleBase, type Deploy, finishTraining, simulateBattle, TROOP_IDS, type UnitKind } from '../shared/villageBattle';
+import { baseOf, type BattleArmy, type BattleBase, type BattleResult, type Deploy, finishTraining, simulateBattle, TROOP_IDS, type UnitKind } from '../shared/villageBattle';
 import { botBase } from '../shared/villageCamps';
 import { finishResearch } from '../shared/villageLab';
 import {
@@ -52,6 +52,8 @@ const KEEP_MS = 7 * DAY;
 const ACTIVE_MS = 30 * DAY;
 // Пропущенного соперника не выдаём снова 10 минут.
 const SKIP_MS = 10 * 60_000;
+// Сколько после конца брони ещё можно отправить итог боя: на случай, если пропала связь.
+const SUBMIT_GRACE_MS = 15 * 60_000;
 const NOTICE_TTL = DAY;
 const MIN_BUILDINGS = 3;
 export const DELETED_NAME = 'Удалённый игрок';
@@ -92,6 +94,8 @@ export interface AttackRec {
   used: Partial<Record<UnitKind, number>>;
   attTrophies: number;
   defTrophies: number;
+  // Бронь, по которой прошёл набег: повторная отправка того же боя (пропала связь) вернёт этот же итог.
+  token?: string;
 }
 
 interface Lock {
@@ -169,11 +173,13 @@ export class VillageStore {
     this.d = { ...defaults, ...deps };
     if (!file) return;
     try {
-      const data = JSON.parse(readFileSync(file, 'utf8')) as { villages?: VillageRec[]; attacks?: AttackRec[]; notices?: VillageNotice[]; notifyOff?: string[] };
+      const data = JSON.parse(readFileSync(file, 'utf8')) as { villages?: VillageRec[]; attacks?: AttackRec[]; notices?: VillageNotice[]; notifyOff?: string[]; locks?: Lock[] };
       for (const v of data.villages ?? []) this.villages.set(v.id, v);
       this.attacks = data.attacks ?? [];
       this.notices = data.notices ?? [];
       this.notifyOff = new Set(data.notifyOff ?? []);
+      // Брони переживают перезапуск сервера (выкладку): идущий бой потом засчитается.
+      for (const l of data.locks ?? []) this.locks.set(l.token, l);
     } catch {
       // Файла ещё нет.
     }
@@ -269,7 +275,7 @@ export class VillageStore {
   }
 
   private dropExpired(now: number): void {
-    for (const [k, l] of this.locks) if (l.until <= now) this.locks.delete(k);
+    for (const [k, l] of this.locks) if (l.until + SUBMIT_GRACE_MS <= now) this.locks.delete(k);
   }
 
   /** Отпустить свою прошлую бронь: пропуск соперника. */
@@ -303,6 +309,7 @@ export class VillageStore {
   private lockFor(attacker: string, l: Omit<Lock, 'token' | 'until' | 'attacker'>, now: number, myTrophies: number, myTh: number): TargetView {
     const token = randomBytes(12).toString('base64url');
     this.locks.set(token, { ...l, token, attacker, until: now + LOCK_MS });
+    this.save();
     return {
       id: l.bot ? l.target : `t:${token.slice(0, 8)}`,
       name: l.name,
@@ -400,9 +407,17 @@ export class VillageStore {
   submit(me: string, body: { token?: unknown; seed?: unknown; army?: unknown; deploys?: unknown; endTick?: unknown }): Result<AttackOutcome> {
     const now = this.d.now();
     const lock = typeof body.token === 'string' ? this.locks.get(body.token) : undefined;
-    if (!lock || lock.attacker !== me) return fail(409, 'Бронь набега не найдена');
-    this.locks.delete(lock.token);
-    if (lock.until < now) return fail(409, 'Время набега вышло');
+    if (!lock || lock.attacker !== me) {
+      // Этот бой уже засчитан, а ответ до телефона не дошёл: отдаём тот же итог ещё раз.
+      const done = typeof body.token === 'string' ? this.attacks.find((a) => a.token === body.token && a.attacker === me) : undefined;
+      if (done) return { result: this.resultOf(done), verified: true, win: this.winOf(done), me: this.me(me) };
+      return fail(409, 'Бронь набега не найдена');
+    }
+    // Бронь держит соперника LOCK_MS на сам бой; отправить итог можно и чуть позже — если связь пропала.
+    if (lock.until + SUBMIT_GRACE_MS < now) {
+      this.locks.delete(lock.token);
+      return fail(409, 'Время набега вышло');
+    }
     if (body.seed != null && body.seed !== lock.seed) {
       this.d.flag(me, 'pvpSeed', `${body.seed} != ${lock.seed}`);
       return fail(400, 'Набег не прошёл проверку');
@@ -455,7 +470,9 @@ export class VillageStore {
       used: result.used,
       attTrophies: delta.att,
       defTrophies: lock.bot ? 0 : delta.def,
+      token: lock.token,
     };
+    this.locks.delete(lock.token);
     this.attacks.push(rec);
     mine.trophies = Math.max(0, mine.trophies + delta.att);
     if (def) {
@@ -471,6 +488,10 @@ export class VillageStore {
     this.prune(now);
     this.save();
     return { result, verified: true, win: this.winOf(rec), me: this.me(me) };
+  }
+
+  private resultOf(a: AttackRec): BattleResult {
+    return { stars: a.stars, destruction: a.pct, townhall: a.pct >= 100, loot: a.loot, ticks: a.endTick ?? 0, used: a.used, destroyed: [] };
   }
 
   private winOf(a: AttackRec): PvpWin {
@@ -594,7 +615,7 @@ export class VillageStore {
     clearTimeout(this.timer);
     this.timer = null;
     mkdirSync(dirname(this.file), { recursive: true });
-    writeFileSync(`${this.file}.tmp`, JSON.stringify({ villages: [...this.villages.values()], attacks: this.attacks, notices: this.notices, notifyOff: [...this.notifyOff] }));
+    writeFileSync(`${this.file}.tmp`, JSON.stringify({ villages: [...this.villages.values()], attacks: this.attacks, notices: this.notices, notifyOff: [...this.notifyOff], locks: [...this.locks.values()].filter((l) => l.until + SUBMIT_GRACE_MS > this.d.now()) }));
     renameSync(`${this.file}.tmp`, this.file);
   }
 

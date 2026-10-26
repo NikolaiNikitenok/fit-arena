@@ -242,3 +242,13 @@
 .vil-advice.ok { box-shadow: inset 0 0 0 2px rgba(110, 231, 120, .55); }
 .vil-advice-go { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; font-weight: 900; color: #fff; }
 .vil-advice.ok .vil-advice-go { background: linear-gradient(#7fe25f, #2fa83a); }
+
+/* Связь с сервером перед набегом. */
+.vil-link { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); font-size: 13px; color: var(--hint); }
+.vil-link > span:nth-child(2) { flex: 1; }
+.vil-link-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #9aa3b5; animation: vil-link-pulse 1.2s ease-in-out infinite; }
+.vil-link.ok { color: var(--text); }
+.vil-link.ok .vil-link-dot { background: #5fd36a; box-shadow: 0 0 8px #5fd36a; animation: none; }
+.vil-link.bad { color: #ffb3b3; }
+.vil-link.bad .vil-link-dot { background: #ff6b6b; box-shadow: 0 0 8px #ff6b6b; animation: none; }
+@keyframes vil-link-pulse { 50% { opacity: .35; } }
