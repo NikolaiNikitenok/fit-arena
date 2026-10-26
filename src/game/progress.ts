@@ -15,6 +15,8 @@ import { boostLab } from '../village/state';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
 
 export interface Progress {
+  // «Начать игру заново»: пустой прогресс с этой отметкой сервер принимает поверх героя.
+  resetAt?: number;
   stars: Record<number, number>;
   baseline: Baseline;
   coins: number;
@@ -174,7 +176,21 @@ export function replaceProgress(p: Progress): Progress {
   return p;
 }
 
+/** Есть ли у копии герой: пройденные уровни, тренировки или опыт программ. Пустую копию нельзя класть поверх героя. */
+export function hasHero(p: unknown): boolean {
+  const x = p as Partial<Progress> | null | undefined;
+  if (!x || typeof x !== 'object') return false;
+  return Object.keys(x.stars ?? {}).length > 0 || Object.keys(x.days ?? {}).length > 0 || (x.programs?.xp ?? 0) > 0;
+}
+
+// Смена аккаунта: до перезагрузки ничего не сохраняем, иначе старое состояние в памяти затрёт только что взятый прогресс.
+let frozen = false;
+export const freezeProgress = () => {
+  frozen = true;
+};
+
 function save(p: Progress): Progress {
+  if (frozen) return p;
   p = { ...p, savedAt: Date.now() };
   onSaved?.(p);
   try {
@@ -479,7 +495,7 @@ export function spendSwaps(p: Progress, levelId: number, count: number, now: num
 
 /** Начать игру заново: прогресс, предметы и монеты стираются. */
 export function resetProgress(): Progress {
-  return save(fresh());
+  return save({ ...fresh(), resetAt: Date.now() });
 }
 
 /** Награда за рейд клана: монеты, зелья и, для лучших или при победе, сундук рейда со снаряжением. */

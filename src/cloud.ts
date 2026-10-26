@@ -1,7 +1,8 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
-import { loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
+import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
 import { guestId, setMaxBot, tg } from './telegram';
+import { reportError } from './telemetry';
 
 const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId() });
 
@@ -28,11 +29,53 @@ const storeAccount = (id: string) => {
   }
 };
 
+const BACKUP_KEY = 'fit-arena-adventure-backup';
+const isEmpty = (p: Partial<Progress> | null | undefined) => !hasHero(p);
+
+/** Копия героя этого телефона до смены аккаунта: если выбор при привязке оказался не тем, её можно вернуть. */
+export function localBackup(): { progress: Progress; at: number; level: number; stages: number } | null {
+  try {
+    const b = JSON.parse(localStorage.getItem(BACKUP_KEY) ?? 'null') as { progress: Progress; at: number } | null;
+    if (!b || isEmpty(b.progress)) return null;
+    return { ...b, level: heroLevel(heroXp({ ...loadProgress(), ...b.progress })).level, stages: Object.keys(b.progress.stars ?? {}).length };
+  } catch {
+    return null;
+  }
+}
+
+/** Вернуть героя из копии этого телефона: он становится героем аккаунта, сервер получает его как самую свежую копию. */
+export async function restoreLocalBackup(): Promise<void> {
+  const b = localBackup();
+  if (!b) return;
+  const p = { ...b.progress, savedAt: Date.now() };
+  // Нынешний герой этого телефона ложится в копию на его место: ничего не теряется.
+  const now = loadProgress();
+  await post('/api/progress/save', { progress: p, account: cloud?.account });
+  replaceProgress(p);
+  freezeProgress();
+  try {
+    if (isEmpty(now)) localStorage.removeItem(BACKUP_KEY);
+    else localStorage.setItem(BACKUP_KEY, JSON.stringify({ progress: now, at: Date.now() }));
+  } catch {
+    // Нет хранилища.
+  }
+  location.reload();
+}
+
 /** Вход привязан к другому герою: берём его прогресс (или чистый лист) и перезапускаем игру. */
 export function switchAccount(id: string, progress: Progress | null): void {
   stopped = true;
   pending = null;
+  const before = loadProgress();
+  if (!isEmpty(before) && JSON.stringify(before.stars) !== JSON.stringify(progress?.stars ?? {})) {
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ progress: before, at: Date.now() }));
+    } catch {
+      // Нет хранилища.
+    }
+  }
   replaceProgress(progress ?? ({} as Progress));
+  freezeProgress();
   storeAccount(id);
   location.reload();
 }
@@ -70,6 +113,14 @@ const push = (keepalive = false) => {
   if (p) post('/api/progress/save', { progress: p, account: cloud?.account }, keepalive).catch((e) => (onSaveError(e) ? null : (pending ??= p)));
 };
 
+// Сервер не принял копию (слишком большая): сообщаем разработчику один раз за запуск.
+let tooLargeReported = false;
+const onTooLarge = (e: { status?: number }) => {
+  if (e.status !== 413 || tooLargeReported) return;
+  tooLargeReported = true;
+  reportError('error', new Error('progress save rejected: too large'), String(JSON.stringify(loadProgress()).length));
+};
+
 /** Отправить копию прогресса сейчас и дождаться ответа (перед набегом сервер должен знать войско). */
 export async function syncNow(p?: Progress): Promise<void> {
   if (stopped) return;
@@ -86,6 +137,7 @@ export async function syncNow(p?: Progress): Promise<void> {
 
 /** Сервер не принял копию: вход теперь ведёт в другой аккаунт. Тогда перезагружаемся на его прогресс. */
 function onSaveError(e: { status?: number; body?: { account?: string } }): boolean {
+  onTooLarge(e);
   if (e.status !== 409 || !e.body?.account) return false;
   const id = e.body.account;
   stopped = true;
@@ -125,7 +177,12 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
     const local = loadProgress();
     // Новый телефон: своего прогресса нет, берём серверный, даже если игра уже успела что-то сохранить.
     const empty = !Object.keys(local.stars).length && !Object.keys(local.days).length;
-    if (r.progress && (empty || (r.progress.savedAt ?? 0) > (local.savedAt ?? 0))) {
+    // На сервере пустая копия, а здесь герой (её затёрли с другого устройства): возвращаем героя этого телефона.
+    // Не трогаем только настоящий «Начать заново», сделанный позже.
+    if (r.progress && !hasHero(r.progress) && hasHero(local) && !((r.progress.resetAt ?? 0) > (local.savedAt ?? 0))) {
+      pending = { ...local, savedAt: Date.now() };
+      push();
+    } else if (r.progress && (empty || (r.progress.savedAt ?? 0) > (local.savedAt ?? 0))) {
       replaceProgress(r.progress);
       onRemote(loadProgress());
     } else if (!r.progress || (local.savedAt ?? 0) > (r.progress.savedAt ?? 0)) {

@@ -129,6 +129,19 @@ describe('accountApi', () => {
     expect(accounts.logins('tg:2')).toEqual(['tg:2', 'tg:1']);
   });
 
+  it('сервер не видел героя телефона: верим телефону и не затираем его пустым', () => {
+    const { accounts, dropped, d } = setup({});
+    const { code } = accounts.code('ya:2');
+    const me = { id: 'tg:1', login: 'tg:1' };
+    // На сервере обе копии пустые, но в телефоне Telegram герой 5 уровня.
+    const r = accountApi(d, '/api/account/link', me, { code, local: { level: 5, stages: 0, days: 12 } });
+    expect(r.body).toMatchObject({ ok: true, id: 'tg:1' });
+    expect(dropped).toEqual(['ya:2']);
+    // Без описания телефона пустой здешний уступил бы пустому тому.
+    const c2 = accounts.code('ya:3').code;
+    expect(accountApi(d, '/api/account/link', { id: 'tg:4', login: 'tg:4' }, { code: c2 }).body).toMatchObject({ id: 'ya:3' });
+  });
+
   it('свой код и чужой неверный код не проходят', () => {
     const { accounts, d } = setup({});
     const { code } = accounts.code('tg:1');
@@ -159,5 +172,17 @@ describe('accountApi', () => {
     expect(accountApi(d, '/api/account/unlink', { id: 'tg:1', login: 'tg:1' }, { login: 'tg:1' }).status).toBe(400);
     const r = accountApi(d, '/api/account/unlink', { id: 'tg:1', login: 'tg:1' }, { login: 'tg:2' });
     expect(r.body).toMatchObject({ logins: [{ login: 'tg:1', platform: 'tg' }] });
+  });
+});
+
+describe('копия героя не затирается пустой', () => {
+  it('пустая копия без «Начать заново» не ложится поверх героя', async () => {
+    const { SaveStore } = await import('./saves');
+    const s = new SaveStore(null);
+    s.put('tg:1', { savedAt: 10, stars: { 1: 3 }, days: { '2026-10-25': 50 } });
+    s.put('tg:1', { savedAt: 20, stars: {}, days: {} });
+    expect(Object.keys((s.get('tg:1')!.progress as { stars: object }).stars)).toEqual(['1']);
+    s.put('tg:1', { savedAt: 30, stars: {}, days: {}, resetAt: 30 });
+    expect(s.get('tg:1')!.progress).toMatchObject({ resetAt: 30 });
   });
 });
