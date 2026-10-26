@@ -60,6 +60,7 @@ import { mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
 import { type AccountDeps, accountApi } from './accountApi';
+import { Reels } from './reels';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const readToken = (file: string) => {
@@ -383,6 +384,10 @@ const personal = new PersonalChannel(process.env.PERSONAL_CHANNEL_FILE ?? join(d
   stats: () => telemetry.summaryText(),
   ignoreText: (t) => t.trim() in ADMIN_BUTTONS,
 });
+// Рилсы для Instagram: кнопка запускает сборку в GitHub Actions (server/reels.ts), токен — секрет GH_ACTIONS_TOKEN → .gh-token.
+const reels = new Reels(process.env.REELS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'reels.json'), {
+  token: () => process.env.GH_ACTIONS_TOKEN || readToken(join(__dirname, '.gh-token')),
+});
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
 const channelUpdate = (u: Update): boolean =>
   PERSONAL_CHANNEL !== 'off' &&
@@ -399,9 +404,10 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '📣 Пост в Арену сейчас': '/channel_post',
   '✍️ Личный канал': '/channel_me',
   '🚩 Жалобы': '/reports',
+  '🎬 Новый рилс': '/reel',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -409,14 +415,14 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|reel\b)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
-  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
+  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс для Instagram. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}`), true;
-  return personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
+  return reels.command(chatId, text, reply) || personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
 };
 const clanInfo = (code: string) => {
   const c = clans.byCode(code);
@@ -1091,6 +1097,7 @@ const ADMIN_COMMANDS = [
   { command: 'channel_post', description: 'Опубликовать пост в @NikitenokArena сейчас' },
   { command: 'channel_me', description: 'Черновик для личного канала с кнопками' },
   { command: 'reports', description: 'Жалобы игроков' },
+  { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
 ];
 const adminMenus = new Set<string>();
 if (BOT_TOKEN)
