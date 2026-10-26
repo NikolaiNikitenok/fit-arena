@@ -148,7 +148,7 @@ function slide(s, i) {
     <div class="npc side"><div class="glow"></div><img src="${npcImg}"></div><div class="who">Совет: <b>${esc(npcName)}</b></div>${foot(i)}</div>`;
 }
 
-const b = await chromium.launch();
+const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
 const p = await b.newPage({ viewport: { width: 1080, height: 1350 } });
 for (let i = 0; i < total; i++) {
   await p.setContent(

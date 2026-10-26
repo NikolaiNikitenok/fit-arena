@@ -15,7 +15,7 @@ const subs = [];
 s.lines.slice(1).forEach((l) => l.subs.forEach((t, j) => subs.push({ t, acc: j === l.subs.length - 1 && l.subs.length > 1 })));
 writeFileSync('subs.json', JSON.stringify(subs));
 
-const b = await chromium.launch();
+const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
 let p = await b.newPage({ viewport: { width: 1080, height: 330 } });
 for (let i = 0; i < subs.length; i++) {
   await p.setContent(`<html><head><style>${css}

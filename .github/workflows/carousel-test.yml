@@ -11,7 +11,7 @@ on:
 
 jobs:
   carousel:
-    strategy: { matrix: { kind: [tips, app] }, fail-fast: false }
+    strategy: { matrix: { kind: [app] }, fail-fast: false }
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -31,7 +31,8 @@ jobs:
           npm i -g @anthropic-ai/claude-code > /dev/null
           npm i --prefix $HOME/pw playwright@1.63.0 > /dev/null
           ln -s $HOME/pw/node_modules promo/carousel/node_modules
-          $HOME/pw/node_modules/.bin/playwright install --with-deps chromium > /dev/null
+          # Браузер берём готовый с раннера (Google Chrome): установка Chromium с зависимостями занимает 5–10 минут.
+          echo "CHROME=$(which google-chrome || which chromium)" >> $GITHUB_ENV
           mkdir -p out
       - name: Text
         working-directory: out
@@ -41,10 +42,3 @@ jobs:
         run: node ../promo/carousel/render.mjs
       - uses: actions/upload-artifact@v4
         with: { name: "carousel-${{ matrix.kind }}", path: "out/slide_*.jpg\nout/carousel.json", retention-days: 7 }
-      - name: Send
-        working-directory: out
-        run: node ../promo/carousel/send.mjs "$CHAT"
-      - name: Report failure
-        if: failure()
-        working-directory: out
-        run: node ../promo/carousel/send.mjs "$CHAT" "ошибка в GitHub Actions (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
