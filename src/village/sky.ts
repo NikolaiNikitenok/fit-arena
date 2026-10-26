@@ -25,7 +25,7 @@ interface Key extends SkyLook {
 }
 
 // Ночь — лунная, а не чёрная: деревню должно быть видно и в полночь.
-const NIGHT: Omit<Key, 'h'> = { fog: '#2a3866', hemiSky: '#93a6e6', hemiGround: '#2c2a4a', hemi: 1.0, sun: '#b4c6ff', sunI: 0.95, sunH: 0.8, lamps: 1, stars: 1 };
+const NIGHT: Omit<Key, 'h'> = { fog: '#34457e', hemiSky: '#b4c2f2', hemiGround: '#4a4870', hemi: 1.2, sun: '#c6d4ff', sunI: 1.35, sunH: 0.85, lamps: 1, stars: 1 };
 const KEYS: Key[] = [
   { h: 0, ...NIGHT },
   { h: 5, ...NIGHT },
@@ -33,7 +33,7 @@ const KEYS: Key[] = [
   { h: 8.5, fog: '#cfe7d6', hemiSky: '#ffffff', hemiGround: '#5a4a38', hemi: 1.25, sun: '#ffffff', sunI: 2.3, sunH: 1, lamps: 0, stars: 0 },
   { h: 17, fog: '#cfe7d6', hemiSky: '#ffffff', hemiGround: '#5a4a38', hemi: 1.25, sun: '#ffffff', sunI: 2.3, sunH: 1, lamps: 0, stars: 0 },
   { h: 19, fog: '#eab79a', hemiSky: '#f3e2e6', hemiGround: '#4f4040', hemi: 1.1, sun: '#ffb27a', sunI: 1.8, sunH: 0.55, lamps: 0.4, stars: 0 },
-  { h: 20.5, fog: '#5a4f80', hemiSky: '#a49ce0', hemiGround: '#342c44', hemi: 1.0, sun: '#ffa898', sunI: 1.1, sunH: 0.45, lamps: 1, stars: 0.4 },
+  { h: 20.5, fog: '#605688', hemiSky: '#b4ace8', hemiGround: '#46405c', hemi: 1.15, sun: '#ffb0a0', sunI: 1.35, sunH: 0.45, lamps: 1, stars: 0.4 },
   { h: 22, ...NIGHT },
   { h: 24, ...NIGHT },
 ];
@@ -101,7 +101,7 @@ export function themed(s: SkyLook, w: Weather, theme: string | undefined, ms: nu
   }
   if (theme === 'halloween') {
     const weather: Weather = w === 'snow' ? 'clear' : w;
-    return { sky: { ...s, fog: mixHex(s.fog, '#4b3466', 0.5), hemiSky: mixHex(s.hemiSky, '#c9a6ff', 0.3), hemiGround: mixHex(s.hemiGround, '#3a2440', 0.5), sun: mixHex(s.sun, '#ffb06b', 0.35), sunI: s.sunI * 0.8, lamps: Math.max(s.lamps, 0.55) }, weather };
+    return { sky: { ...s, fog: mixHex(s.fog, '#4b3466', 0.5), hemiSky: mixHex(s.hemiSky, '#c9a6ff', 0.3), hemiGround: mixHex(s.hemiGround, '#5e4470', 0.4), sun: mixHex(s.sun, '#ffb06b', 0.35), sunI: s.sunI, hemi: s.hemi * 1.1, lamps: Math.max(s.lamps, 0.55) }, weather };
   }
   return { sky: s, weather: w };
 }

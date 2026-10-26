@@ -131,9 +131,9 @@ const PALS: Record<'enemy' | ThemeId, Pal> = {
     low: ['#e3eaf3', '#f6f9fc', '#c7d3e2'], water: '#a8d0ea', sand: '#e9eff6', road: '#c9c2b8', tree: THEME_TREE_TINT.winter,
   },
   halloween: {
-    grass: ['#56613a', '#5d6840', '#505b36', '#646f45'], meadow: '#4b5533', dirt: ['#7d6347', '#86694c', '#735b41'],
-    tuft: ['#47522c', '#525e33', '#3e4826', '#5c6838'], flower: ['#ff8a24', '#b06ae0', '#ffb347'],
-    low: ['#4b5433', '#5c663f', '#384024'], water: '#3d5c66', sand: '#8a7a5a', road: '#7f6a50', tree: THEME_TREE_TINT.halloween,
+    grass: ['#6c7848', '#74804e', '#657143', '#7c8856'], meadow: '#5e6940', dirt: ['#8e7252', '#987a57', '#84694b'],
+    tuft: ['#58653a', '#637041', '#4f5b33', '#6d7a46'], flower: ['#ff8a24', '#b06ae0', '#ffb347'],
+    low: ['#5c6640', '#6c784b', '#475030'], water: '#4a6c78', sand: '#8a7a5a', road: '#7f6a50', tree: THEME_TREE_TINT.halloween,
   },
 };
 const palOf = (enemy: boolean, theme: ThemeId) => PALS[enemy ? 'enemy' : theme];

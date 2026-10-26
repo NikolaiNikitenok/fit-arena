@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GRID, isTrap } from '../../shared/village';
@@ -293,55 +293,69 @@ export function Lamps({ spots, on, ctl, shadows }: { spots: [number, number][]; 
 }
 
 /** Окна домов ночью: тёплый свет у стен построек. */
-// Без окон: открытые площадки и мастерские; в два ряда — высокие постройки.
-const NO_WINDOWS = new Set<string>(['quarry', 'goldmine', 'lumbermill', 'storage', 'barracks']);
-const ROWS: Record<string, number[]> = { townhall: [0.75, 1.55], tower: [1.25, 2.05], lab: [0.8, 1.5] };
+// ── Окна ────────────────────────────────────────────────────────────────────────────────────────
 
-export function Windows({ buildings, on, ctl }: { buildings: ViewBld[]; on: number; ctl: React.MutableRefObject<Ctl> }) {
-  const geo = useMemo(() => {
-    const list: { x: number; y: number; z: number; size: number; color: string }[] = [];
-    for (const b of buildings) {
-      if (b.t === 'wall' || isTrap(b.t) || b.state !== 'ok') continue;
-      const s = SIZE[b.t];
-      const cx = W(b.x + s / 2);
-      const cz = W(b.y + s / 2);
-      list.push({ x: cx + s * 0.3, y: 0.7, z: cz + s * 0.3, size: s * 1.6, color: '#ff9d4d' });
-    }
-    return pointsGeometry(list);
-  }, [buildings]);
-  // Сами окна: тёплые квадратики на двух стенах, что смотрят в камеру; у высоких построек — в два ряда.
-  const panes = useMemo(() => {
-    const list: { x: number; y: number; z: number; size: number; color: string; seed: number }[] = [];
-    for (const b of buildings) {
-      if (b.t === 'wall' || isTrap(b.t) || b.state !== 'ok' || NO_WINDOWS.has(b.t)) continue;
-      const s = SIZE[b.t];
-      const cx = W(b.x + s / 2);
-      const cz = W(b.y + s / 2);
-      const n = s >= 3 ? 2 : 1;
-      const rows = ROWS[b.t] ?? [0.65];
-      const face = b.t === 'tower' ? s * 0.46 : s * 0.36;
-      for (const y of rows)
-        for (let k = 0; k < n; k++) {
-          const off = n === 1 ? 0 : (k - (n - 1) / 2) * s * 0.34;
-          const seed = ((b.x * 31 + b.y * 17 + k * 7 + y * 13) % 10) / 10;
-          list.push({ x: cx + face, y, z: cz + off, size: 0.36, color: seed < 0.3 ? '#ffd27a' : '#ffb35c', seed });
-          list.push({ x: cx + off, y, z: cz + face, size: 0.36, color: seed > 0.7 ? '#ffd27a' : '#ffb35c', seed: 1 - seed });
+// Постройки KayKit раскрашены одной палитрой 8×4: у каждого цвета своя полоса. Окна и проёмы —
+// тёмно-серая полоса (3, 0). Ночью она светится тёплым светом прямо на моделях.
+const WINDOW_SWATCHES: [number, number][] = [[3, 0]];
+let windowMask: THREE.Texture | null = null;
+function windowMaskTexture() {
+  if (windowMask) return windowMask;
+  const c = document.createElement('canvas');
+  c.width = 8;
+  c.height = 4;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, 8, 4);
+  g.fillStyle = '#fff';
+  for (const [x, y] of WINDOW_SWATCHES) g.fillRect(x, y, 1, 1);
+  const t = new THREE.CanvasTexture(c);
+  // Как у текстур из glTF: v = 0 — верх картинки.
+  t.flipY = false;
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return (windowMask = t);
+}
+const isPalette = (m: THREE.Material) => m.name.startsWith('hexagons_medieval') || (m as THREE.MeshStandardMaterial).map?.name?.startsWith('hexagons_medieval');
+
+/** Ночью окна построек загораются: свечение палитры окон на всех моделях сцены. */
+export function WindowGlow({ on }: { on: number }) {
+  const scene = useThree((s) => s.scene);
+  const last = useRef(-1);
+  const wait = useRef(0);
+  useFrame((_, dt) => {
+    wait.current -= dt;
+    if (wait.current > 0 && Math.abs(on - last.current) < 0.02) return;
+    wait.current = 1;
+    last.current = on;
+    const mask = windowMaskTexture();
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const sm = m as THREE.MeshStandardMaterial;
+        if (!sm.isMeshStandardMaterial || !isPalette(sm)) continue;
+        if (sm.emissiveMap !== mask) {
+          sm.emissiveMap = mask;
+          sm.emissive.set('#ffb054');
+          sm.needsUpdate = true;
         }
-    }
-    return pointsGeometry(list);
-  }, [buildings]);
-  const mat = useMemo(() => glowMaterial(0, true, 0), []);
-  const paneMat = useMemo(() => glowMaterial(3, true, 0), []);
-  useEffect(() => () => [geo, panes].forEach((g) => g.dispose()), [geo, panes]);
-  useEffect(() => () => [mat, paneMat].forEach((m) => m.dispose()), [mat, paneMat]);
-  useGlowFrame(mat, ctl, on * 0.7);
-  useGlowFrame(paneMat, ctl, on);
-  return (
-    <>
-      <points geometry={geo} material={mat} frustumCulled={false} renderOrder={6} />
-      <points geometry={panes} material={paneMat} frustumCulled={false} renderOrder={7} />
-    </>
+        sm.emissiveIntensity = on * 2.2;
+      }
+    });
+  });
+  // Ушли из своей деревни (бой, чужая деревня — там день): окна гаснут.
+  useEffect(
+    () => () =>
+      scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if ((m as THREE.MeshStandardMaterial).emissiveMap === windowMask) (m as THREE.MeshStandardMaterial).emissiveIntensity = 0;
+      }),
+    [scene],
   );
+  return null;
 }
 
 /** Светлячки над низиной у озера и леса — только ночью. */

@@ -12,7 +12,7 @@ import type { CharName } from '../three/kit';
 import { AnimInstances, animateGroup, Blobs, lookGroup, PrimInstances } from './looks3d';
 import { getSettings, useSettings } from '../settings';
 import { emitFx, Particles } from './Particles';
-import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, Windows } from './Atmosphere';
+import { EdgeFog, Fireflies, Lamps, lampSpots, Precipitation, SkyLights, useSky, WindowGlow } from './Atmosphere';
 import { BuildingType, GRID, ResKey } from '../../shared/village';
 import { BattleState, cellOf, Fx } from '../../shared/villageBattle';
 import { CRY, GUARD, QUAKE, SKILLS, type SkillId } from '../../shared/heroSkills';
@@ -600,7 +600,7 @@ export function Village3D(props: SceneProps) {
       <Suspense fallback={null}>
         <Scene {...props} />
         {live && <Lamps spots={spots} on={sky.lamps} ctl={props.ctl} shadows={!s.lowPower} />}
-        {live && sky.lamps > 0.01 && <Windows buildings={props.buildings} on={sky.lamps} ctl={props.ctl} />}
+        <WindowGlow on={live ? sky.lamps : 0} />
       </Suspense>
       {live && fx && <Birds theme={props.theme ?? 'classic'} night={sky.lamps} />}
       {live && fx && <TavernNotes buildings={props.buildings} />}
