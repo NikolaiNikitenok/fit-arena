@@ -287,6 +287,57 @@ function bubbleTex(res: ResKey): THREE.Texture {
   return t;
 }
 
+let upTex: THREE.Texture | null = null;
+/** Зелёный кружок со стрелкой вверх: «можно улучшить». */
+function upTexture(): THREE.Texture {
+  if (upTex) return upTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(0,0,0,.28)';
+  g.beginPath();
+  g.arc(48, 52, 38, 0, Math.PI * 2);
+  g.fill();
+  const grad = g.createLinearGradient(0, 10, 0, 86);
+  grad.addColorStop(0, '#8af06a');
+  grad.addColorStop(1, '#2fa83a');
+  g.fillStyle = grad;
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(48, 46, 36, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.moveTo(48, 22);
+  g.lineTo(70, 46);
+  g.lineTo(57, 46);
+  g.lineTo(57, 68);
+  g.lineTo(39, 68);
+  g.lineTo(39, 46);
+  g.lineTo(26, 46);
+  g.closePath();
+  g.fill();
+  upTex = new THREE.CanvasTexture(c);
+  upTex.colorSpace = THREE.SRGBColorSpace;
+  return upTex;
+}
+
+function UpArrow({ x, z, h }: { x: number; z: number; h: number }) {
+  const ref = useRef<THREE.Sprite>(null);
+  useFrame(() => {
+    if (!ref.current) return;
+    const t = performance.now() / 1000;
+    ref.current.position.y = h + 0.18 * Math.abs(Math.sin(t * 2.4 + x));
+  });
+  return (
+    <sprite ref={ref} position={[x, h, z]} scale={[0.85, 0.85, 1]} renderOrder={6}>
+      <spriteMaterial map={upTexture()} depthTest={false} depthWrite={false} />
+    </sprite>
+  );
+}
+
 function Bubble({ res, x, z, h }: { res: ResKey; x: number; z: number; h: number }) {
   const ref = useRef<THREE.Sprite>(null);
   useFrame(() => {
@@ -447,6 +498,8 @@ export interface SceneProps {
   statueHero?: CharName;
   grid?: boolean;
   bubbles?: { i: number; res: ResKey }[];
+  // Постройки, которые можно улучшить прямо сейчас: зелёная стрелка над ними.
+  ups?: number[];
   labels?: { i: number; text: string; color?: string }[];
   battle?: React.MutableRefObject<BattleView | null>;
   noDeploy?: number[];
@@ -520,6 +573,12 @@ function Scene(props: SceneProps) {
       {props.bubbles?.map((bb) => {
         const b = byId.get(bb.i);
         return b && <Bubble key={b.i} res={bb.res} x={W(b.x + SIZE[b.t] / 2)} z={W(b.y + SIZE[b.t] / 2)} h={top(b)} />;
+      })}
+      {props.ups?.map((i) => {
+        const b = byId.get(i);
+        if (!b || props.bubbles?.some((bb) => bb.i === i)) return null;
+        const s = SIZE[b.t];
+        return <UpArrow key={i} x={W(b.x + s * 0.85)} z={W(b.y + s * 0.85)} h={top(b) * BIG * 0.8} />;
       })}
       {props.labels?.map((l) => {
         const b = byId.get(l.i);

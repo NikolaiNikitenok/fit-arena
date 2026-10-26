@@ -59,6 +59,8 @@ import { fmtNum, fmtTime, foundTown, hasTown, tickTown, townOf, unpackBase, with
 import { claimTask, openTasks, taskDone, taskProgress, TASKS } from './tasks';
 import type { DefenseEntry } from './types';
 import { focusOn, type Ctl, type ViewBld } from './Village3D';
+import { adviceCount, builderAdvice, upgradeNow } from './advice';
+import { Curtain, type CurtainPhase } from './Curtain';
 import { useViewSlot, ViewHost } from './Viewport';
 import { TroopSheet, TroopThumb } from './TroopInfo';
 import { LabSheet } from './LabSheet';
@@ -86,7 +88,7 @@ interface Props {
   onDungeon?: () => void;
 }
 
-type Sheet = 'build' | 'army' | 'lab' | 'attack' | 'tasks' | 'log' | 'top' | null;
+type Sheet = 'build' | 'army' | 'lab' | 'attack' | 'tasks' | 'log' | 'top' | 'advice' | null;
 type Battle =
   | { kind: 'camp'; camp: Camp }
   | { kind: 'pvp'; target: TargetView; revengeOf?: string }
@@ -124,12 +126,29 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const inBattle = (el: ReactNode) => (
     <div className="vil-screen battle">
       <BattleMusic />
+      <Curtain phase={curtain.phase} text={curtain.text} />
       <ViewHost slot={viewSlot}>{el}</ViewHost>
     </div>
   );
   const [toast, setToast] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Line[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // Облака между деревнями: съехались → работа (поиск, смена экрана) → разошлись.
+  const [curtain, setCurtain] = useState<{ phase: CurtainPhase; text?: string }>({ phase: 'off' });
+  const cover = async (text: string, work: () => Promise<void> | void) => {
+    setCurtain({ phase: 'in', text });
+    sfx('whoosh');
+    await new Promise((r) => setTimeout(r, 560));
+    setCurtain({ phase: 'shut', text });
+    try {
+      await work();
+    } finally {
+      // Кадр-другой на то, чтобы новая сцена встала за облаками.
+      await new Promise((r) => setTimeout(r, 250));
+      setCurtain({ phase: 'out' });
+      setTimeout(() => setCurtain((c) => (c.phase === 'out' ? { phase: 'off' } : c)), 700);
+    }
+  };
   // Набеги на игроков: есть ли сеть, что сказал сервер о последнем набеге, топ, «бот пишет о нападениях».
   const [online, setOnline] = useState(isOnline);
   const [pvpNote, setPvpNote] = useState<ReactNode>(null);
@@ -271,18 +290,24 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   // Набег на игрока: поиск (или месть), бронь цели и бой. Без сети — только лагеря Князя.
   const startPvp = async (revengeOf?: string) => {
     if (!isOnline()) return flash(OFFLINE);
+    if (searching) return;
     setSearching(true);
-    try {
-      const target = revengeOf ? await revengeTarget(revengeOf) : await findTarget();
-      setSheet(null);
-      setPvpNote(null);
-      setBattle({ kind: 'pvp', target, revengeOf });
-    } catch (e) {
-      flash(e instanceof PvpError ? e.message : 'Соперник не нашёлся. Попробуй позже.');
-    } finally {
-      setSearching(false);
-    }
+    let error: string | null = null;
+    await cover('Ищем соперника', async () => {
+      try {
+        const target = revengeOf ? await revengeTarget(revengeOf) : await findTarget();
+        setSheet(null);
+        setPvpNote(null);
+        setBattle({ kind: 'pvp', target, revengeOf });
+      } catch (e) {
+        error = e instanceof PvpError ? e.message : 'Соперник не нашёлся. Попробуй позже.';
+      }
+    });
+    setSearching(false);
+    if (error) flash(error);
   };
+  // Домой из боя — тоже через облака.
+  const leaveBattle = () => void cover('Возвращаемся домой', () => setBattle(null));
   const pvp = v.pvp ?? {};
   const trophies = pvp.trophies ?? 0;
   const league = villageLeague(trophies);
@@ -373,7 +398,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       const c = battle.camp;
       const repeat = (v.camps?.[c.id] ?? 0) > 0;
       const loot = repeat ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot;
-      return inBattle(<BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={() => setBattle(null)} />);
+      return inBattle(<BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={leaveBattle} />);
     }
     if (battle.kind === 'pvp') {
       const t = battle.target;
@@ -406,12 +431,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           onSkip={battle.revengeOf ? undefined : () => void startPvp()}
           skipBusy={searching}
           onFinish={finish}
-          onClose={() => setBattle(null)}
+          onClose={leaveBattle}
         />,
       );
     }
     const e = battle.entry;
-    return inBattle(<BattleScreen heroLook={heroLook} title={e.who} base={{ ...unpackBase(e.base ?? []), hero: e.hero }} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={() => setBattle(null)} />);
+    return inBattle(<BattleScreen heroLook={heroLook} title={e.who} base={{ ...unpackBase(e.base ?? []), hero: e.hero }} loot={lootOf(e)} seed={e.seed} army={e.army} mode="replay" deploys={e.deploys} endTick={e.endTick} enemy={false} onClose={leaveBattle} />);
   }
 
   const tap = (x: number, y: number) => {
@@ -430,6 +455,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       return;
     }
     sfx('tap');
+    pick(b);
+  };
+  // Открыть карточку постройки и подвести к ней камеру.
+  const pick = (b: Bld) => {
     setSelDecor(null);
     setSelected(b.i);
     const s = sizeOf(b.t);
@@ -513,6 +542,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const tasksReady = tasks.filter((t) => taskDone(progress, t)).length;
   const builders = buildersAt(th);
   const busy = busyBuilders(town);
+  // Советы строителя и стрелки над тем, что можно улучшить сейчас.
+  const advice = builderAdvice(town);
+  const adviceOk = adviceCount(advice);
+  const ups = upgradeNow(advice);
   const bonus = villageBonus(town.b);
   const queue = town.q;
 
@@ -520,7 +553,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     <div className="vil-screen">
       <ViewHost
         slot={viewSlot}
-        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id, decor: placing.decor } : null, decor: decorShown, theme, clanFlag: v.clanFlag, statueHero, grid: !!placing, bubbles: placing ? [] : bubbles, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
+        props={{ ctl, buildings: shown, selected: selected ?? undefined, ghost: placing ? { t: placing.t, x: placing.x, y: placing.y, ok: placeOk, id: placing.id, decor: placing.decor } : null, decor: decorShown, theme, clanFlag: v.clanFlag, statueHero, grid: !!placing, bubbles: placing ? [] : bubbles, ups: placing ? [] : ups, labels: placing ? [] : labels, onTap: tap, onBubble: harvest, onGhost: (x, y) => placing && setPlacing({ ...placing, x: clampCell(x, sizeOf(placing.t)), y: clampCell(y, sizeOf(placing.t)) }) }}
       />
 
       <div className="vil-top vil-hud">
@@ -546,10 +579,11 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               {trophies}
               <small>{league.name}</small>
             </button>
-            <span className={`hud-chip ${busy >= builders ? 'empty' : ''}`} title="Свободные строители">
+            <button className={`hud-chip ${busy >= builders ? 'empty' : ''}`} onClick={() => setSheet('advice')} aria-label="Советы строителя">
               <Hammer />
               {builders - busy}/{builders}
-            </span>
+              {adviceOk > 0 && busy < builders && <span className="hud-badge">{adviceOk > 9 ? '9+' : adviceOk}</span>}
+            </button>
             {shieldLeft > 0 && (
               <span className="hud-chip mint" title="Щит: на деревню нельзя напасть">
                 <Shield size={14} />
@@ -582,6 +616,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       </div>
       <FlyLayer ref={flyRef} bars={barEls} />
       <VillageMusic tavern={town.b.some((b) => b.t === 'tavern' && b.l >= 1)} />
+      <Curtain phase={curtain.phase} text={curtain.text} />
 
       {toast && <div className="toast vil-warn">{toast}</div>}
 
@@ -690,6 +725,48 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             </div>
           )}
         </div>
+      )}
+
+      {sheet === 'advice' && (
+        <Sheet onClose={() => setSheet(null)}>
+          <div className="section-title">
+            Советы строителя
+            <span className="muted">
+              свободно {builders - busy} из {builders}
+            </span>
+          </div>
+          <div className="vil-advice-say">
+            <Portrait line={say('boris', '')} size={48} />
+            <span>{advice.length === 0 ? 'Всё построено и улучшено, что позволяет ратуша. Копи на следующую!' : busy >= builders ? 'Все мои ребята заняты. Вот что сделаем, как освободятся:' : advice.some((a) => a.ok) ? 'Вот что можно сделать прямо сейчас — зелёным:' : 'Пока не хватает запасов. Вот что ближе всего:'}</span>
+          </div>
+          {advice.slice(0, 10).map((a) => (
+            <button
+              key={a.kind === 'up' ? `u${a.id}` : `b${a.t}`}
+              className={`vil-shop vil-advice ${a.ok ? 'ok' : ''}`}
+              onClick={() => {
+                if (a.kind === 'build') {
+                  if (!a.ok) return flash(BUILD_ERRORS[a.why ?? 'cost']);
+                  return startPlacing(a.t);
+                }
+                const b = town.b.find((x) => x.i === a.id);
+                setSheet(null);
+                if (b) pick(b);
+              }}
+            >
+              <span className="vil-shop-pic">
+                <Preview t={a.t} l={a.kind === 'up' ? a.l : 1} size={56} />
+              </span>
+              <span className="vil-shop-info">
+                <b>{a.kind === 'build' ? `Построить: ${BUILDINGS[a.t].name}` : `Улучшить: ${BUILDINGS[a.t].name}`}</b>
+                <span className="muted">{a.kind === 'build' ? `есть ${a.have} из ${a.max}` : `уровень ${a.l} → ${a.l + 1}`}{a.why && a.why !== 'cost' ? ` · ${BUILD_ERRORS[a.why].toLowerCase().replace(/\.$/, '')}` : ''}</span>
+                <span className="vil-shop-meta">
+                  <ResRow res={a.cost} />
+                </span>
+              </span>
+              <span className="vil-advice-go">{a.ok ? (a.kind === 'up' ? '↑' : '+') : ''}</span>
+            </button>
+          ))}
+        </Sheet>
       )}
 
       {sheet === 'build' && (
@@ -848,7 +925,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 disabled={!open || troopCount(town.army) === 0}
                 onClick={() => {
                   setSheet(null);
-                  setBattle({ kind: 'camp', camp: c });
+                  void cover('Идём к лагерю', () => setBattle({ kind: 'camp', camp: c }));
                 }}
               >
                 <span className="vil-camp-num">{c.id}</span>

@@ -5,7 +5,7 @@ import { midiToFreq, NoteEvent, stepSeconds, STEPS_PER_BAR, Theme, themeStep, TH
 import { hasInstrument, type Instrument, loadInstrument, playSample } from './samples';
 import { tg } from './telegram';
 
-export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup' | BattleSfx;
+export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup' | 'whoosh' | BattleSfx;
 // Бой в деревне: удары отрядов, выстрелы башен, разрушения, умения героя. n — сколько таких событий сразу.
 export type BattleSfx = 'sword' | 'slash' | 'bow' | 'smash' | 'blast' | 'heal' | 'shot' | 'cannon' | 'crumble' | 'wallbreak' | 'skill' | 'thunder' | 'hammer';
 // Звуки боя повторяются реже: при толпе отрядов один звук на всех, только чуть громче.
@@ -221,6 +221,25 @@ function play(c: AudioContext, name: Sfx, t: number, n: number): void {
     case 'tap':
       tone(c, 1400, t, 0.03, { vol: 0.035 });
       break;
+    case 'whoosh': {
+      // Облака съезжаются: мягкий шум ветра, фильтр плывёт вверх.
+      const src = c.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 0.8;
+      f.frequency.setValueAtTime(300, t);
+      f.frequency.exponentialRampToValueAtTime(1600, t + 0.5);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.25);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+      src.connect(f).connect(g).connect(sfxBus);
+      src.start(t, Math.random() * 0.5);
+      src.stop(t + 0.75);
+      break;
+    }
     case 'rep':
       // Высота растёт с номером повтора, чтобы было слышно темп.
       tone(c, 520 + Math.min(12, n % 13) * 30, t, 0.22, { type: 'triangle', vol: 0.18, attack: 0.01 });
