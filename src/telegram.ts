@@ -190,9 +190,9 @@ export function openInvoice(url: string): Promise<'paid' | 'cancelled' | 'failed
   return new Promise((resolve) => (platform === 'tg' && tg?.openInvoice ? tg.openInvoice(url, resolve) : resolve('failed')));
 }
 
-/** Pro продаётся только в Telegram: из Max и браузера ведём в бота, игра откроется сразу на пропуске. */
-export function openPassInTelegram(): void {
-  const url = `https://t.me/${BOT_USERNAME}?startapp=tab-pass`;
+/** Покупки за звёзды — только в Telegram: из Max и браузера ведём в бота, игра откроется сразу на нужном экране (pass, shop). */
+export function openPassInTelegram(tab = 'pass'): void {
+  const url = `https://t.me/${BOT_USERNAME}?startapp=tab-${tab}`;
   const open = (tg as { openLink?: (url: string) => void } | undefined)?.openLink;
   if (open && tg?.initData) open.call(tg, url);
   else window.open(url, '_blank', 'noopener');

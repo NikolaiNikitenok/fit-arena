@@ -51,6 +51,8 @@ export interface Item {
   event?: boolean;
   // Только за пройденную программу тренировок (src/game/programs.ts).
   program?: boolean;
+  // Только из набора «Новичок» за звёзды (src/game/starter.ts): в сундуках не выпадает.
+  paid?: boolean;
 }
 
 export const ITEMS: Item[] = [
@@ -65,6 +67,7 @@ export const ITEMS: Item[] = [
   { id: 'dragon', hero: 'Barbarian', name: 'Драконоборец', rarity: 'legendary', color: '#d84315', glow: '#ff3d00', tint: 'mul:1.3,0.75,0.6', coinBonus: 0.3, price: 0, inShop: false },
   { id: 'pass-silver', hero: 'Knight', name: 'Серый страж', rarity: 'epic', color: '#cfd8dc', glow: '#b0bec5', tint: 'mul:0.95,1.0,1.1', coinBonus: 0.15, price: 0, inShop: false, pass: true },
   { id: 'pass-gold', hero: 'Knight', name: 'Страж Золотого щита', rarity: 'legendary', color: '#ffd54a', glow: '#ffc400', tint: 'mul:1.5,1.2,0.5', coinBonus: 0.3, price: 0, inShop: false, pass: true },
+  { id: 'explorer', hero: 'Rogue', name: 'Искатель приключений', rarity: 'epic', color: '#26a69a', glow: '#64ffda', tint: 'mul:0.75,1.15,1.05', coinBonus: 0.1, price: 0, inShop: false, paid: true },
   { id: 'gold', hero: 'Knight', name: 'Золотой чемпион', rarity: 'legendary', color: '#ffc400', glow: '#ffea00', tint: 'mul:1.45,1.15,0.45', coinBonus: 0.3, price: 5000, inShop: true },
   // Облики боссов события выходных (src/game/event.ts): у каждого месяца свой.
   ...([
@@ -229,7 +232,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };

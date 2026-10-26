@@ -51,12 +51,15 @@ import {
   swapsLeft,
   saveProgress,
 } from './progress';
-import { Coin, Flask, Heart, Lock, Swords } from '../icons';
+import { Chest, Coin, Flask, Heart, Lock, Star, Swords } from '../icons';
 import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
-import { startTab } from '../telegram';
+import { openPassInTelegram, platform, startTab } from '../telegram';
+import { useStarter } from '../cloud';
+import { payStars } from '../payments';
+import { claimStarter, STARTER_PACK } from './starter';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
@@ -115,6 +118,18 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     void startCloud((p) => setProgress(p));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Набор «Новичок» оплачен (здесь или на другом устройстве), а в прогрессе его ещё нет: кладём вещи.
+  const starter = useStarter();
+  const [starterGot, setStarterGot] = useState(false);
+  useEffect(() => {
+    if (!starter?.bought) return;
+    const next = claimStarter(latest.current, Date.now());
+    if (!next) return;
+    setProgress(next);
+    setStarterGot(true);
+    sfx('chest');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [starter?.bought]);
   const current = currentLevel(progress, LEVEL_COUNT);
   const currentDef = LEVELS[current - 1];
   const [world, setWorld] = useState(currentDef.world);
@@ -124,7 +139,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     onPlaying(!!l);
   };
   const [selected, setSelected] = useState<LevelDef | null>(null);
-  const [shop, setShop] = useState<ShopTab | null>(null);
+  // Ссылка «Купить в Telegram» из Max и браузера открывает игру сразу у купца (?tab=shop).
+  const [shop, setShop] = useState<ShopTab | null>(() => (startTab() === 'shop' ? 'weapon' : null));
   const [settings, setSettings] = useState(false);
   const [replayOnb, setReplayOnb] = useState(false);
   const [achOpen, setAchOpen] = useState(false);
@@ -351,6 +367,18 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
         />
       )}
       {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
+      {starterGot && (
+        <Sheet onClose={() => setStarterGot(false)}>
+          <div className="starter-got">
+            <Chest size={64} />
+            <div className="level-title">Набор «Новичок» твой!</div>
+            <div className="muted">Облик «{itemById(STARTER_PACK.outfit).name}» уже в гардеробе. Из сундука: {STARTER_PACK.coins} монет, {STARTER_PACK.vigor} зелья бодрости и {STARTER_PACK.swap} свитка замены.</div>
+            <button className="primary" onClick={() => setStarterGot(false)}>
+              Отлично
+            </button>
+          </div>
+        </Sheet>
+      )}
       {shop && <Shop progress={progress} setProgress={setProgress} tab={shop} setTab={setShop} reachedLand={currentDef.land} onClose={() => setShop(null)} />}
       {settings && <SettingsSheet
           progress={progress}
@@ -548,6 +576,41 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
 }
 
 /** Лавка купца Фёдора: облики, оружие, щиты и зелья. Новое оружие появляется по мере продвижения. */
+/** Набор «Новичок» у купца: один раз, за звёзды Telegram. Вещи кладёт Adventure, когда сервер подтвердит оплату. */
+function StarterCard({ progress }: { progress: Progress }) {
+  const starter = useStarter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  if (!starter || starter.bought || progress.starterPack) return null;
+  const outfit = itemById(STARTER_PACK.outfit);
+  const buy = async () => {
+    if (platform !== 'tg') return openPassInTelegram('shop');
+    setBusy(true);
+    setNote(null);
+    const r = await payStars('starter', (s) => s.starter.bought);
+    setBusy(false);
+    if (r === 'late') setNote('Оплата прошла, набор придёт через минуту. Если нет — напиши боту /paysupport.');
+    else if (typeof r === 'object') setNote(r.error);
+  };
+  return (
+    <div className="starter-card" style={{ ['--rc' as string]: outfit.glow ?? outfit.color }}>
+      <div className="starter-card-art">
+        <Chest size={46} />
+      </div>
+      <div className="starter-card-body">
+        <div className="starter-card-title">Набор «Новичок»</div>
+        <div className="starter-card-text">
+          Облик «{outfit.name}» и сундук: {STARTER_PACK.coins} монет, {STARTER_PACK.vigor} зелья бодрости, {STARTER_PACK.swap} свитка замены. Только один раз.
+        </div>
+        {note && <div className="starter-card-note">{note}</div>}
+      </div>
+      <button className="pass-buy primary small" disabled={busy} onClick={buy}>
+        {starter.price} <Star size={13} />
+      </button>
+    </div>
+  );
+}
+
 function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (t: ShopTab) => void; reachedLand: number; onClose: () => void }) {
   const price = (cost: number, buyIt: () => Progress | null) => (
     <button
@@ -587,6 +650,7 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
           <Swords size={13} /> урон {heroPower(progress).damage}
         </div>
       </div>
+      <StarterCard progress={progress} />
       <div className="tabs">
         {SHOP_TABS.map((t) => (
           <button key={t.tab} className={tab === t.tab ? 'active' : ''} onClick={() => setTab(t.tab)}>

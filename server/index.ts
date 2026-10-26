@@ -39,7 +39,7 @@ import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
 import { ProList } from './pro';
-import { invoicePayload, paidText, PRO_PRICE, ProSales, saleAdminText, salesText } from './proSales';
+import { giftText, invoicePayload, paidText, PRO_PRICE, ProSales, type SaleKind, saleAdminText, salesText, STARTER_PRICE } from './proSales';
 import type { ChatMessage } from '../shared/clan';
 import { FriendStore } from './friends';
 import { type FriendsDeps, friendsApi } from './friendsApi';
@@ -360,7 +360,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? sales.offer(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? sales.offer(proIds(who.id)) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -719,7 +719,9 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
     return { method: 'sendMessage', chat_id: msg.chat.id, text: 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.' };
   }
   toAdmins(saleAdminText(p));
-  return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p), reply_markup: { inline_keyboard: [[{ text: 'Открыть пропуск', web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
+  // Подарок: другу пишет бот туда, где он играет (Telegram или Max).
+  if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name), 'Открыть пропуск', '?tab=pass');
+  return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p, p.kind === 'gift' ? friends.get(p.account)?.name : undefined), reply_markup: { inline_keyboard: [[{ text: 'Открыть пропуск', web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
 };
 
 /** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
@@ -736,14 +738,22 @@ const proCommand = (chatId: number, text: string): boolean => {
     .then((r) => {
       if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
       sales.refunded(p.n);
-      say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}). Pro по ней снят.`);
-      say(`↩️ Мы вернули ${p.stars} ⭐ за Pro Pass. Pro по этой покупке отключён.`, Number(p.payer.slice(3)));
+      const what = p.kind === 'starter' ? 'набор «Новичок»' : 'Pro Pass';
+      say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}).${p.kind === 'starter' ? ' Вещи из набора остаются в игре.' : ' Pro по ней снят.'}`);
+      say(`↩️ Мы вернули ${p.stars} ⭐ за ${what}.${p.kind === 'starter' ? '' : ' Pro по этой покупке отключён.'}`, Number(p.payer.slice(3)));
     })
     .catch((e) => say(`Не вышло вернуть: ${e instanceof Error ? e.message : e}`));
   return true;
 };
 
-/** Pro за звёзды из игры: POST /api/pro/status — что показать, /api/pro/invoice — ссылка на оплату в Telegram. */
+// Счета за звёзды: что видит игрок в окне оплаты.
+const INVOICES: Record<SaleKind, { title: string; description: string; price: () => number }> = {
+  pro: { title: 'Pro Pass на сезон', description: 'Золотая дорожка пропуска: награды каждой ступени и облик «Страж Золотого щита». Золотое имя в клане, чате и рейтинге. Действует в Telegram, Max и браузере.', price: () => PRO_PRICE },
+  gift: { title: 'Pro Pass в подарок', description: 'Pro Pass на сезон для друга: золотая дорожка пропуска, золотое имя и облик «Страж Золотого щита». Бот скажет другу, от кого подарок.', price: () => PRO_PRICE },
+  starter: { title: 'Набор «Новичок»', description: 'Облик «Искатель приключений» и сундук новичка: 1000 монет, 3 зелья бодрости и 2 свитка замены. Продаётся один раз.', price: () => STARTER_PRICE },
+};
+
+/** Покупки за звёзды из игры: POST /api/pro/status — что показать, /api/pro/invoice — ссылка на оплату в Telegram ({kind, for}). */
 async function onProApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -751,19 +761,19 @@ async function onProApi(path: string, req: IncomingMessage, res: ServerResponse)
   const who = body && signedIn(body);
   if (!who) return reply(401, { error: 'Войди через Telegram, Max или Яндекс, чтобы купить Pro' });
   const offer = sales.offer(proIds(who.id));
-  if (path === '/api/pro/status') return reply(200, { pro: isPro(who.id), proOffer: offer });
+  if (path === '/api/pro/status') return reply(200, { pro: isPro(who.id), proOffer: offer, starter: sales.starter(proIds(who.id)) });
   if (path !== '/api/pro/invoice') return reply(404, { error: 'not found' });
   if (!BOT_TOKEN) return reply(503, { error: 'Оплата пока не работает: бот не подключён' });
-  if (!offer.canBuy) return reply(409, { error: 'Pro уже оплачен и на этот сезон, и на следующий' });
+  const kind: SaleKind = body!.kind === 'gift' || body!.kind === 'starter' ? body!.kind : 'pro';
+  // Подарок — только другу из списка друзей.
+  const to = kind === 'gift' ? (typeof body!.for === 'string' ? body!.for : '') : who.id;
+  if (kind === 'gift' && (to === who.id || !friends.areFriends(who.id, to))) return reply(403, { error: 'Подарить Pro можно только другу' });
+  const why = sales.why(kind, proIds(to));
+  if (why) return reply(409, { error: why });
+  const inv = INVOICES[kind];
   const r = await botApi(BOT_TOKEN)(
     'createInvoiceLink',
-    {
-      title: 'Pro Pass на сезон',
-      description: 'Золотая дорожка пропуска: награды каждой ступени и облик «Страж Золотого щита». Золотое имя в клане, чате и рейтинге. Действует в Telegram, Max и браузере.',
-      payload: invoicePayload(who.id),
-      currency: 'XTR',
-      prices: [{ label: 'Pro Pass', amount: PRO_PRICE }],
-    },
+    { title: inv.title, description: inv.description, payload: invoicePayload(to, kind), currency: 'XTR', prices: [{ label: inv.title, amount: inv.price() }] },
     20_000,
   ).catch((e: Error) => ({ ok: false, description: e.message }) as { ok: boolean; result?: unknown; description?: string });
   if (!r.ok || typeof r.result !== 'string') return reply(502, { error: 'Telegram не выдал счёт, попробуй ещё раз' });

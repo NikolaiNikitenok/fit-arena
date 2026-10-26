@@ -69,6 +69,8 @@ export interface Progress {
   log?: Record<string, { r: Partial<Record<Exercise, number>>; b: Partial<Record<Exercise, number>> }>;
   // Знакомство с игрой пройдено.
   onboarded?: boolean;
+  // Набор «Новичок» за звёзды уже выдан (когда): второй раз игра его не выдаст (src/game/starter.ts).
+  starterPack?: number;
   // Пропуск сезона: опыт, забранные задания и награды, счётчики по дням сезона.
   pass?: PassState;
   // Событие выходных этого месяца: общий урон по боссу и попытки по дням.

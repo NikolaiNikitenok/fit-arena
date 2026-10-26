@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { seasonEndsAt } from '../shared/rating';
-import { canBuy, invoicePayload, nextUntil, PRO_PRICE, ProSales, payloadAccount } from './proSales';
+import { canBuy, invoicePayload, nextUntil, parsePayload, PRO_PRICE, ProSales, payloadAccount, STARTER_PRICE } from './proSales';
 
 const dir = mkdtempSync(join(tmpdir(), 'pro-sales-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -64,5 +64,29 @@ describe('Pro за звёзды', () => {
     // Сезон кончился (с запасом на часовые пояса) — Pro погас.
     now = seasonEndsAt(MID) + DAY;
     expect(again.active(['ya:7'])).toBe(false);
+  });
+
+  it('подарок даёт Pro только другу, набор «Новичок» — один раз и без Pro', () => {
+    const s = new ProSales(null, () => MID);
+    expect(parsePayload(invoicePayload('tg:9', 'gift'))).toEqual({ kind: 'gift', account: 'tg:9' });
+    expect(parsePayload(invoicePayload('tg:5', 'starter'))).toEqual({ kind: 'starter', account: 'tg:5' });
+    // Цена подарка — как у Pro, набора — своя.
+    expect(s.checkout(invoicePayload('tg:9', 'gift'), 'XTR', PRO_PRICE, ids)).toBeNull();
+    expect(s.checkout(invoicePayload('tg:5', 'starter'), 'XTR', PRO_PRICE, ids)).toMatch(/Цена/);
+
+    s.paid(invoicePayload('tg:9', 'gift'), 'g1', 'tg:5', PRO_PRICE, ids, 'Аня');
+    expect(s.active(['tg:9'])).toBe(true);
+    expect(s.active(['tg:5'])).toBe(false);
+
+    expect(s.starter(['tg:5'])).toEqual({ price: STARTER_PRICE, bought: false });
+    expect(s.checkout(invoicePayload('tg:5', 'starter'), 'XTR', STARTER_PRICE, ids)).toBeNull();
+    const p = s.paid(invoicePayload('tg:5', 'starter'), 's1', 'tg:5', STARTER_PRICE, ids)!;
+    expect(p).toMatchObject({ kind: 'starter', until: 0 });
+    expect(s.starter(['tg:5']).bought).toBe(true);
+    expect(s.active(['tg:5'])).toBe(false);
+    expect(s.checkout(invoicePayload('tg:5', 'starter'), 'XTR', STARTER_PRICE, ids)).toMatch(/уже куплен/);
+    // Вернули звёзды — набор снова можно купить.
+    s.refunded(p.n);
+    expect(s.starter(['tg:5']).bought).toBe(false);
   });
 });

@@ -95,7 +95,12 @@ export interface ProOffer {
   canBuy: boolean;
   price: number;
 }
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
+// starter — набор «Новичок» за звёзды: цена и куплен ли (null — гость).
+export interface StarterOffer {
+  price: number;
+  bought: boolean;
+}
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -168,6 +173,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       telegram: boolean;
       pro?: boolean;
       proOffer?: ProOffer | null;
+      starter?: StarterOffer | null;
       raidNotify?: boolean;
       admin?: boolean;
       account?: string;
@@ -175,7 +181,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       maxBot?: string | null;
     };
     setMaxBot(r.maxBot);
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();
@@ -219,18 +225,25 @@ export function useProOffer(): ProOffer | null {
 }
 
 /** Спросить сервер о Pro заново (после оплаты). */
-export async function refreshPro(): Promise<{ pro: boolean; proOffer: ProOffer }> {
-  const r = (await post('/api/pro/status', {})) as { pro: boolean; proOffer: ProOffer };
+export async function refreshPro(): Promise<{ pro: boolean; proOffer: ProOffer; starter: StarterOffer }> {
+  const r = (await post('/api/pro/status', {})) as { pro: boolean; proOffer: ProOffer; starter: StarterOffer };
   if (cloud) {
-    cloud = { ...cloud, pro: r.pro, proOffer: r.proOffer };
+    cloud = { ...cloud, pro: r.pro, proOffer: r.proOffer, starter: r.starter };
     listeners.forEach((fn) => fn(cloud!));
   }
   return r;
 }
 
-/** Ссылка на оплату Pro звёздами (только в Telegram). */
-export async function proInvoice(): Promise<string> {
-  const r = (await post('/api/pro/invoice', {})) as { url: string };
+/** Набор «Новичок» (null — до ответа сервера или гость). */
+export function useStarter(): StarterOffer | null {
+  const [s, setS] = useState(() => cloud?.starter ?? null);
+  useEffect(() => onCloud((c) => setS(c.starter)), []);
+  return s;
+}
+
+/** Ссылка на оплату звёздами (только в Telegram): Pro себе, Pro в подарок другу (for — его id) или набор «Новичок». */
+export async function proInvoice(kind: 'pro' | 'gift' | 'starter' = 'pro', forId?: string): Promise<string> {
+  const r = (await post('/api/pro/invoice', { kind, for: forId })) as { url: string };
   return r.url;
 }
 

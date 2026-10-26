@@ -2,9 +2,11 @@
 import { useEffect, useState } from 'react';
 import type { FriendView } from '../../shared/protocol';
 import { leagueOf } from '../../shared/rating';
-import { Check, Cross, Flame, Swords, UserPlus, Users } from '../icons';
+import { Check, Cross, Flame, Star, Swords, UserPlus, Users } from '../icons';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
-import { friendInviteCode, friendInviteLink, share } from '../telegram';
+import { friendInviteCode, friendInviteLink, openPassInTelegram, platform, share } from '../telegram';
+import { useProOffer } from '../cloud';
+import { payStars } from '../payments';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
@@ -175,8 +177,43 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
         <input type="checkbox" className="switch" checked={data.notify} disabled={busy === 'notify'} onChange={(e) => run('notify', friendsApi.notify(e.target.checked))} />
       </label>
 
-      {menu && <PlayerMenu target={menu} onBlocked={() => void run('state', friendsApi.state())} onClose={() => setMenu(null)} />}
+      {menu && (
+        <PlayerMenu target={menu} onBlocked={() => void run('state', friendsApi.state())} onClose={() => setMenu(null)}>
+          {menu.where === 'friend' && <GiftPro id={menu.id} name={menu.name} onDone={() => void run('state', friendsApi.state())} />}
+        </PlayerMenu>
+      )}
       {adding && <AddFriendSheet data={data} busy={busy === 'add'} onAdd={(code) => run('add', friendsApi.add({ code })).then((r) => r && !r.error && setAdding(false))} onClose={() => setAdding(false)} />}
+    </>
+  );
+}
+
+/** Подарить другу Pro Pass за звёзды: платит этот игрок, Pro получает друг, бот скажет ему, от кого подарок. */
+function GiftPro({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
+  const offer = useProOffer();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  if (!offer) return null;
+  const gift = async () => {
+    if (platform !== 'tg') return openPassInTelegram('friends');
+    setBusy(true);
+    setNote(null);
+    // Своего Pro подарок не меняет, ждать сервер не нужно: у друга золотое имя появится, когда сервер узнает об оплате.
+    const r = await payStars('gift', null, id);
+    setBusy(false);
+    if (r === 'done' || r === 'late') {
+      setNote(`Подарок отправлен! Бот напишет ${name}, от кого он.`);
+      setTimeout(onDone, 3000);
+    } else if (r !== 'cancelled') setNote(r.error);
+  };
+  return (
+    <>
+      <button className="pass-buy primary" disabled={busy} onClick={gift}>
+        {platform === 'tg' ? 'Подарить Pro Pass' : 'Подарить Pro в Telegram'}
+        <span className="btn-cost">
+          {offer.price} <Star size={13} />
+        </span>
+      </button>
+      <div className="pass-buy-note">{note ?? 'Pro на сезон: золотая дорожка пропуска и золотое имя. Если у друга Pro уже есть, подарок продлит его на следующий сезон.'}</div>
     </>
   );
 }

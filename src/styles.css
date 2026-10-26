@@ -804,3 +804,13 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .blocked-row { display: flex; align-items: center; gap: 10px; }
 .blocked-row .friend-main { flex: 1; min-width: 0; }
 .chat-input input:disabled { opacity: .7; font-size: 13px; }
+
+/* Набор «Новичок» у купца и окно «набор получен». */
+.starter-card { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; margin: 10px 0; padding: 12px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--rc) 55%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--rc) 22%, transparent), rgba(255, 255, 255, .03)); }
+.starter-card-art { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 14px; background: rgba(0, 0, 0, .22); }
+.starter-card-title { font-weight: 900; font-size: 15px; }
+.starter-card-text { margin-top: 2px; font-size: 12px; line-height: 1.35; color: var(--hint); }
+.starter-card-note { margin-top: 4px; font-size: 11.5px; color: var(--gold); }
+.pass-buy.small { min-height: 38px; padding: 8px 14px; font-size: 14px; }
+.starter-got { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 6px 0 4px; }
+.starter-got .primary { min-height: 46px; padding: 10px 28px; border-radius: 999px; font-weight: 900; }

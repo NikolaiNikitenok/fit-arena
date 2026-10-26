@@ -5,8 +5,9 @@ import { portraitUrl } from './npcs';
 import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';
 import { sfx } from '../audio';
-import { proInvoice, refreshPro, useProOffer } from '../cloud';
-import { openInvoice, openPassInTelegram, platform } from '../telegram';
+import { useProOffer } from '../cloud';
+import { payStars } from '../payments';
+import { openPassInTelegram, platform } from '../telegram';
 
 // Пропуск сезона: два щита — серый бесплатный и золотой Pro, ступени наград и задания.
 
@@ -167,7 +168,6 @@ function RewardIcon({ reward }: { reward: PassReward }) {
 
 const DAY = 86_400_000;
 const fmtDay = (t: number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Pro Pass за звёзды Telegram: покупка в Telegram, в Max и браузере — ссылка в бота. Pro действует по аккаунту везде. */
 function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text: string) => void }) {
@@ -181,26 +181,12 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
     setBusy(true);
     setNote(null);
     const before = offer?.until ?? 0;
-    try {
-      const status = await openInvoice(await proInvoice());
-      if (status === 'paid' || status === 'pending') {
-        setNote('Оплата прошла, включаем Pro…');
-        // Сообщение об оплате приходит серверу чуть позже, чем закрывается окно оплаты.
-        for (let i = 0; i < 12; i++) {
-          const r = await refreshPro().catch(() => null);
-          if (r?.pro && (r.proOffer?.until ?? 0) > before) {
-            setNote(null);
-            return onPaid(`Pro Pass активен до ${fmtDay(r.proOffer!.until!)}!`);
-          }
-          await wait(1500);
-        }
-        setNote('Оплата прошла, Pro включится через минуту. Если нет — напиши боту /paysupport.');
-      } else if (status === 'failed') setNote('Оплата не прошла. Попробуй ещё раз.');
-    } catch (e) {
-      setNote((e as { body?: { error?: string } }).body?.error ?? 'Не получилось открыть оплату. Попробуй ещё раз.');
-    } finally {
-      setBusy(false);
-    }
+    let until = 0;
+    const r = await payStars('pro', (s) => s.pro && (until = s.proOffer?.until ?? 0) > before);
+    setBusy(false);
+    if (r === 'done') onPaid(`Pro Pass активен до ${fmtDay(until)}!`);
+    else if (r === 'late') setNote('Оплата прошла, Pro включится через минуту. Если нет — напиши боту /paysupport.');
+    else if (r !== 'cancelled') setNote(r.error);
   };
   const cost = price ? (
     <span className="btn-cost">
