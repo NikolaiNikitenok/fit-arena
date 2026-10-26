@@ -8,6 +8,7 @@ import https from 'node:https';
 import net from 'node:net';
 import { join } from 'node:path';
 import tls from 'node:tls';
+import { PAY_SUPPORT_TEXT } from './proSales';
 
 export interface StartReply {
   text: string;
@@ -41,10 +42,11 @@ export const BOT_SHORT_DESCRIPTION = 'Тренировка-приключени�
 
 /** Ответ на «/start [параметр]»: clan-КОД — клан, friend-ТОКЕН — друг, иначе код дуэли или просто вход. */
 export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined): StartReply | null {
-  const m = /^\/(start|help)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
+  const m = /^\/(start|help|paysupport)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
   if (!m) return null;
   const param = (m[2] ?? '').replace(/[^\w-]/g, '').slice(0, 40);
   const base = appUrl.replace(/\/$/, '');
+  if (m[1] === 'paysupport') return { text: PAY_SUPPORT_TEXT, button: 'Открыть пропуск', url: `${base}/?tab=pass` };
   if (m[1] === 'help') return { text: helpText(base), button: 'Играть', url: `${base}/` };
   if (param.startsWith('clan-')) {
     const code = param.slice(5).toUpperCase();
@@ -79,12 +81,16 @@ export interface TgMessage {
   photo?: { file_id: string; width: number; height: number }[];
   media_group_id?: string;
   reply_to_message?: { message_id: number };
+  // Оплата звёздами прошла (Pro Pass, server/proSales.ts).
+  successful_payment?: { currency: string; total_amount: number; invoice_payload: string; telegram_payment_charge_id: string };
 }
 export interface Update {
   update_id: number;
   message?: TgMessage;
   // Нажатие кнопки под сообщением бота (черновики постов для канала).
   callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; chat: { id: number } } };
+  // Игрок нажал «Оплатить»: за 10 секунд нужно подтвердить или отказать.
+  pre_checkout_query?: { id: string; from: { id: number; first_name?: string }; currency: string; total_amount: number; invoice_payload: string };
 }
 
 type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number } };
@@ -259,12 +265,13 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
     const commands = [
       { command: 'start', description: 'Начать игру' },
       { command: 'help', description: 'Помощь и приватность' },
+      { command: 'paysupport', description: 'Вопрос об оплате' },
     ];
     await api('setMyCommands', { commands }).catch(() => null);
     await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Играть', web_app: { url: `${appUrl.replace(/\/$/, '')}/` } } }).catch(() => null);
     for (;;) {
       try {
-        const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query'] });
+        const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'pre_checkout_query'] });
         if (r.error_code === 409) {
           botStatus.webhook = true;
           botStatus.polling = false;

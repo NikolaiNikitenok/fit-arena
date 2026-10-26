@@ -9,6 +9,7 @@
 //   DATA_FILE — где хранить профили и кубки (по умолчанию ./data/profiles.json)
 //   FAMILY_WEBHOOK_URL, FAMILY_WEBHOOK_SECRET — отчёты о тренировках на семейный сайт (server/family.ts)
 //   PRO_IDS — id в Telegram с Pro Pass через запятую; ещё можно файлом .pro-ids рядом с сервером (PRO_FILE)
+//   PRO_PRICE, PRO_SALES_FILE — Pro Pass за звёзды Telegram: цена и покупки (server/proSales.ts)
 //   GUARD_FILE — защита от читов: забранные награды и подозрения (по умолчанию guard.json рядом с DATA_FILE, server/guard.ts)
 //   ADMIN_IDS — id админов (статистика, сводка и тревоги в боте); ещё файлом .admin-ids (ADMIN_FILE)
 //   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
@@ -38,6 +39,7 @@ import { dailyTask, npcName } from '../src/game/daily';
 import { DEFAULT_BASELINE } from '../src/game/levels';
 import { verifyInitData } from './telegramAuth';
 import { ProList } from './pro';
+import { invoicePayload, paidText, PRO_PRICE, ProSales, saleAdminText, salesText } from './proSales';
 import type { ChatMessage } from '../shared/clan';
 import { FriendStore } from './friends';
 import { type FriendsDeps, friendsApi } from './friendsApi';
@@ -91,7 +93,10 @@ const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), pro
 // Единый аккаунт: вход tg:123 → аккаунт, под которым лежит всё остальное (server/accounts.ts).
 const accounts = new AccountStore(process.env.ACCOUNTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'accounts.json'));
 // Pro и админ выдаются по id в Telegram: годится любой вход аккаунта.
-const isPro = (id: string) => pro.has(id) || accounts.logins(id).some((l) => pro.has(l));
+// Купленный за звёзды Pro лежит на аккаунте и на том, кто платил (server/proSales.ts).
+const sales = new ProSales(process.env.PRO_SALES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'pro-sales.json'));
+const proIds = (id: string) => [id, ...accounts.logins(id)];
+const isPro = (id: string) => pro.has(id) || accounts.logins(id).some((l) => pro.has(l)) || sales.active(proIds(id));
 /** Игрок вошёл через мессенджер (не гость из браузера): ему рейтинг, кланы и набеги. */
 const signedId = (id: string) => !id.startsWith('guest:');
 const telemetry = new Telemetry(process.env.TELEMETRY_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'telemetry.json'));
@@ -355,7 +360,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? sales.offer(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -695,6 +700,76 @@ const onPlayerText = (msg: NonNullable<Update['message']>): Record<string, unkno
   return { method: 'sendMessage', chat_id: msg.chat.id, text: FEEDBACK_THANKS };
 };
 
+/**
+ * Оплата Pro звёздами: подтверждение перед оплатой и сама оплата.
+ * Вернёт метод Bot API для ответа (или null); undefined — обновление не про оплату.
+ */
+const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
+  const q = u.pre_checkout_query;
+  if (q) {
+    const error = sales.checkout(q.invoice_payload, q.currency, q.total_amount, proIds);
+    return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: !error, ...(error ? { error_message: error } : {}) };
+  }
+  const msg = u.message;
+  const pay = msg?.successful_payment;
+  if (!msg || !pay) return undefined;
+  const p = sales.paid(pay.invoice_payload, pay.telegram_payment_charge_id, `tg:${msg.chat.id}`, pay.total_amount, proIds, cleanName(msg.from?.first_name ?? '') || undefined);
+  if (!p) {
+    toAdmins(`⚠️ Оплата ${pay.total_amount} ⭐ от tg:${msg.chat.id} с непонятным счётом (${pay.invoice_payload.slice(0, 60)}). Код платежа: ${pay.telegram_payment_charge_id}`);
+    return { method: 'sendMessage', chat_id: msg.chat.id, text: 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.' };
+  }
+  toAdmins(saleAdminText(p));
+  return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p), reply_markup: { inline_keyboard: [[{ text: 'Открыть пропуск', web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
+};
+
+/** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
+const proCommand = (chatId: number, text: string): boolean => {
+  const m = /^\/(?:refund_(\d+)|sales)(?:@\w+)?$/.exec(text.trim());
+  if (!m || !BOT_TOKEN || !admins.has(`tg:${chatId}`)) return false;
+  const api = botApi(BOT_TOKEN);
+  const say = (t: string, to = chatId) => api('sendMessage', { chat_id: to, text: t }, 15_000).catch(() => null);
+  if (!m[1]) return void say(salesText(sales)), true;
+  const p = sales.get(Number(m[1]));
+  if (!p) return void say('Нет такой покупки. Список: /sales'), true;
+  if (p.refunded) return void say(`Покупка #${p.n} уже возвращена.`), true;
+  api('refundStarPayment', { user_id: Number(p.payer.slice(3)), telegram_payment_charge_id: p.charge }, 15_000)
+    .then((r) => {
+      if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
+      sales.refunded(p.n);
+      say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}). Pro по ней снят.`);
+      say(`↩️ Мы вернули ${p.stars} ⭐ за Pro Pass. Pro по этой покупке отключён.`, Number(p.payer.slice(3)));
+    })
+    .catch((e) => say(`Не вышло вернуть: ${e instanceof Error ? e.message : e}`));
+  return true;
+};
+
+/** Pro за звёзды из игры: POST /api/pro/status — что показать, /api/pro/invoice — ссылка на оплату в Telegram. */
+async function onProApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && signedIn(body);
+  if (!who) return reply(401, { error: 'Войди через Telegram, Max или Яндекс, чтобы купить Pro' });
+  const offer = sales.offer(proIds(who.id));
+  if (path === '/api/pro/status') return reply(200, { pro: isPro(who.id), proOffer: offer });
+  if (path !== '/api/pro/invoice') return reply(404, { error: 'not found' });
+  if (!BOT_TOKEN) return reply(503, { error: 'Оплата пока не работает: бот не подключён' });
+  if (!offer.canBuy) return reply(409, { error: 'Pro уже оплачен и на этот сезон, и на следующий' });
+  const r = await botApi(BOT_TOKEN)(
+    'createInvoiceLink',
+    {
+      title: 'Pro Pass на сезон',
+      description: 'Золотая дорожка пропуска: награды каждой ступени и облик «Страж Золотого щита». Золотое имя в клане, чате и рейтинге. Действует в Telegram, Max и браузере.',
+      payload: invoicePayload(who.id),
+      currency: 'XTR',
+      prices: [{ label: 'Pro Pass', amount: PRO_PRICE }],
+    },
+    20_000,
+  ).catch((e: Error) => ({ ok: false, description: e.message }) as { ok: boolean; result?: unknown; description?: string });
+  if (!r.ok || typeof r.result !== 'string') return reply(502, { error: 'Telegram не выдал счёт, попробуй ещё раз' });
+  reply(200, { url: r.result });
+}
+
 const http = createServer((req, res) => {
   if (req.url === '/api/activity' && req.method === 'POST') {
     handleActivity(req, res);
@@ -710,6 +785,9 @@ const http = createServer((req, res) => {
         const chat = (update as unknown as Update).message?.chat;
         if (chat?.type === 'private') saves.setBlocked(accounts.resolve(`tg:${chat.id}`), false);
         const msg = (update as unknown as Update).message;
+        const pay = payUpdate(update as unknown as Update);
+        if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
+        if (proCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
@@ -719,6 +797,10 @@ const http = createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
       })
       .catch(() => res.writeHead(400).end());
+    return;
+  }
+  if (path.startsWith('/api/pro/')) {
+    onProApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
@@ -1164,8 +1246,16 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
     },
-    (chatId, text) => (channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
-    channelUpdate,
+    (chatId, text) => (proCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
+    (u) => {
+      const pay = payUpdate(u);
+      if (pay === undefined) return channelUpdate(u);
+      if (pay) {
+        const { method, ...params } = pay;
+        botApi(BOT_TOKEN)(String(method), params, 15_000).catch(() => null);
+      }
+      return true;
+    },
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
 if (ANY_BOT)
@@ -1185,12 +1275,14 @@ if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Начать игру' },
   { command: 'help', description: 'Помощь и приватность' },
+  { command: 'paysupport', description: 'Вопрос об оплате' },
   { command: 'admin', description: 'Показать админ-клавиатуру' },
   { command: 'channel', description: 'Каналы: статус и ошибки' },
   { command: 'channel_draft', description: 'Черновик для @NikitenokArena (только тебе)' },
   { command: 'channel_post', description: 'Опубликовать пост в @NikitenokArena сейчас' },
   { command: 'channel_me', description: 'Черновик для личного канала с кнопками' },
   { command: 'reports', description: 'Жалобы игроков' },
+  { command: 'sales', description: 'Покупки Pro Pass и возвраты' },
   { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
 ];
 const adminMenus = new Set<string>();
@@ -1217,5 +1309,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     reports.flush();
     villages.flush();
     accounts.flush();
+    sales.flush();
     process.exit(0);
   });

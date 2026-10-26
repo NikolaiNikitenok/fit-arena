@@ -56,6 +56,7 @@ import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
+import { startTab } from '../telegram';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
@@ -127,7 +128,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const [settings, setSettings] = useState(false);
   const [replayOnb, setReplayOnb] = useState(false);
   const [achOpen, setAchOpen] = useState(false);
-  const [passOpen, setPassOpen] = useState(false);
+  // Кнопка бота после оплаты Pro и ссылка «Купить в Telegram» открывают игру сразу на пропуске (?tab=pass).
+  const [passOpen, setPassOpen] = useState(() => startTab() === 'pass');
   const [eventOpen, setEventOpenState] = useState(false);
   const [petsOpen, setPetsOpen] = useState(false);
   // «Позже» на яйце: спросим снова при следующем запуске.

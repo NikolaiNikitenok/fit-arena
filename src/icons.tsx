@@ -47,6 +47,9 @@ export const Swords = ({ size = 22, className }: P) =>
     </>,
   );
 
+// Звезда Telegram: цена Pro Pass.
+export const Star = ({ size = 16, className }: P) => svg(size, className, <path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" />, true);
+
 export const Lock = ({ size = 14, className }: P) =>
   svg(
     size,

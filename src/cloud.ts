@@ -89,7 +89,13 @@ export interface Remind {
 // raidNotify — бот пишет о рейде клана (по умолчанию да).
 // admin — видит статистику (список админов на сервере).
 // account — id аккаунта на сервере; linkable — вошёл через мессенджер, можно привязывать другие входы.
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
+// proOffer — Pro за звёзды: до когда оплачен, можно ли купить ещё и цена (null — гость, купить нельзя).
+export interface ProOffer {
+  until: number | null;
+  canBuy: boolean;
+  price: number;
+}
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -161,6 +167,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       bot: boolean;
       telegram: boolean;
       pro?: boolean;
+      proOffer?: ProOffer | null;
       raidNotify?: boolean;
       admin?: boolean;
       account?: string;
@@ -168,7 +175,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       maxBot?: string | null;
     };
     setMaxBot(r.maxBot);
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();
@@ -202,6 +209,29 @@ export function usePro(): boolean {
   const [pro, setPro] = useState(() => !!cloud?.pro);
   useEffect(() => onCloud((c) => setPro(c.pro)), []);
   return pro;
+}
+
+/** Предложение Pro за звёзды (null — до ответа сервера или гость). */
+export function useProOffer(): ProOffer | null {
+  const [offer, setOffer] = useState(() => cloud?.proOffer ?? null);
+  useEffect(() => onCloud((c) => setOffer(c.proOffer)), []);
+  return offer;
+}
+
+/** Спросить сервер о Pro заново (после оплаты). */
+export async function refreshPro(): Promise<{ pro: boolean; proOffer: ProOffer }> {
+  const r = (await post('/api/pro/status', {})) as { pro: boolean; proOffer: ProOffer };
+  if (cloud) {
+    cloud = { ...cloud, pro: r.pro, proOffer: r.proOffer };
+    listeners.forEach((fn) => fn(cloud!));
+  }
+  return r;
+}
+
+/** Ссылка на оплату Pro звёздами (только в Telegram). */
+export async function proInvoice(): Promise<string> {
+  const r = (await post('/api/pro/invoice', {})) as { url: string };
+  return r.url;
 }
 
 /** Админ ли игрок (по ответу сервера): до ответа — нет. */
