@@ -83,6 +83,8 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         </button>
       )}
       <DeleteDataRow />
+      {/* Лицензия банка звуков требует указать авторов. */}
+      <small className="muted credits">Модели — KayKit (Kay Lousberg, CC0). Инструменты в музыке — FluidR3 GM (Frank Wen), CC BY 3.0.</small>
     </Sheet>
   );
 }

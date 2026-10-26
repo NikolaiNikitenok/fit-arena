@@ -1,7 +1,8 @@
 // Звуки и музыка без файлов: всё синтезируется WebAudio прямо в браузере.
 import { useEffect, useRef } from 'react';
 import { getSettings, subscribeSettings } from './settings';
-import { midiToFreq, NoteEvent, stepSeconds, Theme, themeStep, THEMES } from './music';
+import { midiToFreq, NoteEvent, stepSeconds, STEPS_PER_BAR, Theme, themeStep, THEMES, type Voice } from './music';
+import { hasInstrument, type Instrument, loadInstrument, playSample } from './samples';
 import { tg } from './telegram';
 
 export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup' | BattleSfx;
@@ -123,10 +124,40 @@ function pad(c: AudioContext, freq: number, t: number, dur: number, vol: number,
   }
 }
 
+// Живые инструменты: голос темы → записи нот. Если записи не загрузились, играет синтезатор.
+const SAMPLED: Partial<Record<Voice, { inst: Instrument; vol: number; attack?: number; release?: number; hold?: number; synth: Voice }>> = {
+  harp: { inst: 'orchestral_harp', vol: 0.9, release: 0.6, hold: 1.4, synth: 'pluck' },
+  pizz: { inst: 'pizzicato_strings', vol: 1, release: 0.25, hold: 0.6, synth: 'bass' },
+  strings: { inst: 'string_ensemble_1', vol: 0.75, attack: 0.25, release: 0.7, synth: 'pad' },
+  horn: { inst: 'french_horn', vol: 0.8, attack: 0.04, release: 0.35, synth: 'pad' },
+  flute: { inst: 'flute', vol: 0.7, attack: 0.03, release: 0.25, synth: 'bell' },
+  timp: { inst: 'timpani', vol: 1, release: 0.6, hold: 1.2, synth: 'tom' },
+  guitar: { inst: 'acoustic_guitar_nylon', vol: 0.8, release: 0.3, hold: 0.5, synth: 'pluck' },
+  glock: { inst: 'glockenspiel', vol: 0.6, release: 0.8, hold: 1.4, synth: 'bell' },
+  accordion: { inst: 'accordion', vol: 0.6, attack: 0.02, release: 0.15, synth: 'pluck' },
+  trumpet: { inst: 'trumpet', vol: 0.65, attack: 0.02, release: 0.2, synth: 'arp' },
+};
+
+/** Какие записи нужны теме: собираем голоса по всему кругу аккордов. */
+export function themeInstruments(theme: Theme): Instrument[] {
+  const out = new Set<Instrument>();
+  const loop = THEMES[theme].chords.length * STEPS_PER_BAR;
+  for (let st = 0; st < loop; st++) for (const e of themeStep(theme, st)) {
+    const sm = SAMPLED[e.voice];
+    if (sm) out.add(sm.inst);
+  }
+  return [...out];
+}
+
 /** Голос музыкальной темы. */
 function voice(c: AudioContext, e: NoteEvent, t: number, step: number, out: AudioNode): void {
-  const f = midiToFreq(e.midi);
   const len = e.len * step;
+  const sm = SAMPLED[e.voice];
+  if (sm) {
+    if (playSample(c, sm.inst, e.midi, t, Math.max(len, sm.hold ?? 0), e.vel * sm.vol, out, sm)) return;
+    e = { ...e, voice: sm.synth };
+  }
+  const f = midiToFreq(e.midi);
   const v = e.vel;
   switch (e.voice) {
     case 'pluck':
@@ -380,6 +411,8 @@ interface Track {
   step: number;
   next: number;
   timer: number;
+  // Записи инструментов загружены (или ждать надоело).
+  ready: boolean;
 }
 
 let track: Track | null = null;
@@ -391,15 +424,26 @@ function startTrack(c: AudioContext, theme: Theme): void {
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(MUSIC_VOLUME * THEMES[theme].volume, now + 2);
   gain.connect(master);
-  const t: Track = { theme, gain, step: 0, next: now + 0.1, timer: 0 };
+  const t: Track = { theme, gain, step: 0, next: now + 0.1, timer: 0, ready: false };
   t.timer = window.setInterval(() => schedule(c, t), TICK_MS);
   track = t;
+  // Ждём записи инструментов (не дольше 4 с), чтобы тема не начиналась синтезатором.
+  const need = themeInstruments(theme);
+  if (need.every(hasInstrument)) t.ready = true;
+  else
+    void Promise.race([Promise.all(need.map((i) => loadInstrument(c, i))), new Promise((r) => setTimeout(r, 4000))]).then(() => {
+      t.ready = true;
+    });
   schedule(c, t);
 }
 
 /** Планировщик с упреждением: ноты ставятся в очередь WebAudio чуть вперёд, таймер JS может дрожать. */
 function schedule(c: AudioContext, t: Track): void {
   if (c.state !== 'running') return;
+  if (!t.ready) {
+    t.next = c.currentTime + 0.1;
+    return;
+  }
   const step = stepSeconds(THEMES[t.theme].bpm);
   // После паузы не наверстываем пропущенные ноты.
   if (t.next < c.currentTime - 0.2) t.next = c.currentTime + 0.05;
@@ -530,4 +574,17 @@ export function initAudio(): void {
   tg?.onEvent?.('deactivated', () => setHidden(true));
   tg?.onEvent?.('activated', () => setHidden(document.hidden));
   subscribeSettings(syncMusic);
+}
+
+/** Свести тему в звук без проигрывания: для прослушки и проверки музыки (не в игре). */
+export async function renderTheme(theme: Theme, seconds: number, rate = 44100): Promise<AudioBuffer> {
+  const oc = new OfflineAudioContext(2, Math.ceil(rate * seconds), rate);
+  const c = oc as unknown as AudioContext;
+  await Promise.all(themeInstruments(theme).map((i) => loadInstrument(c, i)));
+  const g = oc.createGain();
+  g.gain.value = MUSIC_VOLUME * THEMES[theme].volume * 2.5;
+  g.connect(oc.destination);
+  const step = stepSeconds(THEMES[theme].bpm);
+  for (let st = 0, t = 0.05; t < seconds - 1.5; st++, t += step) for (const e of themeStep(theme, st)) voice(c, e, t, step, g);
+  return oc.startRendering();
 }

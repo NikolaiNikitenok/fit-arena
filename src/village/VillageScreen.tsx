@@ -70,7 +70,8 @@ import { heroHands } from '../game/power';
 import './village.css';
 import { Sheet } from '../Sheet';
 import { BarKey, FlyApi, FlyLayer, ResBar } from './Hud';
-import { getSettings } from '../settings';
+import { getSettings, useSettings } from '../settings';
+import { nowSky, skyAt } from './sky';
 import { CHARGE_MAX } from '../game/resources';
 
 // Пролёт над деревней уже был в этом запуске приложения.
@@ -122,6 +123,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const viewSlot = useViewSlot();
   const inBattle = (el: ReactNode) => (
     <div className="vil-screen battle">
+      <BattleMusic />
       <ViewHost slot={viewSlot}>{el}</ViewHost>
     </div>
   );
@@ -579,7 +581,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         )}
       </div>
       <FlyLayer ref={flyRef} bars={barEls} />
-      {town.b.some((b) => b.t === 'tavern' && b.l >= 1) && <TavernMusic />}
+      <VillageMusic tavern={town.b.some((b) => b.t === 'tavern' && b.l >= 1)} />
 
       {toast && <div className="toast vil-warn">{toast}</div>}
 
@@ -1358,8 +1360,21 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
   );
 }
 
-/** Пока открыта деревня с таверной, оттуда слышна плясовая. */
-function TavernMusic() {
-  useMusic('tavern', 1);
+/** Днём в деревне светлый марш, а вечером и ночью из таверны (если она есть) слышна плясовая. */
+function VillageMusic({ tavern }: { tavern: boolean }) {
+  const s = useSettings();
+  const [hour, setHour] = useState(() => nowSky().hour);
+  useEffect(() => {
+    const id = window.setInterval(() => setHour(nowSky().hour), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const evening = s.dayNight && skyAt(hour).lamps > 0.5;
+  useMusic(tavern && evening ? 'tavern' : 'village', 1);
+  return null;
+}
+
+/** Набег, защита и повтор боя — боевая тема. */
+function BattleMusic() {
+  useMusic('battle', 2);
   return null;
 }
