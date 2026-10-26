@@ -339,3 +339,45 @@ export function HolidayToken({ id, size = 22 }: { id: string; size?: number }) {
     </svg>
   );
 }
+
+// Разделы настроек.
+export const Speaker = ({ size = 20, className }: P) => svg(size, className, <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" />);
+
+export const Camera = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M3.5 8.5A1.5 1.5 0 015 7h2.5l1.5-2.5h6L16.5 7H19a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>,
+  );
+
+export const Bell = ({ size = 20, className }: P) => svg(size, className, <path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 1.5h-15zM10 20.5a2.2 2.2 0 004 0" />);
+
+export const Sparkles = ({ size = 20, className }: P) => svg(size, className, <path d="M10 3.5c.8 4.2 2.3 5.7 6.5 6.5-4.2.8-5.7 2.3-6.5 6.5-.8-4.2-2.3-5.7-6.5-6.5 4.2-.8 5.7-2.3 6.5-6.5zM18 14.5c.4 2 1 2.6 3 3-2 .4-2.6 1-3 3-.4-2-1-2.6-3-3 2-.4 2.6-1 3-3z" />);
+
+export const UserCircle = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="10" r="3" />
+      <path d="M6.5 18.5c1.2-2.2 3.1-3.3 5.5-3.3s4.3 1.1 5.5 3.3" />
+    </>,
+  );
+
+export const Info = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.6v.1" />
+    </>,
+  );
+
+export const Wrench = ({ size = 20, className }: P) => svg(size, className, <path d="M14.5 4a5 5 0 00-4.7 6.7L4 16.5 7.5 20l5.8-5.8A5 5 0 0020 9.5l-3 3-3-1-1-3 3-3a5 5 0 00-1.5-1.5z" />);
+
+export const ChevronLeft = ({ size = 18, className }: P) => svg(size, className, <path d="M14.5 5.5L8 12l6.5 6.5" />);

@@ -32,8 +32,8 @@
 .hb-cta-text small { font-size: 13px; font-weight: 700; opacity: .72; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Общий вид карточек меню. */
-.hb-daily, .hb-tile, .hb-more-item { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--hb-card); color: var(--text); box-shadow: var(--hb-shadow); transition: transform .12s ease, border-color .2s ease, background-color .2s ease; }
-.hb-daily:active:not(:disabled), .hb-tile:active, .hb-more-item:active { transform: scale(.97); }
+.hb-daily, .hb-more-item { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--hb-card); color: var(--text); box-shadow: var(--hb-shadow); transition: transform .12s ease, border-color .2s ease, background-color .2s ease; }
+.hb-daily:active:not(:disabled), .hb-more-item:active { transform: scale(.97); }
 
 /* Задание дня одной строкой. */
 .hb-daily { display: flex; align-items: center; gap: 10px; min-height: 62px; padding: 8px 10px 8px 10px; text-align: left; }
@@ -51,39 +51,53 @@
 .hb-daily.ready .hb-daily-act { background: var(--accent-grad); color: var(--on-accent); }
 .hb-daily.claimed .hb-daily-act { background: transparent; color: var(--mint); }
 
-/* Четыре быстрые плитки. */
-.hb-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.hb-tile { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; min-height: 96px; padding: 10px 4px 9px; text-align: center; }
-.hb-tile b { font-size: 12.5px; font-weight: 900; line-height: 1.15; }
-.hb-tile small { font-size: 10.5px; font-weight: 700; color: var(--hint); line-height: 1.2; }
-.hb-tile-icon { width: 44px; height: 44px; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: rgba(255, 255, 255, .05); }
-.hb-prog { color: var(--on-accent); background: var(--accent-grad); }
-.hb-dungeon .hb-tile-icon { background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--la) 40%, transparent), transparent 75%); }
-.hb-dungeon.ready { border-color: color-mix(in srgb, var(--la) 45%, transparent); }
-.hb-tile.pro { border-color: var(--pro-line); }
-.hb-event { border-color: color-mix(in srgb, var(--eg) 55%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--eg) 16%, var(--surface)), var(--surface)); }
-.hb-event .hb-tile-icon { background: transparent; }
+/* Четыре главных раздела: крупные карточки 2 × 2, у каждой свой цвет (--fc). */
+.hb-feats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.hb-feat { --fc: var(--accent); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 134px; padding: 12px 12px 12px 13px; text-align: left; border: 1px solid color-mix(in srgb, var(--fc) 34%, transparent); border-radius: 20px; color: var(--text); background: radial-gradient(130% 90% at 0% 0%, color-mix(in srgb, var(--fc) 26%, transparent), transparent 62%), linear-gradient(160deg, color-mix(in srgb, var(--fc) 10%, var(--surface)), var(--surface) 70%); box-shadow: var(--hb-shadow), inset 0 1px 0 rgba(255, 255, 255, .06); transition: transform .12s ease, border-color .2s ease; }
+.hb-feat:active { transform: scale(.97); }
+/* Мягкий блик в углу: карточка выглядит объёмной. */
+.hb-feat::before { content: ''; position: absolute; right: -34px; bottom: -44px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--fc) 22%, transparent), transparent 70%); pointer-events: none; }
+.hb-feat-icon { width: 56px; height: 56px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; border-radius: 17px; background: color-mix(in srgb, var(--fc) 16%, rgba(0, 0, 0, .25)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fc) 30%, transparent), 0 6px 16px color-mix(in srgb, var(--fc) 22%, transparent); }
+.hb-feat-icon.hb-prog { color: var(--on-accent); background: var(--accent-grad); }
+.hb-feat b { position: relative; font-size: 16px; font-weight: 900; line-height: 1.15; }
+.hb-feat small { position: relative; max-width: 100%; font-size: 12.5px; font-weight: 700; color: color-mix(in srgb, var(--fc) 45%, var(--hint)); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-feat-chev { position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255, 255, 255, .06); color: var(--hint); font-size: 18px; font-weight: 900; line-height: 1; }
+.hb-feat-bar { position: relative; display: block; width: 100%; height: 6px; margin-top: auto; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.hb-feat-bar > span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--fc) 70%, #fff), var(--fc)); transition: width .4s ease; }
+.hb-feat .hb-dot { top: 10px; right: 10px; }
+.hb-feat .hb-dot:not(:empty) { top: 8px; right: 8px; }
+.hb-feat:has(.hb-dot) .hb-feat-chev { opacity: 0; }
+.hb-feat.pro { border-color: var(--pro-line); }
+.hb-dungeon.ready { border-color: color-mix(in srgb, var(--fc) 60%, transparent); }
+.hb-event .hb-feat-icon { background: transparent; box-shadow: 0 0 22px color-mix(in srgb, var(--fc) 45%, transparent); border-radius: 50%; }
 
-/* «Ещё»: остальное — сеткой 3 × 2, без прокрутки. */
-.hb-more-title { margin: 2px 2px -2px; font-size: 12px; font-weight: 900; color: var(--hint); text-transform: uppercase; letter-spacing: .6px; }
-.hb-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.hb-more-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 64px; padding: 6px 4px; text-align: center; }
-.hb-more-item > span:not(.hb-dot):not(.hb-more-icon):not(.portrait) { max-width: 100%; min-width: 0; display: flex; flex-direction: column; }
-.hb-more-item b { font-size: 12px; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hb-more-item small { font-size: 10px; line-height: 1.15; font-weight: 700; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hb-more-icon { flex: none; width: 28px; height: 28px; margin-bottom: 1px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(255, 138, 92, .14); color: var(--accent); }
-.hb-more-icon.gold { background: rgba(255, 210, 122, .14); color: var(--gold); }
-.hb-more-icon.mint { background: rgba(110, 231, 183, .13); color: var(--mint); }
-.hb-more-icon.blue { background: rgba(125, 211, 252, .13); color: #7dd3fc; }
+/* «Ещё»: остальное — сеткой 3 × 3, у каждого пункта яркий значок, как иконка приложения. */
+.hb-more-title { margin: 4px 2px -2px; font-size: 12px; font-weight: 900; color: var(--hint); text-transform: uppercase; letter-spacing: .6px; }
+.hb-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.hb-more-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-height: 108px; padding: 12px 4px 10px; text-align: center; }
+.hb-more-text { max-width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hb-more-item b { font-size: 13.5px; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-more-item small { font-size: 11.5px; line-height: 1.15; font-weight: 700; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-more-icon { --t1: #ffb46b; --t2: #ff7a59; flex: none; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 15px; color: #fff; background: linear-gradient(140deg, var(--t1), var(--t2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .18), 0 6px 14px color-mix(in srgb, var(--t2) 35%, transparent); }
+.hb-more-icon svg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
+.hb-more-icon.accent { color: var(--on-accent); }
+.hb-more-icon.gold { --t1: #ffe08a; --t2: #f0a53a; color: #3a2405; }
+.hb-more-icon.mint { --t1: #8af0c4; --t2: #2fbf8a; color: #06301f; }
+.hb-more-icon.teal { --t1: #6fe3e0; --t2: #1f9fb8; color: #052a33; }
+.hb-more-icon.blue { --t1: #8ecbff; --t2: #4b7bff; }
+.hb-more-icon.violet { --t1: #c7a4ff; --t2: #8358f0; }
+.hb-more-icon.rose { --t1: #ff9db0; --t2: #f0507a; }
+.hb-more-icon.pet { background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, .1), rgba(255, 255, 255, .03) 70%); box-shadow: inset 0 0 0 1px var(--line); border-radius: 50%; }
 .hb-more-item .pet-face, .hb-more-item .portrait, .hb-more-item .ach-badge { flex: none; }
-.hb-egg { flex: none; width: 24px !important; height: 28px !important; }
+.hb-egg { flex: none; width: 30px !important; height: 36px !important; }
 .hb-event-soon { border-color: color-mix(in srgb, var(--eg) 30%, transparent); }
+.hb-event-soon .hb-more-icon { box-shadow: 0 0 16px color-mix(in srgb, var(--eg) 40%, transparent); }
 
 /* Метка «есть что забрать»: красная точка или число в углу. */
 .hb-dot { position: absolute; top: -4px; right: -4px; z-index: 3; min-width: 12px; height: 12px; padding: 0; border-radius: 999px; background: var(--hb-red); border: 2px solid var(--bg); box-shadow: 0 0 0 0 rgba(255, 77, 94, .5); animation: hb-pulse 2.4s ease-out infinite; color: #fff; font-size: 10px; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; box-sizing: content-box; }
 .hb-dot:not(:empty) { min-width: 14px; height: 14px; padding: 1px 3px; top: -6px; right: -6px; }
 @keyframes hb-pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 77, 94, .45); } 70%, 100% { box-shadow: 0 0 0 6px rgba(255, 77, 94, 0); } }
-@media (prefers-reduced-motion: reduce) { .hb-dot { animation: none; } .hb-hero, .hb-tile, .hb-daily, .hb-more-item { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .hb-dot { animation: none; } .hb-hero, .hb-feat, .hb-daily, .hb-more-item { transition: none; } }
 
 /* Лист героя: уровень, урон, слоты и инвентарь. */
 .hb-sheet { max-height: min(88vh, calc(100dvh - var(--safe-top) - 12px)); }
