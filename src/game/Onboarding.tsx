@@ -6,6 +6,7 @@ import { NPCS } from './npcs';
 import { track } from '../telemetry';
 import { openPrivacy } from '../privacy';
 import { HaveHeroButton } from '../account/Account';
+import { WebLoginButtons } from '../account/WebLogin';
 
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
 
@@ -85,6 +86,8 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
         </button>
         {/* Уже играл на другой платформе: привязать этот вход к тому герою (src/account). */}
         {!replay && step === 0 && <HaveHeroButton />}
+        {/* Браузер: войти через Яндекс или Telegram, иначе — гостем. */}
+        {!replay && step === 0 && <WebLoginButtons />}
       </div>
     </div>
   );

@@ -14,6 +14,7 @@
 //   TELEMETRY_FILE — ошибки и анонимная статистика (по умолчанию data/telemetry.json)
 //   VILLAGES_FILE — деревни для набегов, кубки, щиты и набеги за неделю (по умолчанию villages.json рядом с DATA_FILE, server/villages.ts)
 //   MAX_BOT_TOKEN (или файл .max-token), MAX_CA_FILE — бот и мини-приложение в Max (server/maxBot.ts)
+//   YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET (или файлы .yandex-id, .yandex-secret) — вход в браузере через Яндекс ID (server/webAuth.ts)
 //   ACCOUNTS_FILE — какие входы (Telegram, потом Max и браузер) ведут в один аккаунт (server/accounts.ts)
 //   MODERATION_FILE, REPORTS_FILE — чёрный список, запреты писать и жалобы (server/moderation.ts, server/reports.ts); о жалобах бот пишет ADMIN_IDS
 import { randomUUID } from 'node:crypto';
@@ -60,6 +61,7 @@ import { PersonalChannel } from './personalChannel';
 import { mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
+import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
@@ -279,6 +281,11 @@ function cleanName(name: unknown): string {
 // Подпись у Telegram и Max устроена одинаково, ключи разные: подпись одного мессенджера другим не проверится.
 function loginOf(body: { initData?: unknown }): { login: string; name: string } | null {
   if (typeof body.initData !== 'string' || !body.initData) return null;
+  // Браузер после входа через Яндекс или Telegram присылает сессию (server/webAuth.ts).
+  if (body.initData.startsWith('session:')) {
+    const s = checkSession((t) => telemetry.sign(t), body.initData.slice(8), Date.now());
+    return s && { login: s.login, name: cleanName(s.name) };
+  }
   const tgUser = BOT_TOKEN ? verifyInitData(body.initData, BOT_TOKEN) : null;
   if (tgUser) return { login: `tg:${tgUser.id}`, name: cleanName(tgUser.first_name) };
   const maxUser = MAX_TOKEN ? verifyInitData(body.initData, MAX_TOKEN) : null;
@@ -367,6 +374,43 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
 }
 
 const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
+const YANDEX_ID = process.env.YANDEX_CLIENT_ID || readToken(join(__dirname, '.yandex-id'));
+const YANDEX_SECRET = process.env.YANDEX_CLIENT_SECRET || readToken(join(__dirname, '.yandex-secret'));
+const YANDEX_REDIRECT = `${APP_URL.replace(/\/$/, '')}/api/auth/yandex/callback`;
+
+/** Вход в браузере: GET /api/auth/yandex/start → Яндекс → /callback; POST /api/auth/telegram (данные виджета). Сессия уходит в адрес после #. */
+async function onAuthApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const now = Date.now();
+  const sign = (t: string) => telemetry.sign(t);
+  const back = (hash: string) => res.writeHead(302, { Location: `/#${hash}`, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }).end();
+  // Какие входы включены: браузер-гость без подписи узнаёт это до входа.
+  if (path === '/api/auth/options' && req.method === 'GET')
+    return res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ yandex: !!(YANDEX_ID && YANDEX_SECRET), telegram: BOT_TOKEN ? botUsername : null }));
+  if (path === '/api/auth/yandex/start' && req.method === 'GET') {
+    if (!YANDEX_ID || !YANDEX_SECRET) return back('login-error=yandex-off');
+    return res.writeHead(302, { Location: yandexAuthorizeUrl(YANDEX_ID, YANDEX_REDIRECT, oauthState(sign, now)), 'Cache-Control': 'no-store' }).end();
+  }
+  if (path === '/api/auth/yandex/callback' && req.method === 'GET') {
+    const q = new URL(req.url ?? '/', 'http://x').searchParams;
+    const code = q.get('code');
+    if (!code || !checkState(sign, q.get('state'), now) || !YANDEX_ID) return back('login-error=yandex');
+    try {
+      const u = await yandexUser(code, YANDEX_ID, YANDEX_SECRET);
+      return back(`session=${sessionToken(sign, `ya:${u.id}`, u.name, now)}`);
+    } catch (e) {
+      console.log(`yandex login: ${e instanceof Error ? e.message : e}`);
+      return back('login-error=yandex');
+    }
+  }
+  if (path === '/api/auth/telegram' && req.method === 'POST') {
+    const body = await readJson(req).catch(() => null);
+    const u = BOT_TOKEN && body ? verifyTelegramLogin(body, BOT_TOKEN, now / 1000) : null;
+    const reply = (code: number, b: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(b));
+    if (!u) return reply(401, { error: 'Telegram не подтвердил вход' });
+    return reply(200, { session: sessionToken(sign, `tg:${u.id}`, u.first_name, now) });
+  }
+  res.writeHead(404).end();
+}
 // Автопостинг в канал (server/channel.ts): подписка Claude через Claude Code или ключ API — файлы рядом с сервером из секретов репозитория.
 const ANTHROPIC_KEY_FILE = process.env.ANTHROPIC_KEY_FILE ?? join(__dirname, '.anthropic-key');
 const CLAUDE_TOKEN_FILE = process.env.CLAUDE_TOKEN_FILE ?? join(__dirname, '.claude-token');
@@ -697,6 +741,10 @@ const http = createServer((req, res) => {
         });
       })
       .catch(() => (res.headersSent ? null : res.writeHead(400).end()));
+    return;
+  }
+  if (path.startsWith('/api/auth/')) {
+    onAuthApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path.startsWith('/api/account/')) {

@@ -59,11 +59,44 @@ function fromMax(m: MaxWebApp): TelegramWebApp {
   } as TelegramWebApp;
 }
 
+// Вход в браузере (Яндекс ID или Telegram): сервер вернул сессию в адресе после # (server/webAuth.ts).
+const SESSION_KEY = 'fit-arena-session';
+export let loginError: string | null = null;
+(() => {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const session = h.get('session');
+  const error = h.get('login-error');
+  if (!session && !error) return;
+  if (session) setSession(session);
+  loginError = error;
+  history.replaceState(null, '', location.pathname + location.search);
+})();
+export function getSession(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+export function setSession(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(SESSION_KEY, token);
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Нет хранилища: вход живёт до перезагрузки.
+  }
+}
+/** Браузер со входом: тот же интерфейс, initData — 'session:<токен>'. Кнопок мессенджера нет. */
+const webApp = (): TelegramWebApp | undefined => {
+  const s = getSession();
+  return s ? ({ ready() {}, expand() {}, initData: `session:${s}`, initDataUnsafe: {} } as TelegramWebApp) : undefined;
+};
+
 const telegramApp = (): TelegramWebApp | undefined => window.Telegram?.WebApp;
 const maxApp = (): TelegramWebApp | undefined => (!telegramApp()?.initData && window.WebApp?.initData ? fromMax(window.WebApp) : undefined);
 
 // Мессенджер, из которого открыта игра: Telegram, Max или обычный браузер (tg без initData или undefined).
-export let tg: TelegramWebApp | undefined = maxApp() ?? telegramApp();
+export let tg: TelegramWebApp | undefined = maxApp() ?? (telegramApp()?.initData ? telegramApp() : (webApp() ?? telegramApp()));
 export let platform: 'tg' | 'max' | 'web' = maxApp() ? 'max' : telegramApp()?.initData ? 'tg' : 'web';
 
 /** Подождать скрипт Max (index.html), чтобы узнать, открыта ли игра из Max. Не дольше пары секунд. */
@@ -75,6 +108,9 @@ export async function detectPlatform(): Promise<void> {
     platform = 'max';
   }
 }
+
+/** Вошёл ли браузер через Яндекс или Telegram (сессия сервера). */
+export const signedInWeb = () => platform === 'web' && !!getSession();
 
 export function initTelegram(): void {
   tg?.ready();
