@@ -40,7 +40,7 @@ jobs:
         working-directory: out
         run: node ../promo/carousel/render.mjs
       - uses: actions/upload-artifact@v4
-        with: { name: carousel-${{ matrix.kind }}, path: "out/slide_*.jpg\nout/carousel.json", retention-days: 7 }
+        with: { name: "carousel-${{ matrix.kind }}", path: "out/slide_*.jpg\nout/carousel.json", retention-days: 7 }
       - name: Send
         working-directory: out
         run: node ../promo/carousel/send.mjs "$CHAT"
