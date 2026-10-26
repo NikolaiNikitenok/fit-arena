@@ -84,8 +84,19 @@ describe('accountApi', () => {
   const setup = (cards: Record<string, HeroCard | null>) => {
     const accounts = new AccountStore(null);
     const dropped: string[] = [];
-    const d: AccountDeps = { accounts, card: (id) => cards[id] ?? null, drop: (id) => dropped.push(id), progress: (id) => ({ of: id }) };
-    return { accounts, dropped, d };
+    const restored: string[] = [];
+    const d: AccountDeps = {
+      accounts,
+      card: (id) => cards[id] ?? null,
+      drop: (id) => {
+        dropped.push(id);
+        accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: { of: id }, cups: 0 });
+      },
+      progress: (id) => ({ of: id }),
+      archivedCard: (a) => ({ level: 1, stages: 0, cups: a.cups }),
+      restore: (id, a) => restored.push(`${a.account}→${id}`),
+    };
+    return { accounts, dropped, restored, d };
   };
   const hero = (level: number): HeroCard => ({ level, stages: level, cups: 0 });
 
@@ -123,6 +134,23 @@ describe('accountApi', () => {
     const { code } = accounts.code('tg:1');
     expect(accountApi(d, '/api/account/link', { id: 'tg:1', login: 'tg:1' }, { code }).status).toBe(400);
     expect(accountApi(d, '/api/account/link', { id: 'tg:1', login: 'tg:1' }, { code: 'ZZZZZZ' }).status).toBe(400);
+  });
+
+  it('отложенного при привязке героя можно вернуть', () => {
+    const { accounts, restored, d } = setup({ 'tg:1': hero(30), 'ya:2': hero(1) });
+    const { code } = accounts.code('ya:2');
+    const me = { id: 'tg:1', login: 'tg:1' };
+    // Игрок выбрал не того героя: tg:1 ушёл в архив, вход tg:1 теперь ведёт в ya:2.
+    accountApi(d, '/api/account/link', me, { code, keep: 'there' });
+    expect(accounts.resolve('tg:1')).toBe('ya:2');
+    const st = accountApi(d, '/api/account/status', { id: 'ya:2', login: 'tg:1' }, {}).body as { archived: { at: number }[] };
+    expect(st.archived).toHaveLength(1);
+    const r = accountApi(d, '/api/account/restore', { id: 'ya:2', login: 'tg:1' }, { at: st.archived[0].at });
+    expect(r.body).toMatchObject({ ok: true, id: 'ya:2' });
+    expect(restored).toEqual(['tg:1→ya:2']);
+    expect(accountApi(d, '/api/account/restore', { id: 'ya:2', login: 'tg:1' }, { at: st.archived[0].at }).status).toBe(400);
+    // Чужой архив не виден.
+    expect((accountApi(d, '/api/account/status', { id: 'tg:9', login: 'tg:9' }, {}).body as { archived: unknown[] }).archived).toEqual([]);
   });
 
   it('вход, с которого играешь, отвязать нельзя', () => {

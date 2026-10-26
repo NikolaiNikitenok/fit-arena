@@ -181,6 +181,23 @@ export class AccountStore {
     return this.archive;
   }
 
+  /** Отложенные герои, у которых есть вход этого аккаунта: их можно вернуть (свежие первыми). */
+  archivedFor(account: string): Archived[] {
+    const logins = this.logins(account);
+    const now = this.now();
+    return this.archive.filter((x) => now - x.at < ARCHIVE_DAYS * 86_400_000 && x.logins.some((l) => logins.includes(l))).sort((a, b) => b.at - a.at);
+  }
+
+  /** Достать героя из архива, чтобы вернуть его аккаунту. */
+  unarchive(account: string, at: number): Archived | null {
+    const a = this.archivedFor(account).find((x) => x.at === at) ?? null;
+    if (a) {
+      this.archive = this.archive.filter((x) => x !== a);
+      this.save();
+    }
+    return a;
+  }
+
   /** «Удалить мои данные»: входы аккаунта становятся пустыми, привязки и архив по ним стираются. */
   forget(account: string): void {
     const logins = this.logins(account);

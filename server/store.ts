@@ -93,6 +93,14 @@ export class Store {
     return i < 0 ? null : i + 1;
   }
 
+  /** Герой вернулся из архива: кубки на место (бои с ним не сохранились). */
+  restoreCups(id: string, cups: number): void {
+    if (!cups) return;
+    const p = this.get(id, this.profiles.get(id)?.name ?? 'Игрок');
+    p.cups = cups;
+    this.scheduleSave();
+  }
+
   /** Игрок попросил удалить свои данные: профиль и кубки пропадают. */
   forget(id: string): void {
     if (this.profiles.delete(id)) this.scheduleSave();

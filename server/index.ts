@@ -30,7 +30,7 @@ import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
 import { botApi, botStatus, botUploadFiles, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
-import { dueReminders, SaveStore } from './saves';
+import { dueReminders, plausibleXp, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
 import { opponent, warTick } from './wars';
@@ -44,7 +44,7 @@ import { type FriendsDeps, friendsApi } from './friendsApi';
 import { Guard } from './guard';
 import { clanPerks } from '../shared/clanLevel';
 import { heroPower } from '../src/game/power';
-import type { Progress } from '../src/game/progress';
+import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
@@ -654,6 +654,15 @@ const accountDeps: AccountDeps = {
   },
   drop: dropAccount,
   progress: (id) => saves.get(id)?.progress ?? null,
+  archivedCard: (a) => {
+    const p = a.progress as Partial<Progress> | null;
+    return { level: heroLevel(plausibleXp(p, Date.now())).level, stages: Object.keys(p?.stars ?? {}).length, cups: a.cups };
+  },
+  restore: (id, a) => {
+    dropAccount(id);
+    if (a.progress && typeof a.progress === 'object') saves.put(id, { ...(a.progress as object), savedAt: Date.now() });
+    store.restoreCups(id, a.cups);
+  },
 };
 /** Аккаунт и привязка входов: POST /api/account/… (только по подписи мессенджера, гостям — нет). */
 async function onAccountApi(path: string, req: IncomingMessage, res: ServerResponse) {
