@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { initTelegram } from './telegram';
+import { detectPlatform, initTelegram } from './telegram';
 import { initAudio } from './audio';
 import { initVoice } from './voice';
 import { initTelemetry } from './telemetry';
@@ -13,17 +13,18 @@ import '@fontsource/nunito/800.css';
 import '@fontsource/nunito/900.css';
 import './styles.css';
 
-initTelegram();
-initTelemetry();
-initAudio();
-initVoice();
-// Слабый телефон по характеристикам — экономный режим ещё до первой 3D-сцены.
-initPowerAuto();
-
 // Номера уровней на карте рисуются на холсте, поэтому шрифт нужен до первого кадра. Ждём недолго.
 const fontReady = Promise.race([document.fonts?.load('900 44px Nunito'), new Promise((r) => setTimeout(r, 1200))]).catch(() => {});
 
-fontReady.then(() => {
+// Сначала узнаём мессенджер (Telegram или Max): от него зависят вход, кнопки и ссылки.
+Promise.all([fontReady, detectPlatform()]).then(() => {
+  initTelegram();
+  initTelemetry();
+  initAudio();
+  initVoice();
+  // Слабый телефон по характеристикам — экономный режим ещё до первой 3D-сцены.
+  initPowerAuto();
+
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <ErrorBoundary>

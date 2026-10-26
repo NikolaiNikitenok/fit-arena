@@ -9,6 +9,7 @@ import { tg } from './telegram';
 import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
 import { Sheet } from './Sheet';
+import { AccountRow } from './account/Account';
 
 const TOGGLES: { key: { [K in keyof Settings]-?: Settings[K] extends boolean ? K : never }[keyof Settings]; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -54,6 +55,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
       <div className="settings-note">
         <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
       </div>
+      <AccountRow />
       <TelegramIdRow />
       <AdminStatsRow />
       <AdminChargeRow />
@@ -222,14 +224,14 @@ function RemindRow() {
   return (
     <div className="toggle-row remind-row">
       <div>
-        <div className="toggle-title">Напоминание в Telegram</div>
+        <div className="toggle-title">Напоминание в боте</div>
         <div className="muted">
           {!cloud
             ? 'Подключаюсь к серверу…'
             : !cloud.bot
-              ? 'Пока недоступно: сервер не может сам писать в Telegram. Заработает, когда подключим пересылку.'
+              ? 'Пока недоступно: сервер не может сам писать в мессенджер. Заработает, когда подключим пересылку.'
               : !cloud.telegram
-                ? 'Работает, когда приложение открыто из Telegram.'
+                ? 'Работает, когда приложение открыто из Telegram или Max.'
                 : 'Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.'}
         </div>
         {hour != null && (

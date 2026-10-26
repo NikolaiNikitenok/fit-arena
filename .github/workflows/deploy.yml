@@ -14,6 +14,7 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       TG_PROXY: ${{ secrets.TG_PROXY }}
+      MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       GH_ACTIONS_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
@@ -46,6 +47,12 @@ jobs:
             # Токен бота из секрета репозитория: передаём через stdin, чтобы он не попал в команду и логи.
             if [ -n "$BOT_TOKEN" ]; then
               printf '%s' "$BOT_TOKEN" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.bot-token'
+            fi
+            # Бот в Max (server/maxBot.ts). Его API подписан корневым сертификатом Минцифры, которого нет в Node:
+            # скачиваем его на сервер один раз, сервер доверяет ему только в запросах к Max.
+            if [ -n "$MAX_BOT_TOKEN" ]; then
+              printf '%s' "$MAX_BOT_TOKEN" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/arena-server/.max-token'
+              $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'cd /opt/arena-server && { grep -q "BEGIN CERTIFICATE" russian-trusted-root-ca.pem 2>/dev/null || { curl -fsS --max-time 30 https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o ca.tmp && grep -q "BEGIN CERTIFICATE" ca.tmp && mv ca.tmp russian-trusted-root-ca.pem; } || echo "Не скачался сертификат Минцифры для Max"; }'
             fi
             # Прокси до Telegram (VPN на сервере), например socks5://127.0.0.1:1080.
             if [ -n "$TG_PROXY" ]; then

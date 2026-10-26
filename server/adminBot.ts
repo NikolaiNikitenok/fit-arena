@@ -16,7 +16,7 @@ export function alertText(a: Alert): string {
 }
 
 // Игрок пишет разработчику не чаще пяти раз в час, чтобы бот не стал рупором для спама.
-const feedbackLimit = new IpLimit(5, 3_600_000);
+export const feedbackLimit = new IpLimit(5, 3_600_000);
 
 /** Письмо игрока для админов или null, если пишет слишком часто. */
 export function feedbackText(msg: NonNullable<Update['message']>, now: number): string | null {

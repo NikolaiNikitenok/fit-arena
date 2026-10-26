@@ -13,8 +13,8 @@ export function friendParam(startParam: string | null | undefined, search: strin
   return q ? clean(q) : null;
 }
 
-/** start_param — не код боя: у приглашений в клан и в друзья свои приставки. */
-export const isNamedParam = (p: string) => /^(clan|friend)-/.test(p);
+/** start_param — не код боя: у приглашений в клан и в друзья свои приставки, у вкладки из кнопки бота в Max — tab-. */
+export const isNamedParam = (p: string) => /^(clan|friend|tab)-/.test(p);
 
 /** Ссылка-приглашение в друзья. */
 export function friendLink(token: string, bot: { username: string | null; running: boolean }, fallbackBot: string, origin: string): string {

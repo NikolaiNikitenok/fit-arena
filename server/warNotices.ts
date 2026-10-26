@@ -31,7 +31,7 @@ export function warNotices(store: ClanStore, now: number, skip: (playerId: strin
     const w = c.war;
     if (!w) continue;
     // Пишем только тем, кто в составе войны и может получить сообщение в Telegram.
-    const members = c.members.filter((m) => /^tg:\d+$/.test(m.id) && m.id in w.roster && !skip(m.id));
+    const members = c.members.filter((m) => !m.id.startsWith('guest:') && m.id in w.roster && !skip(m.id));
     if (!members.length) continue;
     const push = (id: string, kind: WarNoticeKind, text: string, button: string) =>
       out.push({ chatId: Number(id.slice(3)), playerId: id, clanId: c.id, key: w.key, kind, text, button });
