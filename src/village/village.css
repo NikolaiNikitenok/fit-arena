@@ -146,12 +146,12 @@
 .vil-res .pill.vil-shield { color: var(--mint); }
 .vil-battle-note { font-size: 12px; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vil-battle-note .icon, .vil-shop-info .icon, .vil-top-cups .icon { vertical-align: -2px; }
-.vil-next { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 10px 18px; border: 0; border-radius: var(--r-md); background: linear-gradient(135deg, #5b8cff, #8a5bff); color: #fff; text-align: left; box-shadow: 0 10px 24px rgba(91, 108, 255, .35); transition: transform .12s ease; }
-.vil-next > span { display: flex; flex-direction: column; gap: 2px; }
-.vil-next b { font-size: 18px; }
-.vil-next small { font-size: 12px; font-weight: 700; opacity: .85; }
-.vil-next:active { transform: scale(.98); }
-.vil-next:disabled { opacity: .7; }
+.vil-next-foe { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 10px 18px; border: 0; border-radius: var(--r-md); background: linear-gradient(135deg, #5b8cff, #8a5bff); color: #fff; text-align: left; box-shadow: 0 10px 24px rgba(91, 108, 255, .35); transition: transform .12s ease; }
+.vil-next-foe > span { display: flex; flex-direction: column; gap: 2px; }
+.vil-next-foe b { font-size: 18px; }
+.vil-next-foe small { font-size: 12px; font-weight: 700; opacity: .85; }
+.vil-next-foe:active { transform: scale(.98); }
+.vil-next-foe:disabled { opacity: .7; }
 .vil-result-note { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
 .vil-result-note .ok, .vil-task .ok { color: var(--mint); }
 .vil-result-note .bad, .vil-task .bad { color: var(--rose); }

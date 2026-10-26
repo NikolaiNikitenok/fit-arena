@@ -271,7 +271,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
         <div className="vil-bottom">
           {!started.current && <div className="vil-hint">Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки{scouting ? ` или через ${scoutLeft} с` : ''}.</div>}
           {!started.current && onSkip && (
-            <button className="vil-next" onClick={onSkip} disabled={skipBusy}>
+            <button className="vil-next-foe" onClick={onSkip} disabled={skipBusy}>
               <span>
                 <b>{skipBusy ? 'Ищем другую деревню…' : 'Следующая деревня'}</b>
                 <small>Не нравится добыча — поищи другую</small>
