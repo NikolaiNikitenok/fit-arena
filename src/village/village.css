@@ -72,9 +72,24 @@
 .b-lumbermill { color: #c98a4b; } .b-quarry { color: #b9c0cc; } .b-goldmine { color: #ffd27a; } .b-storage { color: #d8bf8a; }
 .b-barracks { color: #6aa6ff; } .b-forge { color: #ff8a5c; } .b-tavern { color: #f48fb1; } .b-market { color: #81c784; }
 .b-tower { color: #9575cd; } .b-catapult { color: #ff6b81; } .b-wall { color: #98a0b3; }
-.vil-pvp { background: linear-gradient(135deg, rgba(255,180,107,.18), rgba(255,122,89,.1)); border-color: rgba(255,138,92,.35); }
-.vil-pvp > .icon { color: var(--accent); }
-.vil-camp-num { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #3a2350; color: #e3c6ff; font-weight: 900; }
+.vil-camp:disabled { opacity: .55; }
+/* «Найти соперника» — главная кнопка листа набега: крупная, в акцентном градиенте. */
+.vil-pvp { flex: none; width: 100%; min-height: 86px; padding: 14px 16px; gap: 14px; border: 0; background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 10px 26px rgba(255, 122, 89, .35); transition: transform .12s ease; }
+.vil-pvp:active { transform: scale(.98); }
+.vil-pvp:disabled { opacity: .6; filter: saturate(.5); box-shadow: none; }
+.vil-pvp-icon { flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.28); box-shadow: inset 0 -3px 0 rgba(0,0,0,.12); }
+.vil-pvp-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vil-pvp-text b { font-size: 20px; line-height: 1.15; }
+.vil-pvp-text > span { font-size: 13px; font-weight: 700; opacity: .8; }
+.vil-pvp-text .icon { vertical-align: -2px; }
+/* Лагеря Князя: тёмно-фиолетовые карточки с номером, добыча крупно. */
+.vil-camp { flex: none; width: 100%; min-height: 74px; background: linear-gradient(135deg, #3b2556, #2a2140); border-color: rgba(190,140,255,.28); }
+.vil-camp.locked { background: var(--surface-2); border-color: var(--line); }
+.vil-camp b { font-size: 16px; }
+.vil-camp-num { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(160deg, #ffd27a, #f0a63a); color: #3a2350; font-size: 19px; font-weight: 900; box-shadow: inset 0 -3px 0 rgba(0,0,0,.15); }
+.vil-camp.locked .vil-camp-num { background: #3a3f52; color: var(--hint); }
+.vil-camp-loot { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.25); align-self: flex-start; font-size: 14px; }
+.vil-camp-loot > span:first-child { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: var(--hint); }
 .vil-stars { display: inline-flex; gap: 2px; color: rgba(255,255,255,.22); }
 .vil-stars .on { color: var(--gold); }
 .vil-stars .on.bad { color: var(--rose); }
@@ -95,8 +110,14 @@
 .vil-battle-head b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vil-pct { font-size: 22px; font-weight: 900; display: flex; flex-direction: column; align-items: flex-end; line-height: 1; font-variant-numeric: tabular-nums; }
 .vil-pct small { font-size: 12px; color: var(--hint); margin-top: 3px; }
-.vil-battle-loot { align-self: flex-start; display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; background: var(--glass); font-size: 13px; }
-.vil-battle-loot .muted { font-size: 12.5px; }
+.vil-loot-panel { align-self: stretch; margin-right: 56px; display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.vil-loot-title { flex: none; max-width: 64px; font-size: 11px; font-weight: 900; line-height: 1.15; text-transform: uppercase; letter-spacing: .4px; color: var(--gold); }
+.vil-loot-cell { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.vil-loot-num { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.vil-loot-num b { font-size: 17px; line-height: 1; font-variant-numeric: tabular-nums; }
+.vil-loot-num small { font-size: 11px; font-weight: 800; color: var(--c); line-height: 1; }
+.vil-loot-bar { display: block; height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.vil-loot-bar > i { display: block; height: 100%; background: var(--c); border-radius: 3px; transition: width .3s ease; }
 .vil-hint { padding: 8px 12px; border-radius: var(--r-md); background: var(--glass); color: #eef1f6; font-size: 13px; text-align: center; backdrop-filter: blur(6px); }
 .vil-troops { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 env(safe-area-inset-bottom); scrollbar-width: none; }
 .vil-troop { position: relative; flex: none; width: 70px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 6px; border-radius: var(--r-md); border: 2px solid rgba(255,255,255,.08); background: rgba(16,18,28,.9); color: var(--text); font-size: 11.5px; font-weight: 800; transition: transform .12s; }
@@ -125,7 +146,12 @@
 .vil-res .pill.vil-shield { color: var(--mint); }
 .vil-battle-note { font-size: 12px; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vil-battle-note .icon, .vil-shop-info .icon, .vil-top-cups .icon { vertical-align: -2px; }
-.vil-skip { align-self: center; background: var(--glass); color: var(--text); border: 1px solid var(--glass-line); }
+.vil-next { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 10px 18px; border: 0; border-radius: var(--r-md); background: linear-gradient(135deg, #5b8cff, #8a5bff); color: #fff; text-align: left; box-shadow: 0 10px 24px rgba(91, 108, 255, .35); transition: transform .12s ease; }
+.vil-next > span { display: flex; flex-direction: column; gap: 2px; }
+.vil-next b { font-size: 18px; }
+.vil-next small { font-size: 12px; font-weight: 700; opacity: .85; }
+.vil-next:active { transform: scale(.98); }
+.vil-next:disabled { opacity: .7; }
 .vil-result-note { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
 .vil-result-note .ok, .vil-task .ok { color: var(--mint); }
 .vil-result-note .bad, .vil-task .bad { color: var(--rose); }

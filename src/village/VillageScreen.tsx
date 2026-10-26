@@ -401,7 +401,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           mode="attack"
           enemy
           scout={t.token ? SCOUT_SECONDS : undefined}
-          onSkip={battle.revengeOf || searching ? undefined : () => void startPvp()}
+          onSkip={battle.revengeOf ? undefined : () => void startPvp()}
+          skipBusy={searching}
           onFinish={finish}
           onClose={() => setBattle(null)}
         />,
@@ -817,10 +818,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           </div>
           {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
           <button className="vil-pvp" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp()}>
-            <Swords size={26} />
-            <span>
+            <span className="vil-pvp-icon">
+              <Swords size={30} />
+            </span>
+            <span className="vil-pvp-text">
               <b>{!online ? OFFLINE : searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
-              <span className="muted">
+              <span>
                 {online ? (
                   <>
                     Деревня игрока твоего уровня · <Trophy size={12} /> {trophies} {league.name}
@@ -850,8 +853,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 <span className="vil-shop-info">
                   <b>{c.name}</b>
                   <span className="muted">{open ? c.hint : th < c.th ? `Нужна ратуша ${c.th}` : 'Сначала разгроми предыдущий лагерь'}</span>
-                  <span className="vil-shop-meta">
-                    <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
+                  <span className="vil-camp-loot">
+                    <span>Добыча</span> <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
                   </span>
                 </span>
                 <span className="vil-stars">
