@@ -66,6 +66,7 @@ import { AccountStore } from './accounts';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
+import { CityStore } from './cities';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -89,6 +90,8 @@ const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
+// Топ по городу (server/cities.ts).
+const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'cities.json'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 // Единый аккаунт: вход tg:123 → аккаунт, под которым лежит всё остальное (server/accounts.ts).
 const accounts = new AccountStore(process.env.ACCOUNTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'accounts.json'));
@@ -618,6 +621,24 @@ async function onVillageApi(path: string, req: IncomingMessage, res: ServerRespo
   reply(r.status, r.body);
 }
 
+/** Топ по городу: POST /api/city (топ недели), /api/city/set ({ city } — выбрать, null — убрать себя). Только для вошедших. */
+async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const signed = body && signedIn(body);
+  // Без токена бота (сервер для разработки) — и гости, как у набегов.
+  const guest = body && !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
+  const me = signed ? { id: signed.id, name: signed.name } : guest ? { id: guest, name: cleanName(body!.name) } : null;
+  if (!me) return reply(401, { error: 'Топ города — для тех, кто вошёл через Telegram, Max или Яндекс' });
+  const now = Date.now();
+  if (path === '/api/city/set') {
+    const r = cities.set(me.id, body!.city, me.name, now);
+    if (typeof r === 'string') return reply(400, { error: r });
+  } else cities.rename(me.id, me.name);
+  reply(200, cities.board({ days: (id) => saves.get(id)?.progress?.days, level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
+}
+
 /** POST /api/delete-me: игрок стирает свои данные (кнопка в настройках). */
 async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
@@ -628,7 +649,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const now = Date.now();
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
-    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages }, id, now);
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities }, id, now);
     if (clan) {
       sendClan(clan);
       toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -641,7 +662,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 /** Убрать героя аккаунта, которого не выбрали при привязке: копия прогресса и кубки — в архив, остальное как «Удалить мои данные». */
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
-  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages }, id, Date.now());
+  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities }, id, Date.now());
   if (clan) {
     sendClan(clan);
     toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -852,6 +873,10 @@ const http = createServer((req, res) => {
   }
   if (path.startsWith('/api/account/')) {
     onAccountApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/city' || path === '/api/city/set') {
+    onCityApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/delete-me') {
@@ -1313,6 +1338,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     clans.flush();
     saves.flush();
     friends.flush();
+    cities.flush();
     guard.flush();
     telemetry.flush();
     mod.flush();

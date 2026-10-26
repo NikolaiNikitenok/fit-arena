@@ -1,6 +1,7 @@
 // Снаряжение героя. Предметы меняют внешность и дают игровые бонусы, но не снижают цели по повторам:
 // тренировка остаётся честной.
 import type { CharName } from '../three/kit';
+import { holidayOutfits } from './holidayDefs';
 
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 
@@ -53,6 +54,8 @@ export interface Item {
   program?: boolean;
   // Только из набора «Новичок» за звёзды (src/game/starter.ts): в сундуках не выпадает.
   paid?: boolean;
+  // Только с дорожки праздника этого года (src/game/holidays.ts): ключ праздника, после него больше не выдаётся.
+  holiday?: string;
 }
 
 export const ITEMS: Item[] = [
@@ -89,6 +92,8 @@ export const ITEMS: Item[] = [
   { id: 'prog-bogatyr', hero: 'Barbarian', name: 'Богатырь', rarity: 'epic', color: '#ffb46b', glow: '#ffa726', tint: 'mul:1.25,1.05,0.7', coinBonus: 0.15, price: 0, inShop: false, program: true },
   { id: 'prog-stone', hero: 'Knight', name: 'Каменный страж', rarity: 'epic', color: '#a8a29e', glow: '#c4b5fd', tint: 'mul:0.8,0.78,0.85', coinBonus: 0.15, price: 0, inShop: false, program: true },
   { id: 'prog-champion', hero: 'Knight', name: 'Чемпион Грома', rarity: 'legendary', color: '#ffd27a', glow: '#ff8a5c', tint: 'mul:1.4,0.95,0.6', coinBonus: 0.25, price: 0, inShop: false, program: true },
+  // Облики праздников (src/game/holidayDefs.ts): у каждого праздника каждого года свой.
+  ...holidayOutfits().map(({ id, key, name, hero, color, glow, tint }): Item => ({ id, hero, name, rarity: 'legendary', color, glow, tint, coinBonus: 0.25, price: 0, inShop: false, holiday: key })),
 ];
 
 export const itemById = (id: string): Item => ITEMS.find((i) => i.id === id) ?? ITEMS[0];
@@ -232,7 +237,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && !i.holiday && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };

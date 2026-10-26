@@ -1,6 +1,7 @@
 // «Удалить мои данные» из настроек: стираем всё, что сервер знает об игроке.
 // Профиль дуэлей, копию прогресса и настройки бота, клан (выход и имя в чате), друзей,
 // анонимные следы в статистике, деревню для набегов (кубки, щит, набеги на него; в чужих журналах — без имени). Семейный сайт (server/family.ts) хранит свои данные сам.
+import type { CityStore } from './cities';
 import type { ClanStore } from './clans';
 import type { FriendStore } from './friends';
 import type { SaveStore } from './saves';
@@ -15,6 +16,8 @@ export interface DeleteDeps {
   friends: Pick<FriendStore, 'forget'>;
   telemetry: Pick<Telemetry, 'forget'>;
   villages: Pick<VillageStore, 'forget'>;
+  // Город в топе городов.
+  cities?: Pick<CityStore, 'forget'>;
 }
 
 export const DELETED_NAME = 'Удалённый игрок';
@@ -46,5 +49,6 @@ export function deletePlayer(d: DeleteDeps, id: string, now: number) {
   d.friends.forget(id);
   d.telemetry.forget(id);
   d.villages.forget(id);
+  d.cities?.forget(id);
   return { clan: left };
 }

@@ -1,6 +1,7 @@
 import type { DailyTask } from './daily';
 import { achDone, ACHIEVEMENTS } from './achievements';
 import { eventOf, eventWindow, triesLeft } from './event';
+import { holidayReady } from './holidays';
 import { dailyBonusReady, dungeonOf, FLOOR_COST } from './match3/dungeon';
 import { passReady } from './pass';
 import { canHatch, newPets } from './pets';
@@ -25,6 +26,8 @@ export interface HomeBadges {
   pets: number;
   // Событие идёт, босс жив и попытки ещё есть.
   event: boolean;
+  // Праздник: ступени дорожки, которые можно забрать.
+  holiday: number;
 }
 
 export function homeBadges(p: Progress, daily: DailyTask, pro: boolean, now: number): HomeBadges {
@@ -41,6 +44,7 @@ export function homeBadges(p: Progress, daily: DailyTask, pro: boolean, now: num
     achievements: ACHIEVEMENTS.filter((a) => achDone(a, p, now) && !p.achClaimed?.includes(a.id)).length,
     pets: newPets(p, lvl).filter((id) => id !== p.pets?.active).length + Number(canHatch(p)),
     event: eventWindow(now).live && !ev.won && triesLeft(p, now) > 0,
+    holiday: holidayReady(p, now),
   };
 }
 

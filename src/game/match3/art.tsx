@@ -247,7 +247,7 @@ export function MonsterFace({ shape, color, boss, size = 72, angry }: { shape: M
           <path d="M22 12l4-7 6 6 6-6 4 7z" fill="#ffd54f" stroke="#b77d0b" strokeWidth="1.2" strokeLinejoin="round" />
         </>
       )}
-      <g>
+      <g className="m3-eyes">
         <ellipse cx="24" cy={eyeY} rx="5.5" ry={angry ? 3.6 : 5} fill={shape === 'skull' ? '#1b1520' : '#fff'} />
         <ellipse cx="40" cy={eyeY} rx="5.5" ry={angry ? 3.6 : 5} fill={shape === 'skull' ? '#1b1520' : '#fff'} />
         <circle cx="25" cy={eyeY + 1} r="2.4" fill={shape === 'skull' ? (angry ? '#ff5252' : '#ffb74d') : '#1b1520'} />

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Coin } from '../icons';
-import { type AchIcon, type AchTier, achDone, type Achievement, ACHIEVEMENTS } from './achievements';
+import { type AchIcon, type AchTier, achDone, type Achievement, visibleAchievements } from './achievements';
 import type { Progress } from './progress';
 import { Sheet } from '../Sheet';
 
@@ -40,16 +40,17 @@ export function AchBadge({ ach, done, size = 48 }: { ach: Achievement; done: boo
 /** Все достижения: забрать награду, выбрать титул под именем героя. */
 export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: { progress: Progress; now: number; onClaim: (a: Achievement) => void; onTitle: (id: string | undefined) => void; onClose: () => void }) {
   const [tab, setTab] = useState<'all' | 'done'>('all');
-  const done = ACHIEVEMENTS.filter((x) => achDone(x, progress, now));
+  const all = visibleAchievements(progress, now);
+  const done = all.filter((x) => achDone(x, progress, now));
   // Сначала те, что можно забрать, потом выполненные, потом ближайшие к цели.
-  const list = [...(tab === 'done' ? done : ACHIEVEMENTS)].sort((x, y) => {
+  const list = [...(tab === 'done' ? done : all)].sort((x, y) => {
     const rank = (a: Achievement) => (achDone(a, progress, now) ? (progress.achClaimed?.includes(a.id) ? 1 : 0) : 2);
     return rank(x) - rank(y) || Math.min(1, y.value(progress, now) / y.goal) - Math.min(1, x.value(progress, now) / x.goal);
   });
   return (
     <Sheet onClose={onClose}>
       <div className="level-title">
-        Достижения <span className="muted">{done.length} из {ACHIEVEMENTS.length}</span>
+        Достижения <span className="muted">{done.length} из {all.length}</span>
       </div>
       <div className="muted ach-hint">За каждое — монеты и титул. Титул виден под именем героя; нажми на полученный, чтобы надеть.</div>
       <div className="tabs">

@@ -68,6 +68,9 @@ const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m
 const GymScreen = lazy(() => import('../gym/GymScreen').then((m) => ({ default: m.GymScreen })));
 const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
 const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.PassScreen })));
+const HolidayScreen = lazy(() => import('./HolidayScreen').then((m) => ({ default: m.HolidayScreen })));
+const CollectionsSheet = lazy(() => import('./CollectionsSheet').then((m) => ({ default: m.CollectionsSheet })));
+const CitySheet = lazy(() => import('../city/CitySheet').then((m) => ({ default: m.CitySheet })));
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
 const DungeonScreen = lazy(() => import('./match3/DungeonScreen').then((m) => ({ default: m.DungeonScreen })));
 const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetHatch })));
@@ -148,6 +151,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const [passOpen, setPassOpen] = useState(() => startTab() === 'pass');
   const [eventOpen, setEventOpenState] = useState(false);
   const [petsOpen, setPetsOpen] = useState(false);
+  const [holidayOpen, setHolidayOpen] = useState(false);
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
   // «Позже» на яйце: спросим снова при следующем запуске.
   const [eggLater, setEggLater] = useState(false);
   const setEventOpen = (open: boolean) => {
@@ -357,6 +363,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
       )}
       {passOpen && <PassScreen progress={progress} setProgress={setProgress} pro={pro} land={currentDef.land} onClose={() => setPassOpen(false)} />}
       {petsOpen && <PetScreen progress={progress} setProgress={setProgress} onClose={() => setPetsOpen(false)} />}
+      {holidayOpen && <HolidayScreen progress={progress} setProgress={setProgress} onClose={() => setHolidayOpen(false)} />}
+      {collectionsOpen && <CollectionsSheet progress={progress} setProgress={setProgress} onClose={() => setCollectionsOpen(false)} />}
+      {cityOpen && <CitySheet onClose={() => setCityOpen(false)} />}
       {tab === 'hero' && !newcomer && !eggLater && canHatch(progress) && (
         <PetHatch
           onDone={(name) => {
@@ -452,6 +461,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onPrograms={() => setPrograms({})}
           onGym={() => setGym(true)}
           onDungeon={() => setDungeon(true)}
+          onHoliday={() => setHolidayOpen(true)}
+          onCollections={() => setCollectionsOpen(true)}
+          onCity={() => setCityOpen(true)}
         />
         {sheets}
       </>

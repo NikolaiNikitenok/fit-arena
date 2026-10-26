@@ -5,6 +5,8 @@ import { LEVELS } from './levels';
 import { type Progress, streak } from './progress';
 import { programById, type ProgramId } from './programs';
 import { dungeonOf } from './match3/dungeon';
+import { COLLECTIONS, collectionOwned } from './collections';
+import { FIRST_YEAR, HOLIDAYS, holidayKey, yearOf } from './holidayDefs';
 
 export type AchTier = 'bronze' | 'silver' | 'gold' | 'legend';
 export type AchIcon = 'flame' | 'rep' | 'crown' | 'skull' | 'star' | 'map' | 'arm' | 'leg' | 'core' | 'banner' | 'gem' | 'scroll';
@@ -19,6 +21,8 @@ export interface Achievement {
   // Текущее значение и цель: для полоски прогресса.
   value: (p: Progress, now: number) => number;
   goal: number;
+  // Получить можно только в своё время (праздник, праздничный год): в списке видно, лишь когда получено.
+  limited?: boolean;
 }
 
 const totalReps = (p: Progress) => Object.values(p.days).reduce((a, b) => a + b, 0);
@@ -39,6 +43,8 @@ const PROGRAM_TITLES: [ProgramId, string, AchIcon, AchTier][] = [
   ['plank5', 'Каменная плита', 'core', 'legend'],
   ['full4w', 'Атлет Грома', 'crown', 'legend'],
 ];
+
+const HOLIDAY_ICON: Record<string, AchIcon> = { pumpkin: 'flame', winter: 'gem', spring: 'star', summer: 'crown' };
 
 const TIER_COINS: Record<AchTier, number> = { bronze: 50, silver: 150, gold: 400, legend: 1000 };
 const a = (id: string, title: string, text: string, icon: AchIcon, tier: AchTier, goal: number, value: Achievement['value']): Achievement => ({ id, title, text, icon, tier, goal, value, coins: TIER_COINS[tier] });
@@ -80,7 +86,23 @@ export const ACHIEVEMENTS: Achievement[] = [
   a('combo6', 'Цепная реакция', 'Комбо ×6 в подземелье', 'flame', 'silver', 6, (p) => dungeonOf(p).bestCombo),
   // Титулы за программы тренировок Мастера Грома.
   ...PROGRAM_TITLES.map(([id, title, icon, tier]) => a(`prog-${id}`, title, `Пройди программу «${programById(id)!.title}»`, icon, tier, 1, (p) => Number(!!p.programs?.done.includes(id)))),
+  // Титулы за собранные коллекции обликов (src/game/collections.ts).
+  ...COLLECTIONS.map((c) => ({
+    ...a(`col-${c.id}`, c.title, `Собери коллекцию «${c.name}»`, 'gem', c.limited ? 'legend' : c.items.length >= 6 ? 'gold' : 'silver', c.items.length, (p) => collectionOwned(c, p)),
+    limited: c.limited,
+  })),
+  // Титулы праздников (src/game/holidays.ts): выдаются с дорожки праздника, монет за них нет.
+  ...HOLIDAYS.flatMap((h) =>
+    h.outfits.map((_, i) => {
+      const year = yearOf(h, FIRST_YEAR + i);
+      const key = holidayKey(h.id, year);
+      return { ...a(`hol-${key}`, `${h.hero} ${year}`, `Пройди дорожку праздника «${h.name}» ${year}`, HOLIDAY_ICON[h.id], 'legend', 1, (p) => Number(!!p.achClaimed?.includes(`hol-${key}`))), coins: 0, limited: true };
+    }),
+  ),
 ];
+
+/** Достижения в списке: праздничные — только полученные. */
+export const visibleAchievements = (p: Progress, now: number) => ACHIEVEMENTS.filter((x) => !x.limited || achDone(x, p, now));
 
 export const achDone = (ach: Achievement, p: Progress, now: number) => ach.value(p, now) >= ach.goal;
 

@@ -6,6 +6,7 @@ import { seasonAt } from '../../shared/rating';
 import { bossDrop, Gear, GEAR, gearById, ITEMS, itemById, openChest, PotionId, potionById } from './items';
 import type { DailyTask } from './daily';
 import type { EventState } from './event';
+import type { HolidayState } from './holidays';
 import type { ProgramsState } from './programs';
 import { Baseline, DEFAULT_BASELINE, LevelDef } from './levels';
 import { addCharge, type Village } from './resources';
@@ -77,6 +78,10 @@ export interface Progress {
   event?: EventState;
   // Месяцы (YYYY-MM), когда босс события повержен.
   eventWins?: string[];
+  // Праздник (src/game/holidays.ts): забранные ступени дорожки. Жетоны считаются из days.
+  holiday?: HolidayState;
+  // Сияние собранной коллекции обликов вокруг героя (src/game/collections.ts).
+  aura?: string;
   // Питомцы: кто открыт, кто рядом с героем, опыт и лакомство дня (src/game/pets.ts).
   pets?: PetState;
   // Программы тренировок Мастера Грома (src/game/programs.ts): идущая, пройденные и опыт за дни.
@@ -587,4 +592,5 @@ export function claimAchievement(p: Progress, id: string, coins: number): Progre
 }
 
 export const setTitle = (p: Progress, id: string | undefined): Progress => save({ ...p, title: id });
+export const setAura = (p: Progress, id: string | undefined): Progress => save({ ...p, aura: id });
 export const finishOnboarding = (p: Progress): Progress => save({ ...p, onboarded: true });
