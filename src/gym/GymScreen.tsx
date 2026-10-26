@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Cross, Dumbbell, Medal, Pencil, Plus, Search, Timer, Trash } from '../icons';
+import { useBusy } from '../updates/busy';
 import { sfx } from '../audio';
 import { reportGym } from '../family';
 import { Remark } from '../game/Dialog';
@@ -361,6 +362,8 @@ function NumInput({ value, onChange, placeholder, step = 1 }: { value?: number; 
 const REST_DEFAULT = 90;
 
 function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: Progress; update: Props['update']; onFinish: () => void }) {
+  // Тренировка в зале идёт (таймер отдыха): обновление игры подождёт.
+  useBusy(true);
   const g = gymOf(progress);
   const [now, setNow] = useState(Date.now());
   const [picker, setPicker] = useState(false);

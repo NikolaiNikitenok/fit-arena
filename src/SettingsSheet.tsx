@@ -11,6 +11,9 @@ import { BlackListRow } from './moderation/BlackList';
 import { Sheet } from './Sheet';
 import { AccountRow } from './account/Account';
 import { WebLoginRow } from './account/WebLogin';
+import { ChangesList } from './updates/UpdateBanner';
+import { CHANGELOG } from './updates/changelog';
+import { APP_VERSION } from './telemetry';
 
 const TOGGLES: { key: { [K in keyof Settings]-?: Settings[K] extends boolean ? K : never }[keyof Settings]; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -30,6 +33,16 @@ const TOGGLES: { key: { [K in keyof Settings]-?: Settings[K] extends boolean ? K
 export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progress: Progress; onReset: () => void; onIntro: () => void; onClose: () => void }) {
   const s = useSettings();
   const [confirm, setConfirm] = useState(false);
+  const [history, setHistory] = useState(false);
+  // Вторая шторка — рядом, а не внутри первой: внутри анимированного листа fixed считается от него.
+  if (history)
+    return (
+      <Sheet onClose={() => setHistory(false)}>
+        <div className="level-title">История обновлений</div>
+        <ChangesList entries={CHANGELOG} />
+        <small className="muted credits">Версия {APP_VERSION}</small>
+      </Sheet>
+    );
   return (
     <Sheet onClose={onClose}>
       <div className="level-title">Настройки</div>
@@ -48,6 +61,9 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
       <BlackListRow />
       <button className="secondary" onClick={onIntro}>
         Посмотреть знакомство заново
+      </button>
+      <button className="secondary" onClick={() => setHistory(true)}>
+        История обновлений
       </button>
       <div className="settings-note">
         <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.{' '}
