@@ -5,9 +5,12 @@ import { midiToFreq, NoteEvent, stepSeconds, STEPS_PER_BAR, Theme, themeStep, TH
 import { hasInstrument, type Instrument, loadInstrument, playSample } from './samples';
 import { tg } from './telegram';
 
-export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup' | 'whoosh' | BattleSfx;
+export type Sfx = 'tap' | 'rep' | 'hit' | 'combo' | 'hurt' | 'ouch' | 'roar' | 'ko' | 'win' | 'lose' | 'coin' | 'chest' | 'beep' | 'go' | 'levelup' | 'whoosh' | BattleSfx | GemSfx;
 // Бой в деревне: удары отрядов, выстрелы башен, разрушения, умения героя. n — сколько таких событий сразу.
 export type BattleSfx = 'sword' | 'slash' | 'bow' | 'smash' | 'blast' | 'heal' | 'shot' | 'cannon' | 'crumble' | 'wallbreak' | 'skill' | 'thunder' | 'hammer';
+// Три в ряд: свой звук у каждого самоцвета, лучи, взрывы, радуга, когти чудища. n — номер волны
+// каскада: с каждой волной звук на полтона выше.
+export type GemSfx = 'gem-wood' | 'gem-stone' | 'gem-gold' | 'gem-heart' | 'gem-sword' | 'zap' | 'boom' | 'prism' | 'claw' | 'shatter' | 'spark' | 'thud';
 // Звуки боя повторяются реже: при толпе отрядов один звук на всех, только чуть громче.
 const MIN_GAP: Partial<Record<Sfx, number>> = { sword: 0.11, slash: 0.15, bow: 0.12, smash: 0.2, blast: 0.12, heal: 1.2, shot: 0.14, cannon: 0.2, crumble: 0.25, wallbreak: 0.15, skill: 0.3, thunder: 0.3, hammer: 0.12 };
 
@@ -330,7 +333,8 @@ function play(c: AudioContext, name: Sfx, t: number, n: number): void {
       noise(c, t + 0.4, 0.5, 0.05, 'highpass', 7000);
       break;
     default:
-      playBattle(c, name, t, n);
+      if (name.startsWith('gem-') || GEM_SFX.has(name)) playGem(c, name as GemSfx, t, n);
+      else playBattle(c, name as BattleSfx, t, n);
   }
 }
 
@@ -606,4 +610,76 @@ export async function renderTheme(theme: Theme, seconds: number, rate = 44100): 
   const step = stepSeconds(THEMES[theme].bpm);
   for (let st = 0, t = 0.05; t < seconds - 1.5; st++, t += step) for (const e of themeStep(theme, st)) voice(c, e, t, step, g);
   return oc.startRendering();
+}
+
+const GEM_SFX = new Set<Sfx>(['zap', 'boom', 'prism', 'claw', 'shatter', 'spark', 'thud']);
+
+function playGem(c: AudioContext, name: GemSfx, t: number, n: number): void {
+  // Каскад: каждая волна на полтона выше, но не выше октавы.
+  const up = Math.pow(2, Math.min(12, Math.max(0, n - 1)) / 12);
+  const notes = (freqs: number[], gap: number, dur: number, o: ToneOpts) => freqs.forEach((f, i) => tone(c, f * up, t + i * gap, dur, o));
+  switch (name) {
+    case 'gem-wood':
+      // Сухой треск ветки и деревянный «тук».
+      noise(c, t, 0.05, 0.14, 'bandpass', 1800 * up, sfxBus, 4);
+      tone(c, 420 * up, t, 0.09, { type: 'triangle', vol: 0.16, glide: 300 * up });
+      break;
+    case 'gem-stone':
+      // Камень о камень: низкий стук и хруст.
+      tone(c, 210 * up, t, 0.1, { vol: 0.22, glide: 120 * up });
+      noise(c, t, 0.07, 0.12, 'bandpass', 900 * up, sfxBus, 2);
+      break;
+    case 'gem-gold':
+      // Монетки звенят.
+      notes([1568, 2093], 0.045, 0.22, { type: 'square', vol: 0.035, lp: [6000, 2500] });
+      notes([1568, 2093], 0.045, 0.3, { vol: 0.07 });
+      break;
+    case 'gem-heart':
+      // Тёплый колокольчик.
+      notes([784, 1175], 0.06, 0.4, { vol: 0.08 });
+      notes([1568], 0.06, 0.3, { type: 'triangle', vol: 0.03 });
+      break;
+    case 'gem-sword':
+      // Лязг клинка.
+      noise(c, t, 0.04, 0.12, 'highpass', 4000);
+      tone(c, 1760 * up, t, 0.18, { type: 'square', vol: 0.03, lp: [7000, 1800] });
+      tone(c, 2640 * up, t + 0.004, 0.14, { type: 'square', vol: 0.018, lp: [7000, 2000] });
+      break;
+    case 'zap':
+      // Луч: электрический треск и свист вниз.
+      tone(c, 2400, t, 0.28, { type: 'sawtooth', vol: 0.06, glide: 300, lp: [8000, 900] });
+      noise(c, t, 0.25, 0.14, 'highpass', 5000);
+      tone(c, 90, t, 0.18, { vol: 0.2, glide: 45 });
+      break;
+    case 'boom':
+      // Бомба: удар, гул и осколки.
+      tone(c, 110, t, 0.55, { vol: 0.55, glide: 28 });
+      noise(c, t, 0.55, 0.45, 'lowpass', 1000);
+      noise(c, t + 0.03, 0.15, 0.12, 'highpass', 3000);
+      break;
+    case 'prism':
+      // Радуга: блёстки по пентатонике вверх и вниз.
+      [1047, 1319, 1568, 2093, 2637, 2093, 1568].forEach((f, i) => tone(c, f, t + i * 0.04, 0.35, { vol: 0.06 }));
+      noise(c, t, 0.5, 0.06, 'highpass', 7000);
+      break;
+    case 'claw':
+      // Когти: три быстрых свиста-царапины и удар.
+      for (let i = 0; i < 3; i++) noise(c, t + i * 0.06, 0.1, 0.18, 'bandpass', 2600 - i * 500, sfxBus, 3);
+      tone(c, 80, t + 0.18, 0.3, { vol: 0.45, glide: 40 });
+      break;
+    case 'shatter':
+      // Чудище рассыпается: звон осколков и низкий выдох.
+      for (let i = 0; i < 9; i++) tone(c, 1800 + Math.random() * 2600, t + i * 0.035 + Math.random() * 0.02, 0.22, { type: 'triangle', vol: 0.05 });
+      noise(c, t, 0.6, 0.18, 'highpass', 4000);
+      tone(c, 160, t, 0.7, { type: 'sawtooth', vol: 0.12, glide: 50, lp: [1200, 200] });
+      break;
+    case 'spark':
+      // Салют: самоцвет становится лучом.
+      tone(c, 1320 * up, t, 0.12, { type: 'triangle', vol: 0.09, glide: 1980 * up });
+      break;
+    case 'thud':
+      // Самоцвет долетел до цели.
+      tone(c, 520 * up, t, 0.07, { type: 'triangle', vol: 0.06 });
+      break;
+  }
 }

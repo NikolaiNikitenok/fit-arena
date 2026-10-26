@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { sfx, useMusic } from '../../audio';
+import { type GemSfx, sfx, useMusic } from '../../audio';
 import { getSettings, useSettings } from '../../settings';
 import { tg } from '../../telegram';
 import { track } from '../../telemetry';
@@ -10,7 +10,7 @@ import { useAdmin } from '../../cloud';
 import { heroPower } from '../power';
 import { saveProgress, type Progress } from '../progress';
 import { Stars } from '../Stars';
-import { adjacent, cloneBoard, type Board, hint as findHint, idx, type Pos } from './engine';
+import { adjacent, type ClearedGem, cloneBoard, type Board, hint as findHint, idx, type Pos, type Step } from './engine';
 import { BoardView, type Effect } from './Board';
 import { Bolt, GemIcon, MonsterFace, ResIcon } from './art';
 import { Backdrop } from './Backdrop';
@@ -20,6 +20,11 @@ import {
   beginFloor,
   blocksLeft,
   checkSavedRun,
+  comboMult,
+  FINALE_SHARE,
+  finaleRun,
+  floorMult,
+  GEM_YIELD,
   dailyBonusReady,
   dungeonOf,
   FAIL_KEEP,
@@ -93,7 +98,7 @@ const ChargePill = ({ charge }: { charge: number }) => (
 const ResRow = ({ res, plus }: { res: Resources; plus?: boolean }) => (
   <span className="m3-res">
     {RESOURCES.map((r) => (
-      <span key={r} title={RESOURCE_LABELS[r]}>
+      <span key={r} data-res={r} title={RESOURCE_LABELS[r]}>
         <ResIcon res={r} size={16} /> {plus ? '+' : ''}
         {res[r]}
       </span>
@@ -616,6 +621,33 @@ function GoalBadge({ f, size }: { f: FloorDef; size: number }) {
 // ---------- Партия ----------
 
 let fxKey = 1;
+// Сколько летит самоцвет от доски к цели: к чудищу, к здоровью героя, к добыче.
+const FLY_MS = 460;
+const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Добыча одной волны: счётчик внизу растёт, когда самоцветы долетают. Как в playMove. */
+function stepLoot(floor: number, s: Step, share: number): Resources {
+  const k = floorMult(floor) * share;
+  const out: Resources = { wood: 0, stone: 0, gold: 0 };
+  for (const r of RESOURCES) out[r] = s.counts[r] * GEM_YIELD[r] * k;
+  return out;
+}
+
+const addLoot = (a: Resources, b: Resources): Resources => ({ wood: a.wood + b.wood, stone: a.stone + b.stone, gold: a.gold + b.gold });
+
+/** Тряска элемента: только transform. */
+function shake(el: HTMLElement | null | undefined, px: number, ms = 380) {
+  if (!el?.animate || reduceMotion()) return;
+  el.animate(
+    [{ transform: 'translate(0,0)' }, { transform: `translate(${-px}px,${px * 0.4}px)` }, { transform: `translate(${px * 0.8}px,${-px * 0.4}px)` }, { transform: `translate(${-px * 0.5}px,${px * 0.2}px)` }, { transform: 'translate(0,0)' }],
+    { duration: ms, easing: 'ease-out' },
+  );
+}
+
+/** Цель «подпрыгивает», когда в неё прилетел самоцвет. */
+function bump(el: Element | null | undefined, to = 'scale(1.2)') {
+  (el as HTMLElement | null)?.animate?.([{ transform: 'none' }, { transform: to }, { transform: 'none' }], { duration: 220, easing: 'ease-out' });
+}
 
 function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: number; onMove: (r: Run) => void; onFinish: (r: Run) => void }) {
   const settings = useSettings();
@@ -628,9 +660,23 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
   const [effects, setEffects] = useState<Effect[]>([]);
   const [monsterHp, setMonsterHp] = useState(initial.monsterHp);
   const [floats, setFloats] = useState<{ key: number; text: string; cls: string; dx: number }[]>([]);
+  // Добыча на экране: растёт, когда самоцветы долетают до счётчика.
+  const [lootShown, setLootShown] = useState<Resources>(initial.loot);
+  // Волна каскада: счётчик ×N и разгорающаяся рамка.
+  const [combo, setCombo] = useState(0);
+  const [attack, setAttack] = useState(0);
+  const [claw, setClaw] = useState(0);
+  const [dead, setDead] = useState(false);
+  const [finale, setFinale] = useState(false);
+  const [movesView, setMovesView] = useState<number | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const hudRef = useRef<HTMLDivElement>(null);
   const lootRef = useRef<HTMLDivElement>(null);
+  const playRef = useRef<HTMLDivElement>(null);
+  const foeRef = useRef<HTMLDivElement>(null);
+  const heroBarRef = useRef<HTMLDivElement>(null);
+  const movesRef = useRef<HTMLDivElement>(null);
+  const flyRef = useRef<HTMLDivElement>(null);
   // Заставка хранителя — только в начале этажа (не при продолжении сохранённой партии).
   const [intro, setIntro] = useState(initial.floor.boss && initial.moves === initial.floor.moves);
   const [howto, setHowto] = useState(() => !howToSeen());
@@ -641,10 +687,15 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
   const [quit, setQuit] = useState(false);
   const drops = useRef(new Map<number, number>());
   const born = useRef(new Set<number>());
+  const landed = useRef(new Map<number, string>());
   const alive = useRef(true);
   const busyRef = useRef(false);
+  const skipRef = useRef(false);
+  const hpRef = useRef(initial.monsterHp);
   const f = initial.floor;
   const L = landDef(f.land);
+  const m = f.monster;
+  const fights = !!m && (f.goal === 'monster' || f.goal === 'survive');
 
   useEffect(() => {
     if (!intro) return;
@@ -665,22 +716,214 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
     if (busy || run.status !== 'play') return;
     setHint(null);
     const t = setTimeout(() => {
-      const m = findHint(run.board);
-      if (m) setHint([m.a, m.b]);
+      const mv = findHint(run.board);
+      if (mv) setHint([mv.a, mv.b]);
     }, HINT_AFTER_MS);
     return () => clearTimeout(t);
   }, [busy, run]);
 
+  const later = (ms: number, fn: () => void) => setTimeout(() => alive.current && fn(), ms);
+  // Пауза анимации; в салюте по нажатию «пропустить» — без ожидания.
+  const pause = (ms: number) => (skipRef.current ? Promise.resolve() : wait(ms));
+
   const addFx = (list: Effect[]) => {
     if (!list.length) return;
-    setEffects((e) => [...e, ...list]);
+    // Новая надпись сменяет прежнюю, а не ложится поверх.
+    const text = list.some((x) => x.type === 'combo');
+    setEffects((e) => [...(text ? e.filter((x) => x.type !== 'combo') : e), ...list]);
     const keys = new Set(list.map((x) => x.key));
-    setTimeout(() => alive.current && setEffects((e) => e.filter((x) => !keys.has(x.key))), 900);
+    later(900, () => setEffects((e) => e.filter((x) => !keys.has(x.key))));
   };
   const addFloat = (text: string, cls: string) => {
     const key = fxKey++;
     setFloats((x) => [...x, { key, text, cls, dx: Math.round((Math.random() - 0.5) * 50) }]);
-    setTimeout(() => alive.current && setFloats((x) => x.filter((y) => y.key !== key)), 1100);
+    later(1100, () => setFloats((x) => x.filter((y) => y.key !== key)));
+  };
+
+  /** Летящий значок: от точки к точке по дуге, в слое поверх экрана. Координаты — от экрана партии. */
+  const launch = (sx: number, sy: number, tx: number, ty: number, size: number, html: string, cls: string, delay: number, done?: () => void) => {
+    const layer = flyRef.current;
+    if (!layer) return;
+    const el = document.createElement('div');
+    el.className = `m3-flyer ${cls}`;
+    el.style.cssText = `left:${sx - size / 2}px;top:${sy - size / 2}px;width:${size}px;height:${size}px`;
+    el.innerHTML = html;
+    layer.appendChild(el);
+    const dx = tx - sx;
+    const dy = ty - sy;
+    // Сначала подскок вверх и чуть в сторону, потом разгон к цели.
+    const side = (Math.random() - 0.5) * Math.min(90, Math.abs(dy) * 0.3 + 30);
+    const anim = el.animate?.(
+      [
+        { transform: 'translate(0px,0px) scale(1)', opacity: 1 },
+        { transform: `translate(${dx * 0.18 + side}px,${dy * 0.18 - 36}px) scale(1.18)`, opacity: 1, offset: 0.32 },
+        { transform: `translate(${dx}px,${dy}px) scale(.4)`, opacity: 0.85 },
+      ],
+      { duration: FLY_MS, delay, easing: 'cubic-bezier(.45,0,.75,.9)', fill: 'backwards' },
+    );
+    if (!anim) {
+      el.remove();
+      done?.();
+      return;
+    }
+    anim.onfinish = () => {
+      el.remove();
+      done?.();
+    };
+  };
+
+  // Где на экране центр клетки доски и какой она величины.
+  const boardGeom = () => {
+    const root = playRef.current?.getBoundingClientRect();
+    const br = wrap.current?.querySelector('.m3-board')?.getBoundingClientRect();
+    if (!root || !br) return null;
+    const cw = br.width / shown.w;
+    return { root, cw, at: (p: Pos) => ({ x: br.left - root.left + (p.x + 0.5) * cw, y: br.top - root.top + (p.y + 0.5) * cw }) };
+  };
+  const centerOf = (el: Element | null | undefined, root: DOMRect, left = false) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left - root.left + (left ? Math.min(r.width / 2, 10) : r.width / 2), y: r.top - root.top + r.height / 2 };
+  };
+
+  /** Убранные самоцветы летят к целям: мечи — в чудище, сердца — в здоровье, ресурсы — в добычу. */
+  const flyGems = (cleared: ClearedGem[]) => {
+    const g = boardGeom();
+    if (!g || reduceMotion()) return;
+    const list = cleared.filter((c) => c.special !== 'rainbow' && (!!m || (c.kind !== 'sword' && c.kind !== 'heart')));
+    const max = lite ? 4 : 14;
+    const step = Math.max(1, list.length / max);
+    const pick: ClearedGem[] = [];
+    for (let i = 0; i < list.length && pick.length < max; i += step) pick.push(list[Math.floor(i)]);
+    pick.forEach((c, i) => {
+      const target = c.kind === 'sword' ? foeRef.current : c.kind === 'heart' ? heroBarRef.current : lootRef.current?.querySelector(`[data-res="${c.kind}"]`);
+      const to = centerOf(target, g.root, c.kind !== 'sword' && c.kind !== 'heart');
+      if (!to) return;
+      const from = g.at(c);
+      launch(from.x, from.y, to.x, to.y, g.cw * 0.72, `<svg viewBox="0 0 48 48" width="100%" height="100%"><use href="#m3s-${c.kind}"/></svg>`, c.kind, i * 22, () => bump(target, c.kind === 'heart' ? 'scaleY(1.45)' : 'scale(1.2)'));
+    });
+  };
+
+  /** Одна волна: вспышки, молнии, звуки, полёт самоцветов, падение. */
+  const animateStep = async (s: Step, damage: number, share: number) => {
+    const fx: Effect[] = s.cleared.map((c) => ({ key: fxKey++, type: 'pop' as const, x: c.x, y: c.y, kind: c.kind, special: c.special }));
+    let line = false;
+    let bomb = false;
+    let prism = false;
+    const mega = s.blasts.some((bl) => bl.kind === 'bigbomb' || bl.kind === 'all') || s.blasts.some((a) => a.kind === 'row' && s.blasts.some((b) => b.kind === 'col' && b.x === a.x && b.y === a.y));
+    for (const bl of s.blasts) {
+      if (bl.kind === 'row' || bl.kind === 'col') {
+        fx.push({ key: fxKey++, type: bl.kind, x: bl.x, y: bl.y });
+        line = true;
+      } else if (bl.kind === 'bomb' || bl.kind === 'bigbomb') {
+        const r = bl.kind === 'bomb' ? 1 : 2;
+        fx.push({ key: fxKey++, type: 'bomb', x: bl.x, y: bl.y, r }, { key: fxKey++, type: 'debris', x: bl.x, y: bl.y, r });
+        bomb = true;
+      } else {
+        fx.push({ key: fxKey++, type: 'flash', x: bl.x, y: bl.y, kind: bl.target });
+        const to = s.cleared.filter((c) => (bl.kind === 'all' || c.kind === bl.target) && (c.x !== bl.x || c.y !== bl.y)).slice(0, 24);
+        if (to.length) fx.push({ key: fxKey++, type: 'chain', x: bl.x, y: bl.y, to, kind: bl.target });
+        prism = true;
+      }
+    }
+    if (mega) {
+      const at = s.blasts[0];
+      fx.push({ key: fxKey++, type: 'mega', x: at.x, y: at.y });
+    }
+    for (const h of s.blocksHit) fx.push({ key: fxKey++, type: 'break', x: h.x, y: h.y, block: h.kind });
+    for (const h of s.iceHit) fx.push({ key: fxKey++, type: 'break', x: h.x, y: h.y, block: 'ice' });
+    if (mega) fx.push({ key: fxKey++, type: 'combo', text: 'Сокрушительно!', big: true });
+    // Номер волны показывает счётчик ×N у доски, надпись — только похвала.
+    else if (s.combo >= 2) fx.push({ key: fxKey++, type: 'combo', text: s.combo >= 5 ? 'Невероятно!' : s.combo >= 3 ? 'Супер!' : 'Комбо!', big: s.combo >= 3 });
+    else if (s.longest >= 5) fx.push({ key: fxKey++, type: 'combo', text: 'Радуга!', big: true });
+    addFx(fx);
+    if (s.combo >= 2) setCombo(s.combo);
+    for (const c of s.created) born.current.add(c.gem.id);
+    setShown(s.mid);
+    if (bomb || prism || mega) setFlash((n) => n + 1);
+    if (mega) shake(playRef.current, 9, 520);
+    else if (bomb) shake(wrap.current, 6);
+    else if (line) shake(wrap.current, 2.5, 220);
+
+    // Звуки: у каждого самоцвета свой, с каждой волной выше.
+    const kinds = new Set(s.cleared.filter((c) => c.special !== 'rainbow').map((c) => c.kind));
+    kinds.forEach((k) => sfx(`gem-${k}` as GemSfx, s.combo));
+    if (line) sfx('zap');
+    if (bomb || mega) sfx('boom');
+    if (prism) sfx('prism');
+    if (s.combo >= 2) sfx('combo');
+    haptic(mega || bomb ? 'heavy' : s.combo >= 2 || line ? 'medium' : 'light');
+
+    flyGems(s.cleared);
+    const got = stepLoot(f.id, s, share);
+    later(FLY_MS, () => {
+      setLootShown((l) => addLoot(l, got));
+      sfx('thud', s.combo);
+    });
+    if (damage > 0) {
+      later(FLY_MS * 0.8, () => {
+        hpRef.current = Math.max(0, hpRef.current - damage);
+        setMonsterHp(hpRef.current);
+        setHitMonster((n) => n + 1);
+        addFloat(`−${damage}`, s.combo >= 2 || s.blasts.length ? 'dmg crit' : 'dmg');
+        sfx('hurt');
+      });
+    }
+    await pause(lite ? 170 : 210);
+    if (!alive.current) return;
+    for (const sp of s.spawned) drops.current.set(sp.id, sp.drop);
+    // Упавшие пружинят: у самоцвета класс чередуется, чтобы анимация началась заново, а у
+    // остальных не меняется — их анимация не повторяется.
+    for (const fl of s.falls) {
+      drops.current.delete(fl.id);
+      landed.current.set(fl.id, landed.current.get(fl.id) === 'm3-land-a' ? 'm3-land-b' : 'm3-land-a');
+    }
+    setShown(s.after);
+    await pause(lite ? 220 : 260);
+  };
+
+  /** Финальный салют: оставшиеся ходы улетают на доску лучами, и всё взрывается. */
+  const playFinale = async (won: Run, fin: NonNullable<ReturnType<typeof finaleRun>>) => {
+    setFinale(true);
+    skipRef.current = false;
+    addFx([{ key: fxKey++, type: 'combo', text: 'Финальный салют!', big: true }]);
+    sfx('levelup');
+    setMovesView(won.moves);
+    await pause(750);
+    let b = cloneBoard(won.board);
+    let left = won.moves;
+    for (let k = 0; k < fin.finale.marked.length && !skipRef.current; k++) {
+      const mk = fin.finale.marked[k];
+      left -= 1;
+      setMovesView(left);
+      const g = boardGeom();
+      const from = g && centerOf(movesRef.current, g.root);
+      if (g && from && !reduceMotion()) {
+        const to = g.at(mk);
+        launch(from.x, from.y, to.x, to.y, g.cw * 0.5, '', 'star', 0);
+      }
+      sfx('spark', k + 1);
+      await pause(lite ? 220 : FLY_MS);
+      if (!alive.current) return;
+      b = cloneBoard(b);
+      b.cells[idx(b, mk.x, mk.y)].gem = mk.gem;
+      born.current.add(mk.gem.id);
+      setShown(b);
+      addFx([{ key: fxKey++, type: 'flash', x: mk.x, y: mk.y, kind: mk.gem.kind }]);
+      await pause(lite ? 40 : 90);
+    }
+    setMovesView(won.moves - fin.finale.marked.length);
+    setShown(fin.finale.start);
+    await pause(350);
+    for (const s of fin.finale.result.steps) {
+      if (skipRef.current || !alive.current) break;
+      await animateStep(s, 0, FINALE_SHARE);
+    }
+    if (!alive.current) return;
+    setShown(fin.run.board);
+    await wait(FLY_MS);
+    setLootShown(fin.run.loot);
+    setCombo(0);
   };
 
   const swap = async (a: Pos, b: Pos) => {
@@ -714,45 +957,10 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
     }
     // Ход в сохранение до анимации: закроют приложение посреди каскада — ход не пропадёт.
     onMove(o.run);
-    let hp = run.monsterHp;
+    hpRef.current = run.monsterHp;
     for (let i = 0; i < o.result.steps.length; i++) {
       const s = o.result.steps[i];
-      const fx: Effect[] = s.cleared.map((c) => ({ key: fxKey++, type: 'pop' as const, x: c.x, y: c.y, kind: c.kind, special: c.special }));
-      if (s.blasts.some((bl) => bl.kind !== 'row' && bl.kind !== 'col')) setFlash((n) => n + 1);
-      for (const bl of s.blasts) {
-        if (bl.kind === 'row' || bl.kind === 'col') fx.push({ key: fxKey++, type: bl.kind, x: bl.x, y: bl.y });
-        else if (bl.kind === 'bomb' || bl.kind === 'bigbomb') fx.push({ key: fxKey++, type: 'bomb', x: bl.x, y: bl.y, r: bl.kind === 'bomb' ? 1 : 2 });
-        else fx.push({ key: fxKey++, type: 'flash', x: bl.x, y: bl.y, kind: bl.target });
-      }
-      for (const h of s.blocksHit) fx.push({ key: fxKey++, type: 'break', x: h.x, y: h.y, block: h.kind });
-      for (const h of s.iceHit) fx.push({ key: fxKey++, type: 'break', x: h.x, y: h.y, block: 'ice' });
-      if (s.combo >= 2) fx.push({ key: fxKey++, type: 'combo', text: s.combo >= 5 ? `Невероятно! ×${s.combo}` : s.combo >= 3 ? `Супер! ×${s.combo}` : `Комбо ×${s.combo}`, big: s.combo >= 3 });
-      else if (s.longest >= 5) fx.push({ key: fxKey++, type: 'combo', text: 'Радуга!', big: true });
-      addFx(fx);
-      for (const c of s.created) born.current.add(c.gem.id);
-      setShown(s.mid);
-      if (s.blasts.length) {
-        sfx('ko');
-        haptic('heavy');
-      } else if (s.combo >= 2) {
-        sfx('combo');
-        haptic('medium');
-      } else {
-        sfx('hit');
-        haptic('light');
-      }
-      if (o.damage[i] > 0) {
-        hp = Math.max(0, hp - o.damage[i]);
-        setMonsterHp(hp);
-        setHitMonster((n) => n + 1);
-        addFloat(`−${o.damage[i]}`, s.combo >= 2 || s.blasts.length ? 'dmg crit' : 'dmg');
-        setTimeout(() => sfx('hurt'), 80);
-      }
-      await wait(lite ? 170 : 210);
-      if (!alive.current) return;
-      for (const sp of s.spawned) drops.current.set(sp.id, sp.drop);
-      setShown(s.after);
-      await wait(lite ? 220 : 260);
+      await animateStep(s, o.damage[i], comboMult(s.combo));
       if (!alive.current) return;
     }
     if (o.result.reshuffled) {
@@ -760,22 +968,49 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
       await wait(500);
       setShown(o.run.board);
     }
+    // Самоцветы долетают: добыча на экране ровно как в партии.
+    later(FLY_MS, () => setLootShown(o.run.loot));
+    setCombo(0);
     if (o.healed > 0) addFloat(`+${o.healed}`, 'heal');
     if (o.hit > 0) {
-      await wait(120);
+      // Чудище замахивается, бросается на доску, по экрану проходят когти.
+      await wait(160);
+      setAttack((n) => n + 1);
+      await wait(lite ? 180 : 300);
+      if (!alive.current) return;
+      setClaw((n) => n + 1);
       setHurt((n) => n + 1);
-      // Тряска доски без перерисовки самоцветов.
-      wrap.current?.animate?.([{ transform: 'translate(0,0)' }, { transform: 'translate(-6px,2px)' }, { transform: 'translate(5px,-2px)' }, { transform: 'translate(-3px,1px)' }, { transform: 'translate(0,0)' }], { duration: 380, easing: 'ease-out' });
+      shake(playRef.current, 8, 420);
       addFloat(`−${o.hit}`, 'hurt');
-      sfx('ouch');
+      sfx('claw');
       haptic('heavy');
+      await wait(250);
     }
-    setRun(o.run);
-    setShown(o.run.board);
-    setMonsterHp(o.run.monsterHp);
-    if (o.run.status !== 'play') {
-      await wait(o.run.status === 'won' ? 700 : 900);
-      if (alive.current) onFinish(o.run);
+    let final = o.run;
+    if (o.run.status === 'won') {
+      if (fights && o.run.monsterHp <= 0) {
+        // Чудище повержено: вспыхивает и рассыпается искрами.
+        await wait(FLY_MS);
+        setMonsterHp(0);
+        setDead(true);
+        sfx('shatter');
+        haptic('heavy');
+        await wait(900);
+      }
+      const fin = finaleRun(o.run);
+      if (fin && alive.current) {
+        onMove(fin.run);
+        final = fin.run;
+        await playFinale(o.run, fin);
+      }
+    }
+    if (!alive.current) return;
+    setRun(final);
+    setShown(final.board);
+    setMonsterHp(final.monsterHp);
+    if (final.status !== 'play') {
+      await wait(final.status === 'won' ? 700 : 900);
+      if (alive.current) onFinish(final);
       return;
     }
     busyRef.current = false;
@@ -792,13 +1027,18 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
     }
   };
 
-  const m = f.monster;
   const left = goalLeft(run);
-  const telegraph = !!m && run.monsterHp > 0 && run.attackIn === 1;
+  const telegraph = !!m && run.monsterHp > 0 && run.attackIn === 1 && !dead;
+  // Чудище при смерти злится и дрожит.
+  const weak = fights && !dead && monsterHp > 0 && monsterHp / run.monsterMax < 0.3;
+  const heat = Math.min(1, Math.max(0, (combo - 1) / 4));
+  const moves = movesView ?? run.moves;
+  const shards = lite ? 6 : 14;
   return (
-    <div className={`m3-play m3-th-${L.theme} ${f.boss ? 'boss' : ''}`} style={{ ['--la' as string]: L.accent, ['--lb' as string]: L.bg }}>
+    <div ref={playRef} className={`m3-play m3-th-${L.theme} ${f.boss ? 'boss' : ''}`} style={{ ['--la' as string]: L.accent, ['--lb' as string]: L.bg }}>
       <Backdrop theme={L.theme} lite={lite} />
       {flash > 0 && !lite && <div key={flash} className="m3-screenflash" aria-hidden="true" />}
+      {hurt > 0 && <div key={`h${hurt}`} className="m3-hurtflash" aria-hidden="true" />}
       <div className="m3-top">
         <button className="pill btn icon-only" onClick={() => setQuit(true)} aria-label="Выйти">
           ×
@@ -815,8 +1055,8 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
 
       <div ref={hudRef} className="m3-hud">
         <div className="m3-hud-main">
-          <div className="m3-foe-name">{m && (f.goal === 'monster' || f.goal === 'survive') ? m.name : goalText(f)}</div>
-          {m && (f.goal === 'monster' || f.goal === 'survive') ? (
+          <div className="m3-foe-name">{fights ? m!.name : goalText(f)}</div>
+          {fights ? (
             <div className="m3-bar foe">
               <span style={{ width: `${(monsterHp / run.monsterMax) * 100}%` }} />
               <em>{monsterHp}</em>
@@ -830,7 +1070,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
             </div>
           )}
           {m && (
-            <div key={hurt} className={`m3-bar hero ${hurt ? 'hurt' : ''}`}>
+            <div ref={heroBarRef} key={hurt} className={`m3-bar hero ${hurt ? 'hurt' : ''}`}>
               <span style={{ width: `${(run.heroHp / run.heroMax) * 100}%` }} />
               <em>
                 <Heart size={11} /> {run.heroHp}
@@ -843,25 +1083,37 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
             </div>
           )}
         </div>
-        <div className={`m3-moves ${run.moves <= 3 ? 'low' : ''}`}>
-          <b>{f.goal === 'survive' ? left : run.moves}</b>
+        <div ref={movesRef} className={`m3-moves ${moves <= 3 && !finale ? 'low' : ''} ${finale ? 'finale' : ''}`}>
+          <b>{f.goal === 'survive' ? left : moves}</b>
           <span>{f.goal === 'survive' ? 'продержись' : 'ходов'}</span>
         </div>
       </div>
 
       <div className="m3-stage">
-        <div className={`m3-foe ${telegraph ? 'telegraph' : ''}`}>
-          <div key={hitMonster} className={`m3-foe-face ${hitMonster ? 'hit' : ''}`}>
-            {m ? <MonsterFace shape={m.shape} color={m.color} boss={f.boss} size={f.boss ? 132 : 112} angry={telegraph} /> : <GoalBadge f={f} size={96} />}
-            {hitMonster > 0 && <span className="m3-foe-flash" aria-hidden="true" />}
+        <div ref={foeRef} className={`m3-foe ${telegraph ? 'telegraph' : ''} ${dead ? 'dead' : ''}`}>
+          <div key={`a${attack}`} className={`m3-foe-body ${attack ? 'lunge' : ''}`}>
+            <div key={hitMonster} className={`m3-foe-face ${hitMonster ? 'hit' : ''} ${weak ? 'weak' : ''}`}>
+              <div className={lite ? '' : 'm3-foe-idle'}>
+                {m ? <MonsterFace shape={m.shape} color={m.color} boss={f.boss} size={f.boss ? 132 : 112} angry={telegraph || weak} /> : <GoalBadge f={f} size={96} />}
+              </div>
+              {hitMonster > 0 && <span className="m3-foe-flash" aria-hidden="true" />}
+              {hitMonster > 0 && !lite && <span className="m3-impact" aria-hidden="true" />}
+            </div>
           </div>
+          {dead && (
+            <div className="m3-shatter" aria-hidden="true" style={{ ['--gc' as string]: m?.color ?? '#fff' }}>
+              {Array.from({ length: shards }, (_, i) => (
+                <i key={i} style={{ ['--a' as string]: `${(i * 360) / shards + (i % 3) * 9}deg`, ['--l' as string]: `${60 + (i % 4) * 18}px` }} />
+              ))}
+            </div>
+          )}
           {floats.filter((x) => x.cls.startsWith('dmg')).map((x) => (
             <span key={x.key} className={`m3-float ${x.cls}`} style={{ ['--dx' as string]: `${x.dx}px` }}>
               {x.text}
             </span>
           ))}
         </div>
-        {m && run.monsterHp > 0 && (
+        {m && run.monsterHp > 0 && !dead && (
           <span className={`m3-attack ${telegraph ? 'soon' : ''}`}>
             <Swords size={13} /> {telegraph ? 'Сейчас ударит!' : `Удар через ${run.attackIn} ${plural(run.attackIn, 'ход', 'хода', 'ходов')} · −${m.atk}`}
           </span>
@@ -869,16 +1121,36 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
       </div>
 
       <div ref={wrap} className="m3-board-wrap">
-        <div className={`m3-frame ${frameOf(L.theme)}`}>
-          <BoardView board={shown} drops={drops.current} born={born.current} effects={effects} selected={selected} hint={hintPair} disabled={busy || intro || howto || run.status !== 'play'} lite={lite} onTap={tap} onSwipe={(a, b) => void swap(a, b)} />
+        <div className={`m3-frame ${frameOf(L.theme)} ${heat > 0 ? 'hot' : ''}`} style={{ ['--heat' as string]: heat }}>
+          <BoardView board={shown} drops={drops.current} born={born.current} landed={landed.current} effects={effects} selected={selected} hint={hintPair} disabled={busy || intro || howto || run.status !== 'play'} lite={lite} onTap={tap} onSwipe={(a, b) => void swap(a, b)} />
         </div>
         {telegraph && <div className="m3-warn" />}
+        {combo >= 2 && (
+          <div key={combo} className={`m3-meter ${combo >= 4 ? 'hot' : ''}`} aria-hidden="true">
+            ×{combo}
+          </div>
+        )}
+        {claw > 0 && (
+          <div key={claw} className="m3-claws" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+        )}
       </div>
 
       <div ref={lootRef} className="m3-bottom">
         <span className="m3-res-label">Добыча</span>
-        <ResRow res={{ wood: Math.round(run.loot.wood), stone: Math.round(run.loot.stone), gold: Math.round(run.loot.gold) }} />
+        <ResRow res={{ wood: Math.round(lootShown.wood), stone: Math.round(lootShown.stone), gold: Math.round(lootShown.gold) }} />
       </div>
+
+      <div ref={flyRef} className="m3-fly" aria-hidden="true" />
+
+      {finale && busy && (
+        <button className="m3-finale-skip" onClick={() => (skipRef.current = true)}>
+          нажми, чтобы пропустить
+        </button>
+      )}
 
       {intro && m && (
         <div className="m3-boss-intro" onClick={() => setIntro(false)}>

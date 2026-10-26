@@ -37,7 +37,7 @@ import { RESOURCES, addResources, spendCharge, villageOf, type Resource, type Re
 import type { Progress } from '../progress';
 import { dayKey } from '../progress';
 import { landDef, seededRng, type MonsterShape } from './lands';
-import { createBoard, GEM_KINDS, type Board, type BlockKind, type Cell, type Counts, type GemKind, type Pos, type Special, type SwapResult, trySwap } from './engine';
+import { createBoard, GEM_KINDS, type Board, type BlockKind, type Cell, type Counts, finale, type Finale, type GemKind, type Pos, type Special, type SwapResult, trySwap } from './engine';
 
 export const FLOOR_COST = 20;
 export const LAND_COUNT = 10;
@@ -359,6 +359,26 @@ export function playMove(run: Run, a: Pos, b: Pos): MoveOutcome | null {
     else if (next.moves <= 0) next.status = f.goal === 'survive' ? 'won' : 'lost';
   }
   return { run: next, result, damage, healed, hit };
+}
+
+// Финальный салют: сколько оставшихся ходов превращаются в лучи и какая доля добычи с них идёт.
+export const FINALE_MAX = 8;
+export const FINALE_SHARE = 0.5;
+
+/**
+ * Салют после победы: оставшиеся ходы (не больше FINALE_MAX) становятся лучами и взрываются,
+ * добыча с них — вполовину. Ходы не тратятся, звёзды те же. null — салюта нет.
+ */
+export function finaleRun(run: Run): { run: Run; finale: Finale; bonus: Resources } | null {
+  if (run.status !== 'won' || run.moves <= 0 || run.floor.goal === 'survive') return null;
+  const fin = finale(run.board, Math.min(FINALE_MAX, run.moves));
+  if (!fin) return null;
+  const mult = floorMult(run.floor.id);
+  const bonus: Resources = { wood: 0, stone: 0, gold: 0 };
+  for (const r of RESOURCES) bonus[r] = fin.result.counts[r] * GEM_YIELD[r] * mult * FINALE_SHARE;
+  const loot = { ...run.loot };
+  for (const r of RESOURCES) loot[r] += bonus[r];
+  return { run: { ...run, board: fin.result.board, loot }, finale: fin, bonus };
 }
 
 /** Звёзды: по оставшимся ходам, в выживании — по здоровью героя. */
