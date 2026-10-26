@@ -9,6 +9,8 @@ import type { ModerationStore } from './moderation';
 import type { Report, ReportStore } from './reports';
 
 export interface ModerationDeps {
+  /** Аккаунт входа tg:123 (server/accounts.ts): привязанный вход ведёт в аккаунт с другим id. */
+  account?: (login: string) => string;
   mod: ModerationStore;
   reports: ReportStore;
   isAdmin: (id: string) => boolean;
@@ -101,7 +103,7 @@ export function adminCommand(d: ModerationDeps, chatId: number, text: string): s
   const by = `tg:${chatId}`;
   const mute = /^\/mute[_\s]+(\d{1,20})[_\s]+(1h|1d|24h|7d|forever)\b/.exec(t);
   if (mute) {
-    const id = `tg:${mute[1]}`;
+    const id = d.account?.(`tg:${mute[1]}`) ?? `tg:${mute[1]}`;
     const until = d.mod.mute(id, MUTES[mute[2]], by);
     d.muted(id);
     const name = d.nameOf(id) ?? id;
@@ -109,7 +111,7 @@ export function adminCommand(d: ModerationDeps, chatId: number, text: string): s
   }
   const unmute = /^\/unmute[_\s]+(\d{1,20})\b/.exec(t);
   if (unmute) {
-    const id = `tg:${unmute[1]}`;
+    const id = d.account?.(`tg:${unmute[1]}`) ?? `tg:${unmute[1]}`;
     d.mod.mute(id, 0, by);
     d.muted(id);
     return `🔊 ${d.nameOf(id) ?? id} снова может писать в чат.`;

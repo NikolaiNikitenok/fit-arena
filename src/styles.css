@@ -371,6 +371,13 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .settings-note b { color: var(--text); }
 .tg-id-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .tg-id-row b { font-variant-numeric: tabular-nums; user-select: all; }
+.account-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
+.account-login { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.account-code { display: flex; flex-direction: column; gap: 4px; }
+.account-code b { font-size: 26px; letter-spacing: 6px; font-variant-numeric: tabular-nums; user-select: all; }
+.account-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.account-choice { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.account-choice .settings-note { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .danger-link { color: var(--rose); }
 .danger-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
 .danger-row span { flex: 1; min-width: 150px; }
