@@ -10,6 +10,7 @@ import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './Set
 import { BlackListRow } from './moderation/BlackList';
 import { Sheet } from './Sheet';
 import { AccountRow } from './account/Account';
+import { WebLoginRow } from './account/WebLogin';
 
 const TOGGLES: { key: { [K in keyof Settings]-?: Settings[K] extends boolean ? K : never }[keyof Settings]; title: string; text: string }[] = [
   { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
@@ -55,6 +56,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
       <div className="settings-note">
         <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
       </div>
+      <WebLoginRow />
       <AccountRow />
       <TelegramIdRow />
       <AdminStatsRow />

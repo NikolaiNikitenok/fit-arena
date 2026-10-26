@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { cloudState, onCloud, post, switchAccount } from '../cloud';
 import type { Progress } from '../game/progress';
 import { Sheet } from '../Sheet';
+import { WebLogoutButton } from './WebLogin';
 
 interface HeroCard {
   level: number;
@@ -13,11 +14,11 @@ interface HeroCard {
 interface Status {
   id: string;
   login: string;
-  logins: { login: string; platform: 'tg' | 'max' | null }[];
+  logins: { login: string; platform: 'tg' | 'max' | 'ya' | null }[];
   notify: 'tg' | 'max' | null;
 }
 
-const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max' };
+const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: 'Яндекс' };
 const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? 'Вход'} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
 const errText = (e: { body?: { error?: string } }) => e.body?.error ?? 'Не получилось связаться с сервером. Попробуй ещё раз.';
 
@@ -94,6 +95,7 @@ export function AccountRow() {
           <button className="small-btn ghost" onClick={() => setEnter(true)}>
             Ввести код
           </button>
+          <WebLogoutButton />
         </div>
         {error && <div className="muted">{error}</div>}
       </div>

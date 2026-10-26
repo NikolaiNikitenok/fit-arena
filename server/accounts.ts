@@ -12,9 +12,12 @@ export const ARCHIVE_DAYS = 30;
 // Без похожих букв и цифр (0/O, 1/I/L), чтобы код легко переписать с другого экрана.
 const CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-export type Platform = 'tg' | 'max';
-export const LOGIN_RE = /^(tg|max):\d{1,20}$/;
+// ya — вход в браузере через Яндекс ID: писать туда боту некуда.
+export type Platform = 'tg' | 'max' | 'ya';
+export type Messenger = 'tg' | 'max';
+export const LOGIN_RE = /^(tg|max|ya):\d{1,20}$/;
 export const platformOf = (login: string): Platform | null => (LOGIN_RE.test(login) ? (login.slice(0, login.indexOf(':')) as Platform) : null);
+const isMessenger = (p: Platform | null): p is Messenger => p === 'tg' || p === 'max';
 
 export interface Archived {
   account: string;
@@ -30,14 +33,14 @@ interface Data {
   // Аккаунт → последний вход: туда пишет бот.
   last: Record<string, string>;
   // Аккаунт → куда писать, если игрок выбрал сам (иначе — туда, где заходил последним).
-  notify?: Record<string, Platform>;
+  notify?: Record<string, Messenger>;
   archive: Archived[];
 }
 
 export class AccountStore {
   private links = new Map<string, string>();
   private last = new Map<string, string>();
-  private notifyPref = new Map<string, Platform>();
+  private notifyPref = new Map<string, Messenger>();
   private archive: Archived[] = [];
   private codes = new Map<string, { account: string; exp: number }>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -94,21 +97,21 @@ export class AccountStore {
   }
 
   /** Куда писать игроку: выбранный мессенджер, иначе где заходил последним, иначе любой привязанный. */
-  target(account: string): { platform: Platform; id: number } | null {
-    const logins = this.logins(account);
-    const pick = (p?: Platform) => (p ? logins.find((l) => platformOf(l) === p) : undefined);
+  target(account: string): { platform: Messenger; id: number } | null {
+    const logins = this.logins(account).filter((l) => isMessenger(platformOf(l)));
+    const pick = (p?: Messenger) => (p ? logins.find((l) => platformOf(l) === p) : undefined);
     const last = this.last.get(account);
     const l = pick(this.notifyPref.get(account)) ?? (last && logins.includes(last) ? last : undefined) ?? logins[0];
     if (!l) return null;
-    return { platform: platformOf(l)!, id: Number(l.slice(l.indexOf(':') + 1)) };
+    return { platform: platformOf(l) as Messenger, id: Number(l.slice(l.indexOf(':') + 1)) };
   }
 
-  notifyChoice(account: string): Platform | null {
+  notifyChoice(account: string): Messenger | null {
     return this.notifyPref.get(account) ?? null;
   }
 
   /** Выбор в настройках: null — туда, где заходил последним. */
-  setNotify(account: string, p: Platform | null): void {
+  setNotify(account: string, p: Messenger | null): void {
     if (p) this.notifyPref.set(account, p);
     else this.notifyPref.delete(account);
     this.save();

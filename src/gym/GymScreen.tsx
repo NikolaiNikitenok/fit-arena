@@ -6,7 +6,7 @@ import { Remark } from '../game/Dialog';
 import type { Line } from '../game/levels';
 import { NPCS } from '../game/npcs';
 import { dayKey, type Progress } from '../game/progress';
-import { hapticRep, tg } from '../telegram';
+import { hapticRep, platform } from '../telegram';
 import { customId, GYM_EXERCISES, gymExercise, type Muscle, MUSCLES, searchGym } from './catalog';
 import {
   bestOf,
@@ -111,7 +111,7 @@ export function GymScreen({ progress, update, onClose }: Props) {
             )}
           />
         )}
-        {view.fresh && tg?.initData && <div className="muted gym-note">Отметка «тренировка сделана» ушла в NikitenokFamily, раздел «Спорт».</div>}
+        {view.fresh && platform === 'tg' && <div className="muted gym-note">Отметка «тренировка сделана» ушла в NikitenokFamily, раздел «Спорт».</div>}
         <button className="primary" onClick={() => setView({ kind: 'home' })}>
           Готово
         </button>
