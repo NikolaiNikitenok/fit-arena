@@ -1,4 +1,5 @@
-// Слайды карусели из carousel.json: slide_01.jpg … 1080×1350 (4:5 — самый большой формат ленты Instagram). Нужен playwright.
+// Слайды карусели из carousel.json: slide_01.jpg … 1080×1350 (4:5 — самый большой формат ленты Instagram),
+// а для kind=story — три сторис 1080×1920. Нужен playwright.
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 
@@ -35,11 +36,13 @@ const fonts = [700, 800, 900]
 @font-face{font-family:N;font-weight:${w};src:url(data:font/woff2;base64,${font(`nunito-latin-${w}-normal.woff2`)})}`,
   )
   .join("\n");
+const story = c.kind === "story";
+const H = story ? 1920 : 1350;
 const accent = c.kind === "tips" ? (NPC_COLORS[c.npc] ?? "#ff8a5c") : "#ff8a5c";
 const css = `${fonts}
 *{box-sizing:border-box}
-html,body{margin:0;width:1080px;height:1350px;overflow:hidden;background:#0d0f17;font-family:N;color:#f5f2ec}
-.s{position:relative;width:1080px;height:1350px;padding:84px 80px 0;
+html,body{margin:0;width:1080px;height:${H}px;overflow:hidden;background:#0d0f17;font-family:N;color:#f5f2ec}
+.s{position:relative;width:1080px;height:${H}px;padding:84px 80px 0;
   background:radial-gradient(ellipse 80% 55% at 85% 0%,rgba(255,138,92,.22),transparent 70%),radial-gradient(ellipse 70% 50% at 0% 100%,rgba(90,110,255,.16),transparent 70%),#0d0f17}
 .brand{position:absolute;left:80px;top:56px;display:flex;align-items:center;gap:16px;font:800 30px N;color:#c9cfdc;letter-spacing:.5px}
 .brand img{width:52px;height:52px;border-radius:14px}
@@ -48,6 +51,16 @@ html,body{margin:0;width:1080px;height:1350px;overflow:hidden;background:#0d0f17
 .dots{display:flex;gap:10px}.dots i{width:14px;height:14px;border-radius:7px;background:rgba(255,255,255,.18)}.dots i.on{width:44px;background:linear-gradient(90deg,#ffb46b,#ff7a59)}
 .swipe{font:800 30px N;color:#ffb37a}
 .acc{background:linear-gradient(135deg,#ffb46b,#ff7a59);-webkit-background-clip:text;background-clip:text;color:transparent}
+.st{padding:0 80px}
+.st .brand{top:250px}
+.st .label{position:absolute;left:80px;top:360px;padding:16px 30px;border-radius:999px;background:linear-gradient(135deg,#ffb46b,#ff7a59);font:900 40px N;color:#2b1206;text-transform:uppercase;letter-spacing:1px}
+.st .tx{position:absolute;left:80px;right:80px;top:480px}
+.st .t1{font:900 108px/1.04 N;letter-spacing:-1px}
+.st .t2{font:900 124px/1.04 N;letter-spacing:-1px;padding-bottom:10px}
+.st p{font:700 50px/1.32 N;color:#d3d8e4;margin:30px 0 0}
+.st .npc{width:600px;height:600px;right:20px;bottom:330px}
+.st .who{bottom:380px}
+.st .shotbox{bottom:330px}
 .cover .t1{font:900 112px/1.02 N;margin-top:150px;letter-spacing:-1px}
 .cover .t2{font:900 128px/1.02 N;margin-top:8px;letter-spacing:-1px;padding-bottom:10px}
 .cover .sub{display:inline-block;margin-top:44px;padding:18px 32px;border-radius:999px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.1);font:800 36px N;color:#ffd7b8}
@@ -77,7 +90,8 @@ html,body{margin:0;width:1080px;height:1350px;overflow:hidden;background:#0d0f17
 .btn{display:inline-flex;align-items:center;gap:16px;margin-top:50px;padding:28px 44px;border-radius:999px;background:linear-gradient(135deg,#ffb46b,#ff7a59);font:900 40px N;color:#2b1206;box-shadow:0 20px 50px rgba(255,122,89,.35)}
 `;
 
-const total = c.slides.length;
+const pages = story ? c.stories : c.slides;
+const total = pages.length;
 const head = (i) =>
   `<div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div><div class="page">${i + 1}/${total}</div>`;
 const foot = (i) =>
@@ -134,7 +148,22 @@ function shotHtml(id) {
   return `<div class="shotbox"><div class="frame"><img src="${shot(id)}"></div></div>`;
 }
 
+/** Сторис: плашка формата, крупный текст, свободное место под стикер, персонаж или скриншот внизу. */
+function storyHtml(s) {
+  const face = s.format === "app" ? "" : img(`public/portraits/${s.npc}.png`);
+  const color = NPC_COLORS[s.npc] ?? "#ff8a5c";
+  return `<div class="s st"><div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div>
+    <div class="label">${esc(s.label)}</div>
+    <div class="tx"><div class="t1">${esc(s.top)}</div><div class="t2 acc">${esc(s.accent)}</div>${s.text ? `<p>${esc(s.text)}</p>` : ""}</div>
+    ${
+      s.format === "app"
+        ? shotHtml(s.shot)
+        : `<div class="npc"><div class="glow" style="background:radial-gradient(circle,${color}55,transparent 68%)"></div><img src="${face}"></div><div class="who"><b style="color:${color}">${esc(NPC_NAMES[s.npc] ?? "")}</b></div>`
+    }</div>`;
+}
+
 function slide(s, i) {
+  if (story) return storyHtml(s);
   if (s.type === "cover")
     return `<div class="s cover ${c.kind}">${head(i)}<div class="t1">${esc(s.top)}</div><div class="t2 acc">${esc(s.accent)}</div>${s.sub ? `<div class="sub">${esc(s.sub)}</div>` : ""}
       ${c.kind === "tips" ? `<div class="npc"><div class="glow"></div><img src="${npcImg}"></div><div class="who">Советы: <b>${esc(npcName)}</b></div>` : fan()}${foot(i)}</div>`;
@@ -148,13 +177,15 @@ function slide(s, i) {
     <div class="npc side"><div class="glow"></div><img src="${npcImg}"></div><div class="who">Совет: <b>${esc(npcName)}</b></div>${foot(i)}</div>`;
 }
 
-const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
-const p = await b.newPage({ viewport: { width: 1080, height: 1350 } });
+const b = await chromium.launch(
+  process.env.CHROME ? { executablePath: process.env.CHROME } : {},
+);
+const p = await b.newPage({ viewport: { width: 1080, height: H } });
 for (let i = 0; i < total; i++) {
   await p.setContent(
-    `<html><head><style>${css}</style></head><body>${slide(c.slides[i], i)}</body></html>`,
+    `<html><head><style>${css}</style></head><body>${slide(pages[i], i)}</body></html>`,
   );
-  await p.evaluate(async () => {
+  await p.evaluate(async (H) => {
     await document.fonts.ready;
     await Promise.all(
       [...document.images].map((im) => im.decode().catch(() => null)),
@@ -163,10 +194,11 @@ for (let i = 0; i < total; i++) {
     for (const box of document.querySelectorAll(".shotbox")) {
       const im = box.querySelector("img");
       const text = [...box.parentElement.children]
-        .filter((e) => e.matches("h2,p,.btn,.t1,.t2,.sub"))
+        .filter((e) => e.matches("h2,p,.btn,.t1,.t2,.sub,.tx"))
         .at(-1);
       const top = text ? text.getBoundingClientRect().bottom + 50 : 300;
-      const room = 1350 - 130 - top;
+      const bottom = parseFloat(getComputedStyle(box).bottom);
+      const room = Math.min(H - bottom - top, H > 1500 ? 860 : 9999); // в сторис над скриншотом остаётся место под стикер
       const w = 920;
       const tall = im.naturalHeight > im.naturalWidth * 1.1;
       if (tall) {
@@ -179,9 +211,9 @@ for (let i = 0; i < total; i++) {
         im.style.height = `${im.naturalHeight * k}px`;
       }
     }
-  });
+  }, H);
   await p.screenshot({
-    path: `slide_${String(i + 1).padStart(2, "0")}.jpg`,
+    path: `${story ? "story" : "slide"}_${String(i + 1).padStart(2, "0")}.jpg`,
     type: "jpeg",
     quality: 95,
   });
