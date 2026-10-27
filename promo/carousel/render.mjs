@@ -61,6 +61,7 @@ html,body{margin:0;width:1080px;height:${H}px;overflow:hidden;background:#0d0f17
 .st .npc{width:600px;height:600px;right:20px;bottom:330px}
 .st .who{bottom:380px}
 .st .shotbox{bottom:330px}
+.st.cat .shotbox{bottom:90px}
 .cover .t1{font:900 112px/1.02 N;margin-top:150px;letter-spacing:-1px}
 .cover .t2{font:900 128px/1.02 N;margin-top:8px;letter-spacing:-1px;padding-bottom:10px}
 .cover .sub{display:inline-block;margin-top:44px;padding:18px 32px;border-radius:999px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.1);font:800 36px N;color:#ffd7b8}
@@ -152,7 +153,7 @@ function shotHtml(id) {
 function storyHtml(s) {
   const face = s.format === "app" ? "" : img(`public/portraits/${s.npc}.png`);
   const color = NPC_COLORS[s.npc] ?? "#ff8a5c";
-  return `<div class="s st"><div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div>
+  return `<div class="s st${c.catalog ? " cat" : ""}"><div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div>
     <div class="label">${esc(s.label)}</div>
     <div class="tx"><div class="t1">${esc(s.top)}</div><div class="t2 acc">${esc(s.accent)}</div>${s.text ? `<p>${esc(s.text)}</p>` : ""}</div>
     ${
@@ -198,7 +199,7 @@ for (let i = 0; i < total; i++) {
         .at(-1);
       const top = text ? text.getBoundingClientRect().bottom + 50 : 300;
       const bottom = parseFloat(getComputedStyle(box).bottom);
-      const room = Math.min(H - bottom - top, H > 1500 ? 860 : 9999); // в сторис над скриншотом остаётся место под стикер
+      const room = Math.min(H - bottom - top, H > 1500 && !document.querySelector(".cat") ? 860 : 9999); // в сторис над скриншотом остаётся место под стикер
       const w = 920;
       const tall = im.naturalHeight > im.naturalWidth * 1.1;
       if (tall) {

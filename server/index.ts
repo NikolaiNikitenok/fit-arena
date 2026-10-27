@@ -475,9 +475,10 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '🖼 Карусель: советы': '/carousel tips',
   '🖼 Карусель: приложение': '/carousel app',
   '📱 Сторис': '/story',
+  '🎭 Рилс от персонажа': '/talk',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -485,10 +486,10 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin|reel\b|carousel\b|story\b)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
-  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, карусели и сторис для Instagram. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
+  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, карусели и сторис для Instagram. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}`), true;
@@ -1324,6 +1325,7 @@ const ADMIN_COMMANDS = [
   { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
   { command: 'carousel', description: 'Карусель для Instagram: /carousel tips|app [тема]' },
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
+  { command: 'talk', description: 'Рилс, где рассказывает персонаж игры: /talk [тема]' },
 ];
 const adminMenus = new Set<string>();
 if (BOT_TOKEN)
