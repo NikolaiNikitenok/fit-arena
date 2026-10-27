@@ -1,0 +1,29 @@
+name: Catalog images send (temporary)
+on:
+  push:
+    branches: [claude/project-thread-3wuybz]
+    paths: ['.github/workflows/catalog-send.yml']
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Send
+        run: |
+          cat > send.mjs <<'JS'
+          import { readFileSync } from 'node:fs';
+          const files = [1, 2, 3, 4, 5].map((i) => `tmp-catalog/catalog-0${i}.jpg`);
+          for (const type of ['photo', 'document']) {
+            const fd = new FormData();
+            fd.set('chat_id', '991020798');
+            fd.set('media', JSON.stringify(files.map((_, i) => ({ type, media: `attach://f${i}`, ...(i === 0 ? { caption: type === 'photo' ? '🗂 Картинки для каталогов мини-приложений и превью в BotFather (по порядку).' : 'Те же картинки файлами 1080×1920 без сжатия — их и загружай в каталоги.' } : {}) }))));
+            files.forEach((f, i) => fd.set(`f${i}`, new Blob([readFileSync(f)], { type: 'image/jpeg' }), `NikitenokArena-catalog-0${i + 1}.jpg`));
+            const r = await (await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMediaGroup`, { method: 'POST', body: fd })).json();
+            if (!r.ok) throw new Error(r.description);
+          }
+          JS
+          node send.mjs
