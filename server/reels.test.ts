@@ -129,3 +129,21 @@ describe("сторис", () => {
     expect(out.at(-1)).toMatch(/Сторис уже собираются/);
   });
 });
+
+describe("рилс от персонажа", () => {
+  it("запускает talk.yml со своим номером и называет ведущего", async () => {
+    const runs: [Record<string, string>, string][] = [];
+    const r = new Reels(null, {
+      token: () => "gh",
+      dispatch: async (_, i, w) => (runs.push([i, w]), { ok: true }),
+    });
+    const out: string[] = [];
+    r.command(7, "/reel", () => undefined);
+    expect(r.command(7, "/talk", (t) => out.push(t))).toBe(true);
+    await flush();
+    expect(runs[1]).toEqual([{ chat_id: "7", n: "1", topic: "" }, "talk.yml"]);
+    expect(out.at(-1)).toMatch(/№1: ведёт Князь Диван, тон мотивирующий/);
+    r.command(7, "/talk", (t) => out.push(t));
+    expect(out.at(-1)).toMatch(/Рилс от персонажа уже собирается/);
+  });
+});

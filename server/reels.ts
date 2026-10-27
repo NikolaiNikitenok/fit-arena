@@ -74,10 +74,35 @@ const JOBS = {
     what: "сторис",
     busy: "Сторис уже собираются.",
   },
+  talk: {
+    workflow: "talk.yml",
+    n: "tn",
+    at: "tlastAt",
+    what: "рилс от персонажа",
+    busy: "Рилс от персонажа уже собирается.",
+  },
 } as const;
 
+/** Ведущий и тон по номеру — так же по кругу, как в promo/talk/generate.mjs. */
+export const TALK_HOSTS = [
+  "Мастер Гром",
+  "Князь Диван",
+  "Борис Петрович",
+  "Купец Фёдор",
+];
+export const TALK_TONES = ["смешной", "мотивирующий", "с советами"];
+
 export class Reels {
-  private state = { n: 0, lastAt: 0, cn: 0, clastAt: 0, sn: 0, slastAt: 0 };
+  private state = {
+    n: 0,
+    lastAt: 0,
+    cn: 0,
+    clastAt: 0,
+    sn: 0,
+    slastAt: 0,
+    tn: 0,
+    tlastAt: 0,
+  };
   constructor(
     private file: string | null,
     private d: ReelsDeps,
@@ -100,13 +125,13 @@ export class Reels {
     renameSync(`${this.file}.tmp`, this.file);
   }
 
-  /** /reel [тема], /carousel [tips|app] [тема] или /story [тема]. true — команда наша (ответ уже отправлен или будет). */
+  /** /reel [тема], /carousel [tips|app] [тема], /story [тема] или /talk [тема]. true — команда наша (ответ уже отправлен или будет). */
   command(chatId: number, text: string, reply: (t: string) => void): boolean {
-    const m = /^\/(reel|carousel|story)(?:@\w+)?\b\s*([\s\S]*)$/.exec(
+    const m = /^\/(reel|carousel|story|talk)(?:@\w+)?\b\s*([\s\S]*)$/.exec(
       text.trim(),
     );
     if (!m) return false;
-    const job = m[1] as "reel" | "carousel" | "story";
+    const job = m[1] as "reel" | "carousel" | "story" | "talk";
     const J = JOBS[job];
     const now = (this.d.now ?? Date.now)();
     const token = this.d.token();
@@ -157,7 +182,9 @@ export class Reels {
               ? `🖼 Делаю карусель №${n} ${kind === "app" ? "про приложение" : "с советами"}${about}. Пришлю картинки примерно через минуту.`
               : job === "story"
                 ? `📱 Делаю сторис №${n}${about}: три картинки на выбор. Пришлю примерно через минуту.`
-                : `🎬 Делаю рилс №${n}${about}. Пришлю файл минут через 5–7.`,
+                : job === "talk"
+                  ? `🎭 Делаю рилс от персонажа №${n}${about}: ведёт ${TALK_HOSTS[n % 4]}, тон ${TALK_TONES[n % 3]}. Пришлю файл минут через 10–12.`
+                  : `🎬 Делаю рилс №${n}${about}. Пришлю файл минут через 5–7.`,
           );
         this.state[J.at] = 0;
         this.save();
