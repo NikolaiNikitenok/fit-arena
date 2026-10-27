@@ -51,8 +51,33 @@ export async function dispatchReel(
   }
 }
 
+/** Что запускает каждая команда; номер и пауза у каждого вида свои. */
+const JOBS = {
+  reel: {
+    workflow: "reel.yml",
+    n: "n",
+    at: "lastAt",
+    what: "рилс",
+    busy: "Рилс уже собирается.",
+  },
+  carousel: {
+    workflow: "carousel.yml",
+    n: "cn",
+    at: "clastAt",
+    what: "карусель",
+    busy: "Карусель уже собирается.",
+  },
+  story: {
+    workflow: "carousel.yml",
+    n: "sn",
+    at: "slastAt",
+    what: "сторис",
+    busy: "Сторис уже собираются.",
+  },
+} as const;
+
 export class Reels {
-  private state = { n: 0, lastAt: 0, cn: 0, clastAt: 0 };
+  private state = { n: 0, lastAt: 0, cn: 0, clastAt: 0, sn: 0, slastAt: 0 };
   constructor(
     private file: string | null,
     private d: ReelsDeps,
@@ -75,33 +100,34 @@ export class Reels {
     renameSync(`${this.file}.tmp`, this.file);
   }
 
-  /** /reel [тема] или /carousel [tips|app] [тема]. true — команда наша (ответ уже отправлен или будет). */
+  /** /reel [тема], /carousel [tips|app] [тема] или /story [тема]. true — команда наша (ответ уже отправлен или будет). */
   command(chatId: number, text: string, reply: (t: string) => void): boolean {
-    const m = /^\/(reel|carousel)(?:@\w+)?\b\s*([\s\S]*)$/.exec(text.trim());
+    const m = /^\/(reel|carousel|story)(?:@\w+)?\b\s*([\s\S]*)$/.exec(
+      text.trim(),
+    );
     if (!m) return false;
+    const job = m[1] as "reel" | "carousel" | "story";
+    const J = JOBS[job];
     const now = (this.d.now ?? Date.now)();
     const token = this.d.token();
-    const carousel = m[1] === "carousel";
-    const what = carousel ? "Карусель" : "Рилс";
     if (!token)
       return (
         reply(
-          `Чтобы делать рилсы и карусели, нужен токен GitHub: секрет GH_ACTIONS_TOKEN (права Actions: Read and write), потом перевыкладка.`,
+          `Чтобы делать рилсы, карусели и сторис, нужен токен GitHub: секрет GH_ACTIONS_TOKEN (права Actions: Read and write), потом перевыкладка.`,
         ),
         true
       );
-    const wait =
-      (carousel ? this.state.clastAt : this.state.lastAt) + REEL_COOLDOWN - now;
+    const wait = this.state[J.at] + REEL_COOLDOWN - now;
     if (wait > 0)
       return (
         reply(
-          `${what} уже собирается. ${carousel ? "Следующую" : "Следующий"} можно запустить через ${Math.ceil(wait / 60_000)} мин.`,
+          `${J.busy} Следующую сборку можно запустить через ${Math.ceil(wait / 60_000)} мин.`,
         ),
         true
       );
     let rest = m[2].trim();
     let kind = "";
-    if (carousel) {
+    if (job === "carousel") {
       const k =
         /^(tips|app|советы|совет|приложение|про приложение)(?=\s|$)\s*/i.exec(
           rest,
@@ -111,36 +137,33 @@ export class Reels {
           (rest = rest.slice(k[0].length)));
     }
     const topic = rest.slice(0, 300);
-    const n = (carousel ? this.state.cn : this.state.n) + 1;
-    if (carousel) {
-      kind ||= n % 2 ? "tips" : "app";
-      this.state = { ...this.state, cn: n, clastAt: now };
-    } else this.state = { ...this.state, n, lastAt: now };
+    const n = this.state[J.n] + 1;
+    if (job === "carousel") kind ||= n % 2 ? "tips" : "app";
+    if (job === "story") kind = "story";
+    this.state = { ...this.state, [J.n]: n, [J.at]: now };
     this.save();
     const inputs: Record<string, string> = {
       chat_id: String(chatId),
       n: String(n),
       topic,
-      ...(carousel ? { kind } : {}),
+      ...(kind ? { kind } : {}),
     };
-    void (this.d.dispatch ?? dispatchReel)(
-      token,
-      inputs,
-      carousel ? "carousel.yml" : "reel.yml",
-    ).then((r) => {
-      if (r.ok)
-        return reply(
-          carousel
-            ? `🖼 Делаю карусель №${n} ${kind === "app" ? "про приложение" : "с советами"}${topic ? ` на тему «${topic}»` : ""}. Пришлю картинки минуты через 3–4.`
-            : `🎬 Делаю рилс №${n}${topic ? ` на тему «${topic}»` : ""}. Пришлю файл минут через 5–7.`,
-        );
-      if (carousel) this.state.clastAt = 0;
-      else this.state.lastAt = 0;
-      this.save();
-      reply(
-        `Не получилось запустить сборку ${carousel ? "карусели" : "рилса"}: ${r.error}`,
-      );
-    });
+    void (this.d.dispatch ?? dispatchReel)(token, inputs, J.workflow).then(
+      (r) => {
+        const about = topic ? ` на тему «${topic}»` : "";
+        if (r.ok)
+          return reply(
+            job === "carousel"
+              ? `🖼 Делаю карусель №${n} ${kind === "app" ? "про приложение" : "с советами"}${about}. Пришлю картинки примерно через минуту.`
+              : job === "story"
+                ? `📱 Делаю сторис №${n}${about}: три картинки на выбор. Пришлю примерно через минуту.`
+                : `🎬 Делаю рилс №${n}${about}. Пришлю файл минут через 5–7.`,
+          );
+        this.state[J.at] = 0;
+        this.save();
+        reply(`Не получилось запустить сборку (${J.what}): ${r.error}`);
+      },
+    );
     return true;
   }
 }

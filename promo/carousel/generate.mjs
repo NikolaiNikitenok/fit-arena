@@ -1,10 +1,14 @@
 // Текст карусели для Instagram: Claude пишет слайды (обложка, пункты, финал) и подпись; проверяем и сохраняем в carousel.json.
-// Запуск: node generate.mjs <номер> <tips|app> [тема]. Два вида: полезные советы (приложение только в финале) и про приложение.
+// Запуск: node generate.mjs <номер> <tips|app|story> [тема]. Виды: полезные советы (приложение только в финале), про приложение
+// и story — три сторис 1080×1920 на выбор (story.mjs).
 import { readFileSync, writeFileSync } from "node:fs";
 import { askApi, askClaude } from "../reels/generate.mjs";
+import { storyProblems, storyPrompt } from "./story.mjs";
 
 const n = Number(process.argv[2] ?? 0) || 0;
-const kind = process.argv[3] === "app" ? "app" : "tips";
+const kind = ["app", "story"].includes(process.argv[3])
+  ? process.argv[3]
+  : "tips";
 const topic = (process.argv[4] ?? "").trim().slice(0, 300);
 
 // Скриншоты берём из библиотеки постов канала (server/channelMedia.ts): имя → что на картинке.
@@ -69,6 +73,8 @@ const FACTS = `Факты о приложении (только это, ниче
 - Дневник зала: вес, подходы, рекорды. Программы тренировок. Серии дней, достижения, календарь и график силы, сезонный пропуск.`;
 
 function prompt() {
+  if (kind === "story")
+    return storyPrompt({ n, topic, facts: FACTS, npcs: NPCS, shots: SHOTS });
   const theme =
     topic ||
     (kind === "app"
@@ -109,6 +115,7 @@ ${FACTS}
 
 /** Проверка: возвращает список проблем (пустой — всё хорошо). */
 export function problems(c, k = kind) {
+  if (k === "story") return storyProblems(c, { npcs: NPCS, shots: SHOTS, n });
   const out = [];
   const S = c?.slides;
   if (!Array.isArray(S) || S.length < 6 || S.length > 10)

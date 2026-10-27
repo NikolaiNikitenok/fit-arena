@@ -106,3 +106,26 @@ describe("карусели", () => {
     ]);
   });
 });
+
+describe("сторис", () => {
+  it("запускает carousel.yml с kind=story и своим номером", async () => {
+    const runs: [Record<string, string>, string][] = [];
+    const r = new Reels(null, {
+      token: () => "gh",
+      dispatch: async (_, i, w) => (runs.push([i, w]), { ok: true }),
+    });
+    const out: string[] = [];
+    r.command(7, "/carousel", () => undefined);
+    expect(r.command(7, "/story челлендж приседаний", (t) => out.push(t))).toBe(
+      true,
+    );
+    await flush();
+    expect(runs[1]).toEqual([
+      { chat_id: "7", n: "1", topic: "челлендж приседаний", kind: "story" },
+      "carousel.yml",
+    ]);
+    expect(out.at(-1)).toMatch(/сторис №1 на тему «челлендж приседаний»/);
+    r.command(7, "/story", (t) => out.push(t));
+    expect(out.at(-1)).toMatch(/Сторис уже собираются/);
+  });
+});
