@@ -26,16 +26,16 @@ jobs:
         with: { node-version: 22 }
       - name: Tools
         run: |
+          mkdir -p out
           npm i -g @anthropic-ai/claude-code > /dev/null
           # Playwright и three отдельно от зависимостей проекта: нужны только для рендера персонажа и титров.
           npm i --prefix $HOME/pw playwright@1.63.0 three@0.186.1 > /dev/null
           ln -s $HOME/pw/node_modules promo/talk/node_modules
           echo "THREE_MODULES=$HOME/pw/node_modules" >> $GITHUB_ENV
           echo "CHROME=$(which google-chrome || which chromium)" >> $GITHUB_ENV
-          pip install -q edge-tts imageio-ffmpeg piper-tts==1.2.0
+          pip install -q edge-tts imageio-ffmpeg piper-tts==1.3.0
           mkdir -p $HOME/bin && ln -sf $(python3 -c 'import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())') $HOME/bin/ffmpeg
           echo $HOME/bin >> $GITHUB_PATH
-          mkdir -p out
       - name: Script
         working-directory: out
         run: node ../promo/talk/generate.mjs "$N" "$TOPIC"

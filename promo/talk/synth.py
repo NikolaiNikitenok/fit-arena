@@ -33,8 +33,9 @@ def piper(i, line):
     if not os.path.exists(m):
         os.makedirs(PIPER, exist_ok=True); u = f'https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/{voice}/medium/ru_RU-{voice}-medium.onnx'
         for x in ('', '.json'): subprocess.run(['curl', '-sSfL', '--retry', '3', '-o', m + x, u + x], check=True)
-    subprocess.run(['piper', '--model', m, '--length_scale', '0.9', '--output_file', f'vo/{i}.raw.wav'],
-                   input=line['say'], text=True, check=True, capture_output=True)
+    from piper import PiperVoice, SynthesisConfig
+    with wave.open(f'vo/{i}.raw.wav', 'wb') as w:
+        PiperVoice.load(m).synthesize_wav(line['say'], w, syn_config=SynthesisConfig(length_scale=0.9))
     with wave.open(f'vo/{i}.raw.wav') as w: sr = w.getframerate()
     af = f'asetrate={sr}*{shift},aresample=24000,atempo={1 / shift:.4f}' if shift != 1 else 'aresample=24000'
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', f'vo/{i}.raw.wav', '-af', af, '-ac', '1', f'vo/{i}.wav'], check=True)
