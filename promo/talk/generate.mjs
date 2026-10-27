@@ -9,22 +9,23 @@ const music = JSON.parse(readFileSync(new URL('../reels/music/library.json', imp
 const n = Number(process.argv[2] ?? 0) || 0;
 const topic = (process.argv[3] ?? '').trim().slice(0, 300);
 
-// Мужские персонажи игры (src/game/npcs.ts): модель, окраска, голос (сдвиг тона и темпа edge-tts) и характер.
+// Мужские персонажи игры (src/game/npcs.ts): модель, окраска, голос (сдвиг тона и темпа edge-tts; запасной —
+// локальный Piper: голос и сдвиг тона) и характер.
 export const CAST = {
   grom: {
-    name: 'Мастер Гром', role: 'наставник', model: 'Barbarian', pitch: '-8Hz', rate: '+6%',
+    name: 'Мастер Гром', role: 'наставник', model: 'Barbarian', pitch: '-8Hz', rate: '+6%', piper: ['dmitri', 0.94],
     about: 'бывший тренер чемпионов, строгий, но добрый, говорит коротко и весомо, любит армейскую прямоту и сухой юмор',
   },
   knyaz: {
-    name: 'Князь Диван', role: 'злодей', model: 'Skeleton_Mage', tint: 'mul:1.2,0.6,1.4', pitch: '-16Hz', rate: '-4%',
+    name: 'Князь Диван', role: 'злодей', model: 'Skeleton_Mage', tint: 'mul:1.2,0.6,1.4', pitch: '-16Hz', rate: '-4%', piper: ['ruslan', 0.88],
     about: 'главный злодей, ленивый и вальяжный, усыпил три мира, уговаривает не тренироваться и смешно злится, когда игрок всё равно качается; когда-то был чемпионом и выгорел',
   },
   boris: {
-    name: 'Борис Петрович', role: 'физрук', model: 'Barbarian', tint: 'mul:0.75,0.95,1.3', pitch: '+2Hz', rate: '+14%',
+    name: 'Борис Петрович', role: 'физрук', model: 'Barbarian', tint: 'mul:0.75,0.95,1.3', pitch: '+2Hz', rate: '+14%', piper: ['denis', 1],
     about: 'бывший школьный учитель физкультуры, бодрый, командует «равняйсь», «шагом марш», «не филоним», говорит свистками и школьными шутками',
   },
   fedor: {
-    name: 'Купец Фёдор', role: 'торговец', model: 'Mage', pitch: '+8Hz', rate: '+10%',
+    name: 'Купец Фёдор', role: 'торговец', model: 'Mage', pitch: '+8Hz', rate: '+10%', piper: ['dmitri', 1.08],
     about: 'хитрый и обаятельный купец, всё сводит к выгоде и наградам: «за каждое отжимание — монетки», расхваливает товар как на ярмарке',
   },
 };
