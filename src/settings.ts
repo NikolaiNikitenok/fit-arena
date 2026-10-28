@@ -32,10 +32,12 @@ export interface Settings {
   villageFx: boolean;
   // Пролёт камеры над деревней при входе.
   flyIn: boolean;
+  // Главная старым списком с прокруткой вместо сцены «во весь экран».
+  homeList: boolean;
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true };
+const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false };
 
 let current: Settings = (() => {
   try {

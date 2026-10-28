@@ -25,6 +25,7 @@ import { Bolt, MonsterFace } from './match3/art';
 import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './match3/dungeon';
 import { homeBadges } from './homeBadges';
 import { WorldBackdrop } from './WorldBackdrop';
+import { useSettings } from '../settings';
 import { LANDS } from './lands';
 import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
@@ -135,16 +136,6 @@ function Side({ title, sub, icon, color, dot, onClick }: { title: string; sub?: 
   );
 }
 
-// Вид главной: «лента» (прокрутка) или «сцена» — герой во весь экран, кнопки по бокам, без прокрутки.
-// Пока прототип: включается в localStorage (home-layout = stage).
-const homeLayout = (): 'feed' | 'stage' => {
-  try {
-    return localStorage.getItem('home-layout') === 'stage' ? 'stage' : 'feed';
-  } catch {
-    return 'feed';
-  }
-};
-
 type Tone = 'accent' | 'gold' | 'mint' | 'teal' | 'blue' | 'violet' | 'rose' | 'pet';
 /** Плитка сетки «Ещё»: яркий значок-«иконка приложения» и подпись. */
 function More({ title, sub, icon, tone, dot, cls = '', style, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; onClick: () => void }) {
@@ -184,7 +175,8 @@ export function HeroHome(props: Props) {
   const gymToday = todayTemplate(gym, now);
   const [heroOpen, setHeroOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [layout] = useState(homeLayout);
+  // Вид главной: «сцена» — герой во весь экран, кнопки по бокам, без прокрутки; или старый список (настройки).
+  const layout = useSettings().homeList ? 'feed' : 'stage';
   const badges = homeBadges(progress, daily, pro, now);
   const item = itemById(progress.equipped);
   const lvl = heroLevel(heroXp(progress));
