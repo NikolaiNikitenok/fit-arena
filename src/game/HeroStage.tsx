@@ -70,7 +70,7 @@ export function HeroStage({ progress, world }: { progress: Progress; world?: Wor
   const pet = petLook(progress, Date.now());
   const aura = heroAura(progress);
   return (
-    <Canvas3D camera={{ position: [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 1.0, 0)}>
+    <Canvas3D sharp camera={{ position: [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 1.0, 0)}>
       <pointLight position={[-2.5, 1.5, -1.5]} intensity={8} color={item.glow ?? RARITY_COLORS[item.rarity]} />
       {world ? (
         // Подставка — кусочек мира, где герой сейчас сражается.
@@ -94,7 +94,7 @@ export function HeroStage({ progress, world }: { progress: Progress; world?: Wor
         <Turntable>
           <Character model={item.hero} tint={item.tint} glow={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
         </Turntable>
-        {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad} hop={pulse} lively position={[0.95, 0, 0.7]} rotation={-0.45} scale={1.35} onClick={() => setPulse((p) => p + 1)} />}
+        {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad} hop={pulse} lively outline position={[0.95, 0, 0.7]} rotation={-0.45} scale={1.35} onClick={() => setPulse((p) => p + 1)} />}
       </Suspense>
     </Canvas3D>
   );

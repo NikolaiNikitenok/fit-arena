@@ -165,7 +165,7 @@ function Villager({ map, k, look }: { map: Map2; k: number; look: { model: CharN
   });
   return (
     <group ref={g}>
-      <Character model={look.model} tint={look.tint} anim={anim} scale={scale} hands={{}} />
+      <Character model={look.model} tint={look.tint} anim={anim} scale={scale} hands={{}} outline={false} />
     </group>
   );
 }

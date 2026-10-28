@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { parseTint } from './Instanced';
+import { addOutline, outlinesOn, toonOf } from './toon';
 import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
 
 // Персонажи KayKit: рыцарь, маг, варвар, разбойник и скелеты. Скелет у всех общий,
@@ -65,6 +66,8 @@ export interface CharacterProps {
   // Снаряжение героя по отдельности: оружие и вещь во второй руке. Если задано,
   // стандартное оружие набора прячется.
   hands?: { weapon?: HandGear; offhand?: HandGear };
+  // Тёмная обводка силуэта (src/three/toon.ts). В деревне сцена обводится целиком (StylePass) — там выключена.
+  outline?: boolean;
 }
 
 export interface HandGear {
@@ -81,27 +84,35 @@ export interface HandGear {
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands }: CharacterProps) {
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
   const { root, materials, mixer } = useMemo(() => {
     const root = cloneSkinned(gltf.scene) as THREE.Group;
     const gear = GEAR[model];
-    const materials: THREE.MeshStandardMaterial[] = [];
+    const materials: THREE.MeshToonMaterial[] = [];
+    const visible: THREE.Mesh[] = [];
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       if (gear && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(mesh.name)) mesh.visible = false;
       if (hands && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && WEAPONISH.test(mesh.name)) mesh.visible = false;
       mesh.castShadow = true;
-      const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+      // Мультяшный материал (src/three/toon.ts): ступенчатый свет и ободок вместо «пластилина».
+      const mat = toonOf(mesh.material as THREE.MeshStandardMaterial);
       mesh.material = mat;
       materials.push(mat);
+      if (mesh.visible) visible.push(mesh);
     });
+    // Обводка — после обхода: новые меши в дереве во время обхода не нужны. В экономном режиме без неё.
+    if (outline && outlinesOn()) {
+      root.updateMatrixWorld(true);
+      visible.forEach((m) => addOutline(m));
+    }
     return { root, materials, mixer: new THREE.AnimationMixer(root) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gltf, model, !!hands]);
+  }, [gltf, model, !!hands, outline]);
 
   const actions = useMemo(() => {
     const out: Partial<Record<CharAnim, THREE.AnimationAction>> = {};
@@ -193,21 +204,36 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       }
     >
       <primitive object={root} />
-      {hands?.weapon && <HandItem root={root} gear={hands.weapon} />}
-      {hands?.offhand && <HandItem root={root} gear={hands.offhand} />}
+      {hands?.weapon && <HandItem root={root} gear={hands.weapon} outline={outline} />}
+      {hands?.offhand && <HandItem root={root} gear={hands.offhand} outline={outline} />}
     </group>
   );
 }
 
 // Предмет из набора другого героя: берём меш вместе с его положением на кости руки.
-function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
+/** Обводка всех мешей предмета (оружие, щит) — уже прикреплённого к кости. */
+function outlineAll(obj: THREE.Object3D) {
+  const meshes: THREE.Mesh[] = [];
+  obj.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
+  obj.updateWorldMatrix(true, true);
+  // Оружие тоньше тела: обводка чуть толще, чтобы читалась наравне с ним.
+  meshes.forEach((m) => addOutline(m, 0.024));
+}
+
+function HandItem({ root, gear, outline }: { root: THREE.Object3D; gear: HandGear; outline: boolean }) {
   const src = useGltf(charUrl(gear.source));
   useEffect(() => {
     if (gear.make) {
       const bone = root.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(gear.bone ?? 'handslot.r'));
       if (!bone) return;
       const item = gear.make();
+      // Мультяшный материал и у своего предмета — как у остального снаряжения.
+      item.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && (m.material as THREE.MeshStandardMaterial).isMeshStandardMaterial) m.material = toonOf(m.material as THREE.MeshStandardMaterial);
+      });
       bone.add(item);
+      if (outline && outlinesOn()) outlineAll(item);
       return () => {
         bone.remove(item);
       };
@@ -229,7 +255,7 @@ function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       m.castShadow = true;
-      const mat = (m.material as THREE.MeshStandardMaterial).clone();
+      const mat = toonOf(m.material as THREE.MeshStandardMaterial);
       if (gear.tint) mat.color.multiply(parseTint(gear.tint));
       if (gear.glow) {
         mat.emissive.set(gear.glow);
@@ -238,9 +264,11 @@ function HandItem({ root, gear }: { root: THREE.Object3D; gear: HandGear }) {
       m.material = mat;
     });
     bone.add(copy);
+    // Обводка — когда предмет уже в руке: его мировая величина зависит от скелета.
+    if (outline && outlinesOn()) outlineAll(copy);
     return () => {
       bone.remove(copy);
     };
-  }, [src, root, gear.mesh, gear.glow, gear.tint, gear.bone, gear.make]);
+  }, [src, root, gear.mesh, gear.glow, gear.tint, gear.bone, gear.make, outline]);
   return null;
 }
