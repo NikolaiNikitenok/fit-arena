@@ -10,6 +10,7 @@ import { expectedDamage, heroPower } from './power';
 import { countPass, currentLevel, dayKey, Progress, saveProgress } from './progress';
 import { say } from './story';
 import type { NpcId } from './npcs';
+import { EN_MONTHS, isEn } from '../i18n';
 
 export const EVENT_TRIES_PER_DAY = 3;
 export const EVENT_ATTEMPT_S = 90;
@@ -194,6 +195,7 @@ export function fmtLeft(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60000));
   const d = Math.floor(m / 1440);
   const h = Math.floor((m % 1440) / 60);
+  if (isEn()) return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m % 60}m` : `${Math.max(1, m)}m`;
   if (d > 0) return `${d} дн ${h} ч`;
   if (h > 0) return `${h} ч ${m % 60} мин`;
   return `${Math.max(1, m)} мин`;
@@ -204,11 +206,13 @@ const MONTHS_GEN = ['января', 'февраля', 'марта', 'апрел�
 export function fmtWeekend(w: EventWindow): string {
   const a = new Date(w.start);
   const b = new Date(w.end - 1);
+  if (isEn()) return a.getMonth() === b.getMonth() ? `${EN_MONTHS[a.getMonth()]} ${a.getDate()}–${b.getDate()}` : `${EN_MONTHS[a.getMonth()]} ${a.getDate()} – ${EN_MONTHS[b.getMonth()]} ${b.getDate()}`;
   return a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()} ${MONTHS_GEN[a.getMonth()]}` : `${a.getDate()} ${MONTHS_GEN[a.getMonth()]} – ${b.getDate()} ${MONTHS_GEN[b.getMonth()]}`;
 }
 
 /** «через 5 дней», «завтра», «через 1 день». */
 export function fmtDays(n: number): string {
+  if (isEn()) return n <= 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`;
   if (n <= 0) return 'сегодня';
   if (n === 1) return 'завтра';
   const mod10 = n % 10;

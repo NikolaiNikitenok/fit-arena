@@ -3,6 +3,7 @@
 
 // Упражнения на повторы: только они годятся для дуэлей, рейда и боя с тренером.
 export type RepExercise = 'pushup' | 'squat' | 'situp';
+import { t } from './i18n';
 export type Exercise = RepExercise | 'plank';
 
 export const REP_EXERCISES: RepExercise[] = ['squat', 'pushup', 'situp'];
@@ -19,7 +20,7 @@ export const repsEquivalent = (e: Exercise | null, n: number): number => (e === 
 /** Сколько сделано или задано: «45 с», «2:30» или «12». */
 export function amountText(e: Exercise, n: number): string {
   if (!isTimed(e)) return String(n);
-  return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : `${n} с`;
+  return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : t('{n} с', { n });
 }
 
 /** Цель словами: «отжимания × 20», «планка 45 с». */
@@ -81,11 +82,11 @@ export const RULES: Record<RepExercise, Rule> = {
     // Лёжа кисти часто у края кадра и видны хуже.
     minVisibility: 0.35,
     posture: [
-      { ok: (lm, s) => seen(lm[HIP[s]]), hint: 'Камера должна видеть тебя целиком, хотя бы до пояса' },
-      { ok: (lm, s) => tilt(lm[SHOULDER[s]], bodyEnd(lm, s)) < 45, hint: 'Прими упор лёжа' },
+      { ok: (lm, s) => seen(lm[HIP[s]]), hint: t('Камера должна видеть тебя целиком, хотя бы до пояса') },
+      { ok: (lm, s) => tilt(lm[SHOULDER[s]], bodyEnd(lm, s)) < 45, hint: t('Прими упор лёжа') },
       // Ладони на полу, то есть не выше плеч (ось y в кадре направлена вниз).
-      { ok: (lm, s) => lm[WRIST[s]].y > lm[SHOULDER[s]].y - 0.06, hint: 'Упрись руками в пол' },
-      { ok: (lm, s) => !legsSeen(lm, s) || angle(lm[SHOULDER[s]], lm[HIP[s]], lowest(lm, s)) > 130, hint: 'Держи корпус прямым' },
+      { ok: (lm, s) => lm[WRIST[s]].y > lm[SHOULDER[s]].y - 0.06, hint: t('Упрись руками в пол') },
+      { ok: (lm, s) => !legsSeen(lm, s) || angle(lm[SHOULDER[s]], lm[HIP[s]], lowest(lm, s)) > 130, hint: t('Держи корпус прямым') },
     ],
   },
   squat: {
@@ -94,8 +95,8 @@ export const RULES: Record<RepExercise, Rule> = {
     up: 160,
     posture: [
       // Стоя плечи выше таза, корпус может наклоняться, но не ложиться.
-      { ok: (lm, s) => seen(lm[SHOULDER[s]]), hint: 'Камера должна видеть тебя целиком' },
-      { ok: (lm, s) => lm[SHOULDER[s]].y < lm[HIP[s]].y && tilt(lm[SHOULDER[s]], lm[HIP[s]]) > 30, hint: 'Встань прямо' },
+      { ok: (lm, s) => seen(lm[SHOULDER[s]]), hint: t('Камера должна видеть тебя целиком') },
+      { ok: (lm, s) => lm[SHOULDER[s]].y < lm[HIP[s]].y && tilt(lm[SHOULDER[s]], lm[HIP[s]]) > 30, hint: t('Встань прямо') },
     ],
   },
   situp: {
@@ -106,18 +107,18 @@ export const RULES: Record<RepExercise, Rule> = {
     // Лёжа сбоку плечо и колено модель видит хуже, чем стоя.
     minVisibility: 0.35,
     posture: [
-      { ok: (lm, s) => legsSeen(lm, s), hint: 'Камера должна видеть тебя целиком, до колен' },
+      { ok: (lm, s) => legsSeen(lm, s), hint: t('Камера должна видеть тебя целиком, до колен') },
       // Таз и стопы на полу на одной высоте; если стопы не видно, бедро не стоит вертикально, как стоя.
-      { ok: (lm, s) => (seen(lm[ANKLE[s]]) ? tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45 : tilt(lm[HIP[s]], lm[KNEE[s]]) < 70), hint: 'Ляг на пол, стопы на полу' },
+      { ok: (lm, s) => (seen(lm[ANKLE[s]]) ? tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45 : tilt(lm[HIP[s]], lm[KNEE[s]]) < 70), hint: t('Ляг на пол, стопы на полу') },
     ],
   },
 };
 
 export const EXERCISE_LABELS: Record<Exercise, string> = {
-  pushup: 'Отжимания',
-  squat: 'Приседания',
-  situp: 'Пресс',
-  plank: 'Планка',
+  pushup: t('Отжимания'),
+  squat: t('Приседания'),
+  situp: t('Пресс'),
+  plank: t('Планка'),
 };
 
 /** Угол ABC в градусах (вершина в B). */
@@ -242,7 +243,7 @@ export class RepCounter {
   update(raw: Landmark[] | undefined, timestampMs: number, aspect = 1, rotations: number[] = [0]): RepState {
     const rule = RULES[this.exercise];
     if (!raw || raw.length < 33) {
-      return (this.state = { ...this.state, hint: 'Встань в кадр целиком' });
+      return (this.state = { ...this.state, hint: t('Встань в кадр целиком') });
     }
     const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
 
@@ -250,7 +251,7 @@ export class RepCounter {
     const side = bestSide(scaled, ids);
     const [a, b, c] = rule.joint.map((pair) => scaled[pair[side]]);
     if ([a, b, c].some((p) => (p.visibility ?? 1) < (rule.minVisibility ?? MIN_VISIBILITY))) {
-      return (this.state = { ...this.state, hint: 'Камера не видит суставы' });
+      return (this.state = { ...this.state, hint: t('Камера не видит суставы') });
     }
     // Телефон положен боком: ищем поворот кадра, при котором «низ» совпадает с полом. Прошлый удачный — первым.
     const order = [this.rotation, ...rotations.filter((r) => r !== this.rotation)].filter((r) => rotations.includes(r));
@@ -289,7 +290,7 @@ export class RepCounter {
         reps += 1;
         this.lastRepAt = timestampMs;
       } else if (!this.formOk) {
-        hint = 'Повтор не засчитан: ' + (this.failHint ?? 'нарушена техника').toLowerCase();
+        hint = t('Повтор не засчитан: {why}', { why: (this.failHint ?? t('нарушена техника')).toLowerCase() });
       }
     }
 
@@ -307,11 +308,11 @@ const PLANK_ARM_TILT = 50;
 const MAX_FRAME_MS = 250;
 
 export const PLANK_HINTS = {
-  frame: 'Камера должна видеть тебя целиком, хотя бы до колен',
-  pose: 'Встань в планку',
-  arms: 'Поставь локти под плечи',
-  sag: 'Подними таз',
-  pike: 'Опусти таз',
+  frame: t('Камера должна видеть тебя целиком, хотя бы до колен'),
+  pose: t('Встань в планку'),
+  arms: t('Поставь локти под плечи'),
+  sag: t('Подними таз'),
+  pike: t('Опусти таз'),
 };
 // Чем дальше от планки, тем раньше в списке: при выборе поворота кадра берём самую «близкую» ошибку.
 const FAULT_RANK = [PLANK_HINTS.frame, PLANK_HINTS.pose, PLANK_HINTS.arms, PLANK_HINTS.sag, PLANK_HINTS.pike];
@@ -371,7 +372,7 @@ export class PlankTimer {
     this.lastT = timestampMs;
     let fault: string | null;
     let body: number | null = null;
-    if (!raw || raw.length < 33) fault = 'Встань в кадр целиком';
+    if (!raw || raw.length < 33) fault = t('Встань в кадр целиком');
     else {
       const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
       // Сторона, которую камера видит лучше: по плечу, локтю, тазу, колену и стопе.

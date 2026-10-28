@@ -13,6 +13,7 @@ import { heroHands } from './power';
 import { heroLevel, heroTitle, heroXp, Progress, streakOf } from './progress';
 import './ShareCard.css';
 import { Sheet } from '../Sheet';
+import { locale } from '../i18n';
 
 // Открытка «Я победил босса»: герой в победной позе рядом с поверженным боссом, статистика и ссылка на бота.
 // 3D-сцену рисуем на невидимом холсте, потом поверх неё на 2D-холсте — фон, надписи и приглашение.
@@ -105,7 +106,7 @@ export function raidCard(raidKey: string, p: Progress, reps: number, dealt: numb
     world: 4,
     place: 'Рейд клана',
     heroLine: b.heroLine,
-    stats: [{ label: 'Повторов', value: String(reps) }, { label: 'Урон', value: dealt.toLocaleString('ru') }, { label: 'Уровень', value: String(b.level) }, streakStat(b.days)],
+    stats: [{ label: 'Повторов', value: String(reps) }, { label: 'Урон', value: dealt.toLocaleString(locale()) }, { label: 'Уровень', value: String(b.level) }, streakStat(b.days)],
     accent: boss.glow,
   };
 }

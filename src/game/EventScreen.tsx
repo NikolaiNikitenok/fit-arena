@@ -35,6 +35,7 @@ import {
   fmtWeekend,
   triesLeft,
 } from './event';
+import { locale } from '../i18n';
 
 // Экран события выходных: рассказ жителя, общий запас здоровья босса, попытки на сегодня и награда.
 
@@ -146,13 +147,13 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
             <div className="muted light">{boss.title}</div>
             {phase === 'done' && last && (
               <div className="event-last">
-                {last.reps ? `${last.reps} повторов · ${last.dealt.toLocaleString('ru')} урона` : 'Попытка не засчитана: ни одного повтора'}
+                {last.reps ? `${last.reps} повторов · ${last.dealt.toLocaleString(locale())} урона` : 'Попытка не засчитана: ни одного повтора'}
               </div>
             )}
             <div className="event-hp">
               <div className="event-hp-row">
                 <span>
-                  <Heart size={13} className="heart" /> {won ? 'Повержен' : `${hpLeft.toLocaleString('ru')} / ${state.hpMax.toLocaleString('ru')} HP`}
+                  <Heart size={13} className="heart" /> {won ? 'Повержен' : `${hpLeft.toLocaleString(locale())} / ${state.hpMax.toLocaleString(locale())} HP`}
                 </span>
                 <span>{Math.round((1 - share) * 100)}% урона</span>
               </div>
@@ -348,7 +349,7 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
             <div className="bar-fill" style={{ width: `${(hpNow / hpMax) * 100}%`, background: boss.glow }} />
           </div>
           <div className="mhud-label">
-            {hpNow.toLocaleString('ru')} / {hpMax.toLocaleString('ru')} HP · {EXERCISE_LABELS[exercise]} · урон за попытку {dealt}
+            {hpNow.toLocaleString(locale())} / {hpMax.toLocaleString(locale())} HP · {EXERCISE_LABELS[exercise]} · урон за попытку {dealt}
           </div>
         </div>
         {phase === 'fight' && reps > 0 && (

@@ -3,6 +3,7 @@ import { Coin } from '../icons';
 import { type AchIcon, type AchTier, achDone, type Achievement, visibleAchievements } from './achievements';
 import type { Progress } from './progress';
 import { Sheet } from '../Sheet';
+import { locale } from '../i18n';
 
 const GLYPH: Record<AchIcon, string> = {
   flame: 'M12 22c4.2 0 7-2.8 7-6.8 0-3.2-1.8-5.6-3.6-7.6-.4 1.9-1.4 3.2-2.6 3.8.3-3.4-1-6.6-3.8-9.4-.2 3.4-1.8 5.4-3.4 7.4C4.3 11.1 5 13.4 5 15.2 5 19.2 7.8 22 12 22z',
@@ -81,7 +82,7 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
                       <div className="bar-fill" style={{ width: `${(v / x.goal) * 100}%`, background: TIER[x.tier].ring }} />
                     </div>
                     <span>
-                      {v.toLocaleString('ru')} / {x.goal.toLocaleString('ru')}
+                      {v.toLocaleString(locale())} / {x.goal.toLocaleString(locale())}
                     </span>
                   </div>
                 )}

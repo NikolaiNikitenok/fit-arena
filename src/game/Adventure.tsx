@@ -62,6 +62,7 @@ import { openPassInTelegram, platform, startTab } from '../telegram';
 import { useStarter } from '../cloud';
 import { payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
+import { pl, t } from '../i18n';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
@@ -84,13 +85,13 @@ const WorldMap3D = lazy(() => import('./WorldMap3D').then((m) => ({ default: m.W
 const VillageScreen = lazy(() => import('../village/VillageScreen').then((m) => ({ default: m.VillageScreen })));
 
 /** Пока экран докачивается. */
-const Loading = () => <div className="lazy-loading muted">Загружаем…</div>;
+const Loading = () => <div className="lazy-loading muted">{t('Загружаем…')}</div>;
 const Screen = ({ children }: { children: ReactNode }) => <Suspense fallback={<Loading />}>{children}</Suspense>;
 
 // Три мира по 100 уровней и финал. Вкладка «Замок» открывается после третьего мира.
 const TABS = [...WORLDS, 'castle'] as const;
 // На вкладках карты короткие названия, чтобы все четыре мира помещались в строку.
-const SHORT_WORLD: Record<(typeof TABS)[number], string> = { fantasy: 'Королевство', space: 'Космос', zombie: 'Зомби', castle: 'Замок' };
+const SHORT_WORLD: Record<(typeof TABS)[number], string> = { fantasy: t('Королевство'), space: t('Космос'), zombie: t('Зомби'), castle: t('Замок') };
 const levelsOf = (w: number) => (w === 3 ? LEVELS.slice(WORLD_SIZE * 3) : LEVELS.slice(w * WORLD_SIZE, (w + 1) * WORLD_SIZE));
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp', 'plank'];
@@ -195,7 +196,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     // Планка — на время: не миссия, а подходы с отдыхом.
     if (daily.exercise === 'plank') return setPrograms({ quick: plankDailyWorkout(Math.max(10, left), progress.baseline.plank ?? 30, daily.ask) });
     // Миссия на месте текущего уровня: та же земля и декорации, но цель — остаток задания.
-    setPlaying({ ...currentDef, daily: true, type: 'build', title: `Задание: ${NPCS[daily.npc].name}`, exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
+    setPlaying({ ...currentDef, daily: true, type: 'build', title: t('Задание: {0}', { 0: NPCS[daily.npc].name }), exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
   };
   const pro = usePro();
   const [achToast, setAchToast] = useState<string | null>(null);
@@ -219,7 +220,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     const next = applyFreeze(latest.current, pro, now);
     if (next === latest.current) return;
     setProgress(saveProgress(next));
-    showToast(`❄️ Заморозка Pro спасла серию: ${streakOf(next, now).days} дн. подряд`, 5000);
+    showToast(t('❄️ Заморозка Pro спасла серию: {0} дн. подряд', { 0: streakOf(next, now).days }), 5000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pro, progress.days]);
 
@@ -231,7 +232,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     if (!r) return;
     setProgress(r.progress);
     sfx('levelup');
-    setLevelUp(`Новый уровень героя: ${r.levels[r.levels.length - 1]}! +${r.coins} монет`);
+    setLevelUp(t('Новый уровень героя: {0}! +{1} монет', { 0: r.levels[r.levels.length - 1], 1: r.coins }));
     setTimeout(() => setLevelUp(null), 3500);
   }, [playing, programs, progress.days]);
 
@@ -241,7 +242,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   useEffect(() => {
     if (playing) return;
     const id = latest.current.pets?.active;
-    if (id && petSeen.current && petLvl > petSeen.current) showToast(`${petName(latest.current, id)} подрос: уровень ${petLvl}!`);
+    if (id && petSeen.current && petLvl > petSeen.current) showToast(t('{0} подрос: уровень {1}!', { 0: petName(latest.current, id), 1: petLvl }));
     petSeen.current = petLvl;
   }, [playing, petLvl]);
 
@@ -251,7 +252,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     const fresh = newAchievements(latest.current, Date.now());
     if (!fresh.length) return;
     setProgress(markAchSeen(latest.current, fresh.map((a) => a.id)));
-    setAchToast(fresh.length > 1 ? `Новые достижения: ${fresh.map((a) => a.title).join(', ')}` : `Новое достижение: ${fresh[0].title}! Забери награду`);
+    setAchToast(fresh.length > 1 ? t('Новые достижения: {0}', { 0: fresh.map((a) => a.title).join(', ') }) : t('Новое достижение: {0}! Забери награду', { 0: fresh[0].title }));
     setTimeout(() => setAchToast(null), 4000);
   }, [playing, programs, dungeon, progress.days, progress.dailyCount, progress.raidClaimed?.length, progress.programs?.done.length, progress.dungeon?.wins]);
 
@@ -424,10 +425,10 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
         <Sheet onClose={() => setStarterGot(false)}>
           <div className="starter-got">
             <Chest size={64} />
-            <div className="level-title">Набор «Новичок» твой!</div>
-            <div className="muted">Облик «{itemById(STARTER_PACK.outfit).name}» уже в гардеробе. Из сундука: {STARTER_PACK.coins} монет, {STARTER_PACK.vigor} зелья бодрости и {STARTER_PACK.swap} свитка замены.</div>
+            <div className="level-title">{t('Набор «Новичок» твой!')}</div>
+            <div className="muted">{t('Облик «{0}» уже в гардеробе. Из сундука: {1} монет, {2} зелья бодрости и {3} свитка замены.', { 0: itemById(STARTER_PACK.outfit).name, 1: STARTER_PACK.coins, 2: STARTER_PACK.vigor, 3: STARTER_PACK.swap })}</div>
             <button className="primary" onClick={() => setStarterGot(false)}>
-              Отлично
+              {t('Отлично')}
             </button>
           </div>
         </Sheet>
@@ -483,7 +484,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
             if (!next) return;
             setProgress(next);
             sfx('coin');
-            showToast(`Задание выполнено! +${daily.coins} монет${daily.potion ? ' и зелье' : ''}`);
+            showToast(t('Задание выполнено! +{0} монет{1}', { 0: daily.coins, 1: daily.potion ? t(' и зелье') : '' }));
           }}
           onFriends={onFriends}
           onShop={(t) => setShop(t ?? 'weapon')}
@@ -492,9 +493,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onEquipGear={(id) => setProgress(equipGear(progress, id))}
           onPotion={(id) => {
             const next = usePotion(progress, id, Date.now());
-            if (!next) return showToast(id === 'vigor' ? 'Жизни и так полные.' : 'Сейчас не нужно.');
+            if (!next) return showToast(id === 'vigor' ? t('Жизни и так полные.') : t('Сейчас не нужно.'));
             setProgress(next);
-            showToast(id === 'vigor' ? '+1 жизнь!' : id === 'might' ? 'Эликсир выпит: +30% урона в следующем бою.' : 'Ещё одна замена упражнения на сегодня.');
+            showToast(id === 'vigor' ? t('+1 жизнь!') : id === 'might' ? t('Эликсир выпит: +30% урона в следующем бою.') : t('Ещё одна замена упражнения на сегодня.'));
           }}
           onSettings={() => setSettings(true)}
           onAchievements={() => setAchOpen(true)}
@@ -560,10 +561,10 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
               onChest={(land) =>
                 tap(() => {
                   const r = claimChest(progress, land);
-                  if (!r) return showToast('Этот сундук уже пуст.');
+                  if (!r) return showToast(t('Этот сундук уже пуст.'));
                   setProgress(r.progress);
                   sfx('chest');
-                  showToast(r.itemName ? `В сундуке: ${r.itemName}!` : `В сундуке ${r.coins} монет.`);
+                  showToast(r.itemName ? t('В сундуке: {0}!', { 0: r.itemName }) : t('В сундуке {0} монет.', { 0: r.coins }));
                 })()
               }
             />
@@ -580,7 +581,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
             <div className="map-hud">
               <div className="map-title">
                 <div className="map-land">{L.name}</div>
-                <div className="map-sub">{L.world === 'castle' ? 'Финал' : `Хранитель: ${L.boss.name}`}</div>
+                <div className="map-sub">{L.world === 'castle' ? t('Финал') : t('Хранитель: {0}', { 0: L.boss.name })}</div>
               </div>
               <div className="stats">
                 <LivesPill progress={progress} />
@@ -595,7 +596,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           <div className="map-bottom">
             {selected ? (
               <div className="level-card">
-                <button className="close-x" onClick={() => setSelected(null)} aria-label="Закрыть">
+                <button className="close-x" onClick={() => setSelected(null)} aria-label={t('Закрыть')}>
                   ×
                 </button>
                 <div className="level-tag">
@@ -604,23 +605,23 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
                 <div className="level-title">{selected.title}</div>
                 <div className="muted">
                   {selected.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
-                  {selected.type !== 'trial' && ` · цель ${targetReps(selected, progress.baseline)}`} · {selected.coins} монет
+                  {selected.type !== 'trial' && t(' · цель {0}', { 0: targetReps(selected, progress.baseline) })} · {selected.coins} монет
                 </div>
                 <Stars n={progress.stars[selected.id] ?? 0} />
                 {isUnlocked(progress, selected.id) ? (
                   <button className="primary" onClick={() => setPlaying(selected)}>
-                    {progress.stars[selected.id] ? 'Пройти ещё раз' : 'В путь'}
+                    {progress.stars[selected.id] ? t('Пройти ещё раз') : t('В путь')}
                   </button>
                 ) : (
-                  <div className="muted">Сначала пройди предыдущие уровни.</div>
+                  <div className="muted">{t('Сначала пройди предыдущие уровни.')}</div>
                 )}
               </div>
             ) : (
               <>
-                <div className="map-help">Листай карту пальцем · нажми на камень уровня</div>
+                <div className="map-help">{t('Листай карту пальцем · нажми на камень уровня')}</div>
                 <button className="primary daily" onClick={() => setPlaying(currentDef)}>
-                  {series.today ? `Уровень ${currentDef.num}: ${currentDef.title}` : 'Тренировка дня'}
-                  <small>{series.today ? `Сегодня уже ${progress.days[dayKey(now)]} повторов · серия ${series.days}` : `Уровень ${currentDef.num}: ${currentDef.title}`}</small>
+                  {series.today ? t('Уровень {0}: {1}', { 0: currentDef.num, 1: currentDef.title }) : t('Тренировка дня')}
+                  <small>{series.today ? t('Сегодня уже {0} повторов · серия {1}', { 0: progress.days[dayKey(now)], 1: series.days }) : t('Уровень {0}: {1}', { 0: currentDef.num, 1: currentDef.title })}</small>
                 </button>
               </>
             )}
@@ -647,7 +648,7 @@ function StarterCard({ progress }: { progress: Progress }) {
     setNote(null);
     const r = await payStars('starter', (s) => s.starter.bought);
     setBusy(false);
-    if (r === 'late') setNote('Оплата прошла, набор придёт через минуту. Если нет — напиши боту /paysupport.');
+    if (r === 'late') setNote(t('Оплата прошла, набор придёт через минуту. Если нет — напиши боту /paysupport.'));
     else if (typeof r === 'object') setNote(r.error);
   };
   return (
@@ -656,9 +657,9 @@ function StarterCard({ progress }: { progress: Progress }) {
         <Chest size={46} />
       </div>
       <div className="starter-card-body">
-        <div className="starter-card-title">Набор «Новичок»</div>
+        <div className="starter-card-title">{t('Набор «Новичок»')}</div>
         <div className="starter-card-text">
-          Облик «{outfit.name}» и сундук: {STARTER_PACK.coins} монет, {STARTER_PACK.vigor} зелья бодрости, {STARTER_PACK.swap} свитка замены. Только один раз.
+          {t('Облик «{0}» и сундук: {1} монет, {2} зелья бодрости, {3} свитка замены. Только один раз.', { 0: outfit.name, 1: STARTER_PACK.coins, 2: STARTER_PACK.vigor, 3: STARTER_PACK.swap })}
         </div>
         {note && <div className="starter-card-note">{note}</div>}
       </div>
@@ -696,8 +697,8 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
       <div className="remark">
         <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
         <div>
-          <div className="level-title">Купец Фёдор</div>
-          <div className="muted">«Оружие бьёт сильнее, щит бережёт сердца в бою с боссом. Лучшее привожу, когда ты уходишь дальше.»</div>
+          <div className="level-title">{t('Купец Фёдор')}</div>
+          <div className="muted">{t('«Оружие бьёт сильнее, щит бережёт сердца в бою с боссом. Лучшее привожу, когда ты уходишь дальше.»')}</div>
         </div>
       </div>
       <div className="shop-head">
@@ -705,7 +706,7 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
           <Coin className="coin" /> {progress.coins}
         </div>
         <div className="muted">
-          <Swords size={13} /> урон {heroPower(progress).damage}
+          <Swords size={13} /> {t('урон {0}', { 0: heroPower(progress).damage })}
         </div>
       </div>
       <StarterCard progress={progress} />
@@ -744,7 +745,7 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
                 }}
               >
                 {r !== 'all' && <i />}
-                {r === 'all' ? 'Все' : RARITY_SHORT[r]} <small>{n}</small>
+                {r === 'all' ? t('Все') : RARITY_SHORT[r]} <small>{n}</small>
               </button>
             );
           })}
@@ -767,18 +768,18 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
                 </div>
                 {!on && damage > damageNow && (
                   <div className="shop-delta up">
-                    <Swords size={11} /> урон {damageNow} → {damage}
+                    <Swords size={11} /> {t('урон {0} → {1}', { 0: damageNow, 1: damage })}
                   </div>
                 )}
-                {!on && blocked && <div className="shop-delta">не действует с двуручным оружием</div>}
+                {!on && blocked && <div className="shop-delta">{t('не действует с двуручным оружием')}</div>}
               </div>
               {owned ? (
                 <button className="small-btn" disabled={on && g.slot === 'weapon'} onClick={() => setProgress(equipGear(progress, g.id))}>
-                  {on ? (g.slot === 'weapon' ? 'Надето' : 'Снять') : 'Надеть'}
+                  {on ? (g.slot === 'weapon' ? t('Надето') : t('Снять')) : t('Надеть')}
                 </button>
               ) : locked ? (
                 <span className="shop-lock">
-                  <Lock size={12} /> с {LANDS[g.minLand].name}
+                  <Lock size={12} /> {t('с {0}', { 0: LANDS[g.minLand].name })}
                 </span>
               ) : (
                 price(g.price, () => buyGear(progress, g.id))
@@ -788,7 +789,7 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
         })}
       {(tab === 'weapon' || tab === 'offhand') && later && (
         <div className="shop-later muted">
-          <Lock size={12} /> {gear.length ? 'Ещё товар' : 'Такого пока нет'}: Фёдор привезёт его с земли «{LANDS[later.minLand].name}».
+          <Lock size={12} /> {t('{0}: Фёдор привезёт его с земли «{1}».', { 0: gear.length ? t('Ещё товар') : t('Такого пока нет'), 1: LANDS[later.minLand].name })}
         </div>
       )}
       {tab === 'outfit' &&
@@ -801,12 +802,12 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
                 <div>{i.name}</div>
                 <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
                   {RARITY_NAMES[i.rarity]}
-                  {i.coinBonus > 0 && ` · +${Math.round(i.coinBonus * 100)}% монет`}
+                  {i.coinBonus > 0 && t(' · +{0}% монет', { 0: Math.round(i.coinBonus * 100) })}
                 </div>
               </div>
               {owned ? (
                 <button className="small-btn" disabled={progress.equipped === i.id} onClick={() => setProgress(equip(progress, i.id))}>
-                  {progress.equipped === i.id ? 'Надето' : 'Надеть'}
+                  {progress.equipped === i.id ? t('Надето') : t('Надеть')}
                 </button>
               ) : (
                 price(i.price, () => buy(progress, i.id))
@@ -819,13 +820,13 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
 }
 
 const SHOP_TABS: { tab: ShopTab; label: string }[] = [
-  { tab: 'weapon', label: 'Оружие' },
-  { tab: 'offhand', label: 'Щиты' },
-  { tab: 'outfit', label: 'Облик' },
-  { tab: 'potion', label: 'Зелья' },
+  { tab: 'weapon', label: t('Оружие') },
+  { tab: 'offhand', label: t('Щиты') },
+  { tab: 'outfit', label: t('Облик') },
+  { tab: 'potion', label: t('Зелья') },
 ];
 
-const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const WEEKDAY = [t('вс'), t('пн'), t('вт'), t('ср'), t('чт'), t('пт'), t('сб')];
 
 /** «Твоя сила»: рост по упражнениям, серия и повторы за две недели. */
 function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean; progress: Progress; now: number; onClose: () => void; onRecap: (month: string) => void }) {
@@ -843,11 +844,11 @@ function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean;
       <div className="remark">
         <Portrait line={{ face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name }} size={52} />
         <div>
-          <div className="level-title">Твоя сила</div>
+          <div className="level-title">{t('Твоя сила')}</div>
           <div className="muted">
             {series.days > 0
-              ? `Серия ${series.days} ${series.days === 1 ? 'день' : series.days < 5 ? 'дня' : 'дней'}. Отдыхать можно ${REST_PER_WEEK} дня в неделю, серия не сгорит.${pro ? ' С Pro — ещё заморозка раз в неделю.' : ''}`
-              : 'Начни серию сегодня: одна тренировка в день, отдыхать можно два дня в неделю.'}
+              ? t('Серия {0} {1}. Отдыхать можно {2} дня в неделю, серия не сгорит.{3}', { 0: series.days, 1: pl(series.days, ['день', 'дня', 'дней'], ['day', 'days']), 2: REST_PER_WEEK, 3: pro ? t(' С Pro — ещё заморозка раз в неделю.') : '' })
+              : t('Начни серию сегодня: одна тренировка в день, отдыхать можно два дня в неделю.')}
           </div>
         </div>
       </div>
@@ -859,17 +860,17 @@ function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean;
           <div key={ex} className="strength-row">
             <div className="strength-ex">
               {EXERCISE_LABELS[ex]}
-              <div className="strength-was">{first ? `первый подход: ${amountText(ex, first.reps)}` : 'ещё не делал'}</div>
+              <div className="strength-was">{first ? t('первый подход: {0}', { 0: amountText(ex, first.reps) }) : t('ещё не делал')}</div>
             </div>
             {up > 0 && <span className="strength-up">+{amountText(ex, up)}</span>}
             <span className="strength-val">{best ? amountText(ex, best.reps) : '—'}</span>
           </div>
         );
       })}
-      <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
+      <div className="muted">{t('Лучший подход за одну миссию. За 2 недели: {0} повторов.', { 0: total })}</div>
       {months.length > 0 && (
         <>
-          <div className="section-title">🎉 Итоги месяца</div>
+          <div className="section-title">{t('🎉 Итоги месяца')}</div>
           <div className="recap-months">
             {months.map((m) => (
               <button key={m} onClick={() => onRecap(m)}>
@@ -881,13 +882,13 @@ function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean;
       )}
       <div className="tabs">
         <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>
-          2 недели
+          {t('2 недели')}
         </button>
         <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>
-          Календарь
+          {t('Календарь')}
         </button>
         <button className={view === 'chart' ? 'active' : ''} onClick={() => setView('chart')}>
-          График
+          {t('График')}
         </button>
       </div>
       {view === 'week' && (

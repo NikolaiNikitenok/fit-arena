@@ -6,8 +6,9 @@ import { Chest, Coin, Flask, Swords } from '../icons';
 import type { Progress } from '../game/progress';
 import { Flag } from './Flag';
 import './war.css';
+import { locale } from '../i18n';
 
-const num = (n: number) => n.toLocaleString('ru');
+const num = (n: number) => n.toLocaleString(locale());
 const fmtLeft = (ms: number) => {
   const h = Math.max(0, Math.floor(ms / 3600_000));
   return h >= 24 ? `${Math.floor(h / 24)} д ${h % 24} ч` : h >= 1 ? `${h} ч ${Math.floor((ms % 3600_000) / 60000)} мин` : `${Math.max(1, Math.ceil(ms / 60000))} мин`;

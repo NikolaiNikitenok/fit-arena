@@ -19,6 +19,7 @@ import { muteText } from '../../shared/moderation';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
 import { syncClanFlag } from '../village/decor';
+import { locale } from '../i18n';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: 'глава', officer: 'заместитель', member: '' };
@@ -27,7 +28,7 @@ const fmtLeft = (ms: number) => {
   const h = Math.max(0, Math.floor(ms / 3600_000));
   return h >= 24 ? `${Math.floor(h / 24)} д ${h % 24} ч` : h >= 1 ? `${h} ч ${Math.floor((ms % 3600_000) / 60000)} мин` : `${Math.max(1, Math.ceil(ms / 60000))} мин`;
 };
-const num = (n: number) => n.toLocaleString('ru');
+const num = (n: number) => n.toLocaleString(locale());
 
 // Цвет имени в чате: у каждого свой.
 const nameColor = (name: string) => `hsl(${[...name].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 360} 70% 62%)`;

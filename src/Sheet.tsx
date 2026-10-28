@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { t } from './i18n';
 
 /**
  * Нижняя шторка: затемнение + лист снизу.
@@ -159,7 +160,7 @@ export function Sheet({
       <div ref={bodyRef} className={bodyClassName ? `sheet-body ${bodyClassName}` : 'sheet-body'} style={bodyStyle} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-top">
           <div className="sheet-grip" />
-          <button className="sheet-x" onClick={dismiss} aria-label="Закрыть">
+          <button className="sheet-x" onClick={dismiss} aria-label={t('Закрыть')}>
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
             </svg>

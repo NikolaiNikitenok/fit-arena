@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { dayKey, type Progress } from './progress';
+import { locale } from '../i18n';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 export const EX_COLOR: Record<Exercise, string> = { squat: '#ffb46b', pushup: '#ff7a59', situp: '#7dd3fc', plank: '#6ee7b7' };
@@ -32,7 +33,7 @@ export function Calendar({ progress, now }: { progress: Progress; now: number })
         <div className="cal-title">
           {MONTHS[first.getMonth()]} {first.getFullYear() !== base.getFullYear() ? first.getFullYear() : ''}
           <div className="muted">
-            {active} {active === 1 ? 'день' : active > 1 && active < 5 ? 'дня' : 'дней'} с тренировкой · {total.toLocaleString('ru')} повторов
+            {active} {active === 1 ? 'день' : active > 1 && active < 5 ? 'дня' : 'дней'} с тренировкой · {total.toLocaleString(locale())} повторов
           </div>
         </div>
         <button className="cal-nav" disabled={shift >= 0} onClick={() => setShift(shift + 1)} aria-label="Позже">

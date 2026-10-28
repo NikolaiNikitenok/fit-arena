@@ -23,6 +23,7 @@ import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
 import { type Combo, comboLive, comboShout, comboTier, nextCombo, NO_COMBO } from './combo';
 import { sfx } from '../audio';
+import { locale, t } from '../i18n';
 
 const PREP_S = 5;
 // Тряска сцены при ударе — не для тех, кто просил телефон меньше двигать картинку.
@@ -32,13 +33,13 @@ const calm = () => typeof matchMedia === 'function' && matchMedia('(prefers-redu
 type Status = 'story' | 'ready' | 'loading' | 'running' | 'won' | 'lost' | 'error';
 
 const TYPE_NAMES: Record<LevelDef['type'], string> = {
-  trial: 'Испытание',
-  build: 'Строитель',
-  chase: 'Погоня',
-  climb: 'Подъём',
-  defend: 'Оборона',
-  rescue: 'Спасение',
-  boss: 'Босс',
+  trial: t('Испытание'),
+  build: t('Строитель'),
+  chase: t('Погоня'),
+  climb: t('Подъём'),
+  defend: t('Оборона'),
+  rescue: t('Спасение'),
+  boss: t('Босс'),
 };
 
 // Звёзды уровня: в отдельном модуле, чтобы карта не тянула за собой экран миссии.
@@ -218,7 +219,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       setStatus('running');
     } catch (e) {
       camera.stop();
-      setError(e instanceof Error ? e.message : 'не загрузилась модель распознавания');
+      setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
       setStatus('error');
     }
   };
@@ -238,7 +239,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const waitMin = Math.max(1, Math.ceil(lives.nextMs / 60000));
 
   const busy = status === 'loading' || status === 'running';
-  const tag = level.world === 3 ? 'Финал' : `${WORLD_NAMES[land.world]} · ${land.name} · уровень ${level.num}`;
+  const tag = level.world === 3 ? t('Финал') : t('{0} · {1} · уровень {2}', { 0: WORLD_NAMES[land.world], 1: land.name, 2: level.num });
 
   return (
     <>
@@ -273,7 +274,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             <div className="bar-fill" style={{ width: `${Math.min(1, level.type === 'boss' ? 1 - view.progress : view.progress) * 100}%`, background: level.type === 'boss' ? land.boss.color : land.accent }} />
           </div>
           <div className="mhud-label">
-            {level.type === 'boss' ? `${land.boss.name} · ${view.hp} HP · ${view.label}` : level.type === 'chase' ? `${view.label} · отрыв ${Math.round((view.gap ?? 1) * 100)}%` : view.label}
+            {level.type === 'boss' ? `${land.boss.name} · ${view.hp} HP · ${view.label}` : level.type === 'chase' ? t('{0} · отрыв {1}%', { 0: view.label, 1: Math.round((view.gap ?? 1) * 100) }) : view.label}
           </div>
         </div>
         {/* Удар: вспышка по краям экрана, ярче с ростом комбо. */}
@@ -281,7 +282,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         {status === 'running' && combo.n >= 3 && (
           <div key={`c${combo.n}`} className={`combo-badge t${comboTier(combo.n)}`}>
             ×{combo.n}
-            <small>комбо</small>
+            <small>{t('комбо')}</small>
           </div>
         )}
         {status === 'running' && shout && (
@@ -300,7 +301,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         {status === 'running' && countdown > 0 && !calibrating && (
           <div className="countdown">
             <div className="countdown-num">{countdown}</div>
-            <div>Займи позицию</div>
+            <div>{t('Займи позицию')}</div>
           </div>
         )}
         {status === 'story' && <Dialog lines={level.story} onDone={() => setStatus('ready')} />}
@@ -311,20 +312,20 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             <div className="result-title small">{level.title}</div>
             <div className="muted light">
               {TYPE_NAMES[level.type]} · {level.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
-              {level.type !== 'trial' && ` · цель ${mission.current.target}`}
-              {level.rest && ' · лёгкий день'}
+              {level.type !== 'trial' && t(' · цель {0}', { 0: mission.current.target })}
+              {level.rest && t(' · лёгкий день')}
             </div>
             {level.type !== 'trial' && (
               <div className="power-line">
                 <span>
-                  <Swords size={14} /> урон {view.damage}
+                  <Swords size={14} /> {t('урон {0}', { 0: view.damage })}
                 </span>
                 <span>
-                  <Heart size={13} className="heart" /> {level.type === 'boss' ? `${land.boss.name}: ` : 'враги: '}
+                  <Heart size={13} className="heart" /> {level.type === 'boss' ? `${land.boss.name}: ` : t('враги: ')}
                   {view.hpMax} HP
                 </span>
-                {progress.might && <span className="might">эликсир силы +30%</span>}
-                {power.pet > 0 && <span>питомец +{(Math.round(power.pet * 1000) / 10).toLocaleString('ru')}%</span>}
+                {progress.might && <span className="might">{t('эликсир силы +30%')}</span>}
+                {power.pet > 0 && <span>{t('питомец +{0}%', { 0: (Math.round(power.pet * 1000) / 10).toLocaleString(locale()) })}</span>}
               </div>
             )}
             {canSwap && !noLives && (
@@ -343,25 +344,25 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         )}
         {status === 'won' && result && !epilogue && (
           <div className="result">
-            <div className="result-title">Победа!</div>
+            <div className="result-title">{t('Победа!')}</div>
             <Stars n={result.stars} />
             <div className="muted light">
               {view.reps} повторов · +{result.reward.coins} монет
-              {view.record != null && ` · рекорд ${view.record}`}
-              {combo.best >= 3 && ` · лучшее комбо ×${combo.best}`}
+              {view.record != null && t(' · рекорд {0}', { 0: view.record })}
+              {combo.best >= 3 && t(' · лучшее комбо ×{0}', { 0: combo.best })}
             </div>
             {result.reward.petFind && (
               <div className="muted light">
-                {petLook(progress, Date.now())?.name ?? 'Питомец'} нашёл сундучок: +{result.reward.petFind.coins} монет
-                {result.reward.petFind.potion && ` и ${potionById(result.reward.petFind.potion).name.toLowerCase()}`}
+                {petLook(progress, Date.now())?.name ?? t('Питомец')} нашёл сундучок: +{result.reward.petFind.coins} монет
+                {result.reward.petFind.potion && t(' и {0}', { 0: potionById(result.reward.petFind.potion).name.toLowerCase() })}
               </div>
             )}
             {result.reward.drop && (
               <div className="drop">
                 <img src={gearIcon(result.reward.drop.id)} alt="" />
                 <div>
-                  <div className="drop-title">Трофей: {result.reward.drop.name}</div>
-                  <div className="muted">{gearText(result.reward.drop)} · уже в инвентаре</div>
+                  <div className="drop-title">{t('Трофей: {0}', { 0: result.reward.drop.name })}</div>
+                  <div className="muted">{t('{0} · уже в инвентаре', { 0: gearText(result.reward.drop) })}</div>
                 </div>
               </div>
             )}
@@ -370,11 +371,11 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         )}
         {status === 'lost' && (
           <div className="result">
-            <div className="result-title">Не вышло</div>
-            <div className="muted light">{level.type === 'chase' ? 'Чудище догнало. Держи темп ровнее!' : 'Не хватило совсем чуть-чуть.'}</div>
+            <div className="result-title">{t('Не вышло')}</div>
+            <div className="muted light">{level.type === 'chase' ? t('Чудище догнало. Держи темп ровнее!') : t('Не хватило совсем чуть-чуть.')}</div>
             {!level.daily && (
               <div className="life-lost">
-                −1 ♥ · осталось {lives.lives} из {lives.max}
+                {t('−1 ♥ · осталось {0} из {1}', { 0: lives.lives, 1: lives.max })}
               </div>
             )}
             <Remark line={noLives ? restLine(waitMin) : afterLine(level.world, false, level.id + attempt)} />
@@ -394,29 +395,29 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       </div>
 
       <div className="hint-line">
-        {status === 'running' && (camera.hint ?? (calibrating ? 'Медленно и на всю амплитуду, как можешь' : 'Отлично, продолжай!'))}
-        {status === 'ready' && level.exercises.length > 1 && 'Упражнения меняются по фазам: поставь телефон так, чтобы было видно всё тело.'}
-        {status === 'error' && `Не удалось запустить камеру: ${error}`}
+        {status === 'running' && (camera.hint ?? (calibrating ? t('Медленно и на всю амплитуду, как можешь') : t('Отлично, продолжай!')))}
+        {status === 'ready' && level.exercises.length > 1 && t('Упражнения меняются по фазам: поставь телефон так, чтобы было видно всё тело.')}
+        {status === 'error' && t('Не удалось запустить камеру: {0}', { 0: error })}
       </div>
       {status === 'running' && (
         <button className="secondary" onClick={surrender}>
-          Остановиться
+          {t('Остановиться')}
         </button>
       )}
       {status === 'won' && result && !epilogue && level.type === 'boss' && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
       {status === 'won' && onNext && (
         <button className="primary" onClick={onNext}>
-          Дальше
+          {t('Дальше')}
         </button>
       )}
       {(status === 'ready' || status === 'lost' || status === 'error') &&
         (noLives ? (
           <button className="primary" disabled>
-            <Heart /> через {waitMin} мин
+            <Heart /> {t('через {0} мин', { 0: waitMin })}
           </button>
         ) : (
           <button className="primary" onClick={start}>
-            {status === 'ready' ? 'Начать' : 'Ещё раз'}
+            {status === 'ready' ? t('Начать') : t('Ещё раз')}
             {!level.daily && (
               <span className="btn-cost">
                 <Heart size={14} /> {lives.lives}
@@ -426,12 +427,12 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         ))}
       {status === 'loading' && (
         <button className="primary" disabled>
-          Загружаю камеру…
+          {t('Загружаю камеру…')}
         </button>
       )}
       {!busy && (
         <button className="link" onClick={onExit}>
-          К карте
+          {t('К карте')}
         </button>
       )}
     </>
@@ -454,16 +455,16 @@ function SwapRow({ original, exercises, picking, free, onPick, onChoose }: { ori
       </div>
       {picking != null && (
         <div className="swap-pick">
-          <span>Заменить на</span>
+          <span>{t('Заменить на')}</span>
           {ALL.filter((e) => e !== exercises[picking]).map((e) => (
             <button key={e} className="swap-chip" onClick={() => onChoose(picking, e)}>
-              {e === original[picking] ? `${EXERCISE_LABELS[e]} (как было)` : EXERCISE_LABELS[e]}
+              {e === original[picking] ? t('{0} (как было)', { 0: EXERCISE_LABELS[e] }) : EXERCISE_LABELS[e]}
             </button>
           ))}
         </div>
       )}
       <div className="swap-note">
-        {free > 0 ? `Негде сделать? Замени упражнение · осталось ${free} из ${SWAPS_PER_DAY} на сегодня` : `Замены на сегодня закончились, завтра будет ещё ${SWAPS_PER_DAY}`}
+        {free > 0 ? t('Негде сделать? Замени упражнение · осталось {0} из {1} на сегодня', { 0: free, 1: SWAPS_PER_DAY }) : t('Замены на сегодня закончились, завтра будет ещё {0}', { 0: SWAPS_PER_DAY })}
       </div>
     </div>
   );

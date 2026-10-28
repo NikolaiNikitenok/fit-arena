@@ -7,6 +7,7 @@ import { type CityBoard, cityApi, NotSignedIn } from './api';
 import type { MapCity } from './RussiaMap';
 import '../game/holiday.css';
 import './city.css';
+import { locale } from '../i18n';
 
 // Битва городов: карта России, где города светятся своими повторами за неделю (с понедельника по Москве),
 // рейтинг городов по повторам, героям или сильнейшему герою, свой город и место в нём.
@@ -20,13 +21,13 @@ const word = (n: number, forms: [string, string, string]) => {
   return forms[m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2];
 };
 /** Коротко для карты: 9 870, 12,4 тыс., 1,2 млн. */
-const compact = (n: number) => (n < 10_000 ? n.toLocaleString('ru') : n < 1_000_000 ? `${(n / 1000).toLocaleString('ru', { maximumFractionDigits: 1 })} тыс.` : `${(n / 1_000_000).toLocaleString('ru', { maximumFractionDigits: 1 })} млн`);
+const compact = (n: number) => (n < 10_000 ? n.toLocaleString(locale()) : n < 1_000_000 ? `${(n / 1000).toLocaleString('ru', { maximumFractionDigits: 1 })} тыс.` : `${(n / 1_000_000).toLocaleString('ru', { maximumFractionDigits: 1 })} млн`);
 
 type Metric = 'reps' | 'players' | 'best';
 type BoardCity = CityBoard['cities'][number];
 
 const METRICS: { id: Metric; title: string; value: (c: BoardCity) => number; label: (n: number) => string; long: (n: number) => string }[] = [
-  { id: 'reps', title: 'Повторы', value: (c) => c.reps, label: compact, long: (n) => `${n.toLocaleString('ru')} ${word(n, ['повтор', 'повтора', 'повторов'])} за неделю` },
+  { id: 'reps', title: 'Повторы', value: (c) => c.reps, label: compact, long: (n) => `${n.toLocaleString(locale())} ${word(n, ['повтор', 'повтора', 'повторов'])} за неделю` },
   { id: 'players', title: 'Герои', value: (c) => c.players, label: (n) => `${n} ${word(n, ['герой', 'героя', 'героев'])}`, long: (n) => `${n} ${word(n, ['герой тренировался', 'героя тренировались', 'героев тренировались'])} на этой неделе` },
   { id: 'best', title: 'Сильнейший', value: (c) => c.best ?? 0, label: (n) => `ур. ${n}`, long: (n) => `сильнейший герой — ${n} уровня` },
 ];
@@ -125,7 +126,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
               {sel && (sel.reps > 0 || sel.members > 0) ? (
                 <div className="city-card-stats">
                   <span>
-                    <b>{sel.reps.toLocaleString('ru')}</b> {word(sel.reps, ['повтор', 'повтора', 'повторов'])}
+                    <b>{sel.reps.toLocaleString(locale())}</b> {word(sel.reps, ['повтор', 'повтора', 'повторов'])}
                   </span>
                   <span>
                     <b>{sel.players}</b> из {sel.members} {word(sel.members, ['героя', 'героев', 'героев'])} в деле
@@ -185,7 +186,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
             <strong>{board.city}</strong>
             <small>
               {board.me?.reps
-                ? `${board.me.place}-е место из ${board.me.players} · ${board.me.reps.toLocaleString('ru')} ${word(board.me.reps, ['повтор', 'повтора', 'повторов'])} за неделю`
+                ? `${board.me.place}-е место из ${board.me.players} · ${board.me.reps.toLocaleString(locale())} ${word(board.me.reps, ['повтор', 'повтора', 'повторов'])} за неделю`
                 : 'На этой неделе ещё нет повторов: начни тренировку'}
             </small>
           </div>
@@ -219,7 +220,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
                       <b className={r.pro ? 'pro-name' : ''}>{r.name}</b>
                       {r.level != null && <small>уровень {r.level}</small>}
                     </span>
-                    <span className="reps">{r.reps.toLocaleString('ru')}</span>
+                    <span className="reps">{r.reps.toLocaleString(locale())}</span>
                   </div>
                 ))}
               </div>

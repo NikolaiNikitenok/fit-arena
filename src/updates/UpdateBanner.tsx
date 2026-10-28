@@ -5,6 +5,7 @@ import { useIsBusy } from './busy';
 import { ChangeEntry } from './changelog';
 import { applyUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate } from './updates';
 import './updates.css';
+import { t } from '../i18n';
 
 const SNOOZE = 10 * 60_000;
 
@@ -69,11 +70,11 @@ export function UpdateBanner() {
             <UpdateIcon done={mode === 'fresh'} />
           </div>
           <div className="upd-titles">
-            <div className="upd-kicker">{mode === 'update' ? 'Вышло обновление' : 'Игра обновилась'}</div>
-            <div className="upd-title">{entries.length === 1 ? entries[0].title : entries.length ? 'Что нового' : 'Улучшения и исправления'}</div>
+            <div className="upd-kicker">{mode === 'update' ? t('Вышло обновление') : t('Игра обновилась')}</div>
+            <div className="upd-title">{entries.length === 1 ? entries[0].title : entries.length ? t('Что нового') : t('Улучшения и исправления')}</div>
           </div>
           {mode === 'fresh' && (
-            <button className="upd-x" aria-label="Закрыть" onClick={() => close(() => setFresh([]))}>
+            <button className="upd-x" aria-label={t('Закрыть')} onClick={() => close(() => setFresh([]))}>
               <Cross size={16} />
             </button>
           )}
@@ -93,12 +94,12 @@ export function UpdateBanner() {
             ))}
           </div>
         ) : (
-          <div className="upd-plain">Игра стала стабильнее и быстрее. Обновление займёт пару секунд, прогресс сохранится.</div>
+          <div className="upd-plain">{t('Игра стала стабильнее и быстрее. Обновление займёт пару секунд, прогресс сохранится.')}</div>
         )}
         {mode === 'update' ? (
           <div className="upd-actions">
             <button className="upd-later" onClick={() => close(() => setSnoozed(true))}>
-              Позже
+              {t('Позже')}
             </button>
             <button
               className="upd-go"
@@ -108,13 +109,13 @@ export function UpdateBanner() {
                 void applyUpdate(remote!.version);
               }}
             >
-              {updating ? 'Сохраняем…' : 'Обновить'}
+              {updating ? t('Сохраняем…') : t('Обновить')}
             </button>
           </div>
         ) : (
           <div className="upd-actions">
             <button className="upd-go" onClick={() => close(() => setFresh([]))}>
-              Отлично
+              {t('Отлично')}
             </button>
           </div>
         )}

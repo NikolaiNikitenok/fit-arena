@@ -6,12 +6,13 @@ import { addCharge, CHARGE_MAX } from './game/resources';
 import { loadProgress, saveProgress } from './game/progress';
 import { deviceHints, fpsCapped, sceneFps } from './devicePerf';
 import { useSettings } from './settings';
+import { t } from './i18n';
 
 /** Ссылка на политику конфиденциальности. */
 export function PrivacyLink() {
   return (
     <button className="link inline settings-link" onClick={openPrivacy}>
-      Политика конфиденциальности
+      {t('Политика конфиденциальности')}
     </button>
   );
 }
@@ -27,7 +28,7 @@ export function AdminStatsRow() {
     setError(null);
     adminStatsUrl()
       .then(setUrl)
-      .catch(() => setError('Не открылось: сервер не подтвердил доступ'));
+      .catch(() => setError(t('Не открылось: сервер не подтвердил доступ')));
   };
   return (
     <>
@@ -40,12 +41,12 @@ export function AdminStatsRow() {
         createPortal(
         <div className="admin-stats" onClick={(e) => e.stopPropagation()}>
           <div className="admin-stats-head">
-            <b>Статистика</b>
+            <b>{t('Статистика')}</b>
             <button className="small-btn ghost" onClick={() => setUrl(null)}>
-              Закрыть
+              {t('Закрыть')}
             </button>
           </div>
-          <iframe src={url} title="Статистика" />
+          <iframe src={url} title={t('Статистика')} />
         </div>,
           document.body,
         )}
@@ -98,11 +99,11 @@ function FpsMeter() {
   const h = deviceHints();
   return (
     <div className="settings-note">
-      <b>FPS (админ):</b> экран {v.screen} · 3D {v.scene} · экономный {s.lowPower ? (s.lowPowerChosen ? 'вкл (сам)' : 'вкл (авто)') : 'выкл'}
-      {fpsCapped() ? ' · ограничен 30' : ''} · DPR {Math.round(devicePixelRatio * 100) / 100}
+      <b>{t('FPS (админ):')}</b> {t('экран {0} · 3D {1} · экономный {2}', { 0: v.screen, 1: v.scene, 2: s.lowPower ? (s.lowPowerChosen ? t('вкл (сам)') : t('вкл (авто)')) : t('выкл') })}
+      {fpsCapped() ? t(' · ограничен 30') : ''} · DPR {Math.round(devicePixelRatio * 100) / 100}
       {h.tgClass ? ` · ${h.tgClass}` : ''}
-      {h.memory ? ` · ${h.memory} ГБ` : ''}
-      {h.cores ? ` · ${h.cores} ядер` : ''}
+      {h.memory ? t(' · {0} ГБ', { 0: h.memory }) : ''}
+      {h.cores ? t(' · {0} ядер', { 0: h.cores }) : ''}
     </div>
   );
 }
@@ -127,19 +128,19 @@ export function DeleteDataRow() {
     return (
       <>
         <button className="link danger-link" onClick={() => setStep('confirm')}>
-          Удалить мои данные
+          {t('Удалить мои данные')}
         </button>
-        {step === 'error' && <div className="muted">Не получилось связаться с сервером. Попробуй ещё раз позже.</div>}
+        {step === 'error' && <div className="muted">{t('Не получилось связаться с сервером. Попробуй ещё раз позже.')}</div>}
       </>
     );
   return (
     <div className="danger-row delete-row">
-      <span>Удалить прогресс, кубки, клан, друзей и статистику с сервера и с телефона? Это нельзя отменить.</span>
+      <span>{t('Удалить прогресс, кубки, клан, друзей и статистику с сервера и с телефона? Это нельзя отменить.')}</span>
       <button className="small-btn danger" disabled={step === 'busy'} onClick={run}>
-        {step === 'busy' ? 'Удаляю…' : 'Удалить'}
+        {step === 'busy' ? t('Удаляю…') : t('Удалить')}
       </button>
       <button className="small-btn ghost" disabled={step === 'busy'} onClick={() => setStep('idle')}>
-        Отмена
+        {t('Отмена')}
       </button>
     </div>
   );

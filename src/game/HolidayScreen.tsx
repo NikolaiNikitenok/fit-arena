@@ -13,6 +13,7 @@ import type { Progress } from './progress';
 import { say } from './story';
 import { sfx } from '../audio';
 import './holiday.css';
+import { locale } from '../i18n';
 
 // Праздник Атлетии: жетоны за повторы, дорожка наград и облик этого года, который потом не получить.
 
@@ -111,9 +112,9 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
           </div>
           <div className="hol-count">
             <HolidayToken id={w.def.id} size={30} />
-            <b>{tokens.toLocaleString('ru')}</b>
+            <b>{tokens.toLocaleString(locale())}</b>
             <span>
-              {tokenWord(w.def, tokens)} из {HOLIDAY_GOAL.toLocaleString('ru')}
+              {tokenWord(w.def, tokens)} из {HOLIDAY_GOAL.toLocaleString(locale())}
             </span>
           </div>
         </div>
@@ -143,7 +144,7 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
           return (
             <div key={s.at} className={`hol-step ${got ? 'got' : ready ? 'ready' : ''} ${big ? 'big' : ''}`}>
               <div className="hol-step-at">
-                <HolidayToken id={w.def.id} size={14} /> {s.at.toLocaleString('ru')}
+                <HolidayToken id={w.def.id} size={14} /> {s.at.toLocaleString(locale())}
               </div>
               <div className="hol-step-prize">
                 <StepPrize step={s} w={w} />
@@ -159,7 +160,7 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
                   </button>
                 ) : (
                   <span className="hol-left">
-                    <Lock size={12} /> {w.live ? `ещё ${(s.at - tokens).toLocaleString('ru')}` : ''}
+                    <Lock size={12} /> {w.live ? `ещё ${(s.at - tokens).toLocaleString(locale())}` : ''}
                   </span>
                 )}
               </div>

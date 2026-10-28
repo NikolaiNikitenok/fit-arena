@@ -9,6 +9,7 @@ import { MonsterFace } from './match3/art';
 import { type Progress, saveProgress } from './progress';
 import { canClaimTitan, claimTitan, TITAN_COINS, TITAN_OUTFIT } from './titan';
 import './titan.css';
+import { locale } from '../i18n';
 
 // Титан: вся страна бьёт одного босса с 12-го по 18-е число. Каждый повтор в любом режиме — удар.
 // Здоровье и урон — с сервера (server/titan.ts), экран обновляется сам, пока Титан жив.
@@ -40,7 +41,7 @@ export function shownTitan(now: number) {
   return !cur.live && now - last.end < TITAN_AFTER_DAYS * DAY ? last : cur;
 }
 
-const n = (x: number) => x.toLocaleString('ru');
+const n = (x: number) => x.toLocaleString(locale());
 const word = (x: number, f: [string, string, string]) => {
   const m10 = x % 10;
   const m100 = x % 100;

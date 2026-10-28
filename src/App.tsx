@@ -9,6 +9,7 @@ import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
 import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
+import { t } from './i18n';
 
 // Дуэль с 3D-ареной и камерой грузится, когда её открыли.
 const Duel = lazy(() => import('./Duel').then((m) => ({ default: m.Duel })));
@@ -16,11 +17,11 @@ const Duel = lazy(() => import('./Duel').then((m) => ({ default: m.Duel })));
 type Tab = AdventureTab | 'duel';
 
 const NAV: { tab: Tab; Icon: typeof Shield; label: string }[] = [
-  { tab: 'hero', Icon: Shield, label: 'Герой' },
-  { tab: 'map', Icon: MapIcon, label: 'Карта' },
-  { tab: 'village', Icon: House, label: 'Деревня' },
-  { tab: 'clan', Icon: Banner, label: 'Клан' },
-  { tab: 'duel', Icon: Swords, label: 'Дуэль' },
+  { tab: 'hero', Icon: Shield, label: t('Герой') },
+  { tab: 'map', Icon: MapIcon, label: t('Карта') },
+  { tab: 'village', Icon: House, label: t('Деревня') },
+  { tab: 'clan', Icon: Banner, label: t('Клан') },
+  { tab: 'duel', Icon: Swords, label: t('Дуэль') },
 ];
 
 export function App() {
@@ -38,8 +39,8 @@ export function App() {
       {tab === 'duel' ? (
         <>
           <div className="app-head">
-            <h1>Дуэль</h1>
-            <span className="muted">кто больше за минуту</span>
+            <h1>{t('Дуэль')}</h1>
+            <span className="muted">{t('кто больше за минуту')}</span>
           </div>
           <div className="tabs small">
             {/* Планка на время в дуэли не годится: бой идёт на повторы. */}
@@ -49,7 +50,7 @@ export function App() {
               </button>
             ))}
           </div>
-          <Suspense fallback={<div className="lazy-loading muted">Загружаем…</div>}>
+          <Suspense fallback={<div className="lazy-loading muted">{t('Загружаем…')}</div>}>
             <Duel exercise={exercise} join={join} friends={friendsFirst} />
           </Suspense>
         </>

@@ -7,6 +7,7 @@ import { drawRecapCard, recapJpeg } from './recapCard';
 import type { Progress } from './progress';
 import { EX_COLOR } from './Stats';
 import './recap.css';
+import { locale } from '../i18n';
 
 // Итоги месяца, как Spotify Wrapped: слайды листаются касанием (слева — назад) и сами через несколько секунд.
 // Последний слайд — картинка для сторис: в Telegram она уходит в сторис, в остальных местах — в «Поделиться».
@@ -41,7 +42,7 @@ function useCount(target: number, on: boolean, ms = 1400): number {
 const fmtDate = (d: string) => `${Number(d.slice(8))} ${MONTHS_OF[Number(d.slice(5, 7)) - 1]}`;
 
 function Big({ n, on }: { n: number; on: boolean }) {
-  return <div className="rc-big">{useCount(n, on).toLocaleString('ru')}</div>;
+  return <div className="rc-big">{useCount(n, on).toLocaleString(locale())}</div>;
 }
 
 const blobBase64 = (b: Blob) =>
@@ -277,7 +278,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur, paused, last]);
 
-  const text = `Мои итоги ${MONTHS_OF[r.m]} в NikitenokArena: ${r.total.toLocaleString('ru')} ${recapWord(r.total, ['повтор', 'повтора', 'повторов'])}, тип героя — «${type.name}» ${type.emoji}`;
+  const text = `Мои итоги ${MONTHS_OF[r.m]} в NikitenokArena: ${r.total.toLocaleString(locale())} ${recapWord(r.total, ['повтор', 'повтора', 'повторов'])}, тип героя — «${type.name}» ${type.emoji}`;
 
   const upload = async (): Promise<string> => {
     if (storyUrl.current) return storyUrl.current;
@@ -385,7 +386,7 @@ function RankSlide({ s, on }: { s: Standing; on: boolean }) {
     <>
       {s.percent != null && (
         <>
-          <div className="rc-kicker">Среди {s.players.toLocaleString('ru')} героев месяца</div>
+          <div className="rc-kicker">Среди {s.players.toLocaleString(locale())} героев месяца</div>
           <div className="rc-title">ты сильнее</div>
           <div className="rc-big">{p}%</div>
         </>

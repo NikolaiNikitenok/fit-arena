@@ -13,6 +13,7 @@ import { useMusic } from '../audio';
 import { useRaidSounds } from '../gameSounds';
 import { useVoiceCoach } from '../voice';
 import { Canvas3D } from '../three/Canvas3D';
+import { locale } from '../i18n';
 
 /** Огромный босс рейда; рядом может стоять герой игрока. */
 export function RaidScene({ raidKey, hit = 0, hero, pulse = 0, dead }: { raidKey: string; hit?: number; hero?: CharacterProps; pulse?: number; dead?: boolean }) {
@@ -137,7 +138,7 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
             <div className="bar-fill" style={{ width: `${(raid.hp / raid.hpMax) * 100}%`, background: boss.glow }} />
           </div>
           <div className="mhud-label">
-            {raid.hp.toLocaleString('ru')} / {raid.hpMax.toLocaleString('ru')} HP · {EXERCISE_LABELS[exercise]} · твой урон {dealt}
+            {raid.hp.toLocaleString(locale())} / {raid.hpMax.toLocaleString(locale())} HP · {EXERCISE_LABELS[exercise]} · твой урон {dealt}
           </div>
         </div>
         {phase === 'fight' && reps > 0 && (

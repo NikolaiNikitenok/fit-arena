@@ -4,6 +4,7 @@ import { Recalibration, Thresholds } from './calibration';
 import { CalibrationOverlay } from './CalibrationOverlay';
 import { EXERCISE_LABELS, RepExercise } from './repCounter';
 import { useRepCamera } from './useRepCamera';
+import { t } from './i18n';
 
 type Phase = 'intro' | 'loading' | 'running' | 'review' | 'error';
 
@@ -39,7 +40,7 @@ export function RecalibrateScreen({ exercise, onClose }: { exercise: RepExercise
       setPhase('running');
     } catch (e) {
       camera.stop();
-      setError(e instanceof Error ? e.message : 'не загрузилась модель распознавания');
+      setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
       setPhase('error');
     }
   };
@@ -62,46 +63,46 @@ export function RecalibrateScreen({ exercise, onClose }: { exercise: RepExercise
       {phase !== 'running' && (
         <div className="calib">
           <div className="calib-card">
-            <div className="level-tag">Калибровка · {label}</div>
+            <div className="level-tag">{t('Калибровка · {0}', { 0: label })}</div>
             {phase === 'intro' || phase === 'loading' ? (
               <>
-                <div className="calib-title">Пройти заново</div>
+                <div className="calib-title">{t('Пройти заново')}</div>
                 <div className="muted light">
-                  Поставь телефон так, чтобы камера видела тебя целиком, и сделай 3 медленных повтора.
-                  {recal.before ? ` Прежняя калибровка (${range(recal.before)}) останется, пока не сохранишь новую.` : ''}
+                  {t('Поставь телефон так, чтобы камера видела тебя целиком, и сделай 3 медленных повтора.')}
+                  {recal.before ? t(' Прежняя калибровка ({0}) останется, пока не сохранишь новую.', { 0: range(recal.before) }) : ''}
                 </div>
                 <button className="primary" disabled={phase === 'loading'} onClick={begin}>
-                  {phase === 'loading' ? 'Включаю камеру…' : 'Начать'}
+                  {phase === 'loading' ? t('Включаю камеру…') : t('Начать')}
                 </button>
                 <button className="small-btn ghost" onClick={close}>
-                  Отмена
+                  {t('Отмена')}
                 </button>
               </>
             ) : phase === 'error' ? (
               <>
-                <div className="calib-title">Камера не запустилась</div>
-                <div className="muted light">{error}. Прежняя калибровка не изменилась.</div>
+                <div className="calib-title">{t('Камера не запустилась')}</div>
+                <div className="muted light">{t('{0}. Прежняя калибровка не изменилась.', { 0: error })}</div>
                 <button className="primary" onClick={begin}>
-                  Попробовать ещё
+                  {t('Попробовать ещё')}
                 </button>
                 <button className="small-btn ghost" onClick={close}>
-                  Закрыть
+                  {t('Закрыть')}
                 </button>
               </>
             ) : (
               <>
-                <div className="calib-title">Новая калибровка готова</div>
+                <div className="calib-title">{t('Новая калибровка готова')}</div>
                 <div className="recal-compare">
                   <div>
-                    <div className="muted">Прежняя</div>
-                    <b>{recal.before ? range(recal.before) : 'общие пороги'}</b>
+                    <div className="muted">{t('Прежняя')}</div>
+                    <b>{recal.before ? range(recal.before) : t('общие пороги')}</b>
                   </div>
                   <div>
-                    <div className="muted">Новая</div>
+                    <div className="muted">{t('Новая')}</div>
                     <b>{result && range(result)}</b>
                   </div>
                 </div>
-                <div className="muted light">Повтор засчитывается, когда угол уходит ниже первого числа и возвращается выше второго.</div>
+                <div className="muted light">{t('Повтор засчитывается, когда угол уходит ниже первого числа и возвращается выше второго.')}</div>
                 <button
                   className="primary"
                   onClick={() => {
@@ -109,10 +110,10 @@ export function RecalibrateScreen({ exercise, onClose }: { exercise: RepExercise
                     close();
                   }}
                 >
-                  Сохранить
+                  {t('Сохранить')}
                 </button>
                 <button className="small-btn ghost" onClick={close}>
-                  Оставить прежнюю
+                  {t('Оставить прежнюю')}
                 </button>
               </>
             )}

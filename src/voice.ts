@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { getSettings } from './settings';
 import { hintLine, holdLine, Line, pickVoice, repLine, timeLine } from './voiceLines';
+import { t } from './i18n';
 
 const synth = (): SpeechSynthesis | null => (typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null);
 
@@ -94,7 +95,7 @@ export function useVoiceCoach(on: boolean, reps: number, leftS: number, hint: st
   useEffect(() => {
     const p = prev.current;
     const now = performance.now();
-    if (on && !p.on) say('Поехали!');
+    if (on && !p.on) say(t('Поехали!'));
     else if (on) {
       const t = timeLine(p.leftS, leftS, total);
       const held = timed && reps > p.reps ? holdLine(reps, target) : null;

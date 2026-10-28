@@ -3,6 +3,7 @@
 import { BOT_USERNAME } from '../telegram';
 import { EX_COLOR } from './Stats';
 import { amountLabel, MONTHS_OF, RECAP_TYPES, type Recap, recapWord } from './recap';
+import { locale } from '../i18n';
 
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -75,7 +76,7 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   g.fillText(extra.name, M, 312, W - 2 * M);
 
   // Главное число.
-  const total = r.total.toLocaleString('ru');
+  const total = r.total.toLocaleString(locale());
   const tg = g.createLinearGradient(M, 360, M, 600);
   tg.addColorStop(0, '#ffd27a');
   tg.addColorStop(1, '#ff7a59');
@@ -101,7 +102,7 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   const tiles: [string, string][] = [
     [`${r.days}`, `${recapWord(r.days, ['день', 'дня', 'дней'])} с тренировкой`],
     [`${r.streak}`, `${recapWord(r.streak, ['день', 'дня', 'дней'])} подряд`],
-    [r.bestDay ? r.bestDay.reps.toLocaleString('ru') : '—', 'в лучший день'],
+    [r.bestDay ? r.bestDay.reps.toLocaleString(locale()) : '—', 'в лучший день'],
   ];
   const tw = (W - 2 * M - 2 * 24) / 3;
   tiles.forEach(([v, l], i) => {

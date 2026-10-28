@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import type { CalibrationView } from './calibration';
 import { EXERCISE_LABELS, RepExercise } from './repCounter';
 import { say } from './voice';
+import { t } from './i18n';
 
-const COUNT = ['Раз', 'Два', 'Три', 'Четыре', 'Пять'];
+const COUNT = [t('Раз'), t('Два'), t('Три'), t('Четыре'), t('Пять')];
 const HOW: Record<RepExercise, string> = {
-  pushup: 'Опускайся грудью к полу и выпрямляй руки до конца',
-  squat: 'Садись поглубже и вставай в полный рост',
-  situp: 'Поднимай корпус как можешь и ложись обратно',
+  pushup: t('Опускайся грудью к полу и выпрямляй руки до конца'),
+  squat: t('Садись поглубже и вставай в полный рост'),
+  situp: t('Поднимай корпус как можешь и ложись обратно'),
 };
 
 // Шкала угла на полоске, градусы.
@@ -18,8 +19,8 @@ const pos = (a: number) => `${Math.min(100, Math.max(0, ((a - SCALE[0]) / (SCALE
  *  again — повторная калибровка из настроек: вместо «Пропустить» — «Отмена», итог ещё не сохранён. */
 export function CalibrationOverlay({ exercise, view, onSkip, again = false }: { exercise: RepExercise; view: CalibrationView; onSkip: () => void; again?: boolean }) {
   const { reps, target, angle, min, max, result } = view;
-  const doneText = again ? 'Готово, сравни с прежней' : 'Готово, теперь считаю под тебя';
-  useEffect(() => say(`Калибровка. Сделай ${target === 3 ? 'три' : target} медленных повтора`), [target]);
+  const doneText = again ? t('Готово, сравни с прежней') : t('Готово, теперь считаю под тебя');
+  useEffect(() => say(t('Калибровка. Сделай {0} медленных повтора', { 0: target === 3 ? t('три') : target })), [target]);
   useEffect(() => {
     if (reps > 0 && !result) say(COUNT[reps - 1] ?? String(reps));
   }, [reps, result]);
@@ -32,15 +33,15 @@ export function CalibrationOverlay({ exercise, view, onSkip, again = false }: { 
       <div className="calib-card">
         {result ? (
           <>
-            <div className="level-tag">Калибровка · {EXERCISE_LABELS[exercise]}</div>
+            <div className="level-tag">{t('Калибровка · {0}', { 0: EXERCISE_LABELS[exercise] })}</div>
             <div className="calib-title">{doneText}</div>
-            <div className="muted light">Повтор засчитаю от {result.down}° до {result.up}°</div>
+            <div className="muted light">{t('Повтор засчитаю от {0}° до {1}°', { 0: result.down, 1: result.up })}</div>
           </>
         ) : (
           <>
-            <div className="level-tag">Калибровка · {EXERCISE_LABELS[exercise]}</div>
-            <div className="calib-title">Сделай {target} медленных повтора</div>
-            <div className="muted light">{HOW[exercise]}. Так я узнаю твою амплитуду и буду считать точнее.</div>
+            <div className="level-tag">{t('Калибровка · {0}', { 0: EXERCISE_LABELS[exercise] })}</div>
+            <div className="calib-title">{t('Сделай {0} медленных повтора', { 0: target })}</div>
+            <div className="muted light">{t('{0}. Так я узнаю твою амплитуду и буду считать точнее.', { 0: HOW[exercise] })}</div>
           </>
         )}
         <div className="calib-reps">
@@ -50,7 +51,7 @@ export function CalibrationOverlay({ exercise, view, onSkip, again = false }: { 
             </span>
           ))}
         </div>
-        <div className="calib-bar" aria-label="Угол сустава">
+        <div className="calib-bar" aria-label={t('Угол сустава')}>
           {min != null && max != null && <div className="calib-range" style={{ left: pos(min), width: `calc(${pos(max)} - ${pos(min)})` }} />}
           {result && (
             <>
@@ -61,13 +62,13 @@ export function CalibrationOverlay({ exercise, view, onSkip, again = false }: { 
           {angle != null && <div className="calib-dot" style={{ left: pos(angle) }} />}
         </div>
         <div className="calib-scale">
-          <span>согнут</span>
-          <span>{angle != null ? `${Math.round(angle)}°` : 'жду позу'}</span>
-          <span>прямо</span>
+          <span>{t('согнут')}</span>
+          <span>{angle != null ? `${Math.round(angle)}°` : t('жду позу')}</span>
+          <span>{t('прямо')}</span>
         </div>
         {!result && (
           <button className="small-btn ghost" onClick={onSkip}>
-            {again ? 'Отмена' : 'Пропустить'}
+            {again ? t('Отмена') : t('Пропустить')}
           </button>
         )}
       </div>
