@@ -73,7 +73,9 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
 
   if (section)
     return (
-      <Sheet onClose={back} bodyClassName="settings-sub">
+      // Свои ключи у шторок раздела и списка: иначе React переиспользует одну шторку, и список
+      // наследует от закрытого свайпом раздела «уехавший» лист — невидимый, но перехватывающий нажатия.
+      <Sheet key={section} onClose={back} bodyClassName="settings-sub">
         <SubHead title={SECTION_TITLES[section]} onBack={back} />
         {section === 'sound' && <Toggles keys={SOUND} />}
         {section === 'training' && (
@@ -126,7 +128,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
   if (admin) rows.push({ id: 'admin', tone: 'rose', icon: <Wrench />, sub: 'Статистика, FPS, заряд подземелья' });
 
   return (
-    <Sheet onClose={onClose}>
+    <Sheet key="list" onClose={onClose}>
       <div className="level-title">Настройки</div>
       <div className="settings-menu">
         {rows.map((r) => (
