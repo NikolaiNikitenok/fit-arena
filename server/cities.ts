@@ -92,6 +92,10 @@ export class CityStore {
     return this.entries.get(id);
   }
 
+  all(): Iterable<CityEntry> {
+    return this.entries.values();
+  }
+
   /** Выбрать город (null — убрать себя из топа). Возвращает ошибку строкой. */
   set(id: string, city: unknown, name: string, now: number): CityEntry | null | string {
     if (city === null || city === '') {

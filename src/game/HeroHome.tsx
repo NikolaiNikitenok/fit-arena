@@ -24,6 +24,7 @@ import { villageOf } from './resources';
 import { Bolt, MonsterFace } from './match3/art';
 import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './match3/dungeon';
 import { homeBadges } from './homeBadges';
+import { MONTHS_OF, recapMonth } from './recap';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
 import './home.css';
 import { Sheet } from '../Sheet';
@@ -77,6 +78,7 @@ interface Props {
   onHoliday: () => void;
   onCollections: () => void;
   onCity: () => void;
+  onRecap: (month: string) => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -142,7 +144,7 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap } = props;
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -188,6 +190,9 @@ export function HeroHome(props: Props) {
   const holShown = hol.live || hol.start - now < 7 * 86_400_000;
   const cols = visibleCollections(now);
   const colsDone = cols.filter((c) => collectionDone(c, progress)).length;
+
+  // Первая неделя месяца: итоги прошлого.
+  const recapM = recapMonth(progress, now);
 
   const pet = progress.pets?.active;
   const petLvl = pet ? petLevel(petXp(progress, pet)).level : 0;
@@ -252,6 +257,17 @@ export function HeroHome(props: Props) {
       </button>
 
       <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
+
+      {recapM && (
+        <button className="hb-recap" onClick={() => onRecap(recapM)}>
+          <span className="hb-recap-emoji">🎉</span>
+          <span className="hb-recap-text">
+            <b>Итоги {MONTHS_OF[Number(recapM.slice(5)) - 1]} готовы</b>
+            <small>Твой месяц в цифрах — посмотри и поделись</small>
+          </span>
+          <Dot n={progress.recapSeen !== recapM} />
+        </button>
+      )}
 
       {holShown && (
         <button className="hb-holiday" style={{ ['--hs1' as string]: hol.def.sky[0], ['--hs2' as string]: hol.def.sky[1], ['--hg' as string]: hol.def.glow }} onClick={onHoliday}>

@@ -12,6 +12,7 @@ import { dailyTask } from './daily';
 import { startCloud, usePro } from '../cloud';
 import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
+import { MONTHS, recapMonths } from './recap';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
 import { canHatch, hatchEgg, petLevel, petLook, petName, petXp } from './pets';
@@ -71,6 +72,7 @@ const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.P
 const HolidayScreen = lazy(() => import('./HolidayScreen').then((m) => ({ default: m.HolidayScreen })));
 const CollectionsSheet = lazy(() => import('./CollectionsSheet').then((m) => ({ default: m.CollectionsSheet })));
 const CitySheet = lazy(() => import('../city/CitySheet').then((m) => ({ default: m.CitySheet })));
+const RecapScreen = lazy(() => import('./Recap').then((m) => ({ default: m.RecapScreen })));
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
 const DungeonScreen = lazy(() => import('./match3/DungeonScreen').then((m) => ({ default: m.DungeonScreen })));
 const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetHatch })));
@@ -154,6 +156,12 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const [holidayOpen, setHolidayOpen] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
+  const [recap, setRecap] = useState<string | null>(null);
+  // Итоги открыты: точка на полосе главной гаснет.
+  const openRecap = (month: string) => {
+    setRecap(month);
+    if (latest.current.recapSeen !== month) setProgress(saveProgress({ ...latest.current, recapSeen: month }));
+  };
   // «Позже» на яйце: спросим снова при следующем запуске.
   const [eggLater, setEggLater] = useState(false);
   const setEventOpen = (open: boolean) => {
@@ -375,7 +383,18 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onLater={() => setEggLater(true)}
         />
       )}
-      {strength && <StrengthSheet progress={progress} now={now} onClose={() => setStrength(false)} />}
+      {strength && (
+        <StrengthSheet
+          progress={progress}
+          now={now}
+          onClose={() => setStrength(false)}
+          onRecap={(m) => {
+            setStrength(false);
+            openRecap(m);
+          }}
+        />
+      )}
+      {recap && <RecapScreen progress={progress} month={recap} onClose={() => setRecap(null)} />}
       {starterGot && (
         <Sheet onClose={() => setStarterGot(false)}>
           <div className="starter-got">
@@ -464,6 +483,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onHoliday={() => setHolidayOpen(true)}
           onCollections={() => setCollectionsOpen(true)}
           onCity={() => setCityOpen(true)}
+          onRecap={openRecap}
         />
         {sheets}
       </>
@@ -782,8 +802,9 @@ const SHOP_TABS: { tab: ShopTab; label: string }[] = [
 const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
 /** «Твоя сила»: рост по упражнениям, серия и повторы за две недели. */
-function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: number; onClose: () => void }) {
+function StrengthSheet({ progress, now, onClose, onRecap }: { progress: Progress; now: number; onClose: () => void; onRecap: (month: string) => void }) {
   const series = streak(progress.days, now);
+  const months = recapMonths(progress, now).slice(0, 6);
   const [view, setView] = useState<'week' | 'month' | 'chart'>('week');
   const last = Array.from({ length: 14 }, (_, i) => {
     const t = now - (13 - i) * 86400000;
@@ -820,6 +841,18 @@ function StrengthSheet({ progress, now, onClose }: { progress: Progress; now: nu
         );
       })}
       <div className="muted">Лучший подход за одну миссию. За 2 недели: {total} повторов.</div>
+      {months.length > 0 && (
+        <>
+          <div className="section-title">🎉 Итоги месяца</div>
+          <div className="recap-months">
+            {months.map((m) => (
+              <button key={m} onClick={() => onRecap(m)}>
+                {MONTHS[Number(m.slice(5)) - 1]} {m.slice(0, 4) !== String(new Date(now).getFullYear()) ? m.slice(0, 4) : ''}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="tabs">
         <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>
           2 недели
