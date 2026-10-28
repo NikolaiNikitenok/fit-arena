@@ -4,6 +4,14 @@
 // перерисовки всей сцены в текстуру, поэтому дешёвая и на телефоне.
 import * as THREE from 'three';
 
+// Обводка включена (не экономный режим). Ставит холст 3D (Canvas3D): он и так знает про режим и при его смене
+// собирает сцену заново — персонажи создаются уже с новым значением.
+let outlinesEnabled = true;
+export const setOutlines = (on: boolean) => {
+  outlinesEnabled = on;
+};
+export const outlinesOn = () => outlinesEnabled;
+
 // Три ступени света: тень, полутон, свет.
 let gradient: THREE.DataTexture | null = null;
 function toonGradient(): THREE.DataTexture {

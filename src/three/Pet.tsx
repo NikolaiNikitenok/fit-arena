@@ -2,8 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PetId } from '../game/pets';
-import { addOutline } from './toon';
-import { getSettings } from '../settings';
+import { addOutline, outlinesOn } from './toon';
 
 // Питомцы героя собраны из простых фигур: моделей животных в наборах KayKit нет.
 // Живут сами: покачиваются, моргают, виляют хвостом, подпрыгивают на каждый повтор.
@@ -448,7 +447,7 @@ export function Pet({ id, stage = 0, sad, hop = 0, lively, run, position, rotati
   // Обводка частей тела: после того как они появились в сцене (видна их мировая величина).
   useEffect(() => {
     const body = parts.current.body;
-    if (!outline || !body || getSettings().lowPower) return;
+    if (!outline || !body || !outlinesOn()) return;
     body.updateWorldMatrix(true, true);
     const ws = new THREE.Vector3();
     const meshes: THREE.Mesh[] = [];

@@ -3,8 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { parseTint } from './Instanced';
-import { addOutline, toonOf } from './toon';
-import { getSettings } from '../settings';
+import { addOutline, outlinesOn, toonOf } from './toon';
 import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
 
 // Персонажи KayKit: рыцарь, маг, варвар, разбойник и скелеты. Скелет у всех общий,
@@ -107,7 +106,7 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       if (mesh.visible) visible.push(mesh);
     });
     // Обводка — после обхода: новые меши в дереве во время обхода не нужны. В экономном режиме без неё.
-    if (outline && !getSettings().lowPower) {
+    if (outline && outlinesOn()) {
       root.updateMatrixWorld(true);
       visible.forEach((m) => addOutline(m));
     }
@@ -249,7 +248,7 @@ function HandItem({ root, gear, outline }: { root: THREE.Object3D; gear: HandGea
       }
       m.material = mat;
     });
-    if (outline && !getSettings().lowPower) {
+    if (outline && outlinesOn()) {
       const meshes: THREE.Mesh[] = [];
       copy.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
       copy.updateWorldMatrix(true, true);

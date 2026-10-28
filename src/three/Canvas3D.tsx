@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Canvas, type CanvasProps, useFrame, useThree } from '@react-three/fiber';
 import { canvasProps, useSettings } from '../settings';
 import { CAP_FPS, fpsCapped, frameDone, probeFps, sceneStarted, subscribeCap } from '../devicePerf';
+import { setOutlines } from './toon';
 
 // Холст 3D для всех сцен игры. Поверх обычного Canvas:
 // — тени, разрешение и сглаживание по настройке «Экономный режим»; кадров — с частотой экрана,
@@ -62,6 +63,8 @@ const MAX_RESTARTS = 3;
 export function Canvas3D({ gl, onCreated, frameloop, children, sharp, ...rest }: CanvasProps & { sharp?: boolean }) {
   const s = useSettings();
   const p = canvasProps(s);
+  // Обводка персонажей — только не в экономном режиме.
+  setOutlines(!s.lowPower);
   const [el, setEl] = useState<HTMLCanvasElement | null>(null);
   const visible = useOnScreen(el);
   const [gen, setGen] = useState(0);
