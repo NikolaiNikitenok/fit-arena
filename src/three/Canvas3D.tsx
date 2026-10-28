@@ -58,7 +58,8 @@ function useOnScreen(el: HTMLElement | null): boolean {
 // Сколько раз подряд пересоздаём сцену после потери WebGL, прежде чем сдаться.
 const MAX_RESTARTS = 3;
 
-export function Canvas3D({ gl, onCreated, frameloop, children, ...rest }: CanvasProps) {
+/** sharp — полное разрешение экрана (герой крупно на главной); иначе не выше 1,6 ради скорости. */
+export function Canvas3D({ gl, onCreated, frameloop, children, sharp, ...rest }: CanvasProps & { sharp?: boolean }) {
   const s = useSettings();
   const p = canvasProps(s);
   const [el, setEl] = useState<HTMLCanvasElement | null>(null);
@@ -111,7 +112,7 @@ export function Canvas3D({ gl, onCreated, frameloop, children, ...rest }: Canvas
       key={key}
       {...rest}
       shadows={p.shadows}
-      dpr={p.dpr}
+      dpr={sharp && !s.lowPower ? [1, 2] : p.dpr}
       gl={typeof gl === 'function' ? gl : { ...gl, ...p.gl }}
       frameloop={!visible || lost ? 'never' : low ? 'demand' : (frameloop ?? 'always')}
       onCreated={(state) => {

@@ -685,7 +685,7 @@ export function HeroTroop({ view, look, keeper, foe }: { view: React.MutableRefO
         <ringGeometry args={[0.42, 0.52, 6]} />
         <meshBasicMaterial color={keeper ? (foe ? '#ff4d6a' : '#7fd8ff') : '#ffd27a'} transparent opacity={0.85} depthWrite={false} />
       </mesh>
-      <Character {...look} anim={anim} pulse={pulse} pulseAnim="attack" hit={hit} scale={scale} />
+      <Character {...look} anim={anim} pulse={pulse} pulseAnim="attack" hit={hit} scale={scale} outline={false} />
     </group>
   );
 }

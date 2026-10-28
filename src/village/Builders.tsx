@@ -84,7 +84,7 @@ function Builder({ b, k }: { b: ViewBld; k: number }) {
   });
   return (
     <group ref={g}>
-      <Character model="Barbarian" tint="mul:1,0.9,0.75" anim={anim} pulse={pulse} pulseAnim="attack" scale={scale} hands={HANDS} />
+      <Character model="Barbarian" tint="mul:1,0.9,0.75" anim={anim} pulse={pulse} pulseAnim="attack" scale={scale} hands={HANDS} outline={false} />
     </group>
   );
 }

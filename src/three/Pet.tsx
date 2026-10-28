@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PetId } from '../game/pets';
+import { addOutline } from './toon';
+import { getSettings } from '../settings';
 
 // Питомцы героя собраны из простых фигур: моделей животных в наборах KayKit нет.
 // Живут сами: покачиваются, моргают, виляют хвостом, подпрыгивают на каждый повтор.
@@ -21,6 +23,8 @@ export interface PetProps {
   rotation?: number;
   scale?: number;
   onClick?: () => void;
+  // Тёмная обводка, как у героя (src/three/toon.ts): на главной питомец стоит рядом с ним.
+  outline?: boolean;
 }
 
 const STAGE_SCALE = [0.72, 0.86, 1];
@@ -429,7 +433,7 @@ const BODIES: Record<PetId, typeof Dragon> = { dragon: Dragon, cat: Cat, owl: Ow
 // Высота головы: над ней висит грустная тучка.
 const HEAD_Y: Record<PetId, number> = { dragon: 0.75, cat: 0.72, owl: 0.7, wolf: 0.74, bug: 0.5, hedgehog: 0.52 };
 
-export function Pet({ id, stage = 0, sad, hop = 0, lively, run, position, rotation = 0, scale = 1, onClick }: PetProps) {
+export function Pet({ id, stage = 0, sad, hop = 0, lively, run, position, rotation = 0, scale = 1, onClick, outline }: PetProps) {
   const parts = useRef<Partial<Record<Parts, THREE.Object3D | null>>>({});
   const reg = useMemo(() => (k: Parts) => (o: THREE.Object3D | null) => void (parts.current[k] = o), []);
   // Когда начался прыжок и когда питомец сам подпрыгнет в следующий раз.
@@ -441,6 +445,24 @@ export function Pet({ id, stage = 0, sad, hop = 0, lively, run, position, rotati
   useEffect(() => {
     if (hop) hopWanted.current = true;
   }, [hop]);
+  // Обводка частей тела: после того как они появились в сцене (видна их мировая величина).
+  useEffect(() => {
+    const body = parts.current.body;
+    if (!outline || !body || getSettings().lowPower) return;
+    body.updateWorldMatrix(true, true);
+    const ws = new THREE.Vector3();
+    const meshes: THREE.Mesh[] = [];
+    body.traverse((o) => {
+      const m = o as THREE.Mesh;
+      // Обводим крупные объёмные части; мелкие (глаза, нос, щёки) и плоские — нет: иначе взгляд в тёмных кольцах.
+      if (!m.isMesh || (m.material as THREE.Material).transparent || (m.material as THREE.Material).type === 'MeshBasicMaterial') return;
+      m.geometry.computeBoundingSphere();
+      if (m.geometry.boundingSphere!.radius * m.getWorldScale(ws).x < 0.06) return;
+      meshes.push(m);
+    });
+    const off = meshes.map((m) => addOutline(m, 0.012));
+    return () => off.forEach((f) => f());
+  }, [outline, id, stage]);
 
   useFrame(({ clock }) => {
     const P = parts.current;
