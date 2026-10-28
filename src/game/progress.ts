@@ -94,6 +94,8 @@ export interface Progress {
   gym?: GymState;
   // Итоги какого месяца уже открыты (YYYY-MM): точка на полосе главной гаснет.
   recapSeen?: string;
+  // Дни, замороженные Pro (YYYY-MM-DD): пропуск не рвёт серию и остаётся в ней, даже когда Pro закончится.
+  freezes?: string[];
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
@@ -446,8 +448,8 @@ export function recordActivity(p: Progress, exercise: Exercise | null, amount: n
 // В неделю можно отдохнуть два дня, и серия не прервётся: мышцам нужен отдых.
 export const REST_PER_WEEK = 2;
 
-/** Серия: дни подряд с тренировками, где до двух пропусков в неделю считаются отдыхом. */
-export function streak(days: Record<string, number>, now: number): { days: number; restLeft: number; today: boolean } {
+/** Серия: дни подряд с тренировками, где до двух пропусков в неделю считаются отдыхом, а замороженные Pro дни — всегда. */
+export function streak(days: Record<string, number>, now: number, freezes: readonly string[] = []): { days: number; restLeft: number; today: boolean } {
   const DAY = 86400000;
   const today = !!days[dayKey(now)];
   let count = 0;
@@ -467,6 +469,11 @@ export function streak(days: Record<string, number>, now: number): { days: numbe
       pending = 0;
       continue;
     }
+    // Заморозка Pro — как отдых, но не тратит дни отдыха недели.
+    if (freezes.includes(key)) {
+      pending++;
+      continue;
+    }
     if (weekRest < REST_PER_WEEK) {
       weekRest++;
       if (i < 7) restUsed++;
@@ -477,6 +484,30 @@ export function streak(days: Record<string, number>, now: number): { days: numbe
     break;
   }
   return { days: count, restLeft: Math.max(0, REST_PER_WEEK - restUsed), today };
+}
+
+/** Серия игрока с его заморозками. */
+export const streakOf = (p: Pick<Progress, 'days' | 'freezes'>, now: number) => streak(p.days, now, p.freezes);
+
+/**
+ * Заморозка Pro: если серия рвётся на пропуске за последнюю неделю, а в последние 7 дней заморозок не было,
+ * этот день замораживается. Только когда это спасает серию. Возвращает новый прогресс или тот же.
+ */
+export function applyFreeze(p: Progress, pro: boolean, now: number): Progress {
+  if (!pro) return p;
+  const DAY = 86400000;
+  const freezes = p.freezes ?? [];
+  const weekAgo = dayKey(now - 6 * DAY);
+  if (freezes.some((d) => d >= weekAgo)) return p;
+  const before = streak(p.days, now, freezes).days;
+  // Ищем первый пропуск, на котором серия рвётся: замораживаем его и смотрим, стала ли серия длиннее.
+  for (let i = p.days[dayKey(now)] ? 0 : 1; i < 8; i++) {
+    const key = dayKey(now - i * DAY);
+    if (p.days[key] || freezes.includes(key)) continue;
+    const next = [...freezes, key];
+    if (streak(p.days, now, next).days > before) return { ...p, freezes: next.slice(-60) };
+  }
+  return p;
 }
 
 // Три замены упражнения в день, например пресс на приседания, когда негде лечь.

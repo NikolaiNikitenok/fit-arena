@@ -67,6 +67,7 @@ import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
 import { CityStore } from './cities';
+import { ProTrials } from './proTrials';
 import { isMonth, RecapBoard } from './recap';
 import { StoryImages } from './storyImages';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
@@ -103,8 +104,13 @@ const accounts = new AccountStore(process.env.ACCOUNTS_FILE ?? join(dirname(proc
 // Pro и админ выдаются по id в Telegram: годится любой вход аккаунта.
 // Купленный за звёзды Pro лежит на аккаунте и на том, кто платил (server/proSales.ts).
 const sales = new ProSales(process.env.PRO_SALES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'pro-sales.json'));
+// Пробный Pro на 3 дня: игрок с Pro раз в сезон дарит его другу.
+const trials = new ProTrials(process.env.PRO_TRIALS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'pro-trials.json'));
 const proIds = (id: string) => [id, ...accounts.logins(id)];
-const isPro = (id: string) => pro.has(id) || accounts.logins(id).some((l) => pro.has(l)) || sales.active(proIds(id));
+// Настоящий Pro (по списку или оплаченный) и Pro с пробником: дарить пробник может только настоящий.
+const paidPro = (id: string) => pro.has(id) || accounts.logins(id).some((l) => pro.has(l)) || sales.active(proIds(id));
+const isPro = (id: string) => paidPro(id) || trials.active(proIds(id), Date.now());
+const proOfferOf = (id: string) => ({ ...sales.offer(proIds(id)), trial: trials.status(proIds(id), paidPro(id), Date.now()) });
 /** Игрок вошёл через мессенджер (не гость из браузера): ему рейтинг, кланы и набеги. */
 const signedId = (id: string) => !id.startsWith('guest:');
 const telemetry = new Telemetry(process.env.TELEMETRY_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'telemetry.json'));
@@ -368,7 +374,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? sales.offer(proIds(who.id)) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -802,8 +808,8 @@ const proCommand = (chatId: number, text: string): boolean => {
 
 // Счета за звёзды: что видит игрок в окне оплаты.
 const INVOICES: Record<SaleKind, { title: string; description: string; price: () => number }> = {
-  pro: { title: 'Pro Pass на сезон', description: 'Золотая дорожка пропуска: награды каждой ступени и облик «Страж Золотого щита». Золотое имя в клане, чате и рейтинге. Действует в Telegram, Max и браузере.', price: () => PRO_PRICE },
-  gift: { title: 'Pro Pass в подарок', description: 'Pro Pass на сезон для друга: золотая дорожка пропуска, золотое имя и облик «Страж Золотого щита». Бот скажет другу, от кого подарок.', price: () => PRO_PRICE },
+  pro: { title: 'Pro Pass на сезон', description: 'Заморозка серии раз в неделю, +25% опыта пропуска, золотая дорожка наград и облик «Страж Золотого щита», золотое имя, 3 дня Pro в подарок другу. Действует в Telegram, Max и браузере.', price: () => PRO_PRICE },
+  gift: { title: 'Pro Pass в подарок', description: 'Pro Pass на сезон для друга: заморозка серии, +25% опыта пропуска, золотая дорожка наград, облик «Страж Золотого щита» и золотое имя. Бот скажет другу, от кого подарок.', price: () => PRO_PRICE },
   starter: { title: 'Набор «Новичок»', description: 'Облик «Искатель приключений» и сундук новичка: 1000 монет, 3 зелья бодрости и 2 свитка замены. Продаётся один раз.', price: () => STARTER_PRICE },
 };
 
@@ -814,8 +820,16 @@ async function onProApi(path: string, req: IncomingMessage, res: ServerResponse)
   const body = await readJson(req).catch(() => null);
   const who = body && signedIn(body);
   if (!who) return reply(401, { error: 'Войди через Telegram, Max или Яндекс, чтобы купить Pro' });
-  const offer = sales.offer(proIds(who.id));
-  if (path === '/api/pro/status') return reply(200, { pro: isPro(who.id), proOffer: offer, starter: sales.starter(proIds(who.id)) });
+  if (path === '/api/pro/status') return reply(200, { pro: isPro(who.id), proOffer: proOfferOf(who.id), starter: sales.starter(proIds(who.id)) });
+  if (path === '/api/pro/trial') {
+    const to = typeof body!.for === 'string' ? body!.for : '';
+    if (to === who.id || !friends.areFriends(who.id, to)) return reply(403, { error: 'Пробный Pro можно подарить только другу' });
+    const now = Date.now();
+    const t = trials.give(proIds(who.id), proIds(to), paidPro(who.id), sales.paidUntil(proIds(to)) > 0 || paidPro(to), now);
+    if (typeof t === 'string') return reply(409, { error: t });
+    sendFriendBot(to, `🎁 ${who.name} дарит тебе 3 дня Pro Pass в NikitenokArena! Золотая дорожка наград, золотое имя, заморозка серии и +25% опыта пропуска.`, 'Открыть пропуск', '?tab=pass');
+    return reply(200, { until: t.until, proOffer: proOfferOf(who.id) });
+  }
   if (path !== '/api/pro/invoice') return reply(404, { error: 'not found' });
   if (!BOT_TOKEN) return reply(503, { error: 'Оплата пока не работает: бот не подключён' });
   const kind: SaleKind = body!.kind === 'gift' || body!.kind === 'starter' ? body!.kind : 'pro';
@@ -1387,5 +1401,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     villages.flush();
     accounts.flush();
     sales.flush();
+    trials.flush();
     process.exit(0);
   });

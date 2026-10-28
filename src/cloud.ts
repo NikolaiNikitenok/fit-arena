@@ -94,6 +94,8 @@ export interface ProOffer {
   until: number | null;
   canBuy: boolean;
   price: number;
+  // Пробный Pro (server/proTrials.ts): можно ли подарить другу, кому подарен в сезоне, до когда свой пробник.
+  trial?: { canGive: boolean; givenTo: string | null; until: number | null };
 }
 // starter — набор «Новичок» за звёзды: цена и куплен ли (null — гость).
 export interface StarterOffer {
@@ -232,6 +234,19 @@ export async function refreshPro(): Promise<{ pro: boolean; proOffer: ProOffer; 
     listeners.forEach((fn) => fn(cloud!));
   }
   return r;
+}
+
+/** Подарить другу 3 дня Pro бесплатно (раз в сезон, только с Pro). Ошибка — текстом от сервера. */
+export async function giftTrial(forId: string): Promise<void> {
+  try {
+    const r = (await post('/api/pro/trial', { for: forId })) as { proOffer: ProOffer };
+    if (cloud) {
+      cloud = { ...cloud, proOffer: r.proOffer };
+      listeners.forEach((fn) => fn(cloud!));
+    }
+  } catch (e) {
+    throw new Error((e as { body?: { error?: string } }).body?.error ?? 'Нет связи с сервером');
+  }
 }
 
 /** Набор «Новичок» (null — до ответа сервера или гость). */

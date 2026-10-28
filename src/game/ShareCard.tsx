@@ -10,7 +10,7 @@ import { itemById } from './items';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
 import { heroHands } from './power';
-import { heroLevel, heroTitle, heroXp, Progress, streak } from './progress';
+import { heroLevel, heroTitle, heroXp, Progress, streakOf } from './progress';
 import './ShareCard.css';
 import { Sheet } from '../Sheet';
 
@@ -58,7 +58,7 @@ const plural = (n: number, one: string, few: string, many: string) => {
 function heroBits(p: Progress) {
   const item = itemById(p.equipped);
   const level = heroLevel(heroXp(p)).level;
-  const days = streak(p.days, Date.now()).days;
+  const days = streakOf(p, Date.now()).days;
   const name = userName();
   return {
     hero: { model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(p) },

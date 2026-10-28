@@ -48,6 +48,8 @@ describe('задания пропуска', () => {
     expect(passOf(done, tue).xp).toBe(200);
     expect(claimQuest(done, reps, tue)).toBeNull();
     expect(claimQuest(p, { ...reps, target: 71 }, tue)).toBeNull();
+    // С Pro — на четверть больше опыта.
+    expect(passOf(claimQuest(p, reps, tue, true)!, tue).xp).toBe(250);
   });
 
   it('новый сезон — пропуск с нуля', () => {

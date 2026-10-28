@@ -45,7 +45,7 @@ function heroOf(d: FriendsDeps, id: string, now: number) {
   const days = p?.days ?? {};
   const level = d.heroLevel?.(id) ?? heroLevel(heroXp({ days, stars: p?.stars ?? {} } as Progress)).level;
   const trained = Object.keys(days).filter((d) => days[d] > 0).sort();
-  return { level, lastDay: trained[trained.length - 1] ?? null, streak: trained.length ? streak(days, now).days : 0 };
+  return { level, lastDay: trained[trained.length - 1] ?? null, streak: trained.length ? streak(days, now, Array.isArray(p?.freezes) ? p.freezes : []).days : 0 };
 }
 
 export const isOnline = (d: FriendsDeps, id: string) => d.connected(id) || d.friends.seenRecently(id);

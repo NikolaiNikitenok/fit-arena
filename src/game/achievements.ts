@@ -2,7 +2,7 @@
 import type { Exercise } from '../repCounter';
 import { gearById, itemById } from './items';
 import { LEVELS } from './levels';
-import { type Progress, streak } from './progress';
+import { type Progress, streakOf } from './progress';
 import { programById, type ProgramId } from './programs';
 import { dungeonOf } from './match3/dungeon';
 import { COLLECTIONS, collectionOwned } from './collections';
@@ -32,7 +32,7 @@ const worldDone = (p: Progress, world: number) => LEVELS.filter((l) => l.world =
 const threeStars = (p: Progress) => Object.values(p.stars).filter((s) => s >= 3).length;
 const best = (ex: Exercise) => (p: Progress) => p.best[ex]?.reps ?? 0;
 // Самая длинная серия за всё время не хранится, поэтому берём текущую: её и надо удержать.
-const series = (p: Progress, now: number) => streak(p.days, now).days;
+const series = (p: Progress, now: number) => streakOf(p, now).days;
 const legendary = (p: Progress) => p.items.filter((id) => (gearById(id) ?? itemById(id))?.rarity === 'legendary').length;
 
 const PROGRAM_TITLES: [ProgramId, string, AchIcon, AchTier][] = [
