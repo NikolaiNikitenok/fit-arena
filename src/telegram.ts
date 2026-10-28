@@ -17,6 +17,11 @@ interface TelegramWebApp {
   safeAreaInset?: { top: number; bottom: number };
   contentSafeAreaInset?: { top: number; bottom: number };
   onEvent?(event: string, cb: () => void): void;
+  // Bot API 8.0: полноэкранный режим без шапки Telegram.
+  platform?: string;
+  isFullscreen?: boolean;
+  isVersionAtLeast?(version: string): boolean;
+  requestFullscreen?(): void;
   // Bot API 8.0: скачать файл по https-ссылке; Bot API 7.8: история с картинкой по https-ссылке.
   downloadFile?(params: { url: string; file_name: string }, cb?: (accepted: boolean) => void): void;
   shareToStory?(mediaUrl: string, params?: { text?: string; widget_link?: { url: string; name?: string } }): void;
@@ -117,6 +122,13 @@ export const signedInWeb = () => platform === 'web' && !!getSession();
 export function initTelegram(): void {
   tg?.ready();
   tg?.expand();
+  // Во весь экран, как бы игру ни открыли (кнопка в сообщении, ссылка друга): только на телефоне —
+  // на компьютере полный экран занял бы весь монитор.
+  try {
+    if (tg && /^(ios|android)/.test(tg.platform ?? '') && tg.isVersionAtLeast?.('8.0') && !tg.isFullscreen) tg.requestFullscreen?.();
+  } catch {
+    // Клиенты до Bot API 8.0.
+  }
   // Без этого свайп вниз по карте сворачивает всё мини-приложение.
   try {
     tg?.disableVerticalSwipes?.();
