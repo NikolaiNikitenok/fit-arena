@@ -227,6 +227,11 @@ function HandItem({ root, gear, outline }: { root: THREE.Object3D; gear: HandGea
       const bone = root.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(gear.bone ?? 'handslot.r'));
       if (!bone) return;
       const item = gear.make();
+      // Мультяшный материал и у своего предмета — как у остального снаряжения.
+      item.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && (m.material as THREE.MeshStandardMaterial).isMeshStandardMaterial) m.material = toonOf(m.material as THREE.MeshStandardMaterial);
+      });
       bone.add(item);
       if (outline && outlinesOn()) outlineAll(item);
       return () => {
