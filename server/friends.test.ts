@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CHALLENGE_GAP, CHALLENGE_TTL, FRIENDS_MAX, FriendStore, isQuiet, OUTGOING_MAX } from './friends';
 import { type FriendsDeps, friendsApi } from './friendsApi';
 import type { FriendsState } from '../shared/protocol';
+import { Referrals } from './referrals';
 
 // Вторник, 12:00 по Москве.
 const NOON = Date.parse('2026-10-20T12:00:00+03:00');
@@ -189,6 +190,20 @@ describe('друзья: запросы экрана', () => {
     expect(f.streak).toBeGreaterThanOrEqual(1);
     // Владельцу ссылки — сообщение «теперь вы друзья» в очереди.
     expect(s.takeNotices().map((n) => n.to)).toEqual(['tg:1']);
+  });
+
+  it('«Приведи друга»: засчитывается только новичок, пришедший по ссылке', () => {
+    const { api, d } = deps();
+    d.referrals = new Referrals(null);
+    const a = api('tg:1', '');
+    // tg:3 — новичок (прогресса ещё нет), tg:2 уже тренировался два дня.
+    api('tg:3', '');
+    api('tg:3', '/add', { invite: a.invite });
+    api('tg:2', '');
+    api('tg:2', '/add', { invite: a.invite });
+    expect(api('tg:1', '').referrals).toEqual({ brought: [{ id: 'tg:3', name: 'Боря', active: false }], by: null, me: false });
+    expect(api('tg:3', '').referrals).toMatchObject({ brought: [], by: { id: 'tg:1', name: 'Аня' }, me: false });
+    expect(api('tg:2', '').referrals?.by).toBeNull();
   });
 
   it('вызов: в сети — карточка, не в сети — бот, ночью и с выключенными уведомлениями — нет', () => {

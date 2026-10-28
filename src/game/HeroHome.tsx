@@ -25,6 +25,7 @@ import { Bolt, MonsterFace } from './match3/art';
 import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './match3/dungeon';
 import { homeBadges } from './homeBadges';
 import { MONTHS_OF, recapMonth } from './recap';
+import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
 import './home.css';
 import { Sheet } from '../Sheet';
@@ -79,6 +80,7 @@ interface Props {
   onCollections: () => void;
   onCity: () => void;
   onRecap: (month: string) => void;
+  onTitan: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -144,7 +146,7 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan } = props;
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -193,6 +195,10 @@ export function HeroHome(props: Props) {
 
   // Первая неделя месяца: итоги прошлого.
   const recapM = recapMonth(progress, now);
+  // Титан: за 3 дня до появления — анонс, пока идёт — битва, 3 дня после — итоги и награда.
+  const titan = titanWindow(now);
+  const titanLast = lastTitan(now);
+  const titanShown = titan.live || titan.start - now < 3 * 86_400_000 ? titan : now - titanLast.end < 3 * 86_400_000 ? titanLast : null;
 
   const pet = progress.pets?.active;
   const petLvl = pet ? petLevel(petXp(progress, pet)).level : 0;
@@ -257,6 +263,17 @@ export function HeroHome(props: Props) {
       </button>
 
       <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
+
+      {titanShown && (
+        <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>
+          <MonsterFace shape="golem" color={titanShown.def.color} boss angry size={44} />
+          <span className="hb-titan-text">
+            <b>{titanShown.def.name}</b>
+            <small>{titanShown.live ? `Вся страна бьёт Титана · ещё ${fmtLeft(titanShown.end - now)}` : now < titanShown.start ? `Нападёт ${fmtDays(Math.ceil((titanShown.start - now) / 86_400_000))} — готовься` : 'Битва окончена: итоги и награда'}</small>
+          </span>
+          <Dot n={titanShown.live} />
+        </button>
+      )}
 
       {recapM && (
         <button className="hb-recap" onClick={() => onRecap(recapM)}>

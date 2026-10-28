@@ -56,6 +56,10 @@ export interface Item {
   paid?: boolean;
   // Только с дорожки праздника этого года (src/game/holidays.ts): ключ праздника, после него больше не выдаётся.
   holiday?: string;
+  // Только за приглашённых друзей (src/game/referral.ts).
+  ref?: boolean;
+  // Только за победу над Титаном (src/game/titan.ts).
+  titan?: boolean;
 }
 
 export const ITEMS: Item[] = [
@@ -92,6 +96,10 @@ export const ITEMS: Item[] = [
   { id: 'prog-bogatyr', hero: 'Barbarian', name: 'Богатырь', rarity: 'epic', color: '#ffb46b', glow: '#ffa726', tint: 'mul:1.25,1.05,0.7', coinBonus: 0.15, price: 0, inShop: false, program: true },
   { id: 'prog-stone', hero: 'Knight', name: 'Каменный страж', rarity: 'epic', color: '#a8a29e', glow: '#c4b5fd', tint: 'mul:0.8,0.78,0.85', coinBonus: 0.15, price: 0, inShop: false, program: true },
   { id: 'prog-champion', hero: 'Knight', name: 'Чемпион Грома', rarity: 'legendary', color: '#ffd27a', glow: '#ff8a5c', tint: 'mul:1.4,0.95,0.6', coinBonus: 0.25, price: 0, inShop: false, program: true },
+  // «Приведи друга» и Титан: в сундуках и лавке их нет.
+  { id: 'ref-brother', hero: 'Rogue', name: 'Побратим', rarity: 'epic', color: '#4dd0e1', glow: '#00e5ff', tint: 'mul:0.7,1.1,1.35', coinBonus: 0.15, price: 0, inShop: false, ref: true },
+  { id: 'ref-leader', hero: 'Barbarian', name: 'Вожак стаи', rarity: 'legendary', color: '#b388ff', glow: '#7c4dff', tint: 'mul:0.95,0.7,1.45', coinBonus: 0.25, price: 0, inShop: false, ref: true },
+  { id: 'titan-slayer', hero: 'Knight', name: 'Титаноборец', rarity: 'legendary', color: '#ff7043', glow: '#ffd180', tint: 'mul:1.4,0.9,0.7', coinBonus: 0.25, price: 0, inShop: false, titan: true },
   // Облики праздников (src/game/holidayDefs.ts): у каждого праздника каждого года свой.
   ...holidayOutfits().map(({ id, key, name, hero, color, glow, tint }): Item => ({ id, hero, name, rarity: 'legendary', color, glow, tint, coinBonus: 0.25, price: 0, inShop: false, holiday: key })),
 ];
@@ -237,7 +245,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && !i.holiday && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && !i.holiday && !i.ref && !i.titan && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };

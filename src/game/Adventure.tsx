@@ -74,6 +74,7 @@ const HolidayScreen = lazy(() => import('./HolidayScreen').then((m) => ({ defaul
 const CollectionsSheet = lazy(() => import('./CollectionsSheet').then((m) => ({ default: m.CollectionsSheet })));
 const CitySheet = lazy(() => import('../city/CitySheet').then((m) => ({ default: m.CitySheet })));
 const RecapScreen = lazy(() => import('./Recap').then((m) => ({ default: m.RecapScreen })));
+const TitanScreen = lazy(() => import('./TitanScreen').then((m) => ({ default: m.TitanScreen })));
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
 const DungeonScreen = lazy(() => import('./match3/DungeonScreen').then((m) => ({ default: m.DungeonScreen })));
 const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetHatch })));
@@ -158,6 +159,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
   const [recap, setRecap] = useState<string | null>(null);
+  const [titanOpen, setTitanOpen] = useState(false);
   // Итоги открыты: точка на полосе главной гаснет.
   const openRecap = (month: string) => {
     setRecap(month);
@@ -407,6 +409,17 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
         />
       )}
       {recap && <RecapScreen progress={progress} month={recap} onClose={() => setRecap(null)} />}
+      {titanOpen && (
+        <TitanScreen
+          progress={progress}
+          setProgress={setProgress}
+          onTrain={() => {
+            setTitanOpen(false);
+            setPlaying(currentDef);
+          }}
+          onClose={() => setTitanOpen(false)}
+        />
+      )}
       {starterGot && (
         <Sheet onClose={() => setStarterGot(false)}>
           <div className="starter-got">
@@ -496,6 +509,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onCollections={() => setCollectionsOpen(true)}
           onCity={() => setCityOpen(true)}
           onRecap={openRecap}
+          onTitan={() => setTitanOpen(true)}
         />
         {sheets}
       </>

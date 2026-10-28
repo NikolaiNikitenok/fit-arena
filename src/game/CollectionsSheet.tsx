@@ -20,6 +20,8 @@ export function whereToGet(i: Item, now: number): string {
     return `босс ${MONTHS[m]}`;
   }
   if (i.program) return 'программа Грома';
+  if (i.ref) return i.id === 'ref-leader' ? 'приведи троих друзей' : 'приведи друга';
+  if (i.titan) return 'победа над Титаном';
   if (i.pass) return 'пропуск сезона';
   if (i.holiday) {
     const w = holidayByKey(i.holiday);

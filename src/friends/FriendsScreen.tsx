@@ -1,6 +1,6 @@
 // Экран друзей во вкладке «Дуэль»: список, заявки, вызов на дуэль в один тап.
 import { useEffect, useState } from 'react';
-import type { FriendView } from '../../shared/protocol';
+import type { FriendsState, FriendView } from '../../shared/protocol';
 import { leagueOf } from '../../shared/rating';
 import { Check, Cross, Flame, Star, Swords, UserPlus, Users } from '../icons';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
@@ -10,6 +10,9 @@ import { payStars } from '../payments';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
+import { itemById } from '../game/items';
+import { loadProgress, saveProgress } from '../game/progress';
+import { claimRef, INVITED_COINS, REF_COINS, REF_LEADER_AT, refCount, type RefReward, refPending } from '../game/referral';
 
 const NOTE_TEXT = {
   app: 'Друг в игре — ему пришло приглашение. Ждём его на арене!',
@@ -109,6 +112,8 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
         </button>
       )}
 
+      <RefCard refs={data.referrals} onInvite={() => setAdding(true)} />
+
       {data.incoming.length > 0 && (
         <>
           <div className="section-title">Заявки в друзья</div>
@@ -185,6 +190,52 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
       )}
       {adding && <AddFriendSheet data={data} busy={busy === 'add'} onAdd={(code) => run('add', friendsApi.add({ code })).then((r) => r && !r.error && setAdding(false))} onClose={() => setAdding(false)} />}
     </>
+  );
+}
+
+/** «Приведи друга»: награды за друзей, пришедших по ссылке, и за то, что пришёл сам. */
+function RefCard({ refs, onInvite }: { refs: FriendsState['referrals']; onInvite: () => void }) {
+  const [p, setP] = useState(loadProgress);
+  const [got, setGot] = useState<string | null>(null);
+  if (!refs) return null;
+  const pending = refPending(refs, p);
+  const count = refCount(p);
+  const waiting = refs.brought.filter((r) => !r.active);
+  const claim = (r: RefReward) => {
+    const res = claimRef(loadProgress(), r);
+    setP(saveProgress(res.progress));
+    const outfits = res.outfits.map((id) => `«${itemById(id).name}»`).join(' и ');
+    setGot([res.coins ? `+${res.coins} монет` : '', outfits ? `облик ${outfits}` : ''].filter(Boolean).join(' и ') || 'Засчитано!');
+  };
+  return (
+    <div className="ref-card">
+      <div className="ref-head">
+        <span className="ref-emoji">🤝</span>
+        <span>
+          <b>Приведи друга</b>
+          <small>
+            Друг пришёл по твоей ссылке и провёл первый бой — тебе {REF_COINS} монет, ему {INVITED_COINS}, обоим облик «Побратим». За {REF_LEADER_AT} друзей — легендарный «Вожак стаи».
+          </small>
+        </span>
+      </div>
+      <div className="ref-bar">
+        <div style={{ width: `${Math.min(100, (count / REF_LEADER_AT) * 100)}%` }} />
+        <span>
+          {Math.min(count, REF_LEADER_AT)} из {REF_LEADER_AT}
+        </span>
+      </div>
+      {pending.map((r) => (
+        <button key={r.key} className="small-btn ref-claim" onClick={() => claim(r)}>
+          🎁 {r.self ? `Награда за приглашение от ${r.name}` : `${r.name} в деле — забрать награду`}
+        </button>
+      ))}
+      {got && <div className="ref-got">{got}</div>}
+      {refs.by && !refs.me && <div className="muted">Тебя позвал {refs.by.name}: проведи первый бой — и вы оба получите награду.</div>}
+      {waiting.length > 0 && <div className="muted">Ждём первый бой: {waiting.map((r) => r.name).join(', ')}</div>}
+      <button className="secondary" onClick={onInvite}>
+        Позвать друга по ссылке
+      </button>
+    </div>
   );
 }
 

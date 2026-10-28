@@ -18,6 +18,9 @@ export interface DeleteDeps {
   villages: Pick<VillageStore, 'forget'>;
   // Город в топе городов.
   cities?: Pick<CityStore, 'forget'>;
+  // «Приведи друга» и пробный Pro: кто кого позвал.
+  referrals?: { forget: (id: string) => void };
+  trials?: { forget: (id: string) => void };
 }
 
 export const DELETED_NAME = 'Удалённый игрок';
@@ -50,5 +53,7 @@ export function deletePlayer(d: DeleteDeps, id: string, now: number) {
   d.telemetry.forget(id);
   d.villages.forget(id);
   d.cities?.forget(id);
+  d.referrals?.forget(id);
+  d.trials?.forget(id);
   return { clan: left };
 }
