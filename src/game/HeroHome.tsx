@@ -316,6 +316,7 @@ export function HeroHome(props: Props) {
     const world = LANDS[current.land].world;
     const moreDot = badges.achievements || (extra.includes('titan') && titanShown?.live) || (extra.includes('recap') && recapFresh);
     return (
+      <>
       <div className="hv">
         <div className="hv-stage" role="button" tabIndex={0} aria-label="Герой и снаряжение" onClick={() => setHeroOpen(true)} onKeyDown={(e) => e.key === 'Enter' && setHeroOpen(true)}>
           <WorldBackdrop world={world} />
@@ -377,6 +378,9 @@ export function HeroHome(props: Props) {
           </button>
         </div>
 
+        </div>
+
+        {/* Листы — вне .hv: внутри него (fixed) они оказались бы под нижним меню. */}
         {moreOpen && (
           <Sheet onClose={() => setMoreOpen(false)}>
             <div className="level-title">Все разделы</div>
@@ -398,7 +402,7 @@ export function HeroHome(props: Props) {
           </Sheet>
         )}
         {heroOpen && <HeroSheet {...props} onClose={() => setHeroOpen(false)} />}
-      </div>
+      </>
     );
   }
 
