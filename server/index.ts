@@ -68,6 +68,8 @@ import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
 import { CityStore } from './cities';
 import { ProTrials } from './proTrials';
+import { isActive, Referrals } from './referrals';
+import { TitanBoard } from './titan';
 import { isMonth, RecapBoard } from './recap';
 import { StoryImages } from './storyImages';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
@@ -97,6 +99,14 @@ const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process
 const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'cities.json'));
 // Итоги месяца: место среди игроков и города. Картинки для сторис Telegram — рядом с данными, живут двое суток.
 const recap = new RecapBoard({ saves: () => saves.all(), cities: () => cities.all() });
+// Титан: общий босс страны раз в месяц. Имена героев для топа — из города, друзей или последнего запроса.
+const titanNames = new Map<string, string>();
+const titan = new TitanBoard(process.env.TITANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'titans.json'), {
+  saves: () => saves.all(),
+  cities: () => cities.all(),
+  nameOf: (id) => cities.get(id)?.name ?? friends.get(id)?.name ?? titanNames.get(id),
+  isPro: (id) => isPro(id),
+});
 const stories = new StoryImages(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'stories'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 // Единый аккаунт: вход tg:123 → аккаунт, под которым лежит всё остальное (server/accounts.ts).
@@ -105,6 +115,8 @@ const accounts = new AccountStore(process.env.ACCOUNTS_FILE ?? join(dirname(proc
 // Купленный за звёзды Pro лежит на аккаунте и на том, кто платил (server/proSales.ts).
 const sales = new ProSales(process.env.PRO_SALES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'pro-sales.json'));
 // Пробный Pro на 3 дня: игрок с Pro раз в сезон дарит его другу.
+// «Приведи друга»: кто пришёл по ссылке-приглашению.
+const referrals = new Referrals(process.env.REFERRALS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'referrals.json'));
 const trials = new ProTrials(process.env.PRO_TRIALS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'pro-trials.json'));
 const proIds = (id: string) => [id, ...accounts.logins(id)];
 // Настоящий Pro (по списку или оплаченный) и Pro с пробником: дарить пробник может только настоящий.
@@ -382,6 +394,11 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     // Слишком большую копию сервер не хранит: говорим об этом, а не молча оставляем старую.
     if (JSON.stringify(body!.progress ?? null).length > SAVE_MAX_BYTES) return reply(413, { error: 'progress too large' });
     const s = saves.put(who.id, body!.progress);
+    // Друг, пришедший по приглашению, провёл первый бой: пригласившему — сообщение (один раз).
+    if (referrals.by(who.id) && isActive(s.progress)) {
+      const r = referrals.activated(who.id);
+      if (r) sendFriendBot(r.inviter, `🎉 ${friends.get(who.id)?.name ?? 'Твой друг'} провёл первый бой в NikitenokArena! Награда «Приведи друга» ждёт тебя в «Друзьях».`, 'Забрать награду', '?tab=friends');
+    }
     // Копия принята: обновляем снимок деревни для набегов (невозможный снимок отклоняется и отмечается).
     if (s.progress === body!.progress) villages.update(who.id, s.progress, villageName(who.id, body!));
     return reply(200, { savedAt: s.savedAt });
@@ -553,6 +570,7 @@ const friendsDeps: FriendsDeps = {
     return room.code;
   },
   roomAlive: (code) => !!rooms.get(code) && !rooms.get(code)!.empty,
+  referrals,
   sendBot: sendFriendBot,
   tellDuel: (id, text) => online.get(id)?.send({ type: 'error', message: text }),
 };
@@ -671,6 +689,19 @@ async function onRecapApi(path: string, req: IncomingMessage, res: ServerRespons
   reply(200, recap.standing(who.id, body!.month, now));
 }
 
+/** Титан: POST /api/titan ({ key? }) — здоровье, урон, топ городов и героев, мой вклад. */
+async function onTitanApi(req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Войди через Telegram, Max или Яндекс' });
+  // Имя — из подписи мессенджера, у гостя (сервер для разработки) — из запроса.
+  const name = signedIn(body!)?.name ?? cleanName(body!.name);
+  if (name !== 'Боец' && name !== 'Гость' && titanNames.size < 100_000) titanNames.set(who.id, name);
+  reply(200, titan.state(who.id, Date.now(), isMonth(body!.key) ? body!.key : undefined));
+}
+
 /** GET /api/story/<id>.jpg: картинка для сторис. */
 function onStoryImage(path: string, res: ServerResponse) {
   const img = stories.get(path.slice('/api/story/'.length).replace(/\.jpg$/, ''), Date.now());
@@ -688,7 +719,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const now = Date.now();
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
-    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities }, id, now);
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, now);
     if (clan) {
       sendClan(clan);
       toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -701,7 +732,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 /** Убрать героя аккаунта, которого не выбрали при привязке: копия прогресса и кубки — в архив, остальное как «Удалить мои данные». */
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
-  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities }, id, Date.now());
+  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, Date.now());
   if (clan) {
     sendClan(clan);
     toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -935,6 +966,10 @@ const http = createServer((req, res) => {
     return;
   }
   if (path.startsWith('/api/story/') && req.method === 'GET') return onStoryImage(path, res);
+  if (path === '/api/titan') {
+    onTitanApi(req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
   if (path === '/api/friends' || path.startsWith('/api/friends/') || path === '/api/moderation' || path.startsWith('/api/moderation/')) {
     onFriendsApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
@@ -1402,5 +1437,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     accounts.flush();
     sales.flush();
     trials.flush();
+    referrals.flush();
+    titan.flush();
     process.exit(0);
   });

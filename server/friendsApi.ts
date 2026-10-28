@@ -11,6 +11,7 @@ import type { ChallengeView, FriendRequestView, FriendsState, FriendView } from 
 import { EXERCISE_LABELS, isRepExercise, type Exercise } from '../src/repCounter';
 import { heroLevel, heroXp, streak, type Progress } from '../src/game/progress';
 import { type Challenge, CHALLENGE_TTL, type FriendStore, isQuiet } from './friends';
+import { isActive, isNewbie, type Referrals } from './referrals';
 
 export interface FriendsDeps {
   friends: FriendStore;
@@ -32,6 +33,8 @@ export interface FriendsDeps {
   sendBot: (to: string, text: string, button: string, query: string) => void;
   // Сказать вызвавшему, если он ждёт в комнате боя.
   tellDuel: (id: string, text: string) => void;
+  // «Приведи друга»: без него награды за приглашения не считаются.
+  referrals?: Referrals;
 }
 
 export type ChallengeNote = 'app' | 'bot' | 'quiet' | 'off';
@@ -97,7 +100,14 @@ export function friendsState(d: FriendsDeps, id: string, name: string): FriendsS
     incoming: [...me.requests].reverse().map((r) => request(r.from, r.at)),
     outgoing: d.friends.outgoing(id).map((r) => request(r.to.id, r.at)),
     challenges: inbox(d, id),
+    referrals: d.referrals ? referralsOf(d, d.referrals, id) : undefined,
   };
+}
+
+function referralsOf(d: FriendsDeps, refs: Referrals, id: string): NonNullable<FriendsState['referrals']> {
+  const view = (pid: string) => ({ id: pid, name: d.friends.get(pid)?.name ?? 'Боец', active: isActive(d.progress(pid)) });
+  const by = refs.by(id);
+  return { brought: refs.brought(id).map((r) => view(r.invitee)), by: by ? view(by.inviter) : null, me: isActive(d.progress(id)) };
 }
 
 /** Друга вызвали: решаем, как ему сказать, и говорим. */
@@ -130,6 +140,8 @@ export function friendsApi(d: FriendsDeps, path: string, me: { id: string; name:
       if (body.invite) {
         const r = d.friends.acceptInvite(me.id, body.invite);
         if (typeof r === 'string') return fail(r);
+        // Новичок по ссылке друга: обоим награда, когда он проведёт первый бой.
+        if (d.referrals && isNewbie(d.progress(me.id))) d.referrals.add(r.id, me.id, d.now());
         d.friends.notify(r.id, `🤝 ${me.name} принял твоё приглашение — теперь вы друзья в NikitenokArena. Вызови на дуэль: кто больше за минуту?`, 'Друзья', '?tab=friends');
         return ok({ added: r.name });
       }

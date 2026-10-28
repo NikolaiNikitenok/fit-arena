@@ -1,0 +1,24 @@
+/* Титан: общий босс страны (src/game/TitanScreen.tsx). Цвет и свечение — у каждого месяца свои (--tc, --tg). */
+.titan-sheet > * { flex: none; }
+.titan-sheet .city-row { text-align: left; }
+.titan-sheet { text-align: center; background: radial-gradient(120% 50% at 50% 0%, color-mix(in srgb, var(--tg) 28%, transparent), transparent 70%), var(--surface); }
+.titan-hero { position: relative; display: grid; place-items: center; height: 150px; margin-top: 4px; }
+.titan-hero svg { position: relative; filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--tg) 60%, transparent)); animation: titan-breathe 2.6s ease-in-out infinite; }
+.titan-halo { position: absolute; width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--tg) 55%, transparent), transparent 65%); animation: titan-pulse 2.6s ease-in-out infinite; }
+.titan-hero.down svg { animation: titan-fall .9s cubic-bezier(.3, 1.4, .5, 1) both; filter: grayscale(.7) drop-shadow(0 6px 12px rgba(0, 0, 0, .5)); }
+.titan-hero.down .titan-halo { animation: none; opacity: .35; }
+@keyframes titan-breathe { 50% { transform: translateY(-5px) scale(1.04); } }
+@keyframes titan-pulse { 50% { transform: scale(1.12); opacity: .75; } }
+@keyframes titan-fall { from { transform: rotate(0); } to { transform: rotate(-78deg) translateY(18px); } }
+.titan-name { font-size: 24px; font-weight: 900; color: var(--tc); text-shadow: 0 0 18px color-mix(in srgb, var(--tg) 60%, transparent); }
+.titan-threat { font-size: 13.5px; font-weight: 700; color: var(--hint); margin-top: -6px; }
+.titan-when { align-self: center; padding: 5px 12px; border-radius: 12px; background: var(--surface-2); font-size: 13px; font-weight: 900; }
+.titan-hp { position: relative; height: 30px; border-radius: 15px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.titan-hp-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #ff3d00, #ff7a59 60%, #ffd27a); box-shadow: 0 0 18px rgba(255, 90, 54, .6); transition: width .8s cubic-bezier(.2, .9, .3, 1); }
+.titan-hp span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 14px; font-weight: 900; text-shadow: 0 1px 3px rgba(0, 0, 0, .7); }
+.titan-sub { font-size: 12.5px; color: var(--hint); font-weight: 700; margin-top: -4px; }
+.titan-box { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; font-weight: 700; line-height: 1.4; }
+.titan-me { display: flex; align-items: center; gap: 10px; text-align: left; }
+.titan-me b { font-size: 30px; font-weight: 900; color: var(--gold); }
+.titan-me span { font-size: 13px; color: var(--hint); }
+.titan-got { color: var(--gold); font-weight: 900; }

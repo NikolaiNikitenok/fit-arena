@@ -109,4 +109,6 @@ export interface FriendsState {
   incoming: FriendRequestView[];
   outgoing: FriendRequestView[];
   challenges: ChallengeView[];
+  // «Приведи друга» (server/referrals.ts): кого привёл я и кто привёл меня; active — провёл первый бой, me — я сам провёл.
+  referrals?: { brought: { id: string; name: string; active: boolean }[]; by: { id: string; name: string; active: boolean } | null; me: boolean };
 }
