@@ -67,6 +67,8 @@ import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
 import { CityStore } from './cities';
+import { isMonth, RecapBoard } from './recap';
+import { StoryImages } from './storyImages';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -92,6 +94,9 @@ const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.D
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
 // Топ по городу (server/cities.ts).
 const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'cities.json'));
+// Итоги месяца: место среди игроков и города. Картинки для сторис Telegram — рядом с данными, живут двое суток.
+const recap = new RecapBoard({ saves: () => saves.all(), cities: () => cities.all() });
+const stories = new StoryImages(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'stories'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 // Единый аккаунт: вход tg:123 → аккаунт, под которым лежит всё остальное (server/accounts.ts).
 const accounts = new AccountStore(process.env.ACCOUNTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'accounts.json'));
@@ -643,6 +648,30 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
   reply(200, cities.board({ days: (id) => saves.get(id)?.progress?.days, level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
 }
 
+/** Итоги месяца: POST /api/recap ({ month }) — место среди игроков и города; POST /api/story-image ({ image }) — картинка для сторис. */
+async function onRecapApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Войди через Telegram, Max или Яндекс' });
+  const now = Date.now();
+  if (path === '/api/story-image') {
+    const r = stories.put(who.id, body!.image, now);
+    if ('error' in r) return reply(r.code, { error: r.error });
+    return reply(200, { url: `${APP_URL.replace(/\/$/, '')}/api/story/${r.id}.jpg` });
+  }
+  if (!isMonth(body!.month)) return reply(400, { error: 'Нет месяца' });
+  reply(200, recap.standing(who.id, body!.month, now));
+}
+
+/** GET /api/story/<id>.jpg: картинка для сторис. */
+function onStoryImage(path: string, res: ServerResponse) {
+  const img = stories.get(path.slice('/api/story/'.length).replace(/\.jpg$/, ''), Date.now());
+  if (!img) return res.writeHead(404).end();
+  res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': img.length, 'Cache-Control': 'public, max-age=86400' }).end(img);
+}
+
 /** POST /api/delete-me: игрок стирает свои данные (кнопка в настройках). */
 async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
@@ -887,6 +916,11 @@ const http = createServer((req, res) => {
     onDeleteMe(req, res).catch(() => res.writeHead(500).end());
     return;
   }
+  if (path === '/api/recap' || path === '/api/story-image') {
+    onRecapApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path.startsWith('/api/story/') && req.method === 'GET') return onStoryImage(path, res);
   if (path === '/api/friends' || path.startsWith('/api/friends/') || path === '/api/moderation' || path.startsWith('/api/moderation/')) {
     onFriendsApi(path, req, res).catch(() => res.writeHead(500).end());
     return;

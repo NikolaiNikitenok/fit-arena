@@ -110,3 +110,12 @@
 .hb-sheet .section-title { margin-top: 2px; }
 .hb-tabs { background: var(--surface-2); }
 .hb-tabs button { min-height: 38px; }
+
+/* Итоги месяца (src/game/Recap.tsx): полоса на главной и месяцы в «Силе». */
+.hb-recap { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid rgba(255, 138, 92, .4); border-radius: var(--r-md); color: var(--text); text-align: left; background: radial-gradient(120% 140% at 100% 0%, rgba(255, 122, 89, .45), transparent 60%), radial-gradient(100% 120% at 0% 100%, rgba(192, 132, 252, .35), transparent 60%), var(--surface); }
+.hb-recap-emoji { font-size: 30px; line-height: 1; }
+.hb-recap-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hb-recap-text b { font-size: 15px; font-weight: 900; }
+.hb-recap-text small { font-size: 12px; color: var(--hint); font-weight: 700; }
+.recap-months { display: flex; flex-wrap: wrap; gap: 6px; }
+.recap-months button { text-transform: capitalize; padding: 7px 12px; border-radius: 12px; border: 1px solid rgba(255, 138, 92, .35); background: rgba(255, 138, 92, .1); color: var(--text); font: 800 13px var(--font); }

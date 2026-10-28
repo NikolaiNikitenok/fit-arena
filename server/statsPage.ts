@@ -158,6 +158,7 @@ ${tile('Ошибок за 7 дней', String(errors7), `${s.errors.length} ра
 <tr><td>Побед / поражений</td><td class="n">${sum('mission_win')} / ${sum('mission_lose')}</td></tr>
 <tr><td>Камера: разрешили / отказали</td><td class="n">${sum('camera_granted')} / ${sum('camera_denied')}</td></tr>
 <tr><td>Дуэли · рейды · программы · события</td><td class="n">${sum('duel_start')} · ${sum('raid_start')} · ${sum('program_start')} · ${sum('event_start')}</td></tr>
+<tr><td>Итоги месяца: открыли / поделились</td><td class="n">${sum('recap_open')} / ${sum('recap_share')}</td></tr>
 </table></div>
 
 <h2>Воронка новичка: где уходят</h2>
