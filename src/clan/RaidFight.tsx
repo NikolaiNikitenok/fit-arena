@@ -13,7 +13,7 @@ import { useMusic } from '../audio';
 import { useRaidSounds } from '../gameSounds';
 import { useVoiceCoach } from '../voice';
 import { Canvas3D } from '../three/Canvas3D';
-import { locale } from '../i18n';
+import { locale, t } from '../i18n';
 
 /** Огромный босс рейда; рядом может стоять герой игрока. */
 export function RaidScene({ raidKey, hit = 0, hero, pulse = 0, dead }: { raidKey: string; hit?: number; hero?: CharacterProps; pulse?: number; dead?: boolean }) {
@@ -107,7 +107,7 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
       )
       .then(() => setPhase((p) => (p === 'loading' ? 'prep' : p)))
       .catch((e) => {
-        setError(e instanceof Error ? e.message : 'не загрузилась модель распознавания');
+        setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
         setPhase('error');
       });
     return () => camera.stop();
@@ -138,7 +138,7 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
             <div className="bar-fill" style={{ width: `${(raid.hp / raid.hpMax) * 100}%`, background: boss.glow }} />
           </div>
           <div className="mhud-label">
-            {raid.hp.toLocaleString(locale())} / {raid.hpMax.toLocaleString(locale())} HP · {EXERCISE_LABELS[exercise]} · твой урон {dealt}
+            {raid.hp.toLocaleString(locale())} / {raid.hpMax.toLocaleString(locale())} HP · {EXERCISE_LABELS[exercise]} · {t('твой урон {0}', { 0: dealt })}
           </div>
         </div>
         {phase === 'fight' && reps > 0 && (
@@ -149,13 +149,13 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
         {(phase === 'prep' || phase === 'loading') && (
           <div className="countdown">
             <div className="countdown-num">{phase === 'loading' ? '…' : left}</div>
-            <div>{phase === 'loading' ? 'Включаю камеру' : 'Займи позицию'}</div>
+            <div>{phase === 'loading' ? t('Включаю камеру') : t('Займи позицию')}</div>
           </div>
         )}
         {(phase === 'done' || phase === 'error') && (
           <div className="result">
-            <div className="result-title">{phase === 'error' ? 'Камера не включилась' : raid.hp <= 0 ? 'Босс повержен!' : 'Атака окончена'}</div>
-            <div className="muted light">{phase === 'error' ? error : `${reps} повторов · ${dealt} урона по боссу`}</div>
+            <div className="result-title">{phase === 'error' ? t('Камера не включилась') : raid.hp <= 0 ? t('Босс повержен!') : t('Атака окончена')}</div>
+            <div className="muted light">{phase === 'error' ? error : t('{0} повторов · {1} урона по боссу', { 0: reps, 1: dealt })}</div>
           </div>
         )}
         <div className={`pip ${camera.active ? '' : 'hidden'}`}>
@@ -165,9 +165,9 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
         </div>
       </div>
       <div className="hint-line">
-        {phase === 'fight' ? (camera.hint ?? 'Каждый повтор — удар по боссу!') : (
+        {phase === 'fight' ? (camera.hint ?? t('Каждый повтор — удар по боссу!')) : (
           <>
-            <Swords size={13} /> урон за повтор {power.damage} · <Heart size={12} className="heart" /> босса видят все в клане
+            <Swords size={13} /> {t('урон за повтор {0} ·', { 0: power.damage })} <Heart size={12} className="heart" /> {t('босса видят все в клане')}
           </>
         )}
       </div>
@@ -180,14 +180,14 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
             setPhase('done');
           }}
         >
-          Закончить атаку
+          {t('Закончить атаку')}
         </button>
       ) : (
         (phase === 'done' || phase === 'error') && (
           <>
             {phase === 'done' && raid.hp <= 0 && reps > 0 && <ShareVictory card={() => raidCard(raid.key, progress, reps, dealt)} />}
             <button className="primary" onClick={() => onDone(dealt)}>
-              Вернуться в клан
+              {t('Вернуться в клан')}
             </button>
           </>
         )

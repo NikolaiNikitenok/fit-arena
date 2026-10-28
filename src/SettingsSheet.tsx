@@ -9,7 +9,7 @@ import { tg } from './telegram';
 import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
 import { Sheet } from './Sheet';
-import { getLang, Lang, setLang, t } from './i18n';
+import { getLang, Lang, setLang, t, locale } from './i18n';
 import { AccountRow } from './account/Account';
 import { WebLoginRow } from './account/WebLogin';
 import { ChangesList } from './updates/UpdateBanner';
@@ -38,12 +38,12 @@ function Toggles({ keys }: { keys: ToggleKey[] }) {
   return (
     <>
       {keys.map((k) => {
-        const t = TOGGLES[k];
+        const tm = TOGGLES[k];
         return (
           <label key={k} className="toggle-row">
             <div>
-              <div className="toggle-title">{t.title}</div>
-              <div className="muted">{t.text}</div>
+              <div className="toggle-title">{tm.title}</div>
+              <div className="muted">{tm.text}</div>
             </div>
             <input type="checkbox" className="switch" checked={s[k]} onChange={(e) => setSetting(k, e.target.checked)} />
           </label>
@@ -233,7 +233,7 @@ function AboutSection({ onIntro }: { onIntro: () => void }) {
   );
 }
 
-const dateText = (at: number) => new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+const dateText = (at: number) => new Date(at).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 
 function statusText(st: CalibrationStatus): string {
   if (st.kind === 'done') return t('Откалибровано: вниз {0}°, вверх {1}°{2}', { 0: st.down, 1: st.up, 2: st.at ? ` · ${dateText(st.at)}` : '' });
@@ -299,7 +299,7 @@ function TelegramIdRow() {
   return (
     <div className="settings-note tg-id-row">
       <span>
-        Твой ID в Telegram: <b>{id}</b>
+        {t('Твой ID в Telegram:')} <b>{id}</b>
       </span>
       <button
         className="small-btn ghost"

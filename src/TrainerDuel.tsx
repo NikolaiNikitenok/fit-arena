@@ -15,6 +15,7 @@ import { Dialog, Portrait, Remark } from './game/Dialog';
 import { NPCS } from './game/npcs';
 import { nextTrainer, pickLine, type Trainer, type TrainerId, trainerLine, trainerRate, trainerSchedule, TRAINERS } from './game/trainer';
 import { Check } from './icons';
+import { t } from './i18n';
 
 // Бой с тренером: та же минута и те же правила урона, что в живой дуэли, но соперник — бот на этом устройстве.
 // Кубки и рейтинг не меняются, повторы идут в серию, задание дня и клан.
@@ -29,7 +30,7 @@ const MIN_REP_INTERVAL_MS = 400;
 const MIN_REPS_FOR_PASS = 3;
 const KNYAZ_RAGE = 0.35;
 
-const RESULT_TEXT = { win: 'Победа!', lose: 'Поражение', draw: 'Ничья' };
+const RESULT_TEXT = { win: t('Победа!'), lose: t('Поражение'), draw: t('Ничья') };
 const LEVEL_COLOR: Record<TrainerId, string> = { lisa: 'var(--mint)', grom: 'var(--gold)', knyaz: 'var(--rose)' };
 
 const BEATEN_KEY = 'fit-arena-trainers';
@@ -89,10 +90,10 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
 
   const onRep = () => {
     const f = fight.current;
-    const t = Date.now();
-    if (!f || phaseRef.current !== 'fight' || t - f.lastRepAt < MIN_REP_INTERVAL_MS) return;
-    f.lastRepAt = t;
-    const r = strike(f.battle, 'player', t);
+    const tm = Date.now();
+    if (!f || phaseRef.current !== 'fight' || tm - f.lastRepAt < MIN_REP_INTERVAL_MS) return;
+    f.lastRepAt = tm;
+    const r = strike(f.battle, 'player', tm);
     f.battle = r.battle;
     f.combo.player = r.strike.combo;
     f.unsaved++;
@@ -131,14 +132,14 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
   useEffect(() => {
     if (phase !== 'countdown' && phase !== 'fight') return;
     const id = setInterval(() => {
-      const t = Date.now();
-      setNow(t);
+      const tm = Date.now();
+      setNow(tm);
       const f = fight.current!;
       if (phaseRef.current === 'countdown') {
-        if (t >= f.startAt) setPhase('fight');
+        if (tm >= f.startAt) setPhase('fight');
         return;
       }
-      const elapsed = t - f.startAt;
+      const elapsed = tm - f.startAt;
       let changed = false;
       while (f.next < f.schedule.length && f.schedule[f.next] <= elapsed && !winner(f.battle, false)) {
         const r = strike(f.battle, 'bot', f.startAt + f.schedule[f.next]);
@@ -160,8 +161,8 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
     if (phase === 'fight' && f && f.battle.bot.hp === 0) finish('player', 'ko');
   });
 
-  const choose = (t: Trainer) => {
-    setTrainer(t);
+  const choose = (tm: Trainer) => {
+    setTrainer(tm);
     setResult(null);
     setError(null);
     fight.current = null;
@@ -180,17 +181,17 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
     } catch (e) {
       // В DEV можно драться и без камеры: повторы приходят из __trainerRep.
       if (!import.meta.env.DEV) {
-        setError(`Не удалось запустить камеру: ${e instanceof Error ? e.message : 'ошибка модели'}`);
+        setError(t('Не удалось запустить камеру: {0}', { 0: e instanceof Error ? e.message : t('ошибка модели') }));
         return;
       }
     }
-    const t = Date.now();
-    const fightSeed = (seed ^ t) >>> 0;
+    const tm = Date.now();
+    const fightSeed = (seed ^ tm) >>> 0;
     fight.current = {
       exercise,
       battle: newBattle(),
       combo: { player: false, bot: false },
-      startAt: t + COUNTDOWN_MS,
+      startAt: tm + COUNTDOWN_MS,
       schedule: trainerSchedule(trainer, loadProgress().baseline, exercise, FIGHT_MS, fightSeed),
       next: 0,
       lastRepAt: -Infinity,
@@ -200,7 +201,7 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
     setSeed(fightSeed);
     setTalking(false);
     setResult(null);
-    setNow(t);
+    setNow(tm);
     setPhase('countdown');
   };
 
@@ -232,18 +233,18 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
   const intro = useMemo(() => [trainerLine(trainer, pickLine(trainer.intro, seed))], [trainer, seed]);
 
   let overlay: ReactNode = null;
-  if (phase === 'countdown') overlay = <div className="result-title">{seconds || 'Бой!'}</div>;
+  if (phase === 'countdown') overlay = <div className="result-title">{seconds || t('Бой!')}</div>;
   if (phase === 'over' && result)
     overlay = (
       <>
         <div className="result-title">{RESULT_TEXT[result.result]}</div>
         <div className="muted">
-          {result.reason === 'ko' ? 'нокаутом' : 'по очкам'} · {me.hits} повторов
+          {result.reason === 'ko' ? t('нокаутом') : t('по очкам')} · {t('{0} повторов', { 0: me.hits })}
         </div>
         <Remark
           line={trainerLine(
             trainer,
-            result.result === 'win' ? pickLine(trainer.beaten, seed) : result.result === 'lose' ? pickLine(trainer.won, seed) : 'Ничья. Так даже интереснее: ещё раунд?',
+            result.result === 'win' ? pickLine(trainer.beaten, seed) : result.result === 'lose' ? pickLine(trainer.won, seed) : t('Ничья. Так даже интереснее: ещё раунд?'),
           )}
         />
       </>
@@ -269,42 +270,42 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
       <div className="hint-line">
         {error ??
           (phase === 'pick'
-            ? 'Темп тренера подстроится под твою силу. Кубки не меняются'
+            ? t('Темп тренера подстроится под твою силу. Кубки не меняются')
             : phase === 'talk'
-              ? `${EXERCISE_LABELS[exercise]}: встань в кадр и жми «Я готов»`
+              ? t('{0}: встань в кадр и жми «Я готов»', { 0: EXERCISE_LABELS[exercise] })
               : phase === 'fight'
-                ? camera.hint ?? 'Отлично, продолжай!'
+                ? camera.hint ?? t('Отлично, продолжай!')
                 : '')}
       </div>
 
       {phase === 'pick' && (
         <>
           <div className="trainer-list">
-            {TRAINERS.map((t) => {
-              const n = NPCS[t.npc];
-              const won = beaten.includes(t.id);
+            {TRAINERS.map((tm) => {
+              const n = NPCS[tm.npc];
+              const won = beaten.includes(tm.id);
               return (
-                <button key={t.id} className="trainer-card" style={{ borderColor: t.id === trainer.id ? n.color : undefined }} onClick={() => choose(t)}>
-                  <Portrait line={{ face: t.npc, color: n.color, who: n.name }} size={52} />
+                <button key={tm.id} className="trainer-card" style={{ borderColor: tm.id === trainer.id ? n.color : undefined }} onClick={() => choose(tm)}>
+                  <Portrait line={{ face: tm.npc, color: n.color, who: n.name }} size={52} />
                   <span className="trainer-info">
                     <span className="trainer-name" style={{ color: n.color }}>
                       {n.name}
                       {won && <Check size={15} className="trainer-won" />}
                     </span>
-                    <span className="muted">{t.about}</span>
+                    <span className="muted">{tm.about}</span>
                   </span>
                   <span className="trainer-side">
-                    <span className="trainer-level" style={{ color: LEVEL_COLOR[t.id] }}>
-                      {t.level}
+                    <span className="trainer-level" style={{ color: LEVEL_COLOR[tm.id] }}>
+                      {tm.level}
                     </span>
-                    <span className="trainer-pace">≈{Math.max(1, Math.round(trainerRate(t, baseline, exercise)))} в мин</span>
+                    <span className="trainer-pace">{t('≈{0} в мин', { 0: Math.max(1, Math.round(trainerRate(tm, baseline, exercise))) })}</span>
                   </span>
                 </button>
               );
             })}
           </div>
           <button className="link" onClick={onExit}>
-            К живым дуэлям
+            {t('К живым дуэлям')}
           </button>
         </>
       )}
@@ -313,37 +314,37 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
         <>
           <CameraGuide exercise={exercise} />
           <button className="primary" onClick={ready}>
-            Я готов
+            {t('Я готов')}
           </button>
           <button className="link" onClick={leave}>
-            Выбрать другого тренера
+            {t('Выбрать другого тренера')}
           </button>
         </>
       )}
 
       {(phase === 'countdown' || phase === 'fight') && (
         <button className="link" onClick={leave}>
-          Сдаться
+          {t('Сдаться')}
         </button>
       )}
 
       {phase === 'over' && result && (
         <>
           <button className="primary" onClick={ready}>
-            Реванш
+            {t('Реванш')}
           </button>
           {result.result === 'win' && harder && (
             <button className="secondary" onClick={() => choose(harder)}>
-              Тренер сильнее: {NPCS[harder.npc].name}
+              {t('Тренер сильнее: {0}', { 0: NPCS[harder.npc].name })}
             </button>
           )}
           {result.result !== 'win' && easier && (
             <button className="secondary" onClick={() => choose(easier)}>
-              Тренер полегче: {NPCS[easier.npc].name}
+              {t('Тренер полегче: {0}', { 0: NPCS[easier.npc].name })}
             </button>
           )}
           <button className="link" onClick={leave}>
-            Выбрать тренера
+            {t('Выбрать тренера')}
           </button>
         </>
       )}

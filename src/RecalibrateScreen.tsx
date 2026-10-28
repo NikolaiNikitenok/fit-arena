@@ -8,7 +8,7 @@ import { t } from './i18n';
 
 type Phase = 'intro' | 'loading' | 'running' | 'review' | 'error';
 
-const range = (t: Thresholds) => `${t.down}° → ${t.up}°`;
+const range = (tm: Thresholds) => `${tm.down}° → ${tm.up}°`;
 
 /** Повторная калибровка одного упражнения из настроек. Прежние пороги остаются,
  *  пока игрок не нажмёт «Сохранить»; отмена и сбой камеры ничего не меняют. */
@@ -26,11 +26,11 @@ export function RecalibrateScreen({ exercise, onClose }: { exercise: RepExercise
     recal.finish(done);
     setResult(done);
     // Даём секунду на «Готово» на полоске, потом сравнение.
-    const t = setTimeout(() => {
+    const tm = setTimeout(() => {
       camera.stop();
       setPhase('review');
     }, 900);
-    return () => clearTimeout(t);
+    return () => clearTimeout(tm);
   }, [phase, done]);
 
   const begin = async () => {

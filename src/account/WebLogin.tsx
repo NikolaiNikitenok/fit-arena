@@ -2,10 +2,11 @@
 // но без рейтинга и клана; после входа гостевой прогресс переезжает в аккаунт (если там пусто).
 import { useEffect, useRef, useState } from 'react';
 import { getSession, loginError, platform, setSession } from '../telegram';
+import { t } from '../i18n';
 
 const ERRORS: Record<string, string> = {
-  'yandex-off': 'Вход через Яндекс ещё не настроен на сервере.',
-  yandex: 'Яндекс не подтвердил вход. Попробуй ещё раз.',
+  'yandex-off': t('Вход через Яндекс ещё не настроен на сервере.'),
+  yandex: t('Яндекс не подтвердил вход. Попробуй ещё раз.'),
 };
 
 type Auth = { yandex: boolean; telegram: string | null };
@@ -29,7 +30,7 @@ declare global {
 }
 
 /** Кнопка Telegram Login Widget: скрипт с telegram.org рисует её сам (домен игры указан у бота в BotFather). */
-function TelegramButton({ bot, onError }: { bot: string; onError: (t: string) => void }) {
+function TelegramButton({ bot, onError }: { bot: string; onError: (tm: string) => void }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     window.__arenaTgAuth = (user) =>
@@ -39,7 +40,7 @@ function TelegramButton({ bot, onError }: { bot: string; onError: (t: string) =>
           setSession(r.session);
           location.reload();
         })
-        .catch(() => onError('Telegram не подтвердил вход. Попробуй ещё раз.'));
+        .catch(() => onError(t('Telegram не подтвердил вход. Попробуй ещё раз.')));
     const s = document.createElement('script');
     s.src = 'https://telegram.org/js/telegram-widget.js?22';
     s.async = true;
@@ -59,13 +60,13 @@ function TelegramButton({ bot, onError }: { bot: string; onError: (t: string) =>
 /** Кнопки входа: показываются только в обычном браузере и только гостю. */
 export function WebLoginButtons() {
   const auth = useAuth();
-  const [error, setError] = useState(() => (loginError ? (ERRORS[loginError] ?? 'Не получилось войти.') : ''));
+  const [error, setError] = useState(() => (loginError ? (ERRORS[loginError] ?? t('Не получилось войти.')) : ''));
   if (platform !== 'web' || getSession()) return null;
   return (
     <div className="web-login">
       {auth?.yandex && (
         <a className="secondary btn-link web-login-ya" href="/api/auth/yandex/start">
-          Войти через Яндекс
+          {t('Войти через Яндекс')}
         </a>
       )}
       {auth?.telegram && <TelegramButton bot={auth.telegram} onError={setError} />}
@@ -81,8 +82,8 @@ export function WebLoginRow() {
     <div className="toggle-row account-row">
       <div className="account-body">
         <div>
-          <div className="toggle-title">Аккаунт</div>
-          <div className="muted">Сейчас ты играешь гостем: без рейтинга и клана, прогресс только в этом браузере. Войди, и герой станет общим с Telegram и Max.</div>
+          <div className="toggle-title">{t('Аккаунт')}</div>
+          <div className="muted">{t('Сейчас ты играешь гостем: без рейтинга и клана, прогресс только в этом браузере. Войди, и герой станет общим с Telegram и Max.')}</div>
         </div>
         <WebLoginButtons />
       </div>
@@ -101,7 +102,7 @@ export function WebLogoutButton() {
         location.reload();
       }}
     >
-      Выйти
+      {t('Выйти')}
     </button>
   );
 }

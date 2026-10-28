@@ -34,7 +34,7 @@ export function AdminStatsRow() {
     <>
       <FpsMeter />
       <button className="secondary" onClick={open}>
-        Статистика (админ)
+        {t('Статистика (админ)')}
       </button>
       {error && <div className="muted">{error}</div>}
       {url &&
@@ -71,7 +71,7 @@ export function AdminChargeRow() {
         location.reload();
       }}
     >
-      Админ: заряд подземелья до {CHARGE_MAX} ⚡
+      {t('Админ: заряд подземелья до {0} ⚡', { 0: CHARGE_MAX })}
     </button>
   );
 }
@@ -84,12 +84,12 @@ function FpsMeter() {
     let raf = 0;
     const stamps: number[] = [];
     let shown = 0;
-    const tick = (t: number) => {
-      stamps.push(t);
-      while (t - stamps[0] > 1000) stamps.shift();
-      if (t - shown > 500) {
-        shown = t;
-        setV({ screen: stamps.length, scene: sceneFps(t) });
+    const tick = (tm: number) => {
+      stamps.push(tm);
+      while (tm - stamps[0] > 1000) stamps.shift();
+      if (tm - shown > 500) {
+        shown = tm;
+        setV({ screen: stamps.length, scene: sceneFps(tm) });
       }
       raf = requestAnimationFrame(tick);
     };

@@ -67,3 +67,14 @@ export const locale = (): string => (lang === 'en' ? 'en-US' : 'ru');
 
 // Месяцы по-английски: у английского нет падежей, одна форма на все случаи.
 export const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * Слово при числе по трём русским формам [один, два, пять], уже переведённым через t(): по-английски берём
+ * первую форму для одного и третью для остальных (вторая — «два-четыре» — в английском не нужна).
+ */
+export function forms(n: number, f: [string, string, string]): string {
+  if (lang === 'en') return Math.abs(n) === 1 ? f[0] : f[2];
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  return a > 10 && a < 20 ? f[2] : b === 1 ? f[0] : b >= 2 && b <= 4 ? f[1] : f[2];
+}

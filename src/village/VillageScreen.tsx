@@ -78,6 +78,7 @@ import { BarKey, FlyApi, FlyLayer, ResBar } from './Hud';
 import { getSettings, useSettings } from '../settings';
 import { nowSky, skyAt } from './sky';
 import { CHARGE_MAX } from '../game/resources';
+import { t, locale } from '../i18n';
 
 // Пролёт над деревней уже был в этом запуске приложения.
 let flownIn = false;
@@ -160,8 +161,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const [notify, setNotify] = useState<boolean | null>(null);
   // Персонажи отрядов грузятся заранее, пока игрок в деревне: бой и казармы открываются уже с ними.
   useEffect(() => {
-    const t = setTimeout(preloadTroops, 1500);
-    return () => clearTimeout(t);
+    const tm = setTimeout(preloadTroops, 1500);
+    return () => clearTimeout(tm);
   }, []);
   useEffect(() => {
     const on = () => setOnline(isOnline());
@@ -237,7 +238,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   useEffect(() => () => void (inFight.current && onPlaying(false)), []); // eslint-disable-line react-hooks/exhaustive-deps
   const flash = (text: string) => {
     setToast(text);
-    setTimeout(() => setToast((t) => (t === text ? null : t)), 2400);
+    setTimeout(() => setToast((tm) => (tm === text ? null : tm)), 2400);
   };
 
   // Раз в секунду: таймеры, конец стройки и обучения. При входе — набег Князя, если подошёл срок.
@@ -260,18 +261,18 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   useEffect(() => {
     if (!fresh.length || dialog) return;
     const e = fresh[0];
-    const lost = RES_KEYS.filter((k) => e.loot[k] > 0).map((k) => `${fmtNum(e.loot[k])} ${k === 'wood' ? 'дерева' : k === 'stone' ? 'камня' : 'золота'}`);
+    const lost = RES_KEYS.filter((k) => e.loot[k] > 0).map((k) => `${fmtNum(e.loot[k])} ${k === 'wood' ? t('дерева') : k === 'stone' ? t('камня') : t('золота')}`);
     if (e.id) {
-      const cups = e.trophies ? ` Кубки: ${e.trophies > 0 ? '+' : '−'}${Math.abs(e.trophies)}.` : '';
+      const cups = e.trophies ? t(' Кубки: {0}{1}.', { 0: e.trophies > 0 ? '+' : '−', 1: Math.abs(e.trophies) }) : '';
       setDialog([
-        say('boris', e.stars ? `На нас напал ${e.who}! ${e.stars}★, ${lost.length ? `унёс ${lost.join(', ')}` : 'но унести ничего не смог'}.${cups}` : `${e.who} пытался взять деревню, но оборона выстояла!${cups}`),
-        say('vega', canRevenge(e, Date.now()) ? 'Повтор боя — в журнале обороны. Там же можно отомстить: один раз, в течение суток.' : 'Повтор боя — в журнале обороны.'),
+        say('boris', e.stars ? t('На нас напал {0}! {1}★, {2}.{3}', { 0: e.who, 1: e.stars, 2: lost.length ? t('унёс {0}', { 0: lost.join(', ') }) : t('но унести ничего не смог'), 3: cups }) : t('{0} пытался взять деревню, но оборона выстояла!{1}', { 0: e.who, 1: cups })),
+        say('vega', canRevenge(e, Date.now()) ? t('Повтор боя — в журнале обороны. Там же можно отомстить: один раз, в течение суток.') : t('Повтор боя — в журнале обороны.')),
       ]);
       return;
     }
     setDialog([
-      say('knyaz', e.stars ? `Ха-ха! Мои лентяи заглянули к тебе в гости. ${lost.length ? `Унесли ${lost.join(', ')}.` : 'Унести, правда, ничего не смогли.'}` : 'Мои лентяи вернулись ни с чем… Ну ничего, я ещё вернусь!'),
-      say('vega', e.stars ? 'Строй башни и стены, а склады спрячут запасы. Повтор набега — в журнале обороны.' : 'Отличная оборона! Повтор набега — в журнале.'),
+      say('knyaz', e.stars ? t('Ха-ха! Мои лентяи заглянули к тебе в гости. {0}', { 0: lost.length ? t('Унесли {0}.', { 0: lost.join(', ') }) : t('Унести, правда, ничего не смогли.') }) : t('Мои лентяи вернулись ни с чем… Ну ничего, я ещё вернусь!')),
+      say('vega', e.stars ? t('Строй башни и стены, а склады спрячут запасы. Повтор набега — в журнале обороны.') : t('Отличная оборона! Повтор набега — в журнале.')),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh.length]);
@@ -282,7 +283,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   const cap = capacity(town);
   const charge = v.charge;
 
-  const act = (fn: (t: Town) => Town | string, ok?: string) => {
+  const act = (fn: (tm: Town) => Town | string, ok?: string) => {
     const r = fn(townOf(latest.current));
     if (typeof r === 'string') return flash(r), false;
     commit(withTown(latest.current, r));
@@ -310,7 +311,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     try {
       const out = await submitWithRetry(a, undefined, 2);
       const cups = applyOutcome(out, a.revengeOf);
-      const text = `Набег засчитан: ${cups >= 0 ? '+' : '−'}${Math.abs(cups)} кубков${out.win ? ', добыча в хранилище' : ''}.`;
+      const text = t('Набег засчитан: {0}{1} кубков{2}.', { 0: cups >= 0 ? '+' : '−', 1: Math.abs(cups), 2: out.win ? t(', добыча в хранилище') : '' });
       flash(text);
       setPvpNote((n) => (n ? text : n));
     } catch (e) {
@@ -318,8 +319,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         // Сервер отказал окончательно: если бой всё же засчитан, победа придёт с журналом набегов.
         clearPending();
         setPendingAttack(null);
-        flash(e instanceof PvpError ? e.message : 'Набег не засчитан.');
-      } else flash(`${NO_SERVER}. Попробуем ещё раз позже.`);
+        flash(e instanceof PvpError ? e.message : t('Набег не засчитан.'));
+      } else flash(t('{0}. Попробуем ещё раз позже.', { 0: NO_SERVER }));
     } finally {
       retrying.current = false;
     }
@@ -352,21 +353,21 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
     if (searching) return;
     setSearching(true);
     let error: string | null = null;
-    await cover('Ищем соперника', async () => {
+    await cover(t('Ищем соперника'), async () => {
       try {
         const target = revengeOf ? await revengeTarget(revengeOf) : await findTarget();
         setSheet(null);
         setPvpNote(null);
         setBattle({ kind: 'pvp', target, revengeOf });
       } catch (e) {
-        error = e instanceof PvpError ? e.message : 'Соперник не нашёлся. Попробуй позже.';
+        error = e instanceof PvpError ? e.message : t('Соперник не нашёлся. Попробуй позже.');
       }
     });
     setSearching(false);
     if (error) flash(error);
   };
   // Домой из боя — тоже через облака.
-  const leaveBattle = () => void cover('Возвращаемся домой', () => setBattle(null));
+  const leaveBattle = () => void cover(t('Возвращаемся домой'), () => setBattle(null));
   const pvp = v.pvp ?? {};
   const trophies = pvp.trophies ?? 0;
   const league = villageLeague(trophies);
@@ -393,15 +394,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       <div className="vil-found">
         <div className="vil-found-card">
           <Portrait line={say('boris', '')} size={84} />
-          <h1>Своя деревня</h1>
+          <h1>{t('Своя деревня')}</h1>
           <p className="muted">
-            Тренировка даёт заряд, в подземелье он превращается в дерево, камень и золото — а здесь из них растёт деревня. Ратуша, лесопилки, кузница и
-            таверна помогают герою в походах, а башни и стены защищают от лентяев Князя Дивана.
+            {t('Тренировка даёт заряд, в подземелье он превращается в дерево, камень и золото — а здесь из них растёт деревня. Ратуша, лесопилки, кузница и')}
+            {t('таверна помогают герою в походах, а башни и стены защищают от лентяев Князя Дивана.')}
           </p>
           <button className="primary" onClick={() => commit(foundTown(latest.current, Date.now()))}>
-            <House16 /> Основать деревню
+            <House16 /> {t('Основать деревню')}
           </button>
-          <small className="muted">Старт: +300 дерева, +300 камня, +150 золота</small>
+          <small className="muted">{t('Старт: +300 дерева, +300 камня, +150 золота')}</small>
         </div>
       </div>
     );
@@ -418,11 +419,11 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       if (battle.kind === 'replay') return;
       if (battle.kind === 'pvp') {
         // Добыча и кубки — только по ответу сервера: он сам считает этот же бой.
-        const t = battle.target;
-        const sub: PendingAttack = { targetId: t.id, token: t.token, seed: t.seed, army, deploys, endTick, at: Date.now(), revengeOf: battle.revengeOf };
-        setPvpNote('Сервер проверяет набег…');
+        const tm = battle.target;
+        const sub: PendingAttack = { targetId: tm.id, token: tm.token, seed: tm.seed, army, deploys, endTick, at: Date.now(), revengeOf: battle.revengeOf };
+        setPvpNote(t('Сервер проверяет набег…'));
         try {
-          const out = await submitWithRetry(sub, (k) => setPvpNote(`Связь с сервером прерывается — отправляем ещё раз (${k + 1}/4)…`));
+          const out = await submitWithRetry(sub, (k) => setPvpNote(t('Связь с сервером прерывается — отправляем ещё раз ({0}/4)…', { 0: k + 1 })));
           const same = RES_KEYS.every((k) => out.result.loot[k] === r.loot[k]);
           const cups = applyOutcome(out, battle.revengeOf);
           setPvpNote(
@@ -431,7 +432,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 {cups >= 0 ? '+' : '−'}
                 {Math.abs(cups)} <Trophy size={14} />
               </span>{' '}
-              · сервер подтвердил{!same && <> · добыча: <ResRow res={out.result.loot} plus /></>}
+              · {t('сервер подтвердил')}{!same && <> {t('· добыча:')} <ResRow res={out.result.loot} plus /></>}
             </>,
           );
         } catch (e) {
@@ -441,21 +442,21 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             setPendingAttack(sub);
             setPvpNote(
               <span className="bad">
-                {NO_SERVER}. Итог боя сохранён на телефоне — засчитаем добычу и кубки, как только связь вернётся.{' '}
+                {t('{0}. Итог боя сохранён на телефоне — засчитаем добычу и кубки, как только связь вернётся.', { 0: NO_SERVER })}{' '}
                 <button className="small-btn accent" onClick={() => void retryPending()}>
-                  Отправить ещё раз
+                  {t('Отправить ещё раз')}
                 </button>
               </span>,
             );
-          } else setPvpNote(<span className="bad">{e instanceof PvpError ? e.message : 'Набег не засчитан.'} Добыча не засчитана, войско цело.</span>);
+          } else setPvpNote(<span className="bad">{t('{0} Добыча не засчитана, войско цело.', { 0: e instanceof PvpError ? e.message : t('Набег не засчитан.') })}</span>);
         }
         return;
       }
       const res = r;
-      const t = townOf(latest.current);
-      const left = { ...t.army };
+      const tm = townOf(latest.current);
+      const left = { ...tm.army };
       for (const id of TROOP_IDS) left[id] = Math.max(0, (left[id] ?? 0) - (res.used[id] ?? 0));
-      let p = withTown(latest.current, { ...t, army: left, res: addRes(t.res, res.loot) });
+      let p = withTown(latest.current, { ...tm, army: left, res: addRes(tm.res, res.loot) });
       if (battle.kind === 'camp') {
         const vv = villageOf(p);
         p = { ...p, village: { ...vv, camps: { ...vv.camps, [battle.camp.id]: Math.max(vv.camps?.[battle.camp.id] ?? 0, res.stars) } } };
@@ -469,34 +470,34 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       return inBattle(<BattleScreen heroLook={heroLook} title={c.name} base={campBase(c)} loot={loot} seed={c.id * 7919 + (v.camps?.[c.id] ?? 0)} army={army} mode="attack" enemy onFinish={finish} onClose={leaveBattle} />);
     }
     if (battle.kind === 'pvp') {
-      const t = battle.target;
-      const offer = t.offer;
+      const tm = battle.target;
+      const offer = tm.offer;
       return inBattle(
         <BattleScreen
-          key={t.token ?? t.id}
+          key={tm.token ?? tm.id}
           heroLook={heroLook}
-          title={`${t.name}, ратуша ${t.level}`}
+          title={t('{0}, ратуша {1}', { 0: tm.name, 1: tm.level })}
           note={
             <>
-              {!online && <span className="bad">Нет сети — итог отправим, когда она вернётся · </span>}
-              {t.revenge ? 'Месть · ' : t.bot ? 'Деревня-бот · ' : ''}
-              <Trophy size={12} /> {t.trophies ?? 0}
+              {!online && <span className="bad">{t('Нет сети — итог отправим, когда она вернётся ·')} </span>}
+              {tm.revenge ? t('Месть · ') : tm.bot ? t('Деревня-бот · ') : ''}
+              <Trophy size={12} /> {tm.trophies ?? 0}
               {offer && (
                 <>
                   {' '}
-                  · победа +{offer.win}, без звёзд −{offer.loss}
+                  {t('· победа +{0}, без звёзд −{1}', { 0: offer.win, 1: offer.loss })}
                 </>
               )}
             </>
           }
           resultNote={pvpNote}
-          base={t.layout}
-          loot={t.lootAvailable}
-          seed={t.seed}
+          base={tm.layout}
+          loot={tm.lootAvailable}
+          seed={tm.seed}
           army={army}
           mode="attack"
           enemy
-          scout={t.token ? SCOUT_SECONDS : undefined}
+          scout={tm.token ? SCOUT_SECONDS : undefined}
           onSkip={battle.revengeOf ? undefined : () => void startPvp()}
           skipBusy={searching}
           onFinish={finish}
@@ -550,19 +551,19 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         if (getSettings().villageFx && r.res) emitFx('coins', b.x + s / 2 - GRID / 2, b.y + s / 2 - GRID / 2, s, RES_COLORS[r.res]);
       }
       if (r.res && x != null && y != null && getSettings().villageFx) flyRef.current?.fly(r.res, x, y, r.got);
-      else flash(`+${r.got} ${r.res === 'wood' ? 'дерева' : r.res === 'stone' ? 'камня' : 'золота'}`);
-    } else flash('Склады полны: построй или улучши склад.');
+      else flash(`+${r.got} ${r.res === 'wood' ? t('дерева') : r.res === 'stone' ? t('камня') : t('золота')}`);
+    } else flash(t('Склады полны: построй или улучши склад.'));
   };
 
   // Постройки не встают на украшения: украшение для сетки — занятая клетка.
   const occ = occupied(town, decorAll ?? []);
-  const startPlacing = (t: BuildingType) => {
+  const startPlacing = (tm: BuildingType) => {
     const near = { x: GRID / 2 + ctl.current.tx, y: GRID / 2 + ctl.current.tz };
-    const spot = freeSpot(occ, t, near) ?? { x: 0, y: 0 };
+    const spot = freeSpot(occ, tm, near) ?? { x: 0, y: 0 };
     setSheet(null);
     setSelected(null);
     setSelDecor(null);
-    setPlacing({ t, ...spot });
+    setPlacing({ t: tm, ...spot });
   };
   const startDecor = (k: DecorKind, did?: number) => {
     const d = did != null ? decorAll?.find((x) => x.i === did) : undefined;
@@ -604,7 +605,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       commit(withTown(latest.current, r));
       return setPlacing(null);
     }
-    if (act((t) => build(t, placing.t, placing.x, placing.y, Date.now()))) {
+    if (act((tm) => build(tm, placing.t, placing.x, placing.y, Date.now()))) {
       sfx('coin');
       // Стены удобно ставить подряд: следующая секция сразу рядом.
       if (placing.t === 'wall' && countOf(townOf(latest.current), 'wall') < maxCount('wall', th)) {
@@ -617,7 +618,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   };
 
   const tasks = openTasks(progress);
-  const tasksReady = tasks.filter((t) => taskDone(progress, t)).length;
+  const tasksReady = tasks.filter((tm) => taskDone(progress, tm)).length;
   const builders = buildersAt(th);
   const busy = busyBuilders(town);
   // Советы строителя и стрелки над тем, что можно улучшить сейчас.
@@ -645,25 +646,25 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               <b>{th}</b>
             </span>
             <span className="hud-th-text">
-              <b>Ратуша</b>
-              <small>деревня героя</small>
+              <b>{t('Ратуша')}</b>
+              <small>{t('деревня героя')}</small>
             </span>
           </div>
           <div className="hud-chips">
-            <button className="hud-chip" onClick={() => setSheet('top')} aria-label="Топ деревень">
+            <button className="hud-chip" onClick={() => setSheet('top')} aria-label={t('Топ деревень')}>
               <span style={{ color: league.color, display: 'inline-flex' }}>
                 <Trophy size={15} />
               </span>
               {trophies}
               <small>{league.name}</small>
             </button>
-            <button className={`hud-chip ${busy >= builders ? 'empty' : ''}`} onClick={() => setSheet('advice')} aria-label="Советы строителя">
+            <button className={`hud-chip ${busy >= builders ? 'empty' : ''}`} onClick={() => setSheet('advice')} aria-label={t('Советы строителя')}>
               <Hammer />
               {builders - busy}/{builders}
               {adviceOk > 0 && busy < builders && <span className="hud-badge">{adviceOk > 9 ? '9+' : adviceOk}</span>}
             </button>
             {shieldLeft > 0 && (
-              <span className="hud-chip mint" title="Щит: на деревню нельзя напасть">
+              <span className="hud-chip mint" title={t('Щит: на деревню нельзя напасть')}>
                 <Shield size={14} />
                 {fmtTime(shieldLeft / 1000)}
               </span>
@@ -679,15 +680,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       </div>
 
       <div className="vil-side vil-hud">
-        <button className="vil-round" onClick={() => setSheet('tasks')} aria-label="Задания">
+        <button className="vil-round" onClick={() => setSheet('tasks')} aria-label={t('Задания')}>
           <Scroll />
           {tasksReady > 0 && <i className="vil-badge">{tasksReady}</i>}
         </button>
-        <button className="vil-round" onClick={() => setSheet('log')} aria-label="Журнал обороны">
+        <button className="vil-round" onClick={() => setSheet('log')} aria-label={t('Журнал обороны')}>
           <Shield />
         </button>
         {onDungeon && (
-          <button className="vil-round accent" onClick={onDungeon} aria-label="В подземелье">
+          <button className="vil-round accent" onClick={onDungeon} aria-label={t('В подземелье')}>
             <Dungeon />
           </button>
         )}
@@ -702,19 +703,19 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
         <div className="vil-bottom">
           <div className="vil-card compact">
             <div className="vil-card-head">
-              <b>{placing.decor ? `${placing.did != null ? 'Перенос' : 'Украшение'}: ${DECOR[placing.decor].name}` : `${placing.id != null ? 'Перенос' : 'Новая постройка'}: ${BUILDINGS[placing.t].name}`}</b>
-              <span className={placeOk ? 'ok' : 'bad'}>{placeOk ? 'место свободно' : 'место занято'}</span>
+              <b>{placing.decor ? `${placing.did != null ? t('Перенос') : t('Украшение')}: ${DECOR[placing.decor].name}` : `${placing.id != null ? t('Перенос') : t('Новая постройка')}: ${BUILDINGS[placing.t].name}`}</b>
+              <span className={placeOk ? 'ok' : 'bad'}>{placeOk ? t('место свободно') : t('место занято')}</span>
             </div>
             <div className="muted">
-              Двигай {placing.decor ? 'украшение' : 'постройку'} пальцем или коснись земли.
-              {placing.decor ? placing.did == null && RES_KEYS.some((k) => (DECOR[placing.decor!].cost[k] ?? 0) > 0) && <> Цена: <ResRow res={DECOR[placing.decor].cost} /></> : placing.id == null && <> Цена: <ResRow res={costOf(placing.t, 1)} /></>}
+              {t('Двигай {0} пальцем или коснись земли.', { 0: placing.decor ? t('украшение') : t('постройку') })}
+              {placing.decor ? placing.did == null && RES_KEYS.some((k) => (DECOR[placing.decor!].cost[k] ?? 0) > 0) && <> {t('Цена:')} <ResRow res={DECOR[placing.decor].cost} /></> : placing.id == null && <> {t('Цена:')} <ResRow res={costOf(placing.t, 1)} /></>}
             </div>
             <div className="vil-actions">
               <button className="secondary" onClick={() => setPlacing(null)}>
-                Отмена
+                {t('Отмена')}
               </button>
               <button className="primary" disabled={!placeOk} onClick={confirmPlace}>
-                <Check /> {placing.id != null || placing.did != null ? 'Сюда' : placing.decor ? 'Поставить' : 'Построить'}
+                <Check /> {placing.id != null || placing.did != null ? t('Сюда') : placing.decor ? t('Поставить') : t('Построить')}
               </button>
             </div>
           </div>
@@ -728,14 +729,14 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               <div className="vil-card compact">
                 <div className="vil-card-head">
                   <b>{def.name}</b>
-                  <span className="level-tag">украшение</span>
-                  <button className="link" onClick={() => setSelDecor(null)} aria-label="Закрыть">
+                  <span className="level-tag">{t('украшение')}</span>
+                  <button className="link" onClick={() => setSelDecor(null)} aria-label={t('Закрыть')}>
                     <Cross />
                   </button>
                 </div>
                 <div className="muted">{def.desc}</div>
                 <div className="vil-actions">
-                  <button className="secondary icon-btn" onClick={() => startDecor(d.k, d.i)} aria-label="Переместить">
+                  <button className="secondary icon-btn" onClick={() => startDecor(d.k, d.i)} aria-label={t('Переместить')}>
                     <Move />
                   </button>
                   <button
@@ -743,10 +744,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                     onClick={() => {
                       commit(removeDecor(latest.current, d.i));
                       setSelDecor(null);
-                      flash(RES_KEYS.some((k) => (def.cost[k] ?? 0) > 0) ? 'Убрали. Ресурсы вернулись в запасы.' : 'Убрали.');
+                      flash(RES_KEYS.some((k) => (def.cost[k] ?? 0) > 0) ? t('Убрали. Ресурсы вернулись в запасы.') : t('Убрали.'));
                     }}
                   >
-                    Убрать
+                    {t('Убрать')}
                   </button>
                 </div>
               </div>
@@ -761,18 +762,18 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             now={now}
             charge={charge}
             onClose={() => setSelected(null)}
-            onUpgrade={() => act((t) => upgrade(t, sel.i, Date.now()), sel.t === 'wall' ? 'Стена укреплена!' : isTrap(sel.t) ? 'Ловушка стала сильнее!' : 'Строители взялись за дело!') && sfx('coin')}
+            onUpgrade={() => act((tm) => upgrade(tm, sel.i, Date.now()), sel.t === 'wall' ? t('Стена укреплена!') : isTrap(sel.t) ? t('Ловушка стала сильнее!') : t('Строители взялись за дело!')) && sfx('coin')}
             onSpeed={() => {
               const n = speedUpCharge(sel, Date.now());
               const p = spendCharge(latest.current, n);
-              if (!p) return flash('Не хватает заряда — потренируйся!');
+              if (!p) return flash(t('Не хватает заряда — потренируйся!'));
               commit(withTown(p, finishNow(townOf(p), sel.i, Date.now())));
               sfx('levelup');
             }}
             onMove={() => setPlacing({ t: sel.t, x: sel.x, y: sel.y, id: sel.i })}
             onCollect={() => {
               const r = collect(townOf(latest.current), sel.i, Date.now());
-              if (r.got <= 0) return flash(accrued(sel, now) > 0 ? 'Склады полны: построй или улучши склад.' : 'Пока пусто.');
+              if (r.got <= 0) return flash(accrued(sel, now) > 0 ? t('Склады полны: построй или улучши склад.') : t('Пока пусто.'));
               commit(withTown(latest.current, r.town));
               sfx('coin');
               const s = sizeOf(sel.t);
@@ -789,20 +790,20 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           <div className="vil-dock">
             <button className="vil-dock-btn" onClick={() => setSheet('build')}>
               <Hammer size={22} />
-              Строить
+              {t('Строить')}
             </button>
             <button className="vil-dock-btn" onClick={() => setSheet('army')}>
               <span className="vil-army-n">{troopCount(town.army)}</span>
-              Войско{queue.length ? <small>+{queue.length}</small> : null}
+              {t('Войско')}{queue.length ? <small>+{queue.length}</small> : null}
             </button>
             <button className="vil-dock-btn accent" onClick={() => setSheet('attack')}>
               <Swords />
-              Набег
+              {t('Набег')}
             </button>
           </div>
           {(bonus.damage > 0 || bonus.lives > 0 || bonus.coins > 0) && (
             <div className="vil-bonus muted">
-              Деревня помогает герою: {[bonus.damage && `+${Math.round(bonus.damage * 100)}% урона`, bonus.lives && `+${bonus.lives} ${bonus.lives > 1 ? 'жизни' : 'жизнь'}`, bonus.coins && `+${Math.round(bonus.coins * 100)}% монет`].filter(Boolean).join(' · ')}
+              {t('Деревня помогает герою:')} {[bonus.damage && t('+{0}% урона', { 0: Math.round(bonus.damage * 100) }), bonus.lives && t('+{0} {1}', { 0: bonus.lives, 1: bonus.lives > 1 ? t('жизни') : t('жизнь') }), bonus.coins && t('+{0}% монет', { 0: Math.round(bonus.coins * 100) })].filter(Boolean).join(' · ')}
             </div>
           )}
         </div>
@@ -811,14 +812,14 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       {sheet === 'advice' && (
         <Sheet onClose={() => setSheet(null)}>
           <div className="section-title">
-            Советы строителя
+            {t('Советы строителя')}
             <span className="muted">
-              свободно {builders - busy} из {builders}
+              {t('свободно {0} из {1}', { 0: builders - busy, 1: builders })}
             </span>
           </div>
           <div className="vil-advice-say">
             <Portrait line={say('boris', '')} size={48} />
-            <span>{advice.length === 0 ? 'Всё построено и улучшено, что позволяет ратуша. Копи на следующую!' : busy >= builders ? 'Все мои ребята заняты. Вот что сделаем, как освободятся:' : advice.some((a) => a.ok) ? 'Вот что можно сделать прямо сейчас — зелёным:' : 'Пока не хватает запасов. Вот что ближе всего:'}</span>
+            <span>{advice.length === 0 ? t('Всё построено и улучшено, что позволяет ратуша. Копи на следующую!') : busy >= builders ? t('Все мои ребята заняты. Вот что сделаем, как освободятся:') : advice.some((a) => a.ok) ? t('Вот что можно сделать прямо сейчас — зелёным:') : t('Пока не хватает запасов. Вот что ближе всего:')}</span>
           </div>
           {advice.slice(0, 10).map((a) => (
             <button
@@ -838,8 +839,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 <Preview t={a.t} l={a.kind === 'up' ? a.l : 1} size={56} />
               </span>
               <span className="vil-shop-info">
-                <b>{a.kind === 'build' ? `Построить: ${BUILDINGS[a.t].name}` : `Улучшить: ${BUILDINGS[a.t].name}`}</b>
-                <span className="muted">{a.kind === 'build' ? `есть ${a.have} из ${a.max}` : `уровень ${a.l} → ${a.l + 1}`}{a.why && a.why !== 'cost' ? ` · ${BUILD_ERRORS[a.why].toLowerCase().replace(/\.$/, '')}` : ''}</span>
+                <b>{a.kind === 'build' ? t('Построить: {0}', { 0: BUILDINGS[a.t].name }) : t('Улучшить: {0}', { 0: BUILDINGS[a.t].name })}</b>
+                <span className="muted">{a.kind === 'build' ? t('есть {0} из {1}', { 0: a.have, 1: a.max }) : t('уровень {0} → {1}', { 0: a.l, 1: a.l + 1 })}{a.why && a.why !== 'cost' ? ` · ${BUILD_ERRORS[a.why].toLowerCase().replace(/\.$/, '')}` : ''}</span>
                 <span className="vil-shop-meta">
                   <ResRow res={a.cost} />
                 </span>
@@ -853,15 +854,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       {sheet === 'build' && (
         <Sheet onClose={() => setSheet(null)}>
           <div className="section-title">
-            Строительство
+            {t('Строительство')}
             <span className="muted">
-              строители {builders - busy}/{builders}
+              {t('строители {0}/{1}', { 0: builders - busy, 1: builders })}
             </span>
           </div>
           <div className="tabs small vil-cats">
             {CATS.map((c) => (
               <button key={c} className={c === cat ? 'active' : ''} onClick={(e) => (setCat(c), e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }))}>
-                {c === 'decor' ? 'Украшения' : CATEGORY_LABELS[c]}
+                {c === 'decor' ? t('Украшения') : CATEGORY_LABELS[c]}
               </button>
             ))}
           </div>
@@ -875,39 +876,39 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 const owned = ownedThemes(latest.current).includes(id);
                 if (owned) return commit(setTheme(latest.current, id));
                 const r = claimTheme(latest.current, id, Date.now());
-                if (r === 'cost') return flash('Не хватает золота.');
+                if (r === 'cost') return flash(t('Не хватает золота.'));
                 if (r === 'owned') return;
                 commit(r);
                 sfx('chest');
-                flash(`Тема «${THEMES[id].name}» — твоя!`);
+                flash(t('Тема «{0}» — твоя!', { 0: THEMES[id].name }));
               }}
             />
           )}
-          {BUILDING_TYPES.filter((t) => BUILDINGS[t].category === cat && t !== 'townhall').map((t) => {
-            const d = BUILDINGS[t];
-            const have = countOf(town, t);
-            const max = maxCount(t, th);
-            const cost = costOf(t, 1);
+          {BUILDING_TYPES.filter((tm) => BUILDINGS[tm].category === cat && tm !== 'townhall').map((tm) => {
+            const d = BUILDINGS[tm];
+            const have = countOf(town, tm);
+            const max = maxCount(tm, th);
+            const cost = costOf(tm, 1);
             const locked = max === 0;
             const full = have >= max;
-            const can = !locked && !full && affordable(town.res, cost) && (timeOf(t, 1) === 0 || busy < builders);
+            const can = !locked && !full && affordable(town.res, cost) && (timeOf(tm, 1) === 0 || busy < builders);
             return (
-              <button key={t} className={`vil-shop ${locked ? 'locked' : ''}`} disabled={locked || full} onClick={() => (can ? startPlacing(t) : flash(!affordable(town.res, cost) ? BUILD_ERRORS.cost : BUILD_ERRORS.builders))}>
-                <span className="vil-shop-pic">{sheet === 'build' && <Preview t={t} l={1} size={64} />}</span>
+              <button key={tm} className={`vil-shop ${locked ? 'locked' : ''}`} disabled={locked || full} onClick={() => (can ? startPlacing(tm) : flash(!affordable(town.res, cost) ? BUILD_ERRORS.cost : BUILD_ERRORS.builders))}>
+                <span className="vil-shop-pic">{sheet === 'build' && <Preview t={tm} l={1} size={64} />}</span>
                 <span className="vil-shop-info">
                   <b>{d.name}</b>
                   <span className="muted">{d.desc}</span>
                   <span className="vil-shop-meta">
                     {locked ? (
                       <>
-                        <Lock /> ратуша {thFor(t, 1)}
+                        <Lock /> {t('ратуша {0}', { 0: thFor(tm, 1) })}
                       </>
                     ) : (
                       <>
                         <ResRow res={cost} />
-                        {timeOf(t, 1) > 0 && (
+                        {timeOf(tm, 1) > 0 && (
                           <span>
-                            <Timer size={13} /> {fmtTime(timeOf(t, 1))}
+                            <Timer size={13} /> {fmtTime(timeOf(tm, 1))}
                           </span>
                         )}
                       </>
@@ -928,16 +929,16 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           town={town}
           now={now}
           charge={charge}
-          onTrain={(id) => act((t) => {
-            const r = train(t, id, Date.now());
+          onTrain={(id) => act((tm) => {
+            const r = train(tm, id, Date.now());
             return typeof r === 'string' ? TRAIN_ERRORS[r] : r;
           })}
-          onUntrain={(id) => act((t) => untrain(t, id))}
+          onUntrain={(id) => act((tm) => untrain(tm, id))}
           onSpeed={(n) => {
             const p = spendCharge(latest.current, n);
-            if (!p) return flash('Не хватает заряда — потренируйся!');
-            const t = townOf(p);
-            commit(withTown(p, { ...t, q: t.q.map((q) => ({ ...q, end: Date.now() })) }));
+            if (!p) return flash(t('Не хватает заряда — потренируйся!'));
+            const tm = townOf(p);
+            commit(withTown(p, { ...tm, q: tm.q.map((q) => ({ ...q, end: Date.now() })) }));
             setNow(Date.now());
           }}
           onClose={() => setSheet(null)}
@@ -951,14 +952,14 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           town={town}
           now={now}
           charge={charge}
-          onResearch={(id) => act((t) => {
-            const r = startResearch(t, id, Date.now());
+          onResearch={(id) => act((tm) => {
+            const r = startResearch(tm, id, Date.now());
             return typeof r === 'string' ? RESEARCH_ERRORS[r] : r;
-          }, 'Учёные взялись за дело!') && sfx('coin')}
-          onCancel={() => act((t) => cancelResearch(t), 'Исследование отменено, ресурсы вернулись.')}
+          }, t('Учёные взялись за дело!')) && sfx('coin')}
+          onCancel={() => act((tm) => cancelResearch(tm), t('Исследование отменено, ресурсы вернулись.'))}
           onSpeed={(n) => {
             const p = spendCharge(latest.current, n);
-            if (!p) return flash('Не хватает заряда — потренируйся!');
+            if (!p) return flash(t('Не хватает заряда — потренируйся!'));
             commit(withTown(p, finishResearchNow(townOf(p), Date.now())));
             setNow(Date.now());
             sfx('levelup');
@@ -971,28 +972,28 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       {sheet === 'attack' && (
         <Sheet onClose={() => setSheet(null)}>
           <div className="section-title">
-            Набег
+            {t('Набег')}
             <span className="muted">
-              войско {housingOf(town.army)}/{armyCap(town)}
+              {t('войско {0}/{1}', { 0: housingOf(town.army), 1: armyCap(town) })}
             </span>
           </div>
-          {troopCount(town.army) === 0 && <div className="vil-note">Сначала обучи войско в казармах — герой пойдёт с ним.</div>}
+          {troopCount(town.army) === 0 && <div className="vil-note">{t('Сначала обучи войско в казармах — герой пойдёт с ним.')}</div>}
           <div className={`vil-link ${serverOk === false ? 'bad' : serverOk ? 'ok' : ''}`}>
             <span className="vil-link-dot" />
             <span>
-              {serverOk === null ? 'Проверяем связь с сервером…' : serverOk ? 'Сервер на связи: добыча и кубки засчитаются' : `${NO_SERVER}: набег на игрока сейчас не засчитается`}
+              {serverOk === null ? t('Проверяем связь с сервером…') : serverOk ? t('Сервер на связи: добыча и кубки засчитаются') : t('{0}: набег на игрока сейчас не засчитается', { 0: NO_SERVER })}
             </span>
             {serverOk === false && (
               <button className="small-btn accent" onClick={checkServer}>
-                Переподключиться
+                {t('Переподключиться')}
               </button>
             )}
           </div>
           {pendingAttack && (
             <div className="vil-note">
-              Прошлый набег ещё не засчитан — нет связи.{' '}
+              {t('Прошлый набег ещё не засчитан — нет связи.{0}', { 0: ' ' })}
               <button className="small-btn accent" onClick={() => void retryPending()}>
-                Отправить
+                {t('Отправить')}
               </button>
             </div>
           )}
@@ -1001,20 +1002,20 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               <Swords size={30} />
             </span>
             <span className="vil-pvp-text">
-              <b>{!online ? OFFLINE : searching ? 'Ищем соперника…' : 'Найти соперника'}</b>
+              <b>{!online ? OFFLINE : searching ? t('Ищем соперника…') : t('Найти соперника')}</b>
               <span>
                 {online ? (
                   <>
-                    Деревня игрока твоего уровня · <Trophy size={12} /> {trophies} {league.name}
-                    {shieldLeft > 0 && ' · набег снимет щит'}
+                    {t('Деревня игрока твоего уровня')} · <Trophy size={12} /> {trophies} {league.name}
+                    {shieldLeft > 0 && t(' · набег снимет щит')}
                   </>
                 ) : (
-                  'Лагеря Князя Дивана работают и без сети'
+                  t('Лагеря Князя Дивана работают и без сети')
                 )}
               </span>
             </span>
           </button>
-          <div className="section-title">Лагеря Князя Дивана</div>
+          <div className="section-title">{t('Лагеря Князя Дивана')}</div>
           {CAMPS.map((c, k) => {
             const stars = v.camps?.[c.id] ?? 0;
             const open = th >= c.th && (k === 0 || (v.camps?.[CAMPS[k - 1].id] ?? 0) > 0);
@@ -1025,15 +1026,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 disabled={!open || troopCount(town.army) === 0}
                 onClick={() => {
                   setSheet(null);
-                  void cover('Идём к лагерю', () => setBattle({ kind: 'camp', camp: c }));
+                  void cover(t('Идём к лагерю'), () => setBattle({ kind: 'camp', camp: c }));
                 }}
               >
                 <span className="vil-camp-num">{c.id}</span>
                 <span className="vil-shop-info">
                   <b>{c.name}</b>
-                  <span className="muted">{open ? c.hint : th < c.th ? `Нужна ратуша ${c.th}` : 'Сначала разгроми предыдущий лагерь'}</span>
+                  <span className="muted">{open ? c.hint : th < c.th ? t('Нужна ратуша {0}', { 0: c.th }) : t('Сначала разгроми предыдущий лагерь')}</span>
                   <span className="vil-camp-loot">
-                    <span>Добыча</span> <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
+                    <span>{t('Добыча')}</span> <ResRow res={stars ? scaleRes(c.loot, CAMP_REPEAT_SHARE) : c.loot} />
                   </span>
                 </span>
                 <span className="vil-stars">
@@ -1050,37 +1051,37 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       {sheet === 'tasks' && (
         <Sheet onClose={() => setSheet(null)}>
           <div className="section-title">
-            Просьбы жителей
+            {t('Просьбы жителей')}
             <span className="muted">
               {(v.tasks ?? []).length}/{TASKS.length}
             </span>
           </div>
-          {tasks.length === 0 && <div className="muted">Все просьбы выполнены. Жители счастливы!</div>}
-          {tasks.map((t) => {
-            const [a, b] = taskProgress(progress, t);
+          {tasks.length === 0 && <div className="muted">{t('Все просьбы выполнены. Жители счастливы!')}</div>}
+          {tasks.map((tm) => {
+            const [a, b] = taskProgress(progress, tm);
             const done = a >= b;
             return (
-              <div key={t.id} className="vil-task">
-                <Portrait line={say(t.npc, '')} size={46} />
+              <div key={tm.id} className="vil-task">
+                <Portrait line={say(tm.npc, '')} size={46} />
                 <div className="vil-shop-info">
-                  <b style={{ color: NPCS[t.npc].color }}>{NPCS[t.npc].name}</b>
-                  <span>{t.text}</span>
+                  <b style={{ color: NPCS[tm.npc].color }}>{NPCS[tm.npc].name}</b>
+                  <span>{tm.text}</span>
                   <span className="vil-shop-meta">
-                    <ResRow res={t.reward} plus /> <span className="muted">{a}/{b}</span>
+                    <ResRow res={tm.reward} plus /> <span className="muted">{a}/{b}</span>
                   </span>
                 </div>
                 <button
                   className="small-btn"
                   disabled={!done}
                   onClick={() => {
-                    const p = claimTask(latest.current, t.id);
+                    const p = claimTask(latest.current, tm.id);
                     if (!p) return;
                     commit(p);
                     sfx('chest');
-                    flash('Спасибо! Награда в запасах.');
+                    flash(t('Спасибо! Награда в запасах.'));
                   }}
                 >
-                  {done ? 'Забрать' : <Lock />}
+                  {done ? t('Забрать') : <Lock />}
                 </button>
               </div>
             );
@@ -1090,11 +1091,11 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
 
       {sheet === 'log' && (
         <Sheet onClose={() => setSheet(null)}>
-          <div className="section-title">Журнал обороны</div>
+          <div className="section-title">{t('Журнал обороны')}</div>
           <div className="muted">
-            Защищено от набегов: {fmtNum(Math.floor(cap * 0.25))} каждого ресурса. Сейчас можно унести: <ResRow res={lootAvailable(town, now)} />
+            {t('Защищено от набегов: {0} каждого ресурса. Сейчас можно унести:', { 0: fmtNum(Math.floor(cap * 0.25)) })} <ResRow res={lootAvailable(town, now)} />
           </div>
-          {!log.length && <div className="vil-note">Набегов пока не было. Князь Диван присматривается…</div>}
+          {!log.length && <div className="vil-note">{t('Набегов пока не было. Князь Диван присматривается…')}</div>}
           {log.map((e) => (
             <div key={e.id ?? e.at} className="vil-task vil-log">
               {e.id ? (
@@ -1107,7 +1108,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
               <div className="vil-shop-info">
                 <b>{e.who}</b>
                 <span className="muted">
-                  {new Date(e.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · разрушено {e.pct}%
+                  {new Date(e.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {t('разрушено {0}%', { 0: e.pct })}
                   {e.trophies ? (
                     <span className={e.trophies > 0 ? 'ok' : 'bad'}>
                       {' '}
@@ -1119,10 +1120,10 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                 <span className="vil-shop-meta">
                   {RES_KEYS.some((k) => e.loot[k] > 0) ? (
                     <>
-                      унесли <ResRow res={e.loot} />
+                      {t('унесли')} <ResRow res={e.loot} />
                     </>
                   ) : (
-                    'ничего не унесли'
+                    t('ничего не унесли')
                   )}
                 </span>
               </div>
@@ -1141,12 +1142,12 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
                         setBattle({ kind: 'replay', entry: e });
                       }}
                     >
-                      Смотреть
+                      {t('Смотреть')}
                     </button>
                   )}
                   {canRevenge(e, now) && (
                     <button className="small-btn accent" disabled={searching || !online || troopCount(town.army) === 0} onClick={() => void startPvp(e.id)}>
-                      <Swords size={15} /> Отомстить · {fmtTime(((e.revengeUntil ?? 0) - now) / 1000)}
+                      <Swords size={15} /> {t('Отомстить · {0}', { 0: fmtTime(((e.revengeUntil ?? 0) - now) / 1000) })}
                     </button>
                   )}
                 </div>
@@ -1155,8 +1156,8 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
           ))}
           <label className="toggle-row">
             <div>
-              <div className="toggle-title">Бот пишет о нападениях на деревню</div>
-              <div className="muted">Кто напал, сколько унёс и кнопка «Отомстить». Ночью (22–09 по Москве) не будим — сообщение придёт утром.</div>
+              <div className="toggle-title">{t('Бот пишет о нападениях на деревню')}</div>
+              <div className="muted">{t('Кто напал, сколько унёс и кнопка «Отомстить». Ночью (22–09 по Москве) не будим — сообщение придёт утром.')}</div>
             </div>
             <input
               type="checkbox"
@@ -1178,7 +1179,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
       {sheet === 'top' && (
         <Sheet onClose={() => setSheet(null)}>
           <div className="section-title">
-            Лучшие деревни
+            {t('Лучшие деревни')}
             <span className="muted">
               <Trophy size={13} /> {trophies} · {league.name}
             </span>
@@ -1192,15 +1193,15 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
             ))}
           </div>
           {topErr && <div className="vil-note">{topErr}</div>}
-          {!top && !topErr && <div className="muted">Загружаем…</div>}
-          {top && !top.length && <div className="vil-note">Пока никто не взял ни одного кубка. Будь первым!</div>}
+          {!top && !topErr && <div className="muted">{t('Загружаем…')}</div>}
+          {top && !top.length && <div className="vil-note">{t('Пока никто не взял ни одного кубка. Будь первым!')}</div>}
           {top?.map((r, k) => (
             <div key={k} className={`vil-top-row ${r.me ? 'me' : ''}`}>
               <span className="vil-top-n">{k + 1}</span>
               <span className="vil-shop-info">
                 <b>{r.name}</b>
                 <span className="muted">
-                  ратуша {r.th} · <span style={{ color: villageLeague(r.trophies).color }}>{r.league}</span>
+                  {t('ратуша {0}', { 0: r.th })} · <span style={{ color: villageLeague(r.trophies).color }}>{r.league}</span>
                 </span>
               </span>
               <b className="vil-top-cups">
@@ -1252,8 +1253,8 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
     <div className="vil-card">
       <div className="vil-card-head">
         <b>{d.name}</b>
-        <span className="level-tag">{b.l === 0 ? 'строится' : `уровень ${b.l}`}</span>
-        <button className="link" onClick={onClose} aria-label="Закрыть">
+        <span className="level-tag">{b.l === 0 ? t('строится') : t('уровень {0}', { 0: b.l })}</span>
+        <button className="link" onClick={onClose} aria-label={t('Закрыть')}>
           <Cross />
         </button>
       </div>
@@ -1268,25 +1269,25 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
         )}
         <span className="muted">
           {d.desc}
-          {!maxed && b.l >= 1 && newPartsAt(b.t, next) && <b className="vil-evo-note"> Уровень {next}: {newPartsAt(b.t, next)}.</b>}
+          {!maxed && b.l >= 1 && newPartsAt(b.t, next) && <b className="vil-evo-note"> {t('Уровень {0}: {1}.', { 0: next, 1: newPartsAt(b.t, next) })}</b>}
         </span>
       </div>
       <div className="vil-stats">
-        <span>Прочность {d.hp[lvl - 1]}</span>
+        <span>{t('Прочность {0}', { 0: d.hp[lvl - 1] })}</span>
         {col && b.l >= 1 && (
           <span>
-            <ResIcon r={col.res} /> {col.perHour[b.l - 1]}/ч · накоплено {accrued(b, now)}/{col.perHour[b.l - 1] * col.capHours}
+            <ResIcon r={col.res} /> {t('{0}/ч · накоплено {1}/{2}', { 0: col.perHour[b.l - 1], 1: accrued(b, now), 2: col.perHour[b.l - 1] * col.capHours })}
           </span>
         )}
-        {d.storage && b.l >= 1 && <span>Вмещает {fmtNum(d.storage[b.l - 1])} каждого</span>}
+        {d.storage && b.l >= 1 && <span>{t('Вмещает {0} каждого', { 0: fmtNum(d.storage[b.l - 1]) })}</span>}
         {d.defense && (
           <span>
-            Урон {d.defense.damage[lvl - 1]} раз в {d.defense.every} с · дальность {d.defense.range}
+            {t('Урон {0} раз в {1} с · дальность {2}', { 0: d.defense.damage[lvl - 1], 1: d.defense.every, 2: d.defense.range })}
           </span>
         )}
-        {b.t === 'barracks' && b.l >= 1 && <span>Мест в лагере {armyCap(town)}</span>}
-        {b.t === 'lab' && b.l >= 1 && <span>Отряды до {b.l + 1} уровня{town.r ? ` · идёт: ${TROOPS[town.r.t].name}` : ''}</span>}
-        {b.t === 'townhall' && <span>Строителей {buildersAt(th)}</span>}
+        {b.t === 'barracks' && b.l >= 1 && <span>{t('Мест в лагере {0}', { 0: armyCap(town) })}</span>}
+        {b.t === 'lab' && b.l >= 1 && <span>{t('Отряды до {0} уровня', { 0: b.l + 1 })}{town.r ? t(' · идёт: {0}', { 0: TROOPS[town.r.t].name }) : ''}</span>}
+        {b.t === 'townhall' && <span>{t('Строителей {0}', { 0: buildersAt(th) })}</span>}
       </div>
       {b.u != null ? (
         <div className="vil-actions">
@@ -1294,7 +1295,7 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
             <Timer size={15} /> {fmtTime((b.u - now) / 1000)}
           </span>
           <button className="primary" disabled={charge < sp} onClick={onSpeed}>
-            Ускорить <Bolt size={15} /> {sp}
+            {t('Ускорить')} <Bolt size={15} /> {sp}
           </button>
         </div>
       ) : (
@@ -1303,11 +1304,11 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
             <div className="vil-next">
               {block === 'th' ? (
                 <span className="muted">
-                  <Lock /> Уровень {next} — с ратуши {thFor(b.t, next)}
+                  <Lock /> {t('Уровень {0} — с ратуши {1}', { 0: next, 1: thFor(b.t, next) })}
                 </span>
               ) : (
                 <>
-                  <span className="muted">Уровень {next}:</span> <ResRow res={cost} />
+                  <span className="muted">{t('Уровень {0}:', { 0: next })}</span> <ResRow res={cost} />
                   {timeOf(b.t, next) > 0 && (
                     <span className="muted">
                       <Timer size={13} /> {fmtTime(timeOf(b.t, next))}
@@ -1317,36 +1318,36 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
               )}
             </div>
           )}
-          {b.t === 'townhall' && !maxed && <div className="muted vil-unlocks">Откроет: {unlocksAt(th + 1)}</div>}
+          {b.t === 'townhall' && !maxed && <div className="muted vil-unlocks">{t('Откроет: {0}', { 0: unlocksAt(th + 1) })}</div>}
           <div className="vil-actions">
             {b.t !== 'wall' && (
-              <button className="secondary icon-btn" onClick={onMove} aria-label="Переместить">
+              <button className="secondary icon-btn" onClick={onMove} aria-label={t('Переместить')}>
                 <Move />
               </button>
             )}
             {col && b.l >= 1 && (
               <button className="secondary" onClick={onCollect}>
-                Собрать
+                {t('Собрать')}
               </button>
             )}
             {b.t === 'barracks' && b.l >= 1 && (
               <button className="secondary" onClick={onArmy}>
-                Войско
+                {t('Войско')}
               </button>
             )}
             {b.t === 'lab' && b.l >= 1 && (
               <button className="secondary" onClick={onLab}>
-                Исследования
+                {t('Исследования')}
               </button>
             )}
             {b.t === 'townhall' && (
               <button className="secondary" onClick={onAttack}>
-                Набег
+                {t('Набег')}
               </button>
             )}
             {!maxed && (
               <button className="primary" disabled={!!block && block !== 'cost' && block !== 'builders'} onClick={onUpgrade}>
-                <Hammer /> Улучшить
+                <Hammer /> {t('Улучшить')}
               </button>
             )}
           </div>
@@ -1359,15 +1360,15 @@ function BuildingCard({ b, town, now, charge, onClose, onUpgrade, onSpeed, onMov
 /** Что открывает ратуша этого уровня: новые постройки и рост лимитов. */
 function unlocksAt(th: number): string {
   const out: string[] = [];
-  for (const t of BUILDING_TYPES) {
-    if (t === 'townhall') continue;
-    const now = maxCount(t, th - 1);
-    const then = maxCount(t, th);
-    if (now === 0 && then > 0) out.push(BUILDINGS[t].name.toLowerCase());
-    else if (then > now) out.push(`+${then - now} ${t === 'wall' ? 'стен' : BUILDINGS[t].name.toLowerCase()}`);
+  for (const tm of BUILDING_TYPES) {
+    if (tm === 'townhall') continue;
+    const now = maxCount(tm, th - 1);
+    const then = maxCount(tm, th);
+    if (now === 0 && then > 0) out.push(BUILDINGS[tm].name.toLowerCase());
+    else if (then > now) out.push(`+${then - now} ${tm === 'wall' ? t('стен') : BUILDINGS[tm].name.toLowerCase()}`);
   }
-  if (buildersAt(th) > buildersAt(th - 1)) out.push('ещё один строитель');
-  out.push(`уровни построек до ${Math.max(...BUILDING_TYPES.filter((t) => t !== 'townhall').map((t) => levelCap(t, th)))}`);
+  if (buildersAt(th) > buildersAt(th - 1)) out.push(t('ещё один строитель'));
+  out.push(t('уровни построек до {0}', { 0: Math.max(...BUILDING_TYPES.filter((tm) => tm !== 'townhall').map((tm) => levelCap(tm, th))) }));
   return out.join(', ');
 }
 
@@ -1394,16 +1395,16 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
   return (
     <Sheet onClose={onClose}>
       <div className="section-title">
-        Казармы{bl ? ` · ур. ${bl}` : ''}
+        {t('Казармы')}{bl ? t(' · ур. {0}', { 0: bl }) : ''}
         <span className="muted">
-          мест {used}/{cap}
+          {t('мест {0}/{1}', { 0: used, 1: cap })}
         </span>
       </div>
       {bl === 0 ? (
         <>
-          <div className="vil-note">Сначала построй казармы.</div>
+          <div className="vil-note">{t('Сначала построй казармы.')}</div>
           <button className="primary" onClick={onBuild}>
-            Строить
+            {t('Строить')}
           </button>
         </>
       ) : (
@@ -1414,10 +1415,10 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
           {town.q.length > 0 && (
             <div className="vil-actions">
               <span className="vil-timer">
-                <Timer size={15} /> обучение {town.q.length} · {fmtTime((lastEnd - now) / 1000)}
+                <Timer size={15} /> {t('обучение {0} · {1}', { 0: town.q.length, 1: fmtTime((lastEnd - now) / 1000) })}
               </span>
               <button className="primary" disabled={charge < sp} onClick={() => onSpeed(sp)}>
-                Ускорить <Bolt size={15} /> {sp}
+                {t('Ускорить')} <Bolt size={15} /> {sp}
               </button>
             </div>
           )}
@@ -1426,21 +1427,21 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
             const locked = bl < d.unlock;
             const queued = town.q.filter((q) => q.t === id).length;
             return (
-              <div key={id} className={`vil-task vil-troop-card ${locked ? 'locked' : ''}`} role="button" tabIndex={0} onClick={() => setInfo(id)} aria-label={`${d.name}: подробнее`}>
+              <div key={id} className={`vil-task vil-troop-card ${locked ? 'locked' : ''}`} role="button" tabIndex={0} onClick={() => setInfo(id)} aria-label={t('{0}: подробнее', { 0: d.name })}>
                 <span className={`vil-troop-pic u-${id}`}>
                   <TroopThumb id={id} size={52} level={troopLevel(town, id)} />
                 </span>
                 <div className="vil-shop-info">
                   <b>
-                    {d.name} {troopLevel(town, id) > 1 && <span className="level-tag">ур. {troopLevel(town, id)}</span>} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
+                    {d.name} {troopLevel(town, id) > 1 && <span className="level-tag">{t('ур. {0}', { 0: troopLevel(town, id) })}</span>} <span className="muted">×{town.army[id] ?? 0}{queued ? ` (+${queued})` : ''}</span>
                   </b>
-                  <span className="muted">{locked ? `Казармы ${d.unlock} уровня` : d.desc}</span>
+                  <span className="muted">{locked ? t('Казармы {0} уровня', { 0: d.unlock }) : d.desc}</span>
                   <span className="vil-shop-meta">
                     <ResRow res={d.cost} />
                     <span className="muted">
-                      мест {d.housing} · {fmtTime(d.train)}
+                      {t('мест {0} · {1}', { 0: d.housing, 1: fmtTime(d.train) })}
                     </span>
-                    <span className="vil-more">подробнее ›</span>
+                    <span className="vil-more">{t('подробнее ›')}</span>
                   </span>
                 </div>
                 {queued > 0 && (
@@ -1450,7 +1451,7 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
                       e.stopPropagation();
                       onUntrain(id);
                     }}
-                    aria-label="Убрать из очереди"
+                    aria-label={t('Убрать из очереди')}
                   >
                     −
                   </button>
@@ -1462,7 +1463,7 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
                     e.stopPropagation();
                     onTrain(id);
                   }}
-                  aria-label="Обучить"
+                  aria-label={t('Обучить')}
                 >
                   {locked ? <Lock /> : '+'}
                 </button>
@@ -1471,12 +1472,12 @@ function ArmySheet({ town, now, charge, onTrain, onUntrain, onSpeed, onClose, on
           })}
           <button className="vil-lab-link" onClick={onLab}>
             <span>
-              <b>Лаборатория</b>
-              <span className="muted">{labLevel(town) ? (town.r ? `Идёт исследование: ${TROOPS[town.r.t].name}` : 'Прокачай отряды: +15% за уровень') : 'Прокачка отрядов — с ратуши 2'}</span>
+              <b>{t('Лаборатория')}</b>
+              <span className="muted">{labLevel(town) ? (town.r ? t('Идёт исследование: {0}', { 0: TROOPS[town.r.t].name }) : t('Прокачай отряды: +15% за уровень')) : t('Прокачка отрядов — с ратуши 2')}</span>
             </span>
             <span className="vil-more">›</span>
           </button>
-          <div className="muted">Герой идёт в каждый набег сам — его сила растёт с твоими тренировками.</div>
+          <div className="muted">{t('Герой идёт в каждый набег сам — его сила растёт с твоими тренировками.')}</div>
         </>
       )}
     </Sheet>
@@ -1500,12 +1501,12 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
           return (
             <button key={id} className={`vil-theme t-${id} ${cur === id ? 'on' : ''}`} onClick={() => onTheme(id)}>
               <b>{d.name}</b>
-              <small>{cur === id ? 'включена' : owned ? 'включить' : free ? 'бесплатно в сезон' : <ResRow res={d.cost} />}</small>
+              <small>{cur === id ? t('включена') : owned ? t('включить') : free ? t('бесплатно в сезон') : <ResRow res={d.cost} />}</small>
             </button>
           );
         })}
       </div>
-      <div className="muted vil-theme-note">{THEMES[cur].desc}{THEME_IDS.filter((id) => THEMES[id].season && !ctx.themes.includes(id)).map((id) => ` «${THEMES[id].name}» бесплатно ${THEMES[id].season!.label}.`).join('')}</div>
+      <div className="muted vil-theme-note">{THEMES[cur].desc}{THEME_IDS.filter((id) => THEMES[id].season && !ctx.themes.includes(id)).map((id) => t(' «{0}» бесплатно {1}.', { 0: THEMES[id].name, 1: THEMES[id].season!.label })).join('')}</div>
       {DECOR_GROUPS.map((g) => (
         <Fragment key={g.id}>
           <div className="section-title">{g.name}</div>
@@ -1523,7 +1524,7 @@ function DecorShop({ progress, town, now, onPick, onTheme }: { progress: Progres
                 <span className="vil-shop-info">
                   <b>{d.name}</b>
                   <span className="muted">{lock ?? d.desc}</span>
-                  <span className="vil-shop-meta">{lock ? <Lock /> : RES_KEYS.some((r) => (d.cost[r] ?? 0) > 0) ? <ResRow res={d.cost} /> : <span className="ok">бесплатно</span>}</span>
+                  <span className="vil-shop-meta">{lock ? <Lock /> : RES_KEYS.some((r) => (d.cost[r] ?? 0) > 0) ? <ResRow res={d.cost} /> : <span className="ok">{t('бесплатно')}</span>}</span>
                 </span>
                 <span className="vil-shop-count">
                   {have}/{max}

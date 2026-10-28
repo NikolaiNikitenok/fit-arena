@@ -94,8 +94,8 @@ const TIPS: Record<Exercise, string[]> = {
 
 const DEG = Math.PI / 180;
 const dir = (a: number) => new THREE.Vector3(0, Math.sin(a * DEG), Math.cos(a * DEG));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const ease = (t: number) => 0.5 - 0.5 * Math.cos(t * Math.PI * 2); // 0 → 1 → 0 за повтор
+const lerp = (a: number, b: number, tm: number) => a + (b - a) * tm;
+const ease = (tm: number) => 0.5 - 0.5 * Math.cos(tm * Math.PI * 2); // 0 → 1 → 0 за повтор
 
 const BONES = ['hips', 'head', 'upperarm.l', 'upperarm.r', 'lowerarm.l', 'lowerarm.r', 'wrist.l', 'wrist.r', 'upperleg.l', 'upperleg.r', 'lowerleg.l', 'lowerleg.r', 'foot.l', 'foot.r'] as const;
 type BoneName = (typeof BONES)[number];
@@ -170,9 +170,9 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
     const g = holder.current;
     if (!g) return;
     const { root, bones: b, rest, size } = rig;
-    const t = ease((clock.elapsedTime / spec.period) % 1);
+    const tm = ease((clock.elapsedTime / spec.period) % 1);
     const [A, B] = spec.poses;
-    const pose = { torso: lerp(A.torso, B.torso, t), thigh: lerp(A.thigh, B.thigh, t), shin: lerp(A.shin, B.shin, t) };
+    const pose = { torso: lerp(A.torso, B.torso, tm), thigh: lerp(A.thigh, B.thigh, tm), shin: lerp(A.shin, B.shin, tm) };
     if (A.plank) {
       // На предплечьях плечи выше пола на длину плеча, на прямых руках — на всю руку.
       const lift = A.forearm ? size.arm1 + size.height * 0.05 : pose.torso * (size.arm1 + size.arm2) + size.height * 0.03;
@@ -209,7 +209,7 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
         const c = B.arm ?? a;
         // Углы рук для пресса заданы относительно корпуса.
         const rel = exercise === 'situp' ? pose.torso : 0;
-        angles = [rel + lerp(a[0], c[0], t), rel + lerp(a[1], c[1], t)];
+        angles = [rel + lerp(a[0], c[0], tm), rel + lerp(a[1], c[1], tm)];
       }
       aim(b[`upperarm.${s}`], b[`lowerarm.${s}`], dir(angles[0]));
       aim(b[`lowerarm.${s}`], b[`wrist.${s}`], dir(angles[1]));
@@ -326,8 +326,8 @@ export function CameraGuide({ exercise, compact, model = 'Knight' }: { exercise:
       </div>
       {!compact && (
         <ul className="guide-tips">
-          {TIPS[exercise].map((t) => (
-            <li key={t}>{t}</li>
+          {TIPS[exercise].map((tm) => (
+            <li key={tm}>{tm}</li>
           ))}
         </ul>
       )}

@@ -1,5 +1,6 @@
 import { type ReactNode, type RefObject, useLayoutEffect, useState } from 'react';
 import { GemIcon, ResIcon } from './art';
+import { t } from '../../i18n';
 
 // «Как играть»: три шага поверх партии со стрелкой к нужному месту. Показывается при первом
 // входе в партию; из списка этажей открывается кнопкой «Как играть» (там — без стрелок).
@@ -31,28 +32,28 @@ export interface HowToTargets {
 const STEPS: { target: keyof HowToTargets; title: string; body: ReactNode }[] = [
   {
     target: 'board',
-    title: 'Меняй соседние самоцветы',
+    title: t('Меняй соседние самоцветы'),
     body: (
       <>
-        Проведи пальцем или нажми два соседних самоцвета: три одинаковых в ряд исчезают. 4 в ряд — луч, уголок — бомба, 5 в ряд — радуга.
+        {t('Проведи пальцем или нажми два соседних самоцвета: три одинаковых в ряд исчезают. 4 в ряд — луч, уголок — бомба, 5 в ряд — радуга.')}
       </>
     ),
   },
   {
     target: 'hud',
-    title: 'Цель этажа сверху',
+    title: t('Цель этажа сверху'),
     body: (
       <>
-        <GemIcon kind="sword" /> мечи бьют чудовище, <GemIcon kind="heart" /> сердца лечат героя. Следи за счётчиком ходов и за тем, когда чудовище ударит.
+        <GemIcon kind="sword" /> {t('мечи бьют чудовище,')} <GemIcon kind="heart" /> {t('сердца лечат героя. Следи за счётчиком ходов и за тем, когда чудовище ударит.')}
       </>
     ),
   },
   {
     target: 'loot',
-    title: 'Добыча идёт в деревню',
+    title: t('Добыча идёт в деревню'),
     body: (
       <>
-        <ResIcon res="wood" /> дерево, <ResIcon res="stone" /> камень и <ResIcon res="gold" /> золото копятся за каждый ход. Победа удваивает их бонусом этажа, а поражение оставляет половину.
+        <ResIcon res="wood" /> {t('дерево,')} <ResIcon res="stone" /> {t('камень и')} <ResIcon res="gold" /> {t('золото копятся за каждый ход. Победа удваивает их бонусом этажа, а поражение оставляет половину.')}
       </>
     ),
   },
@@ -83,13 +84,13 @@ export function HowTo({ targets, onDone }: { targets?: HowToTargets; onDone: () 
           </svg>
         )}
         <div className="m3-howto-step">
-          Как играть · {step + 1} из {STEPS.length}
+          {t('Как играть · {0} из {1}', { 0: step + 1, 1: STEPS.length })}
         </div>
         <b>{s.title}</b>
         <div className="m3-howto-body">{s.body}</div>
         <div className="m3-howto-actions">
           <button className="link" onClick={done}>
-            Пропустить
+            {t('Пропустить')}
           </button>
           <span className="m3-howto-dots">
             {STEPS.map((_, i) => (
@@ -97,7 +98,7 @@ export function HowTo({ targets, onDone }: { targets?: HowToTargets; onDone: () 
             ))}
           </span>
           <button className="primary" onClick={() => (last ? done() : setStep(step + 1))}>
-            {last ? 'Понятно' : 'Дальше'}
+            {last ? t('Понятно') : t('Дальше')}
           </button>
         </div>
       </div>

@@ -40,6 +40,7 @@ import {
 import { ExIcon } from './GymIcons';
 import './gym.css';
 import { Sheet } from '../Sheet';
+import { t, locale } from '../i18n';
 
 // Дневник зала: план недели, свои тренировки, запись подходов и итог. На серию, задание дня и рейтинг не влияет.
 
@@ -97,9 +98,9 @@ export function GymScreen({ progress, update, onClose }: Props) {
       <div className="gym-screen">
         <div className="app-head">
           <button className="pill btn" onClick={() => setView({ kind: 'home' })}>
-            ‹ Назад
+            {t('‹ Назад')}
           </button>
-          <h1>{view.fresh ? 'Итог' : 'Тренировка'}</h1>
+          <h1>{view.fresh ? t('Итог') : t('Тренировка')}</h1>
           <span />
         </div>
         <SessionCard s={view.session} open />
@@ -107,14 +108,14 @@ export function GymScreen({ progress, update, onClose }: Props) {
           <Remark
             line={grom(
               view.session.prs.length
-                ? `Новых рекордов: ${view.session.prs.length}. Вот это я понимаю — железо уступает!`
-                : 'Записал. Регулярность важнее рекордов, боец: в следующий раз добавим немного веса.',
+                ? t('Новых рекордов: {0}. Вот это я понимаю — железо уступает!', { 0: view.session.prs.length })
+                : t('Записал. Регулярность важнее рекордов, боец: в следующий раз добавим немного веса.'),
             )}
           />
         )}
-        {view.fresh && platform === 'tg' && <div className="muted gym-note">Отметка «тренировка сделана» ушла в NikitenokFamily, раздел «Спорт».</div>}
+        {view.fresh && platform === 'tg' && <div className="muted gym-note">{t('Отметка «тренировка сделана» ушла в NikitenokFamily, раздел «Спорт».')}</div>}
         <button className="primary" onClick={() => setView({ kind: 'home' })}>
-          Готово
+          {t('Готово')}
         </button>
       </div>
     );
@@ -138,73 +139,73 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
     <div className="gym-screen">
       <div className="app-head">
         <button className="pill btn" onClick={onClose}>
-          ‹ Назад
+          {t('‹ Назад')}
         </button>
-        <h1>Дневник зала</h1>
+        <h1>{t('Дневник зала')}</h1>
         <span />
       </div>
       <Remark
         line={grom(
           g.templates.length
             ? today
-              ? `Сегодня у нас «${today.name}». Записывай каждый подход — так видно, как ты растёшь.`
-              : 'Сегодня по плану отдых. Но если тянет в зал — начни свободную тренировку.'
-            : 'В зале тоже нужен план. Собери свои тренировки, расставь по дням недели — а я буду держать счёт весам. На серию и рейтинг это не влияет, это для тебя.',
+              ? t('Сегодня у нас «{0}». Записывай каждый подход — так видно, как ты растёшь.', { 0: today.name })
+              : t('Сегодня по плану отдых. Но если тянет в зал — начни свободную тренировку.')
+            : t('В зале тоже нужен план. Собери свои тренировки, расставь по дням недели — а я буду держать счёт весам. На серию и рейтинг это не влияет, это для тебя.'),
         )}
       />
 
       <div className="gym-week">
         {WEEKDAYS.map((d, i) => {
-          const tpl = g.templates.find((t) => t.id === g.week[i]);
+          const tpl = g.templates.find((tm) => tm.id === g.week[i]);
           const date = dayKey(monday + i * 86400_000);
           return (
             <button key={d} className={`gym-day ${i === weekday(now) ? 'today' : ''} ${tpl ? 'plan' : ''} ${done.has(date) ? 'done' : ''}`} onClick={() => setDayPick(i)}>
               <span className="gym-day-name">{d}</span>
               <span className="gym-day-mark">{done.has(date) ? <Check size={14} /> : tpl ? <Dumbbell size={14} /> : '·'}</span>
-              <span className="gym-day-tpl">{tpl ? tpl.name : 'отдых'}</span>
+              <span className="gym-day-tpl">{tpl ? tpl.name : t('отдых')}</span>
             </button>
           );
         })}
       </div>
-      {volWeek > 0 && <div className="muted gym-note">За эту неделю поднято {kgText(volWeek)}</div>}
+      {volWeek > 0 && <div className="muted gym-note">{t('За эту неделю поднято {0}', { 0: kgText(volWeek) })}</div>}
 
       {today ? (
         <button className="primary daily" onClick={() => update((p) => startRun(p, Date.now(), today))}>
-          Начать: {today.name}
+          {t('Начать: {0}', { 0: today.name })}
           <small>
-            {today.items.length} упр. · {today.items.reduce((a, i) => a + i.sets, 0)} подходов
+            {t('{0} упр. · {1} подходов', { 0: today.items.length, 1: today.items.reduce((a, i) => a + i.sets, 0) })}
           </small>
         </button>
       ) : null}
       <button className={today ? 'secondary' : 'primary'} onClick={() => update((p) => startRun(p, Date.now()))}>
-        Свободная тренировка
+        {t('Свободная тренировка')}
       </button>
 
       <div className="section-title">
-        Мои тренировки
+        {t('Мои тренировки')}
         <button className="link" onClick={() => setView({ kind: 'edit', tpl: null })}>
-          <Plus size={14} /> Новая
+          <Plus size={14} /> {t('Новая')}
         </button>
       </div>
-      {g.templates.map((t) => (
-        <div key={t.id} className="gym-tpl">
-          <button className="gym-tpl-main" onClick={() => setView({ kind: 'edit', tpl: t })}>
-            <b>{t.name}</b>
+      {g.templates.map((tm) => (
+        <div key={tm.id} className="gym-tpl">
+          <button className="gym-tpl-main" onClick={() => setView({ kind: 'edit', tpl: tm })}>
+            <b>{tm.name}</b>
             <small>
-              {daysOf(g.week, t.id) || 'не в плане'} · {t.items.map((i) => gymExercise(i.ex).name.replace(/ \(.*\)$/, '')).slice(0, 3).join(', ')}
-              {t.items.length > 3 ? '…' : ''}
+              {daysOf(g.week, tm.id) || t('не в плане')} · {tm.items.map((i) => gymExercise(i.ex).name.replace(/ \(.*\)$/, '')).slice(0, 3).join(', ')}
+              {tm.items.length > 3 ? '…' : ''}
             </small>
           </button>
-          <button className="small-btn" onClick={() => update((p) => startRun(p, Date.now(), t))}>
-            Начать
+          <button className="small-btn" onClick={() => update((p) => startRun(p, Date.now(), tm))}>
+            {t('Начать')}
           </button>
         </div>
       ))}
       {g.templates.length < 3 && (
         <div className="gym-starters">
-          <div className="muted">Готовые для начала:</div>
+          <div className="muted">{t('Готовые для начала:')}</div>
           <div className="gym-chips">
-            {STARTERS.filter((s) => !g.templates.some((t) => t.name === s.name)).map((s) => (
+            {STARTERS.filter((s) => !g.templates.some((tm) => tm.name === s.name)).map((s) => (
               <button key={s.name} className="swap-chip" onClick={() => update((p) => saveTemplate(p, s))}>
                 <Plus size={13} /> {s.name}
               </button>
@@ -213,7 +214,7 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
         </div>
       )}
 
-      {!!g.history.length && <div className="section-title">История</div>}
+      {!!g.history.length && <div className="section-title">{t('История')}</div>}
       {history.map((s) => (
         <button key={s.id} className="gym-hist" onClick={() => setView({ kind: 'summary', session: s })}>
           <SessionCard s={s} />
@@ -221,29 +222,29 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
       ))}
       {g.history.length > 5 && !showAll && (
         <button className="link" onClick={() => setShowAll(true)}>
-          Показать все ({g.history.length})
+          {t('Показать все ({0})', { 0: g.history.length })}
         </button>
       )}
 
       {dayPick !== null && (
         <Sheet onClose={() => setDayPick(null)}>
-          <div className="section-title">{['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'][dayPick]}</div>
+          <div className="section-title">{[t('Понедельник'), t('Вторник'), t('Среда'), t('Четверг'), t('Пятница'), t('Суббота'), t('Воскресенье')][dayPick]}</div>
           <div className="gym-pick-list">
-            {[null, ...g.templates].map((t) => (
+            {[null, ...g.templates].map((tm) => (
               <button
-                key={t?.id ?? 'rest'}
-                className={`gym-pick ${g.week[dayPick] === (t?.id ?? null) ? 'on' : ''}`}
+                key={tm?.id ?? 'rest'}
+                className={`gym-pick ${g.week[dayPick] === (tm?.id ?? null) ? 'on' : ''}`}
                 onClick={() => {
-                  update((p) => setWeekDay(p, dayPick, t?.id ?? null));
+                  update((p) => setWeekDay(p, dayPick, tm?.id ?? null));
                   setDayPick(null);
                 }}
               >
-                {t ? t.name : 'Отдых'}
-                {g.week[dayPick] === (t?.id ?? null) && <Check size={16} />}
+                {tm ? tm.name : t('Отдых')}
+                {g.week[dayPick] === (tm?.id ?? null) && <Check size={16} />}
               </button>
             ))}
           </div>
-          {!g.templates.length && <div className="muted">Сначала создай тренировку или добавь готовую.</div>}
+          {!g.templates.length && <div className="muted">{t('Сначала создай тренировку или добавь готовую.')}</div>}
         </Sheet>
       )}
     </div>
@@ -256,14 +257,14 @@ const daysOf = (week: (string | null)[], id: string) =>
     .filter(Boolean)
     .join(', ');
 
-const dateText = (t: number) => {
-  const d = new Date(t);
-  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const dateText = (tm: number) => {
+  const d = new Date(tm);
+  const time = d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
   const today = dayKey(Date.now());
-  const k = dayKey(t);
-  if (k === today) return `сегодня в ${time}`;
-  if (k === dayKey(Date.now() - 86400_000)) return `вчера в ${time}`;
-  return `${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} в ${time}`;
+  const k = dayKey(tm);
+  if (k === today) return t('сегодня в {0}', { 0: time });
+  if (k === dayKey(Date.now() - 86400_000)) return t('вчера в {0}', { 0: time });
+  return t('{0} в {1}', { 0: d.toLocaleDateString(locale(), { day: 'numeric', month: 'long' }), 1: time });
 };
 
 /** Итог тренировки: время, объём, рекорды и упражнения — как пост в ленте, но в стиле игры. */
@@ -278,15 +279,15 @@ export function SessionCard({ s, open = false }: { s: GymSession; open?: boolean
       </div>
       <div className="gym-stats">
         <div>
-          <span>Время</span>
+          <span>{t('Время')}</span>
           <b>{durationText(minutesOf(s))}</b>
         </div>
         <div>
-          <span>Объём</span>
+          <span>{t('Объём')}</span>
           <b>{kgText(s.vol)}</b>
         </div>
         <div>
-          <span>Рекорды</span>
+          <span>{t('Рекорды')}</span>
           <b className="gym-prs">
             <Medal size={20} /> {s.prs.length}
           </b>
@@ -318,7 +319,7 @@ export function SessionCard({ s, open = false }: { s: GymSession; open?: boolean
             setMore(true);
           }}
         >
-          Показать ещё {s.items.length - 3} упр.
+          {t('Показать ещё {0} упр.', { 0: s.items.length - 3 })}
         </span>
       )}
     </div>
@@ -327,8 +328,8 @@ export function SessionCard({ s, open = false }: { s: GymSession; open?: boolean
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
 function setText(kind: ReturnType<typeof gymExercise>['kind'], [a, b]: [number, number]): string {
-  if (kind === 't') return `${b} с`;
-  if (kind === 'c') return a ? `${b} мин, ${fmt(a)} км` : `${b} мин`;
+  if (kind === 't') return t('{0} с', { 0: b });
+  if (kind === 'c') return a ? t('{0} мин, {1} км', { 0: b, 1: fmt(a) }) : t('{0} мин', { 0: b });
   if (kind === 'bw') return a ? `+${fmt(a)}×${b}` : `${b}`;
   return `${fmt(a)}×${b}`;
 }
@@ -349,10 +350,10 @@ function NumInput({ value, onChange, placeholder, step = 1 }: { value?: number; 
       value={text}
       onFocus={(e) => e.target.select()}
       onChange={(e) => {
-        const t = e.target.value.replace(/[^\d.,]/g, '').slice(0, 7);
-        setText(t);
-        if (t === '') return onChange(undefined);
-        const n = Number(t.replace(',', '.'));
+        const tm = e.target.value.replace(/[^\d.,]/g, '').slice(0, 7);
+        setText(tm);
+        if (tm === '') return onChange(undefined);
+        const n = Number(tm.replace(',', '.'));
         if (Number.isFinite(n)) onChange(Math.min(9999, n));
       }}
     />
@@ -371,8 +372,8 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
   // Отдых после отмеченного подхода: до какого момента.
   const [restEnd, setRestEnd] = useState<number | null>(null);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const tm = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tm);
   }, []);
   const restLeft = restEnd ? Math.ceil((restEnd - now) / 1000) : 0;
   useEffect(() => {
@@ -417,11 +418,11 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
           </div>
         </div>
         <button className="small-btn" onClick={() => setConfirm('finish')}>
-          Готово
+          {t('Готово')}
         </button>
       </div>
 
-      {!run.items.length && <div className="muted gym-note">Добавь первое упражнение — и поехали.</div>}
+      {!run.items.length && <div className="muted gym-note">{t('Добавь первое упражнение — и поехали.')}</div>}
 
       {run.items.map((it, ei) => {
         const ex = gymExercise(it.ex);
@@ -436,40 +437,40 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
               <span className="gym-ex-text">
                 <b>{ex.name}</b>
                 <small>
-                  {last ? `Прошлый раз: ${last.map((s) => setText(ex.kind, [s.w || s.d || 0, s.r || s.t || 0])).join(' · ')}` : 'Первый раз — подбери рабочий вес'}
+                  {last ? t('Прошлый раз: {0}', { 0: last.map((s) => setText(ex.kind, [s.w || s.d || 0, s.r || s.t || 0])).join(' · ') }) : t('Первый раз — подбери рабочий вес')}
                 </small>
               </span>
               {pr && (
                 <span className="gym-pr-chip">
-                  <Medal size={15} /> рекорд
+                  <Medal size={15} /> {t('рекорд')}
                 </span>
               )}
-              <button className="gym-x" aria-label="Убрать" onClick={() => edit((r) => ({ ...r, items: r.items.filter((_, i) => i !== ei) }))}>
+              <button className="gym-x" aria-label={t('Убрать')} onClick={() => edit((r) => ({ ...r, items: r.items.filter((_, i) => i !== ei) }))}>
                 <Trash size={15} />
               </button>
             </div>
             <div className={`gym-sets k-${ex.kind}`}>
               <div className="gym-set head">
                 <span>№</span>
-                {ex.kind === 'w' && <span>кг</span>}
-                {ex.kind === 'bw' && <span>+кг</span>}
-                {ex.kind === 'c' && <span>км</span>}
-                <span>{ex.kind === 't' ? 'сек' : ex.kind === 'c' ? 'мин' : 'повт.'}</span>
+                {ex.kind === 'w' && <span>{t('кг')}</span>}
+                {ex.kind === 'bw' && <span>{t('+кг')}</span>}
+                {ex.kind === 'c' && <span>{t('км')}</span>}
+                <span>{ex.kind === 't' ? t('сек') : ex.kind === 'c' ? t('мин') : t('повт.')}</span>
                 <span />
               </div>
               {it.sets.map((s, si) => (
                 <div key={si} className={`gym-set ${s.done ? 'done' : ''}`}>
                   <span className="gym-set-n">{si + 1}</span>
-                  {(ex.kind === 'w' || ex.kind === 'bw') && <NumInput value={s.w} step={0.5} placeholder={ex.kind === 'bw' ? '0' : 'кг'} onChange={(w) => setSet(ei, si, { w })} />}
-                  {ex.kind === 'c' && <NumInput value={s.d} step={0.1} placeholder="км" onChange={(d) => setSet(ei, si, { d })} />}
+                  {(ex.kind === 'w' || ex.kind === 'bw') && <NumInput value={s.w} step={0.5} placeholder={ex.kind === 'bw' ? '0' : t('кг')} onChange={(w) => setSet(ei, si, { w })} />}
+                  {ex.kind === 'c' && <NumInput value={s.d} step={0.1} placeholder={t('км')} onChange={(d) => setSet(ei, si, { d })} />}
                   {ex.kind === 't' || ex.kind === 'c' ? (
-                    <NumInput value={s.t} onChange={(t) => setSet(ei, si, { t })} />
+                    <NumInput value={s.t} onChange={(tm) => setSet(ei, si, { t: tm })} />
                   ) : (
                     <NumInput value={s.r} onChange={(r) => setSet(ei, si, { r })} />
                   )}
                   <button
                     className={`gym-check ${s.done ? 'on' : ''}`}
-                    aria-label="Подход сделан"
+                    aria-label={t('Подход сделан')}
                     onClick={() => {
                       const on = !s.done;
                       setSet(ei, si, { done: on });
@@ -499,11 +500,11 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
                   }))
                 }
               >
-                <Plus size={14} /> Подход
+                <Plus size={14} /> {t('Подход')}
               </button>
               {it.sets.length > 1 && (
                 <button className="link" onClick={() => edit((r) => ({ ...r, items: r.items.map((x, i) => (i === ei ? { ...x, sets: x.sets.slice(0, -1) } : x)) }))}>
-                  Убрать последний
+                  {t('Убрать последний')}
                 </button>
               )}
             </div>
@@ -512,23 +513,23 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
       })}
 
       <button className="secondary" onClick={() => setPicker(true)}>
-        <Plus size={18} /> Упражнение
+        <Plus size={18} /> {t('Упражнение')}
       </button>
       <button className="primary" onClick={() => setConfirm('finish')}>
-        Завершить тренировку
+        {t('Завершить тренировку')}
       </button>
       <button className="link" onClick={() => setConfirm('cancel')}>
-        Отменить тренировку
+        {t('Отменить тренировку')}
       </button>
 
       {restEnd && restLeft > 0 && (
         <div className="gym-rest">
           <span>
-            Отдых <b>{clock(restLeft)}</b>
+            {t('Отдых')} <b>{clock(restLeft)}</b>
           </span>
           <button onClick={() => setRestEnd(restEnd - 15000)}>−15</button>
           <button onClick={() => setRestEnd(restEnd + 15000)}>+15</button>
-          <button aria-label="Пропустить отдых" onClick={() => setRestEnd(null)}>
+          <button aria-label={t('Пропустить отдых')} onClick={() => setRestEnd(null)}>
             <Cross size={14} />
           </button>
         </div>
@@ -536,13 +537,13 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
 
       {confirm && (
         <Sheet onClose={() => setConfirm(null)}>
-          <div className="section-title">{confirm === 'finish' ? 'Завершить тренировку?' : 'Отменить тренировку?'}</div>
+          <div className="section-title">{confirm === 'finish' ? t('Завершить тренировку?') : t('Отменить тренировку?')}</div>
           <div className="muted">
             {confirm === 'finish'
               ? doneCount
-                ? `Отмечено ${doneCount} ${setsWord(doneCount)}, ${kgText(vol)}. Неотмеченные подходы не попадут в дневник.`
-                : 'Ни один подход не отмечен галочкой — записывать будет нечего.'
-              : 'Все записанные подходы этой тренировки пропадут.'}
+                ? t('Отмечено {0} {1}, {2}. Неотмеченные подходы не попадут в дневник.', { 0: doneCount, 1: setsWord(doneCount), 2: kgText(vol) })
+                : t('Ни один подход не отмечен галочкой — записывать будет нечего.')
+              : t('Все записанные подходы этой тренировки пропадут.')}
           </div>
           <button
             className="primary"
@@ -552,10 +553,10 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
               else update(cancelRun);
             }}
           >
-            {confirm === 'finish' ? (doneCount ? 'Завершить' : 'Выйти без записи') : 'Да, отменить'}
+            {confirm === 'finish' ? (doneCount ? t('Завершить') : t('Выйти без записи')) : t('Да, отменить')}
           </button>
           <button className="secondary" onClick={() => setConfirm(null)}>
-            Продолжить тренировку
+            {t('Продолжить тренировку')}
           </button>
         </Sheet>
       )}
@@ -599,7 +600,7 @@ function TemplateEditor({ tpl, progress, update, onDone }: { tpl: GymTemplate | 
 
   const save = () => {
     update((p) => {
-      let next = saveTemplate(p, { id: tpl?.id, name: name || 'Моя тренировка', items });
+      let next = saveTemplate(p, { id: tpl?.id, name: name || t('Моя тренировка'), items });
       const id = tpl?.id ?? gymOf(next).templates[gymOf(next).templates.length - 1].id;
       const week = gymOf(next).week;
       for (let d = 0; d < 7; d++) {
@@ -615,19 +616,19 @@ function TemplateEditor({ tpl, progress, update, onDone }: { tpl: GymTemplate | 
     <div className="gym-screen">
       <div className="app-head">
         <button className="pill btn" onClick={onDone}>
-          ‹ Назад
+          {t('‹ Назад')}
         </button>
-        <h1>{tpl ? 'Тренировка' : 'Новая тренировка'}</h1>
+        <h1>{tpl ? t('Тренировка') : t('Новая тренировка')}</h1>
         <span />
       </div>
-      <input className="gym-name" placeholder="Название, например «Грудь и трицепс»" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+      <input className="gym-name" placeholder={t('Название, например «Грудь и трицепс»')} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
 
-      <div className="section-title">Дни недели</div>
+      <div className="section-title">{t('Дни недели')}</div>
       <div className="gym-daypick">
         {WEEKDAYS.map((d, i) => {
-          const other = g.week[i] && g.week[i] !== tpl?.id ? g.templates.find((t) => t.id === g.week[i]) : undefined;
+          const other = g.week[i] && g.week[i] !== tpl?.id ? g.templates.find((tm) => tm.id === g.week[i]) : undefined;
           return (
-            <button key={d} className={days.includes(i) ? 'on' : ''} title={other ? `Сейчас: ${other.name}` : undefined} onClick={() => setDays((xs) => (xs.includes(i) ? xs.filter((x) => x !== i) : [...xs, i]))}>
+            <button key={d} className={days.includes(i) ? 'on' : ''} title={other ? t('Сейчас: {0}', { 0: other.name }) : undefined} onClick={() => setDays((xs) => (xs.includes(i) ? xs.filter((x) => x !== i) : [...xs, i]))}>
               {d}
               {other && !days.includes(i) && <i />}
             </button>
@@ -636,19 +637,19 @@ function TemplateEditor({ tpl, progress, update, onDone }: { tpl: GymTemplate | 
       </div>
 
       <div className="section-title">
-        Упражнения
+        {t('Упражнения')}
         <span className="muted">{items.length}</span>
       </div>
       {items.map((it, i) => {
         const ex = gymExercise(it.ex);
-        const unit = ex.kind === 't' ? 'сек' : ex.kind === 'c' ? 'мин' : 'повт.';
+        const unit = ex.kind === 't' ? t('сек') : ex.kind === 'c' ? t('мин') : t('повт.');
         return (
           <div key={`${it.ex}-${i}`} className="gym-plan-row">
             <div className="gym-order">
-              <button disabled={i === 0} onClick={() => move(i, -1)} aria-label="Выше">
+              <button disabled={i === 0} onClick={() => move(i, -1)} aria-label={t('Выше')}>
                 ▲
               </button>
-              <button disabled={i === items.length - 1} onClick={() => move(i, 1)} aria-label="Ниже">
+              <button disabled={i === items.length - 1} onClick={() => move(i, 1)} aria-label={t('Ниже')}>
                 ▼
               </button>
             </div>
@@ -662,17 +663,17 @@ function TemplateEditor({ tpl, progress, update, onDone }: { tpl: GymTemplate | 
                 <span className="muted">{unit}</span>
               </span>
             </span>
-            <button className="gym-x" aria-label="Убрать" onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}>
+            <button className="gym-x" aria-label={t('Убрать')} onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}>
               <Trash size={15} />
             </button>
           </div>
         );
       })}
       <button className="secondary" onClick={() => setPicker(true)}>
-        <Plus size={18} /> Добавить упражнения
+        <Plus size={18} /> {t('Добавить упражнения')}
       </button>
       <button className="primary" disabled={!items.length} onClick={save}>
-        Сохранить
+        {t('Сохранить')}
       </button>
       {tpl && (
         <button
@@ -682,7 +683,7 @@ function TemplateEditor({ tpl, progress, update, onDone }: { tpl: GymTemplate | 
             onDone();
           }}
         >
-          <Trash size={14} /> Удалить тренировку
+          <Trash size={14} /> {t('Удалить тренировку')}
         </button>
       )}
     </div>
@@ -715,23 +716,23 @@ function Picker({ onPick, onClose }: { onPick: (ids: string[]) => void; onClose:
     <div className="gym-screen gym-picker">
       <div className="app-head">
         <button className="pill btn" onClick={onClose}>
-          ‹ Назад
+          {t('‹ Назад')}
         </button>
-        <h1>Упражнения</h1>
+        <h1>{t('Упражнения')}</h1>
         <span />
       </div>
       <label className="gym-search">
         <Search size={16} />
-        <input placeholder={`Поиск среди ${GYM_EXERCISES.length} упражнений`} value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder={t('Поиск среди {0} упражнений', { 0: GYM_EXERCISES.length })} value={q} onChange={(e) => setQ(e.target.value)} />
         {q && (
-          <button onClick={() => setQ('')} aria-label="Очистить">
+          <button onClick={() => setQ('')} aria-label={t('Очистить')}>
             <Cross size={14} />
           </button>
         )}
       </label>
       <div className="gym-chips scroll">
         <button className={`swap-chip ${!muscle ? 'on' : ''}`} onClick={() => setMuscle(null)}>
-          Все
+          {t('Все')}
         </button>
         {MUSCLES.map((m) => (
           <button key={m.id} className={`swap-chip ${muscle === m.id ? 'on' : ''}`} style={{ ['--mc' as string]: m.color }} onClick={() => setMuscle(muscle === m.id ? null : m.id)}>
@@ -746,8 +747,8 @@ function Picker({ onPick, onClose }: { onPick: (ids: string[]) => void; onClose:
               <Pencil size={18} />
             </span>
             <span className="gym-ex-text">
-              <b>Своё: «{q.trim()}»</b>
-              <small>вес × повторы</small>
+              <b>{t('Своё: «{0}»', { 0: q.trim() })}</b>
+              <small>{t('вес × повторы')}</small>
             </span>
             <span className="gym-tick">{sel.includes(custom) && <Check size={14} />}</span>
           </button>
@@ -762,11 +763,11 @@ function Picker({ onPick, onClose }: { onPick: (ids: string[]) => void; onClose:
             <span className="gym-tick">{sel.includes(e.id) && <Check size={14} />}</span>
           </button>
         ))}
-        {!list.length && !custom && <div className="muted gym-note">Ничего не нашлось. Напиши название целиком — добавим как своё.</div>}
+        {!list.length && !custom && <div className="muted gym-note">{t('Ничего не нашлось. Напиши название целиком — добавим как своё.')}</div>}
       </div>
       <div className="gym-picker-bar">
         <button className="primary" disabled={!sel.length} onClick={() => onPick(sel)}>
-          {sel.length ? `Добавить (${sel.length})` : 'Выбери упражнения'}
+          {sel.length ? t('Добавить ({0})', { 0: sel.length }) : t('Выбери упражнения')}
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { cloudState, localBackup, onCloud, post, restoreLocalBackup, switchAccou
 import { heroLevel, heroXp, loadProgress, type Progress } from '../game/progress';
 import { Sheet } from '../Sheet';
 import { WebLogoutButton } from './WebLogin';
+import { t, locale } from '../i18n';
 
 interface HeroCard {
   level: number;
@@ -27,9 +28,9 @@ const localCard = () => {
 /** Сначала отдаём серверу свою копию героя, чтобы он сравнивал настоящих героев. */
 const pushLocal = () => syncNow(loadProgress()).catch(() => {});
 
-const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: 'Яндекс' };
-const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? 'Вход'} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
-const errText = (e: { body?: { error?: string } }) => e.body?.error ?? 'Не получилось связаться с сервером. Попробуй ещё раз.';
+const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: t('Яндекс') };
+const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? t('Вход')} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
+const errText = (e: { body?: { error?: string } }) => e.body?.error ?? t('Не получилось связаться с сервером. Попробуй ещё раз.');
 
 /** Можно ли привязывать: вошёл через мессенджер (ответ сервера). Гостям из браузера — нет. */
 function useLinkable(): boolean {
@@ -68,24 +69,24 @@ export function AccountRow() {
     <div className="toggle-row account-row">
       <div className="account-body">
         <div>
-          <div className="toggle-title">Аккаунт</div>
-          <div className="muted">Один герой в Telegram, Max и браузере. Возьми код здесь и введи его на другой платформе, и прогресс, клан и деревня будут общими.</div>
+          <div className="toggle-title">{t('Аккаунт')}</div>
+          <div className="muted">{t('Один герой в Telegram, Max и браузере. Возьми код здесь и введи его на другой платформе, и прогресс, клан и деревня будут общими.')}</div>
         </div>
         {status?.logins.map((l) => (
           <div key={l.login} className="account-login">
             <span>{loginText(l)}</span>
             {l.login === status.login ? (
-              <span className="muted">сейчас</span>
+              <span className="muted">{t('сейчас')}</span>
             ) : (
               <button className="small-btn ghost" onClick={() => unlink(l.login)}>
-                Отвязать
+                {t('Отвязать')}
               </button>
             )}
           </div>
         ))}
         {status && new Set(status.logins.map((l) => l.platform)).size > 1 && (
           <label className="account-notify">
-            <span>Напоминания и вести от бота</span>
+            <span>{t('Напоминания и вести от бота')}</span>
             <select
               value={status.notify ?? ''}
               onChange={(e) =>
@@ -95,7 +96,7 @@ export function AccountRow() {
                 )
               }
             >
-              <option value="">Где заходил последним</option>
+              <option value="">{t('Где заходил последним')}</option>
               <option value="tg">Telegram</option>
               <option value="max">Max</option>
             </select>
@@ -104,45 +105,45 @@ export function AccountRow() {
         {code ? (
           <div className="account-code">
             <b>{code.code}</b>
-            <span className="muted">Введи этот код на другой платформе в течение 10 минут: «Настройки» → «Аккаунт» → «Ввести код».</span>
+            <span className="muted">{t('Введи этот код на другой платформе в течение 10 минут: «Настройки» → «Аккаунт» → «Ввести код».')}</span>
           </div>
         ) : null}
         <div className="account-actions">
           <button className="small-btn ghost" onClick={() => pushLocal().then(() => post('/api/account/code', {})).then(setCode, (e) => setError(errText(e)))}>
-            {code ? 'Новый код' : 'Получить код'}
+            {code ? t('Новый код') : t('Получить код')}
           </button>
           <button className="small-btn ghost" onClick={() => setEnter(true)}>
-            Ввести код
+            {t('Ввести код')}
           </button>
           <WebLogoutButton />
         </div>
         {backup && (
           <div className="account-archive">
-            <div className="toggle-title">Копия героя на этом телефоне</div>
-            <div className="muted">Игра сохранила её перед сменой аккаунта.</div>
+            <div className="toggle-title">{t('Копия героя на этом телефоне')}</div>
+            <div className="muted">{t('Игра сохранила её перед сменой аккаунта.')}</div>
             <div className="account-login">
               <span>
-                Герой {backup.level} уровня · {backup.stages} уровней пройдено
-                <span className="muted"> · {new Date(backup.at).toLocaleDateString('ru-RU')}</span>
+                {t('Герой {0} уровня · {1} уровней пройдено', { 0: backup.level, 1: backup.stages })}
+                <span className="muted"> · {new Date(backup.at).toLocaleDateString(locale())}</span>
               </span>
               <button className="small-btn" onClick={() => (sure === -1 ? restoreLocalBackup().catch((e) => setError(errText(e))) : setSure(-1))}>
-                {sure === -1 ? 'Точно вернуть?' : 'Вернуть'}
+                {sure === -1 ? t('Точно вернуть?') : t('Вернуть')}
               </button>
             </div>
           </div>
         )}
         {!!status?.archived?.length && (
           <div className="account-archive">
-            <div className="toggle-title">Прежние герои</div>
-            <div className="muted">Герои, которых не выбрали при привязке, хранятся 30 дней. Можно вернуть любого: нынешний тогда уйдёт сюда же.</div>
+            <div className="toggle-title">{t('Прежние герои')}</div>
+            <div className="muted">{t('Герои, которых не выбрали при привязке, хранятся 30 дней. Можно вернуть любого: нынешний тогда уйдёт сюда же.')}</div>
             {status.archived.map((a) => (
               <div key={a.at} className="account-login">
                 <span>
                   {cardText(a.card)}
-                  <span className="muted"> · отложен {new Date(a.at).toLocaleDateString('ru-RU')}</span>
+                  <span className="muted"> {t('· отложен {0}', { 0: new Date(a.at).toLocaleDateString(locale()) })}</span>
                 </span>
                 <button className="small-btn" onClick={() => restore(a)}>
-                  {sure === a.at ? 'Точно вернуть?' : 'Вернуть'}
+                  {sure === a.at ? t('Точно вернуть?') : t('Вернуть')}
                 </button>
               </div>
             ))}
@@ -163,14 +164,14 @@ export function HaveHeroButton() {
   return (
     <>
       <button className="link" onClick={() => setOpen(true)}>
-        У меня уже есть герой
+        {t('У меня уже есть герой')}
       </button>
       {open && <LinkSheet onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-const cardText = (c: HeroCard) => [`Герой ${c.level} уровня`, `${c.stages} уровней пройдено`, c.cups ? `${c.cups} кубков` : '', c.clan ? `клан «${c.clan}»` : ''].filter(Boolean).join(' · ');
+const cardText = (c: HeroCard) => [t('Герой {0} уровня', { 0: c.level }), t('{0} уровней пройдено', { 0: c.stages }), c.cups ? t('{0} кубков', { 0: c.cups }) : '', c.clan ? t('клан «{0}»', { 0: c.clan }) : ''].filter(Boolean).join(' · ');
 
 /** Ввод кода с другой платформы; если герои есть с обеих сторон — выбор, кого оставить. */
 export function LinkSheet({ onClose }: { onClose: () => void }) {
@@ -198,20 +199,20 @@ export function LinkSheet({ onClose }: { onClose: () => void }) {
   };
   return (
     <Sheet onClose={onClose}>
-      <div className="level-title">У меня уже есть герой</div>
+      <div className="level-title">{t('У меня уже есть герой')}</div>
       {!conflict ? (
         <>
-          <div className="muted">На платформе, где ты уже играешь, открой «Настройки» → «Аккаунт» → «Получить код» и введи его здесь.</div>
+          <div className="muted">{t('На платформе, где ты уже играешь, открой «Настройки» → «Аккаунт» → «Получить код» и введи его здесь.')}</div>
           <div className="join">
-            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Код" maxLength={6} autoCapitalize="characters" />
+            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder={t('Код')} maxLength={6} autoCapitalize="characters" />
             <button disabled={busy || code.length !== 6} onClick={() => link()}>
-              {busy ? '…' : 'Привязать'}
+              {busy ? '…' : t('Привязать')}
             </button>
           </div>
         </>
       ) : (
         <>
-          <div className="muted">Герой есть и здесь, и там. Объединить их нельзя: выбери, кем играть дальше. Второй уйдёт в архив: его можно вернуть в «Настройки» → «Аккаунт» в течение 30 дней.</div>
+          <div className="muted">{t('Герой есть и здесь, и там. Объединить их нельзя: выбери, кем играть дальше. Второй уйдёт в архив: его можно вернуть в «Настройки» → «Аккаунт» в течение 30 дней.')}</div>
           <div className="account-choice">
             {(['there', 'here'] as const).map((side) => {
               const c = conflict[side];
@@ -219,14 +220,14 @@ export function LinkSheet({ onClose }: { onClose: () => void }) {
               const stronger = c.level > other.level || (c.level === other.level && c.stages >= other.stages);
               return (
                 <div key={side} className="settings-note">
-                  <b>{side === 'there' ? 'Герой с платформы, где брал код' : 'Герой на этой платформе'}</b>
+                  <b>{side === 'there' ? t('Герой с платформы, где брал код') : t('Герой на этой платформе')}</b>
                   <div>{cardText(c)}</div>
                   <button
                     className={stronger ? 'small-btn' : 'small-btn ghost'}
                     disabled={busy}
                     onClick={() => (sure === side ? link(side) : setSure(side))}
                   >
-                    {sure === side ? `Точно? Герой ${other.level} ур. уйдёт в архив` : 'Оставить этого'}
+                    {sure === side ? t('Точно? Герой {0} ур. уйдёт в архив', { 0: other.level }) : t('Оставить этого')}
                   </button>
                 </div>
               );

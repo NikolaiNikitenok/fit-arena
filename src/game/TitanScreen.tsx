@@ -9,7 +9,7 @@ import { MonsterFace } from './match3/art';
 import { type Progress, saveProgress } from './progress';
 import { canClaimTitan, claimTitan, TITAN_COINS, TITAN_OUTFIT } from './titan';
 import './titan.css';
-import { locale } from '../i18n';
+import { forms, locale, t } from '../i18n';
 
 // Титан: вся страна бьёт одного босса с 12-го по 18-е число. Каждый повтор в любом режиме — удар.
 // Здоровье и урон — с сервера (server/titan.ts), экран обновляется сам, пока Титан жив.
@@ -42,11 +42,7 @@ export function shownTitan(now: number) {
 }
 
 const n = (x: number) => x.toLocaleString(locale());
-const word = (x: number, f: [string, string, string]) => {
-  const m10 = x % 10;
-  const m100 = x % 100;
-  return f[m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2];
-};
+const word = forms;
 
 export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progress: Progress; setProgress: (p: Progress) => void; onTrain: () => void; onClose: () => void }) {
   const now = Date.now();
@@ -62,13 +58,13 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
     const load = () =>
       post('/api/titan', { key: w.key, name: userName() })
         .then((r) => !stop && (setS(r as TitanState), setError(null)))
-        .catch((e: { status?: number }) => !stop && setError(e.status === 401 ? 'Титан — для тех, кто вошёл через Telegram, Max или Яндекс' : 'Нет связи с сервером'));
+        .catch((e: { status?: number }) => !stop && setError(e.status === 401 ? t('Титан — для тех, кто вошёл через Telegram, Max или Яндекс') : t('Нет связи с сервером')));
     void load();
     // Пока Титан жив, полоска здоровья обновляется сама.
-    const t = w.live ? setInterval(load, 30_000) : undefined;
+    const tm = w.live ? setInterval(load, 30_000) : undefined;
     return () => {
       stop = true;
-      clearInterval(t);
+      clearInterval(tm);
     };
   }, [w.key, w.live]);
 
@@ -83,7 +79,7 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
     if (!s) return;
     const r = claimTitan(progress, s.key, Date.now());
     setProgress(saveProgress(r.progress));
-    setGot(`+${n(r.coins)} монет${r.outfit ? ` и легендарный облик «${itemById(TITAN_OUTFIT).name}»` : ''}`);
+    setGot(t('+{0} монет{1}', { 0: n(r.coins), 1: r.outfit ? t(' и легендарный облик «{0}»', { 0: itemById(TITAN_OUTFIT).name }) : '' }));
   };
 
   return (
@@ -93,9 +89,9 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
         <MonsterFace shape="golem" color={def.color} boss angry={!s?.won} size={128} />
       </div>
       <div className="titan-name">{def.name}</div>
-      <div className="titan-threat">{s?.won ? 'Повержен! Страна отстояла свои тренировки' : `Грозит: ${def.threat}`}</div>
+      <div className="titan-threat">{s?.won ? t('Повержен! Страна отстояла свои тренировки') : t('Грозит: {0}', { 0: def.threat })}</div>
       <div className="titan-when">
-        {upcoming ? `Появится 12-го: через ${fmtLeft(w.start - now)}` : s?.won ? 'Победа! Титан повержен' : ended ? 'Битва окончена: Титан устоял' : `Битва идёт: ещё ${fmtLeft(w.end - now)}`}
+        {upcoming ? t('Появится 12-го: через {0}', { 0: fmtLeft(w.start - now) }) : s?.won ? t('Победа! Титан повержен') : ended ? t('Битва окончена: Титан устоял') : t('Битва идёт: ещё {0}', { 0: fmtLeft(w.end - now) })}
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -104,17 +100,17 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
         <>
           <div className="titan-hp">
             <div className="titan-hp-fill" style={{ width: `${(1 - share) * 100}%` }} />
-            <span>{s.won ? 'ПОВЕРЖЕН' : `${n(left!)} из ${n(s.hp)}`}</span>
+            <span>{s.won ? t('ПОВЕРЖЕН') : t('{0} из {1}', { 0: n(left!), 1: n(s.hp) })}</span>
           </div>
           <div className="titan-sub">
-            {n(s.dealt)} {word(s.dealt, ['удар', 'удара', 'ударов'])} от {n(s.players)} {word(s.players, ['героя', 'героев', 'героев'])}
+            {t('{0} {1} от {2} {3}', { 0: n(s.dealt), 1: word(s.dealt, [t('удар'), t('удара'), t('ударов')]), 2: n(s.players), 3: word(s.players, [t('героя'), t('героев'), t('героев')]) })}
           </div>
         </>
       )}
 
       {upcoming ? (
         <div className="titan-box">
-          С 12-го по 18-е каждый твой повтор — в любом режиме — удар по Титану. Если страна его одолеет, всем, кто внёс хотя бы {TITAN_MIN_REPS} повторов: {n(TITAN_COINS)} монет и легендарный облик «{itemById(TITAN_OUTFIT).name}».
+          {t('С 12-го по 18-е каждый твой повтор — в любом режиме — удар по Титану. Если страна его одолеет, всем, кто внёс хотя бы {0} повторов: {1} монет и легендарный облик «{2}».', { 0: TITAN_MIN_REPS, 1: n(TITAN_COINS), 2: itemById(TITAN_OUTFIT).name })}
         </div>
       ) : (
         s && (
@@ -122,30 +118,30 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
             <div className="titan-me">
               <b>{n(s.me.reps)}</b>
               <span>
-                твой урон{s.me.place ? ` · ${s.me.place}-е место` : ''}
-                {s.myCity ? ` · ${s.myCity.name}: ${s.myCity.place}-е место среди городов` : ''}
+                {t('твой урон')}{s.me.place ? t(' · {0}-е место', { 0: s.me.place }) : ''}
+                {s.myCity ? t(' · {0}: {1}-е место среди городов', { 0: s.myCity.name, 1: s.myCity.place }) : ''}
               </span>
             </div>
             {got ? (
               <div className="titan-got">{got}</div>
             ) : claimable ? (
               <button className="primary" onClick={claim}>
-                Забрать награду победителя
+                {t('Забрать награду победителя')}
               </button>
             ) : claimed ? (
-              <div className="titan-got">Награда за этого Титана получена</div>
+              <div className="titan-got">{t('Награда за этого Титана получена')}</div>
             ) : s.won ? (
-              <div className="muted">{s.me.reps < TITAN_MIN_REPS ? `Для награды нужно внести ${TITAN_MIN_REPS} повторов${ended ? ' — в следующий раз!' : ': ещё не поздно!'}` : ''}</div>
+              <div className="muted">{s.me.reps < TITAN_MIN_REPS ? t('Для награды нужно внести {0} повторов{1}', { 0: TITAN_MIN_REPS, 1: ended ? t(' — в следующий раз!') : t(': ещё не поздно!') }) : ''}</div>
             ) : (
               !ended && (
                 <div className="muted">
-                  Одолеем Титана — всем, кто внёс {TITAN_MIN_REPS}+ повторов: {n(TITAN_COINS)} монет и облик «{itemById(TITAN_OUTFIT).name}».
+                  {t('Одолеем Титана — всем, кто внёс {0}+ повторов: {1} монет и облик «{2}».', { 0: TITAN_MIN_REPS, 1: n(TITAN_COINS), 2: itemById(TITAN_OUTFIT).name })}
                 </div>
               )
             )}
             {!ended && !s.won && (
               <button className="primary" onClick={onTrain}>
-                В бой: каждый повтор — удар
+                {t('В бой: каждый повтор — удар')}
               </button>
             )}
           </div>
@@ -156,14 +152,14 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
         <>
           <div className="tabs">
             <button className={tab === 'cities' ? 'active' : ''} onClick={() => setTab('cities')}>
-              Города
+              {t('Города')}
             </button>
             <button className={tab === 'heroes' ? 'active' : ''} onClick={() => setTab('heroes')}>
-              Герои
+              {t('Герои')}
             </button>
           </div>
           <div className="city-rows">
-            {(tab === 'cities' ? s.cities.map((c) => ({ name: c.name, value: c.dealt, sub: `${c.players} ${word(c.players, ['герой', 'героя', 'героев'])}`, me: c.mine, pro: false })) : s.heroes.map((h) => ({ name: h.name, value: h.reps, sub: '', me: h.me, pro: h.pro }))).map((r, i) => (
+            {(tab === 'cities' ? s.cities.map((c) => ({ name: c.name, value: c.dealt, sub: `${c.players} ${word(c.players, [t('герой'), t('героя'), t('героев')])}`, me: c.mine, pro: false })) : s.heroes.map((h) => ({ name: h.name, value: h.reps, sub: '', me: h.me, pro: h.pro }))).map((r, i) => (
               <div key={`${tab}${i}`} className={`city-row p${i + 1} ${r.me ? 'me' : ''}`}>
                 <span className="place">{i + 1}</span>
                 <span className="who">
@@ -174,7 +170,7 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
               </div>
             ))}
           </div>
-          {tab === 'cities' && !s.myCity && <div className="muted center">Выбери свой город в «Битве городов» — и его урон попадёт в таблицу.</div>}
+          {tab === 'cities' && !s.myCity && <div className="muted center">{t('Выбери свой город в «Битве городов» — и его урон попадёт в таблицу.')}</div>}
         </>
       )}
     </Sheet>

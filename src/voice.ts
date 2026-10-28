@@ -97,11 +97,11 @@ export function useVoiceCoach(on: boolean, reps: number, leftS: number, hint: st
     const now = performance.now();
     if (on && !p.on) say(t('Поехали!'));
     else if (on) {
-      const t = timeLine(p.leftS, leftS, total);
+      const tm = timeLine(p.leftS, leftS, total);
       const held = timed && reps > p.reps ? holdLine(reps, target) : null;
       if (held) say(held);
       else if (reps > p.reps && !timed) say(repLine(reps, target));
-      else if (t) say(t);
+      else if (tm) say(tm);
       const h = hintLine(hint, p.hint, now - p.hintAt);
       if (h) {
         say(h);

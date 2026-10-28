@@ -186,13 +186,13 @@ class Grace {
   private streak = 0;
   private since = 0;
   /** Отмечает кадр; true — сбой затянулся. */
-  update(failed: boolean, t: number): boolean {
+  update(failed: boolean, tm: number): boolean {
     if (!failed) {
       this.streak = 0;
       return false;
     }
-    if (this.streak++ === 0) this.since = t;
-    return this.streak >= POSTURE_GRACE || (this.streak > 1 && t - this.since >= POSTURE_GRACE_MS);
+    if (this.streak++ === 0) this.since = tm;
+    return this.streak >= POSTURE_GRACE || (this.streak > 1 && tm - this.since >= POSTURE_GRACE_MS);
   }
   reset(): void {
     this.streak = 0;
@@ -329,8 +329,8 @@ export function plankFault(lm: Landmark[], s: number): string | null {
   if (support && (support.y <= sh.y || tilt(sh, support) < PLANK_ARM_TILT)) return PLANK_HINTS.arms;
   if (angle(sh, hip, end) < PLANK_STRAIGHT) {
     // Где таз относительно линии плечо — стопа: ниже (y больше) — провис, выше — «домик».
-    const t = (hip.x - sh.x) / (end.x - sh.x || 1e-6);
-    const lineY = sh.y + (end.y - sh.y) * t;
+    const tm = (hip.x - sh.x) / (end.x - sh.x || 1e-6);
+    const lineY = sh.y + (end.y - sh.y) * tm;
     return hip.y > lineY ? PLANK_HINTS.sag : PLANK_HINTS.pike;
   }
   return null;

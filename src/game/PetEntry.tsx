@@ -1,6 +1,7 @@
 import { bonusText, newPets, PetId, petBonus, petById, petLevel, petMood, petName, petXp } from './pets';
 import { heroLevel, heroXp, Progress } from './progress';
 import './pets.css';
+import { t } from '../i18n';
 
 // Кнопка питомца на главном экране и мордочка для списков. Без 3D: экран питомца грузится по нажатию.
 
@@ -73,8 +74,8 @@ export function PetEntry({ progress, onOpen }: { progress: Progress; onOpen: () 
       <button className="ach-entry pet-entry" onClick={onOpen}>
         <span className="pet-entry-egg" />
         <span className="ach-entry-text">
-          Питомец
-          <small>{fresh ? 'Кто-то ждёт тебя!' : 'Яйцо подарит Мастер Гром после первой победы'}</small>
+          {t('Питомец')}
+          <small>{fresh ? t('Кто-то ждёт тебя!') : t('Яйцо подарит Мастер Гром после первой победы')}</small>
         </span>
         {fresh > 0 && <span className="ach-entry-new">+{fresh}</span>}
         <span className="chev">›</span>
@@ -89,7 +90,7 @@ export function PetEntry({ progress, onOpen }: { progress: Progress; onOpen: () 
       <span className="ach-entry-text">
         {petName(progress, id)} <span className={`pet-mood-dot ${mood}`} />
         <small>
-          Ур. {L.level} · {mood === 'sad' ? 'скучает без тренировок' : b}
+          {t('Ур. {0} · {1}', { 0: L.level, 1: mood === 'sad' ? t('скучает без тренировок') : b })}
         </small>
         <span className="pass-bar">
           <span style={{ display: 'block', width: `${(L.into / L.need) * 100}%`, background: petById(id)!.color }} />

@@ -2,7 +2,7 @@
 // Считается на телефоне из дней тренировок (days) и журнала по упражнениям (log); место среди игроков даёт сервер.
 import { EXERCISE_LABELS, type Exercise, repsEquivalent } from '../repCounter';
 import type { Progress } from './progress';
-import { EN_MONTHS, isEn, locale } from '../i18n';
+import { EN_MONTHS, forms, isEn, locale } from '../i18n';
 
 export const MONTHS = isEn() ? EN_MONTHS : ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 // «Итоги октября», «в октябре».
@@ -64,8 +64,8 @@ const shift = (month: string, by: number) => {
 };
 
 /** Местная дата YYYY-MM-DD. */
-const localDate = (t: number) => {
-  const d = new Date(t);
+const localDate = (tm: number) => {
+  const d = new Date(tm);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
@@ -89,13 +89,9 @@ export function recapMonths(p: Pick<Progress, 'days'>, now: number): string[] {
   return [...set].sort().reverse();
 }
 
-const word = (n: number, forms: [string, string, string]) => {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  return forms[m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2];
-};
+const word = forms;
 const num = (n: number) => n.toLocaleString(locale());
-const times = (x: number) => (x >= 10 ? num(Math.round(x)) : x.toLocaleString('ru', { maximumFractionDigits: 1 }));
+const times = (x: number) => (x >= 10 ? num(Math.round(x)) : x.toLocaleString(locale(), { maximumFractionDigits: 1 }));
 
 // Приседание поднимает тело примерно на 45 см; отжимание — около 45 кг (две трети веса) на 30 см.
 const SQUAT_M = 0.45;
@@ -128,10 +124,10 @@ export function funFacts(amount: Partial<Record<Exercise, number>>): string[] {
   }
   const pushups = amount.pushup ?? 0;
   if (pushups >= 40) {
-    const t = (pushups * PUSHUP_KG) / 1000;
-    const [w, what, forms] = [...WEIGHTS].reverse().find(([x]) => t >= x) ?? WEIGHTS[0];
-    const k = Math.floor(t / w);
-    out.push(k >= 2 ? `Отжиманиями ты выжал ${times(t)} т — как ${k} ${word(k, forms)}` : `Отжиманиями ты выжал ${times(t)} т — больше, чем весит ${what}`);
+    const tm = (pushups * PUSHUP_KG) / 1000;
+    const [w, what, forms] = [...WEIGHTS].reverse().find(([x]) => tm >= x) ?? WEIGHTS[0];
+    const k = Math.floor(tm / w);
+    out.push(k >= 2 ? `Отжиманиями ты выжал ${times(tm)} т — как ${k} ${word(k, forms)}` : `Отжиманиями ты выжал ${times(tm)} т — больше, чем весит ${what}`);
   }
   const plank = amount.plank ?? 0;
   if (plank >= 180) out.push(`В планке ты простоял ${num(Math.round(plank / 60))} мин — это ${num(Math.max(1, Math.round(plank / 210)))} ${word(Math.max(1, Math.round(plank / 210)), ['песня', 'песни', 'песен'])} подряд`);

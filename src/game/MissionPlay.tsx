@@ -347,13 +347,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             <div className="result-title">{t('Победа!')}</div>
             <Stars n={result.stars} />
             <div className="muted light">
-              {view.reps} повторов · +{result.reward.coins} монет
+              {t('{0} повторов · +{1} монет', { 0: view.reps, 1: result.reward.coins })}
               {view.record != null && t(' · рекорд {0}', { 0: view.record })}
               {combo.best >= 3 && t(' · лучшее комбо ×{0}', { 0: combo.best })}
             </div>
             {result.reward.petFind && (
               <div className="muted light">
-                {petLook(progress, Date.now())?.name ?? t('Питомец')} нашёл сундучок: +{result.reward.petFind.coins} монет
+                {t('{0} нашёл сундучок: +{1} монет', { 0: petLook(progress, Date.now())?.name ?? t('Питомец'), 1: result.reward.petFind.coins })}
                 {result.reward.petFind.potion && t(' и {0}', { 0: potionById(result.reward.petFind.potion).name.toLowerCase() })}
               </div>
             )}

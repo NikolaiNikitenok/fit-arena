@@ -6,6 +6,7 @@ import type { BuildingType } from '../../shared/village';
 import { decorLook, lookOf } from './looks';
 import type { DecorKind, ThemeId } from './decor';
 import { animateGroup, lookGroup } from './looks3d';
+import { t } from '../i18n';
 
 // Мини-модели построек в меню стройки и в карточке улучшения. Один общий WebGL-рендерер вне экрана
 // рисует каждую видимую мини-модель в свой маленький 2D-холст каждый кадр: постройка вертится плавно,
@@ -117,7 +118,7 @@ function frame(nowMs: number) {
   let moving = false;
   for (const slot of slots) if (!slot.still) moving = true;
   if (!document.hidden) {
-    const t = nowMs / 1000;
+    const tm = nowMs / 1000;
     for (const slot of slots) {
       if (!slot.visible) continue;
       if (slot.still && slot.drawn) continue;
@@ -133,10 +134,10 @@ function frame(nowMs: number) {
       const fixed = still || slot.still;
       // Портрет — в выразительный момент движения (замах), а не в первом кадре.
       const pose = (st.model.userData.poseT as number | undefined) ?? 0;
-      st.spin.rotation.y = -Math.PI / 4 - (fixed ? 0 : (t / TURN_S) * Math.PI * 2);
-      animateGroup(st.model, fixed ? 0 : t);
+      st.spin.rotation.y = -Math.PI / 4 - (fixed ? 0 : (tm / TURN_S) * Math.PI * 2);
+      animateGroup(st.model, fixed ? 0 : tm);
       // Персонажи: своё движение (микшер с костями).
-      (st.model.userData.tick as ((t: number) => void) | undefined)?.(fixed ? pose : t);
+      (st.model.userData.tick as ((tm: number) => void) | undefined)?.(fixed ? pose : tm);
       r.render(st.scene, st.cam);
       const g = slot.canvas.getContext('2d');
       if (g) {
@@ -185,35 +186,35 @@ function useSlot(ref: React.RefObject<HTMLCanvasElement | null>, key: string, ma
   }, [ref, key, size, fixed]);
 }
 
-function Live({ t, l, size, frameL }: { t: BuildingType; l: number; size: number; frameL?: number }) {
+function Live({ t: tm, l, size, frameL }: { t: BuildingType; l: number; size: number; frameL?: number }) {
   const fantasy = useLib('fantasy');
   const village = useLib('village');
   const s = useSettings();
   const ref = useRef<HTMLCanvasElement>(null);
   // Смена экономного режима — другой рендерер и другие детали (без дыма и искр).
   const libs = { fantasy, village, space: undefined, city: undefined };
-  useSlot(ref, `${t}:${l}:${frameL ?? ''}:${s.lowPower ? 1 : 0}`, () => {
-    const g = lookGroup(lookOf(t, l), libs, { lite: s.lowPower });
+  useSlot(ref, `${tm}:${l}:${frameL ?? ''}:${s.lowPower ? 1 : 0}`, () => {
+    const g = lookGroup(lookOf(tm, l), libs, { lite: s.lowPower });
     // Ловушки маленькие: кадр теснее, чтобы их было видно.
-    if (t === 'bomb' || t === 'snare') {
+    if (tm === 'bomb' || tm === 'snare') {
       g.userData.frame = { h: 0.45, half: 0.55 };
       return g;
     }
     // Общая рамка с уровнем frameL: рядом «сейчас → после улучшения» видно, что постройка выросла.
     if (frameL) {
-      const f = frameOf(lookGroup(lookOf(t, Math.max(l, frameL)), libs, { lite: s.lowPower }));
+      const f = frameOf(lookGroup(lookOf(tm, Math.max(l, frameL)), libs, { lite: s.lowPower }));
       g.userData.frame = { h: f.h, half: f.half };
     }
     return g;
   }, size);
-  return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label="Модель постройки" />;
+  return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label={t('Модель постройки')} />;
 }
 
 /** Мини-модель постройки t уровня l; frameL — уровень, по которому выбрана рамка кадра. */
-export function Preview({ t, l = 1, size = 60, frameL }: { t: BuildingType; l?: number; size?: number; frameL?: number }) {
+export function Preview({ t: tm, l = 1, size = 60, frameL }: { t: BuildingType; l?: number; size?: number; frameL?: number }) {
   return (
-    <Suspense fallback={<span className={`vil-swatch b-${t}`} style={{ width: size, height: size }} />}>
-      <Live t={t} l={l} size={size} frameL={frameL} />
+    <Suspense fallback={<span className={`vil-swatch b-${tm}`} style={{ width: size, height: size }} />}>
+      <Live t={tm} l={l} size={size} frameL={frameL} />
     </Suspense>
   );
 }
@@ -244,7 +245,7 @@ function DecorLive({ k, theme, size }: { k: DecorKind; theme: ThemeId; size: num
     g.userData.frame = { h: big ? Math.max(1, look.top * 0.9) : 0.5, half: big ? 1.25 : 0.62 };
     return g;
   }, size);
-  return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label="Украшение" />;
+  return <canvas ref={ref} className="vil-thumb" width={1} height={1} style={{ width: size, height: size }} role="img" aria-label={t('Украшение')} />;
 }
 
 /** Мини-модель украшения в витрине. */

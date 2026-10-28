@@ -5,7 +5,7 @@ import { useIsBusy } from './busy';
 import { ChangeEntry } from './changelog';
 import { applyUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate } from './updates';
 import './updates.css';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 
 const SNOOZE = 10 * 60_000;
 
@@ -26,8 +26,8 @@ export function UpdateBanner() {
   useEffect(() => {
     initUpdates();
     // Что нового в этой сборке: чуть позже первого кадра, чтобы не мешать заставке.
-    const t = setTimeout(() => setFresh(unseenEntries()), 1800);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setFresh(unseenEntries()), 1800);
+    return () => clearTimeout(tm);
   }, []);
 
   // Закончил бой — снова можно предложить обновление.
@@ -40,8 +40,8 @@ export function UpdateBanner() {
   }, [busy, wasBusy]);
   useEffect(() => {
     if (!snoozed) return;
-    const t = setTimeout(() => setSnoozed(false), SNOOZE);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setSnoozed(false), SNOOZE);
+    return () => clearTimeout(tm);
   }, [snoozed]);
 
   const mode = busy ? null : remote && !snoozed ? 'update' : fresh.length ? 'fresh' : null;
@@ -139,7 +139,7 @@ export function ChangesList({ entries }: { entries: ChangeEntry[] }) {
     <div className="upd-history">
       {entries.map((e) => (
         <div key={e.n} className="upd-history-entry">
-          <div className="upd-history-date">{new Date(e.date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          <div className="upd-history-date">{new Date(e.date + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' })}</div>
           <div className="upd-history-title">{e.title}</div>
           {e.items.map((it, i) => (
             <div key={i} className="upd-item">

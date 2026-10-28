@@ -2,6 +2,7 @@
 // Это просто удобство: ни серия, ни задание дня, ни рейтинг, ни опыт героя от зала не меняются.
 import { dayKey, type Progress } from '../game/progress';
 import { gymExercise, type GymKind } from './catalog';
+import { locale } from '../i18n';
 
 /** Подход: w — вес (кг), r — повторы, t — секунды (или минуты для кардио), d — км. */
 export interface GymSet {
@@ -274,7 +275,7 @@ export function durationText(min: number): string {
 }
 
 /** 5455 → «5 455». */
-export const kgText = (v: number) => `${Math.round(v).toLocaleString('ru-RU').replace(/ /g, ' ')} кг`;
+export const kgText = (v: number) => `${Math.round(v).toLocaleString(locale()).replace(/ /g, ' ')} кг`;
 
 export const setsWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'подход' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'подхода' : 'подходов');
 

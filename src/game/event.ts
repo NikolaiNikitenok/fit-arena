@@ -114,7 +114,7 @@ const bossFace = (b: EventBoss) => (b.model === 'Skeleton_Mage' ? 'boss-0m' : 'b
 export const eventBossSay = (b: EventBoss, text: string): Line => ({ who: b.name, text, face: bossFace(b), color: b.glow });
 
 /** Вступление перед боем: рассказ жителя и слова самого босса. */
-export const eventIntro = (b: EventBoss): Line[] => [...b.story.map((t) => say(b.npc, t)), eventBossSay(b, b.taunt)];
+export const eventIntro = (b: EventBoss): Line[] => [...b.story.map((tm) => say(b.npc, tm)), eventBossSay(b, b.taunt)];
 
 export interface EventState {
   key: string;

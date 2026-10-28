@@ -4,6 +4,7 @@ import { ChunkyRes } from './icons';
 import { fmtNum } from './state';
 import type { ResKey } from '../../shared/village';
 import './hud.css';
+import { t } from '../i18n';
 
 // Панели деревни в одном стиле: тёмно-синяя основа, рамка из дерева или камня, крупные полосы
 // запасов сверху справа. Числа не прыгают, а докручиваются; при сборе урожая монеты летят
@@ -19,8 +20,8 @@ export function useCountUp(value: number, ms = 800): number {
     if (from.current === value) return;
     const t0 = performance.now();
     let raf = 0;
-    const step = (t: number) => {
-      const k = Math.min(1, (t - t0) / ms);
+    const step = (tm: number) => {
+      const k = Math.min(1, (tm - t0) / ms);
       const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
       cur.current = Math.round(from.current + (value - from.current) * e);
       setShown(cur.current);
@@ -53,7 +54,7 @@ export const ResBar = forwardRef<HTMLDivElement, { k: BarKey; value: number; cap
         <b key={bump} className={bump ? 'hud-num bump' : 'hud-num'}>
           {k === 'charge' ? n : fmtNum(n)}
         </b>
-        <small>{full ? 'полно' : k === 'charge' ? `/${cap}` : `/${fmtNum(cap)}`}</small>
+        <small>{full ? t('полно') : k === 'charge' ? `/${cap}` : `/${fmtNum(cap)}`}</small>
       </div>
       <span className="hud-ico">{k === 'charge' ? <ChunkyRes r="charge" size={22} /> : <ResIcon r={k} size={20} />}</span>
     </div>

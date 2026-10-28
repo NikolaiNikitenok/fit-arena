@@ -88,14 +88,14 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   g.fillText(recapWord(r.total, ['повтор', 'повтора', 'повторов']), M, 660);
   if (r.growth != null && r.growth !== 0) {
     const up = r.growth > 0;
-    const t = `${up ? '▲ +' : '▼ '}${r.growth}% к прошлому месяцу`;
+    const tm = `${up ? '▲ +' : '▼ '}${r.growth}% к прошлому месяцу`;
     g.font = `900 34px ${FONT}`;
-    const w = g.measureText(t).width + 40;
+    const w = g.measureText(tm).width + 40;
     roundRect(g, M, 690, w, 58, 29);
     g.fillStyle = up ? 'rgba(110,231,183,.16)' : 'rgba(255,107,129,.16)';
     g.fill();
     g.fillStyle = up ? '#6ee7b7' : '#ff6b81';
-    g.fillText(t, M + 20, 731);
+    g.fillText(tm, M + 20, 731);
   }
 
   // Три плитки: дни, серия, день силы.
@@ -145,7 +145,7 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   }
 
   // Тип героя.
-  const t = RECAP_TYPES[r.type];
+  const tm = RECAP_TYPES[r.type];
   const ty = Math.max(y + 10, 1400);
   roundRect(g, M, ty, W - 2 * M, 190, 40);
   const tb = g.createLinearGradient(M, ty, W - M, ty + 190);
@@ -154,13 +154,13 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   g.fillStyle = tb;
   g.fill();
   g.font = `100px ${FONT}`;
-  g.fillText(t.emoji, M + 34, ty + 132);
+  g.fillText(tm.emoji, M + 34, ty + 132);
   g.fillStyle = 'rgba(245,242,236,.7)';
   g.font = `800 30px ${FONT}`;
   g.fillText('Мой тип героя', M + 180, ty + 72);
   g.fillStyle = '#f5f2ec';
-  g.font = `900 ${fit(g, t.name, 900, 60, W - 2 * M - 220)}px ${FONT}`;
-  g.fillText(t.name, M + 180, ty + 140);
+  g.font = `900 ${fit(g, tm.name, 900, 60, W - 2 * M - 220)}px ${FONT}`;
+  g.fillText(tm.name, M + 180, ty + 140);
 
   // Место среди игроков и города.
   const lines: string[] = [];

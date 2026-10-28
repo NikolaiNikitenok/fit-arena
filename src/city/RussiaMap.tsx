@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GRID, MAP_H, MAP_W, RUSSIA, WORLD } from './mapShapes';
+import { t } from '../i18n';
 
 // Карта России: города светятся тем ярче, чем больше у них показатель. Двигается пальцем, щипком и колёсиком,
 // подписи появляются по мере приближения и не налезают друг на друга. Остальной мир пока только фоном.
@@ -67,8 +68,8 @@ export function RussiaMap({ cities, selected, onSelect, focus }: { cities: MapCi
     const from = viewRef.current ?? whole();
     const target = clampView(to, size.w, size.h, fit);
     const t0 = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / 380);
+    const tick = (tm: number) => {
+      const p = Math.min(1, (tm - t0) / 380);
       const e = 1 - (1 - p) ** 3;
       setView({ k: from.k + (target.k - from.k) * e, x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e });
       if (p < 1) anim.current = requestAnimationFrame(tick);
@@ -228,7 +229,7 @@ export function RussiaMap({ cities, selected, onSelect, focus }: { cities: MapCi
 
   return (
     <div className="rmap" ref={box}>
-      <svg width={size.w} height={size.h} role="img" aria-label="Карта городов России">
+      <svg width={size.w} height={size.h} role="img" aria-label={t('Карта городов России')}>
         <defs>
           <radialGradient id="rmap-heat">
             <stop offset="0" stopColor="#ffd27a" stopOpacity=".95" />
@@ -279,19 +280,19 @@ export function RussiaMap({ cities, selected, onSelect, focus }: { cities: MapCi
         })}
       </svg>
       <div className="rmap-zoom">
-        <button onClick={() => zoomAt(1.8, ...anchor())} aria-label="Приблизить">
+        <button onClick={() => zoomAt(1.8, ...anchor())} aria-label={t('Приблизить')}>
           +
         </button>
-        <button onClick={() => zoomAt(1 / 1.8, ...anchor())} aria-label="Отдалить">
+        <button onClick={() => zoomAt(1 / 1.8, ...anchor())} aria-label={t('Отдалить')}>
           −
         </button>
         {zoom > 1.05 && (
-          <button className="all" onClick={() => fly(whole())} aria-label="Вся страна">
+          <button className="all" onClick={() => fly(whole())} aria-label={t('Вся страна')}>
             ⤢
           </button>
         )}
       </div>
-      <div className="rmap-soon">🌍 Весь мир — скоро</div>
+      <div className="rmap-soon">{t('🌍 Весь мир — скоро')}</div>
     </div>
   );
 }

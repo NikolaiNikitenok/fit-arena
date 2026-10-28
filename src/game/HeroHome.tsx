@@ -163,8 +163,8 @@ const MoreIcon = () => (
 function useNow(ms = 30000) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), ms);
-    return () => clearInterval(t);
+    const tm = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(tm);
   }, [ms]);
   return now;
 }
@@ -622,9 +622,9 @@ function HeroSheet({ progress, pro, onShop, onEquip, onEquipGear, onPotion, onAc
         </button>
       </div>
       <div className="tabs hb-tabs">
-        {INV_TABS.map((t) => (
-          <button key={t.tab} className={inv === t.tab ? 'active' : ''} onClick={() => setInv(t.tab)}>
-            {t.label}
+        {INV_TABS.map((tm) => (
+          <button key={tm.tab} className={inv === tm.tab ? 'active' : ''} onClick={() => setInv(tm.tab)}>
+            {tm.label}
           </button>
         ))}
       </div>

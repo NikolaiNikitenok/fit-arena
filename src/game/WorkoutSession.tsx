@@ -133,7 +133,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
         if (left <= 3 && !st.warned) {
           st.warned = true;
           const next = sets[st.idx];
-          say(t('Приготовься: {0}', { 0: next.max ? `${EXERCISE_LABELS[next.exercise].toLowerCase()}, сколько сможешь` : goalText(next.exercise, next.target) }));
+          say(t('Приготовься: {0}', { 0: next.max ? t('{0}, сколько сможешь', { 0: EXERCISE_LABELS[next.exercise].toLowerCase() }) : goalText(next.exercise, next.target) }));
         }
         if (left <= 0) {
           sfx('go');
@@ -243,7 +243,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
             <div className="ws-rest-num">{restLeft}</div>
             <div className="ws-rest-label">{t('Отдых')}</div>
             <div className="ws-next">
-              Дальше: {set.max ? t('{0}, сколько сможешь', { 0: EXERCISE_LABELS[set.exercise] }) : goalText(set.exercise, set.target).replace(/^./, (c) => c.toUpperCase())}
+              {t('Дальше:')} {set.max ? t('{0}, сколько сможешь', { 0: EXERCISE_LABELS[set.exercise] }) : goalText(set.exercise, set.target).replace(/^./, (c) => c.toUpperCase())}
             </div>
           </div>
         )}

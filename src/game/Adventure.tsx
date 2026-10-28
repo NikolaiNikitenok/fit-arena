@@ -211,7 +211,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
 
   const showToast = (text: string, ms = 2600) => {
     setToast(text);
-    setTimeout(() => setToast((t) => (t === text ? null : t)), ms);
+    setTimeout(() => setToast((tm) => (tm === text ? null : tm)), ms);
   };
 
   // Заморозка Pro: пропуск на этой неделе не рвёт серию (раз в 7 дней, только если серия иначе оборвётся).
@@ -487,7 +487,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
             showToast(t('Задание выполнено! +{0} монет{1}', { 0: daily.coins, 1: daily.potion ? t(' и зелье') : '' }));
           }}
           onFriends={onFriends}
-          onShop={(t) => setShop(t ?? 'weapon')}
+          onShop={(tm) => setShop(tm ?? 'weapon')}
           onStrength={() => setStrength(true)}
           onEquip={(id) => setProgress(equip(progress, id))}
           onEquipGear={(id) => setProgress(equipGear(progress, id))}
@@ -600,12 +600,12 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
                   ×
                 </button>
                 <div className="level-tag">
-                  {WORLD_NAMES[LANDS[selected.land].world]} · уровень {selected.num}
+                  {t('{0} · уровень {1}', { 0: WORLD_NAMES[LANDS[selected.land].world], 1: selected.num })}
                 </div>
                 <div className="level-title">{selected.title}</div>
                 <div className="muted">
                   {selected.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
-                  {selected.type !== 'trial' && t(' · цель {0}', { 0: targetReps(selected, progress.baseline) })} · {selected.coins} монет
+                  {selected.type !== 'trial' && t(' · цель {0}', { 0: targetReps(selected, progress.baseline) })} · {t('{0} монет', { 0: selected.coins })}
                 </div>
                 <Stars n={progress.stars[selected.id] ?? 0} />
                 {isUnlocked(progress, selected.id) ? (
@@ -670,7 +670,7 @@ function StarterCard({ progress }: { progress: Progress }) {
   );
 }
 
-function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (t: ShopTab) => void; reachedLand: number; onClose: () => void }) {
+function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (tm: ShopTab) => void; reachedLand: number; onClose: () => void }) {
   const price = (cost: number, buyIt: () => Progress | null) => (
     <button
       className="small-btn"
@@ -711,9 +711,9 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
       </div>
       <StarterCard progress={progress} />
       <div className="tabs">
-        {SHOP_TABS.map((t) => (
-          <button key={t.tab} className={tab === t.tab ? 'active' : ''} onClick={() => setTab(t.tab)}>
-            {t.label}
+        {SHOP_TABS.map((tm) => (
+          <button key={tm.tab} className={tab === tm.tab ? 'active' : ''} onClick={() => setTab(tm.tab)}>
+            {tm.label}
           </button>
         ))}
       </div>
@@ -834,8 +834,8 @@ function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean;
   const months = recapMonths(progress, now).slice(0, 6);
   const [view, setView] = useState<'week' | 'month' | 'chart'>('week');
   const last = Array.from({ length: 14 }, (_, i) => {
-    const t = now - (13 - i) * 86400000;
-    return { day: WEEKDAY[new Date(t).getDay()], reps: progress.days[dayKey(t)] ?? 0 };
+    const tm = now - (13 - i) * 86400000;
+    return { day: WEEKDAY[new Date(tm).getDay()], reps: progress.days[dayKey(tm)] ?? 0 };
   });
   const max = Math.max(10, ...last.map((d) => d.reps));
   const total = last.reduce((s, d) => s + d.reps, 0);
@@ -915,8 +915,8 @@ function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean;
 function LivesPill({ progress }: { progress: Progress }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const tm = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tm);
   }, []);
   const lives = livesNow(progress, now);
   return (

@@ -5,6 +5,7 @@ import { heroHands } from './game/power';
 import { loadProgress } from './game/progress';
 import type { CharName } from './three/kit';
 import type { FighterView } from '../shared/protocol';
+import { t } from './i18n';
 
 export const PLAYER_COLOR = '#ff5a36';
 
@@ -53,7 +54,7 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
       </div>
       {me.combo && camera.active && (
         <div key={me.hits} className="combo">
-          КОМБО!
+          {t('КОМБО!')}
         </div>
       )}
       {banner && (

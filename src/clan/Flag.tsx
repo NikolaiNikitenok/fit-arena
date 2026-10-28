@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { defaultFlag, FLAG_COLORS, FLAG_PATTERNS, FLAG_SYMBOLS, parseFlag } from '../../shared/clan';
 import { clanRank } from '../../shared/clanLevel';
+import { t } from '../i18n';
 
 export const COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#12a594', '#0090ff', '#3e63dd', '#8e4ec6', '#d6409f', '#f2f2f2', '#22252f', '#8d6e63'];
 const LIGHT = new Set([2, 9]);
@@ -83,7 +84,7 @@ export function FlagPicker({ flag, tag, onChange }: { flag: string; tag: string;
   const swatches = (i: number) => (
     <div className="pick-row">
       {COLORS.map((c, x) => (
-        <button type="button" key={c} className={`swatch-btn ${v[i] === x ? 'on' : ''}`} style={{ background: c }} onClick={() => set(i, x)} aria-label={`цвет ${x + 1}`} />
+        <button type="button" key={c} className={`swatch-btn ${v[i] === x ? 'on' : ''}`} style={{ background: c }} onClick={() => set(i, x)} aria-label={t('цвет {0}', { 0: x + 1 })} />
       ))}
     </div>
   );
@@ -92,26 +93,26 @@ export function FlagPicker({ flag, tag, onChange }: { flag: string; tag: string;
       <div className="flag-preview">
         <Flag flag={v.join('.')} size={92} />
       </div>
-      <div className="pick-label">Цвет полотна</div>
+      <div className="pick-label">{t('Цвет полотна')}</div>
       {swatches(0)}
-      <div className="pick-label">Узор</div>
+      <div className="pick-label">{t('Узор')}</div>
       <div className="pick-row">
         {PATTERNS.map((_, x) => (
-          <button type="button" key={x} className={`pick-btn ${v[1] === x ? 'on' : ''}`} onClick={() => set(1, x)} aria-label={`узор ${x + 1}`}>
+          <button type="button" key={x} className={`pick-btn ${v[1] === x ? 'on' : ''}`} onClick={() => set(1, x)} aria-label={t('узор {0}', { 0: x + 1 })}>
             <Flag flag={[v[0], x, v[2], v[3]].join('.')} size={34} />
           </button>
         ))}
       </div>
       {v[1] > 0 && (
         <>
-          <div className="pick-label">Цвет узора</div>
+          <div className="pick-label">{t('Цвет узора')}</div>
           {swatches(3)}
         </>
       )}
-      <div className="pick-label">Символ</div>
+      <div className="pick-label">{t('Символ')}</div>
       <div className="pick-row">
         {SYMBOLS.map((d, x) => (
-          <button type="button" key={x} className={`pick-btn sym ${v[2] === x ? 'on' : ''}`} onClick={() => set(2, x)} aria-label={`символ ${x + 1}`}>
+          <button type="button" key={x} className={`pick-btn sym ${v[2] === x ? 'on' : ''}`} onClick={() => set(2, x)} aria-label={t('символ {0}', { 0: x + 1 })}>
             <svg width={22} height={22} viewBox="0 0 24 24">
               <path d={d} fill="currentColor" fillRule="evenodd" />
             </svg>
