@@ -17,7 +17,8 @@
 .hb-hero:active { transform: scale(.985); }
 .hb-stage { position: relative; flex: 1; min-height: 0; height: auto; }
 .hb-hero-bar { position: relative; z-index: 2; margin: 0 8px 8px; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 7px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.hb-level { width: 38px; height: 38px; border-radius: 12px; font-size: 19px; }
+.hb-level { width: 40px; height: 40px; border-radius: 12px; font-size: 18px; flex-direction: column; line-height: 1; }
+.hb-level small { font-size: 9px; font-weight: 900; opacity: .75; margin-top: 1px; }
 .hb-hero-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .hb-hero-title { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hb-hero-meta .xp-bar { margin-top: 0; height: 5px; }
@@ -53,32 +54,31 @@
 
 /* Четыре главных раздела: крупные карточки 2 × 2, у каждой свой цвет (--fc). */
 .hb-feats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.hb-feat { --fc: var(--accent); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 134px; padding: 12px 12px 12px 13px; text-align: left; border: 1px solid color-mix(in srgb, var(--fc) 34%, transparent); border-radius: 20px; color: var(--text); background: radial-gradient(130% 90% at 0% 0%, color-mix(in srgb, var(--fc) 26%, transparent), transparent 62%), linear-gradient(160deg, color-mix(in srgb, var(--fc) 10%, var(--surface)), var(--surface) 70%); box-shadow: var(--hb-shadow), inset 0 1px 0 rgba(255, 255, 255, .06); transition: transform .12s ease, border-color .2s ease; }
+.hb-feat { --fc: var(--accent); position: relative; overflow: hidden; display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 72px; padding: 10px 8px; text-align: left; border: 1px solid color-mix(in srgb, var(--fc) 34%, transparent); border-radius: 20px; color: var(--text); background: radial-gradient(130% 90% at 0% 0%, color-mix(in srgb, var(--fc) 26%, transparent), transparent 62%), linear-gradient(160deg, color-mix(in srgb, var(--fc) 10%, var(--surface)), var(--surface) 70%); box-shadow: var(--hb-shadow), inset 0 1px 0 rgba(255, 255, 255, .06); transition: transform .12s ease, border-color .2s ease; }
 .hb-feat:active { transform: scale(.97); }
 /* Мягкий блик в углу: карточка выглядит объёмной. */
 .hb-feat::before { content: ''; position: absolute; right: -34px; bottom: -44px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--fc) 22%, transparent), transparent 70%); pointer-events: none; }
-.hb-feat-icon { width: 56px; height: 56px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; border-radius: 17px; background: color-mix(in srgb, var(--fc) 16%, rgba(0, 0, 0, .25)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fc) 30%, transparent), 0 6px 16px color-mix(in srgb, var(--fc) 22%, transparent); }
+.hb-feat-icon { flex: none; width: 44px; height: 44px; margin-bottom: 0; display: flex; align-items: center; justify-content: center; border-radius: 17px; background: color-mix(in srgb, var(--fc) 16%, rgba(0, 0, 0, .25)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fc) 30%, transparent), 0 6px 16px color-mix(in srgb, var(--fc) 22%, transparent); }
 .hb-feat-icon.hb-prog { color: var(--on-accent); background: var(--accent-grad); }
-.hb-feat b { position: relative; font-size: 16px; font-weight: 900; line-height: 1.15; }
-.hb-feat small { position: relative; max-width: 100%; font-size: 12.5px; font-weight: 700; color: color-mix(in srgb, var(--fc) 45%, var(--hint)); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hb-feat-chev { position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255, 255, 255, .06); color: var(--hint); font-size: 18px; font-weight: 900; line-height: 1; }
-.hb-feat-bar { position: relative; display: block; width: 100%; height: 6px; margin-top: auto; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.hb-feat-text { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hb-feat b { position: relative; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 900; line-height: 1.15; }
+.hb-feat small { position: relative; max-width: 100%; font-size: 12px; font-weight: 700; color: color-mix(in srgb, var(--fc) 45%, var(--hint)); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-feat-bar { position: relative; display: block; width: 100%; height: 5px; margin-top: 4px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
 .hb-feat-bar > span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--fc) 70%, #fff), var(--fc)); transition: width .4s ease; }
-.hb-feat .hb-dot { top: 10px; right: 10px; }
-.hb-feat .hb-dot:not(:empty) { top: 8px; right: 8px; }
-.hb-feat:has(.hb-dot) .hb-feat-chev { opacity: 0; }
-.hb-feat.pro { border-color: var(--pro-line); }
+.hb-feat .hb-dot { top: 6px; left: 42px; right: auto; }
+.hb-feat .hb-dot:not(:empty) { top: 4px; left: 38px; right: auto; }
+.hb-feat:has(.hb-dot) .hb-feat.pro { border-color: var(--pro-line); }
 .hb-dungeon.ready { border-color: color-mix(in srgb, var(--fc) 60%, transparent); }
 .hb-event .hb-feat-icon { background: transparent; box-shadow: 0 0 22px color-mix(in srgb, var(--fc) 45%, transparent); border-radius: 50%; }
 
 /* «Ещё»: остальное — сеткой 3 × 3, у каждого пункта яркий значок, как иконка приложения. */
 .hb-more-title { margin: 4px 2px -2px; font-size: 12px; font-weight: 900; color: var(--hint); text-transform: uppercase; letter-spacing: .6px; }
 .hb-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.hb-more-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-height: 108px; padding: 12px 4px 10px; text-align: center; }
+.hb-more-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 94px; padding: 10px 4px 9px; text-align: center; }
 .hb-more-text { max-width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .hb-more-item b { font-size: 13.5px; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hb-more-item small { font-size: 11.5px; line-height: 1.15; font-weight: 700; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hb-more-icon { --t1: #ffb46b; --t2: #ff7a59; flex: none; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 15px; color: #fff; background: linear-gradient(140deg, var(--t1), var(--t2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .18), 0 6px 14px color-mix(in srgb, var(--t2) 35%, transparent); }
+.hb-more-item small { font-size: 12px; line-height: 1.15; font-weight: 700; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-more-icon { --t1: #ffb46b; --t2: #ff7a59; flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 15px; color: #fff; background: linear-gradient(140deg, var(--t1), var(--t2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .18), 0 6px 14px color-mix(in srgb, var(--t2) 35%, transparent); }
 .hb-more-icon svg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
 .hb-more-icon.accent { color: var(--on-accent); }
 .hb-more-icon.gold { --t1: #ffe08a; --t2: #f0a53a; color: #3a2405; }

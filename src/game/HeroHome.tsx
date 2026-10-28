@@ -24,7 +24,7 @@ import { villageOf } from './resources';
 import { Bolt, MonsterFace } from './match3/art';
 import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './match3/dungeon';
 import { homeBadges } from './homeBadges';
-import { MONTHS_OF, recapMonth } from './recap';
+import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
 import './home.css';
@@ -105,16 +105,15 @@ function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', onCli
   return (
     <button className={`hb-feat ${cls}`} style={{ ['--fc' as string]: color }} onClick={onClick}>
       <span className={`hb-feat-icon ${iconCls}`}>{icon}</span>
-      <span className="hb-feat-chev" aria-hidden>
-        ›
+      <span className="hb-feat-text">
+        <b>{title}</b>
+        <small>{sub}</small>
+        {bar !== undefined && (
+          <span className="hb-feat-bar">
+            <span style={{ width: `${Math.max(4, Math.min(100, bar * 100))}%` }} />
+          </span>
+        )}
       </span>
-      <b>{title}</b>
-      <small>{sub}</small>
-      {bar !== undefined && (
-        <span className="hb-feat-bar">
-          <span style={{ width: `${Math.max(4, Math.min(100, bar * 100))}%` }} />
-        </span>
-      )}
       <Dot n={dot ?? 0} />
     </button>
   );
@@ -200,6 +199,20 @@ export function HeroHome(props: Props) {
   const titanLast = lastTitan(now);
   const titanShown = titan.live || titan.start - now < 3 * 86_400_000 ? titan : now - titanLast.end < 3 * 86_400_000 ? titanLast : null;
 
+  // На главной — одна полоса события, самая важная сейчас: идущий Титан, идущий праздник, свежие итоги,
+  // потом анонсы. Остальные события не пропадают — они плитками в начале «Ещё».
+  const recapFresh = !!recapM && progress.recapSeen !== recapM;
+  const slots = [
+    titanShown?.live && 'titan',
+    hol.live && 'holiday',
+    recapFresh && 'recap',
+    titanShown && !titanShown.live && 'titan',
+    holShown && !hol.live && 'holiday',
+    recapM && !recapFresh && 'recap',
+  ].filter((x): x is 'titan' | 'holiday' | 'recap' => !!x);
+  const slot = slots[0];
+  const extra = slots.slice(1);
+
   const pet = progress.pets?.active;
   const petLvl = pet ? petLevel(petXp(progress, pet)).level : 0;
 
@@ -235,7 +248,10 @@ export function HeroHome(props: Props) {
           </Suspense>
         </div>
         <div className="hb-hero-bar">
-          <span className="hero-level hb-level">{lvl.level}</span>
+          <span className="hero-level hb-level">
+            {lvl.level}
+            <small>ур.</small>
+          </span>
           <span className="hb-hero-meta">
             <span className="hb-hero-title">
               <span className={pro ? 'pro-name' : ''}>{heroTitle(lvl.level)}</span>
@@ -257,14 +273,16 @@ export function HeroHome(props: Props) {
       <button className="primary hb-cta" onClick={onTrain}>
         <Swords size={24} />
         <span className="hb-cta-text">
-          В бой: уровень {current.num}
-          <small>{current.title}</small>
+          В бой
+          <small>
+            Уровень карты {current.num} · {current.title}
+          </small>
         </span>
       </button>
 
       <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
 
-      {titanShown && (
+      {slot === 'titan' && titanShown && (
         <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>
           <MonsterFace shape="golem" color={titanShown.def.color} boss angry size={44} />
           <span className="hb-titan-text">
@@ -275,7 +293,7 @@ export function HeroHome(props: Props) {
         </button>
       )}
 
-      {recapM && (
+      {slot === 'recap' && recapM && (
         <button className="hb-recap" onClick={() => onRecap(recapM)}>
           <span className="hb-recap-emoji">🎉</span>
           <span className="hb-recap-text">
@@ -286,7 +304,7 @@ export function HeroHome(props: Props) {
         </button>
       )}
 
-      {holShown && (
+      {slot === 'holiday' && (
         <button className="hb-holiday" style={{ ['--hs1' as string]: hol.def.sky[0], ['--hs2' as string]: hol.def.sky[1], ['--hg' as string]: hol.def.glow }} onClick={onHoliday}>
           <HolidayToken id={hol.def.id} size={30} />
           <span className="hb-holiday-text">
@@ -314,6 +332,9 @@ export function HeroHome(props: Props) {
 
       <div className="hb-more-title">Ещё</div>
       <div className="hb-more">
+        {extra.includes('titan') && titanShown && <More onClick={onTitan} title="Титан" sub={titanShown.live ? 'битва идёт' : now < titanShown.start ? fmtDays(Math.ceil((titanShown.start - now) / 86_400_000)) : 'итоги'} dot={titanShown.live} icon={<MonsterFace shape="golem" color={titanShown.def.color} boss size={40} />} tone="pet" />}
+        {extra.includes('holiday') && <More onClick={onHoliday} title={hol.def.name} sub={hol.live ? `ещё ${fmtLeft(hol.end - now)}` : fmtDays(daysUntil({ ...hol, live: false }, now))} dot={badges.holiday} icon={<HolidayToken id={hol.def.id} size={32} />} tone="pet" />}
+        {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title="Итоги" sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
         <More onClick={onPets} title={pet ? petName(progress, pet) : 'Питомец'} sub={pet ? `ур. ${petLvl}` : 'яйцо ждёт'} dot={badges.pets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} tone="pet" />
         <More onClick={() => setHeroOpen(true)} title="Вещи" sub="и зелья" icon={<Swords size={22} />} tone="accent" />
         <More onClick={() => onShop()} title="Лавка" sub="Фёдора" icon={<Bag size={22} />} tone="gold" />
