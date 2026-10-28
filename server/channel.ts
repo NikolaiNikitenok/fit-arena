@@ -153,7 +153,7 @@ export function userPrompt(o: { now: number; rubric: Rubric; mentionsApp: boolea
   lines.push(
     '',
     aboutApp
-      ? 'Ссылка: там, где речь о приложении, можно один раз сделать ссылку на игру — <a href="https://t.me/ArenaNikitenokBot">@ArenaNikitenokBot</a> (бот игры). Других ссылок не ставь.'
+      ? 'Ссылка: там, где речь о приложении, можно один раз сделать ссылку на игру — <a href="https://t.me/ArenaNikitenokBot?start=src-channel">@ArenaNikitenokBot</a> (бот игры, метка src-channel — по ней статистика считает пришедших из канала). Других ссылок не ставь.'
       : 'Ссылок в этом посте не ставь.',
   );
   lines.push('', imagesHint(aboutApp));
@@ -186,7 +186,7 @@ export const safeLink = (href: string): boolean => {
 /** Ссылки, которые можно ставить в посты: подсказка для промпта. */
 export const LINKS_HINT = `Ссылки: можно 0–1 ссылку на пост, только если она к месту, тегом <a href="адрес">текст</a>, и только эти адреса:
 - https://t.me/NikitenokArena — канал NikitenokArena
-- https://t.me/ArenaNikitenokBot — бот игры NikitenokArena (через него открывается игра)
+- https://t.me/ArenaNikitenokBot?start=src-channel — бот игры NikitenokArena (через него открывается игра; метка src-channel нужна статистике)
 Другие адреса не используй.`;
 /** Чистим текст под HTML Telegram: экранируем всё, кроме разрешённых тегов и своих ссылок, и ограничиваем длину. */
 export function telegramHtml(text: string): string {

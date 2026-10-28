@@ -1,6 +1,6 @@
 // Страница статистики для админов: простой HTML без скриптов, в цветах приложения.
 // Тексты ошибок приходят с телефонов, поэтому всё экранируется.
-import type { Telemetry } from './telemetry';
+import { GONE_DAYS, type Telemetry } from './telemetry';
 
 type Stats = ReturnType<Telemetry['stats']>;
 
@@ -9,6 +9,57 @@ export const esc = (s: unknown) => String(s).replace(/[&<>"']/g, (c) => ({ '&': 
 const pct = (n: number | null, of: number) => (n == null ? '—' : of ? `${Math.round((n / of) * 100)}%` : '0%');
 const when = (t: number) => new Date(t + 3 * 3_600_000).toISOString().slice(5, 16).replace('T', ' ');
 const short = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
+
+// Понятные имена источников; свои метки (src-МЕТКА) показываем как есть.
+const SOURCE_NAMES: Record<string, string> = {
+  direct: 'Бот или меню Telegram',
+  friend: 'Приглашение друга',
+  clan: 'Приглашение в клан',
+  duel: 'Вызов на дуэль',
+  bot: 'Кнопка из уведомления бота',
+  channel: 'Канал NikitenokArena',
+  web: 'Сайт в браузере',
+  max: 'Max',
+  unknown: 'Неизвестно',
+  other: 'Прочие метки',
+};
+export const sourceName = (o: string) => SOURCE_NAMES[o] ?? `Метка «${o}»`;
+
+/** Шаг воронки с самой большой потерей против предыдущего; 0 — потерь нет.
+ *  Последний шаг («вернулись в другой день») не сравниваем: он про другое. */
+export function worstStep(funnel: Stats['funnel']): number {
+  let worst = 0;
+  let most = 0;
+  for (let i = 1; i < funnel.length - 1; i++) {
+    const lost = funnel[i - 1].users - funnel[i].users;
+    if (lost > most) [worst, most] = [i, lost];
+  }
+  return worst;
+}
+
+/** Выводы для блока «Главное»: что сейчас важнее всего, простыми словами. */
+export function insights(s: Stats): string[] {
+  const out: string[] = [];
+  const newcomers = s.funnel[0]?.users ?? 0;
+  if (!newcomers) return [`За ${s.days} дней новых игроков не было: выводов пока нет.`];
+  out.push(`За ${s.days} дней пришло ${newcomers} новичков.`);
+  const w = worstStep(s.funnel);
+  if (w) {
+    const [from, to] = [s.funnel[w - 1], s.funnel[w]];
+    const lost = from.users - to.users;
+    out.push(`Больше всего новичков теряем между шагами «${from.label}» и «${to.label}»: не дошли ${lost} из ${from.users} (${pct(lost, from.users)}). Это место стоит улучшать первым.`);
+  }
+  const back = s.funnel[s.funnel.length - 1];
+  if (back) out.push(`Вернулись в другой день ${back.users} из ${newcomers} (${pct(back.users, newcomers)}).`);
+  const top = s.sources[0];
+  if (top) out.push(`Больше всего новичков пришло через «${sourceName(top.source)}»: ${top.users}.`);
+  const best = s.sources.filter((x) => x.users >= 5).sort((a, b) => b.won / b.users - a.won / a.users)[0];
+  if (best && s.sources.filter((x) => x.users >= 5).length > 1) out.push(`Лучше всех играют пришедшие через «${sourceName(best.source)}»: первую победу одержали ${pct(best.won, best.users)}.`);
+  const gone = s.reach.reduce((a, r) => a + r.gone, 0);
+  const stop = [...s.reach].sort((a, b) => b.gone - a.gone)[0];
+  if (gone && stop) out.push(`Ушли (не заходят 3+ дня) ${gone} новичков; чаще всего на этапе «${stop.label}» — ${stop.gone} человек.`);
+  return out;
+}
 
 /** Столбики DAU за 30 дней; подсказка у каждого столбика — в title. */
 function dauChart(dau: Stats['dau']): string {
@@ -51,6 +102,7 @@ export function statsHtml(s: Stats, opts: { inApp?: boolean } = {}): string {
   const d1Rate = d1.length ? d1.reduce((a, r) => a + r.d1!, 0) / Math.max(1, d1.reduce((a, r) => a + r.cohort, 0)) : null;
   const funnelMax = Math.max(1, s.funnel[0]?.users ?? 1);
   const tile = (label: string, value: string, note = '') => `<div class="tile"><div class="tl">${esc(label)}</div><div class="tv">${esc(value)}</div>${note ? `<div class="tn">${esc(note)}</div>` : ''}</div>`;
+  const worst = worstStep(s.funnel);
   const hardest = s.levels
     .filter((l) => l.win + l.lose >= 5)
     .map((l) => ({ ...l, rate: l.lose / (l.win + l.lose) }))
@@ -72,6 +124,9 @@ h1{font-size:22px;margin:0 0 4px;font-weight:900}h2{font-size:16px;margin:28px 0
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px}
 svg{width:100%;height:auto;display:block}.grid{stroke:rgba(255,255,255,.06)}.ax{fill:var(--hint);font-size:11px}.bar{fill:var(--accent)}g:hover .bar{fill:#ffb46b}
 table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--hint);font-weight:700;font-size:12px}td.n,th.n{text-align:right}
+.hint{color:var(--hint);font-size:13px;margin:-4px 0 10px}code{background:var(--surface-2);padding:1px 5px;border-radius:6px;font-size:12px;word-break:break-all}
+.main{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px 12px 30px;margin:0}.main li{margin:4px 0}
+.lost{color:var(--hint);font-size:12px}.lost.bad{color:var(--rose);font-weight:800}.fill.bad{background:var(--rose)}
 .fun{display:grid;grid-template-columns:minmax(120px,1.4fr) 2fr auto;gap:6px 10px;align-items:center;font-size:13.5px}
 .track{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}.fill{height:100%;border-radius:5px;background:var(--accent)}
 .err{padding:10px 0;border-bottom:1px solid var(--line)}.err:last-child{border:0}
@@ -85,11 +140,15 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:11.5px;color:#c9cfda;bac
 <div class="tiles">
 ${tile('Игроков сегодня', String(last?.users ?? 0), `вчера ${yest?.users ?? 0}`)}
 ${tile('Новых за 7 дней', String(new7))}
-${tile('Удержание D1', d1Rate == null ? '—' : `${Math.round(d1Rate * 100)}%`, 'среднее по когортам')}
+${tile('Удержание D1', d1Rate == null ? '—' : `${Math.round(d1Rate * 100)}%`, 'вернулись на следующий день')}
 ${tile('Ошибок за 7 дней', String(errors7), `${s.errors.length} разных`)}
 </div>
 
+<h2>Главное</h2>
+<ul class="main">${insights(s).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+
 <h2>Игроков в день, 30 дней</h2>
+<div class="hint">Сколько разных людей заходило в каждый день. Наведи или нажми на столбик — там же новые и ошибки.</div>
 <div class="card">${dauChart(s.dau)}</div>
 
 <h2>За 7 дней</h2>
@@ -101,12 +160,33 @@ ${tile('Ошибок за 7 дней', String(errors7), `${s.errors.length} ра
 <tr><td>Дуэли · рейды · программы · события</td><td class="n">${sum('duel_start')} · ${sum('raid_start')} · ${sum('program_start')} · ${sum('event_start')}</td></tr>
 </table></div>
 
-<h2>Воронка новичка</h2>
+<h2>Воронка новичка: где уходят</h2>
+<div class="hint">Новички за ${s.days} дней. Каждая строка — сколько из них дошли до шага; «−N» — сколько потеряли по сравнению с предыдущим шагом. Красным — самая большая потеря: улучшать стоит её.</div>
 <div class="card fun">
-${s.funnel.map((f) => `<div>${esc(f.label)}</div><div class="track"><div class="fill" style="width:${((f.users / funnelMax) * 100).toFixed(1)}%"></div></div><div class="n">${f.users} · ${pct(f.users, funnelMax)}</div>`).join('\n')}
+${s.funnel
+  .map((f, i) => {
+    const lost = i && i < s.funnel.length - 1 ? Math.max(0, s.funnel[i - 1].users - f.users) : 0;
+    return `<div>${esc(f.label)}</div><div class="track"><div class="fill${i === worst ? ' bad' : ''}" style="width:${((f.users / funnelMax) * 100).toFixed(1)}%"></div></div><div class="n">${f.users} · ${pct(f.users, funnelMax)}${lost ? ` <span class="${i === worst ? 'lost bad' : 'lost'}">−${lost}</span>` : ''}</div>`;
+  })
+  .join('\n')}
 </div>
 
+<h2>Откуда пришли</h2>
+<div class="hint">Новички за ${s.days} дней по источнику первого входа (считается с ${esc(s.trackSince)}). Своя ссылка для рекламы или блогера: <code>t.me/ArenaNikitenokBot?start=src-МЕТКА</code>, например <code>src-vk</code> или <code>src-blogger1</code> — метка появится здесь отдельной строкой.</div>
+<div class="card scroll"><table>
+<tr><th>Источник</th><th class="n">Новых</th><th class="n">Камера</th><th class="n">1-я победа</th><th class="n">Дуэль и др.</th><th class="n">D1</th></tr>
+${s.sources.map((x) => `<tr><td>${esc(sourceName(x.source))}</td><td class="n">${x.users}</td><td class="n">${pct(x.camera, x.users)}</td><td class="n">${pct(x.won, x.users)}</td><td class="n">${pct(x.played, x.users)}</td><td class="n">${x.d1Of ? pct(x.d1, x.d1Of) : '—'}</td></tr>`).join('\n') || '<tr><td colspan="6" class="muted">Пока нет данных</td></tr>'}
+</table></div>
+
+<h2>До какого уровня дошли</h2>
+<div class="hint">Те же новички по самому дальнему пройденному уровню. «Ушли» — не заходят ${GONE_DAYS}+ дня, «играют» — заходили недавно. Много ушедших на одном этапе — значит, там скучно, трудно или непонятно.</div>
+<div class="card scroll"><table>
+<tr><th>Пройдено</th><th class="n">Ушли</th><th class="n">Играют</th></tr>
+${s.reach.map((r) => `<tr><td>${esc(r.label)}</td><td class="n">${r.gone ? `<b>${r.gone}</b>` : 0}</td><td class="n">${r.playing}</td></tr>`).join('\n')}
+</table></div>
+
 <h2>Удержание по дню первого входа</h2>
+<div class="hint">Строка — люди, впервые зашедшие в этот день. D1 — какая доля вернулась на следующий день, D7 — через неделю. Ориентир для игр: D1 30–40%, D7 10–15%.</div>
 <div class="card scroll"><table>
 <tr><th>Когорта</th><th class="n">Новых</th><th class="n">D1</th><th class="n">D7</th></tr>
 ${ret.slice(0, 14).map((r) => `<tr><td>${esc(r.date)}</td><td class="n">${r.cohort}</td><td class="n">${pct(r.d1, r.cohort)}</td><td class="n">${pct(r.d7, r.cohort)}</td></tr>`).join('\n') || '<tr><td colspan="4" class="muted">Пока нет данных</td></tr>'}
@@ -114,7 +194,8 @@ ${ret.slice(0, 14).map((r) => `<tr><td>${esc(r.date)}</td><td class="n">${r.coho
 
 ${
   hardest.length
-    ? `<h2>Где бросают: самые трудные уровни</h2>
+    ? `<h2>Самые трудные уровни</h2>
+<div class="hint">Уровни, где чаще всего проигрывают (минимум 5 боёв). Если проигрывают больше половины — уровень стоит облегчить.</div>
 <div class="card scroll"><table>
 <tr><th>Уровень</th><th class="n">Начато</th><th class="n">Побед</th><th class="n">Поражений</th></tr>
 ${hardest.map((l) => `<tr><td>${l.id}</td><td class="n">${l.start}</td><td class="n">${l.win}</td><td class="n">${l.lose} · ${Math.round(l.rate * 100)}%</td></tr>`).join('\n')}

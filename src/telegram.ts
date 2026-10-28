@@ -1,5 +1,5 @@
 // Минимальная обёртка над Telegram WebApp API (скрипт подключён в index.html).
-import { friendLink, friendParam, isNamedParam } from './friends/link';
+import { friendLink, friendParam, isNamedParam, launchSource } from './friends/link';
 
 interface TelegramWebApp {
   ready(): void;
@@ -171,6 +171,9 @@ export function clanInviteCode(): string | null {
 
 /** Приглашение в друзья: startapp=friend-ТОКЕН или ?friend=ТОКЕН (кнопка бота). */
 export const friendInviteCode = (): string | null => friendParam(startParam(), location.search);
+
+/** Откуда открыли приложение (метка src-, приглашение, кнопка бота…) — для статистики. */
+export const appSource = (): string => launchSource(startParam(), location.search, platform);
 
 export const friendInviteLink = (token: string, bot: { username: string | null; running: boolean }): string => maxLink(`friend-${token}`) ?? friendLink(token, bot, BOT_USERNAME, location.origin);
 

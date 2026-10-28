@@ -34,6 +34,10 @@ const MAX_GROUPS = 200;
 const MAX_STACK = 1200;
 const MAX_DAY_KEYS = 200;
 const MAX_ACTIVE = 50_000;
+// Источников больше этого — уже не метки рекламы, а мусор: всё новое идёт в other.
+const MAX_SOURCES = 50;
+// Игрок «ушёл», если не заходил столько дней.
+export const GONE_DAYS = 3;
 export const ALERT_PER_HOUR = 5;
 export const TELEMETRY_MAX_BYTES = 32 * 1024;
 
@@ -74,12 +78,32 @@ interface Day {
   events: Record<string, number>;
 }
 
-// f — первый день, l — последний, s — пройденные шаги воронки (биты).
+// f — первый день, l — последний, s — пройденные шаги воронки (биты),
+// o — откуда пришёл (метка первого входа), m — самый дальний пройденный уровень.
 interface UserRec {
   f: number;
   l: number;
   s: number;
+  o?: string;
+  m?: number;
 }
+
+/** Метка источника с телефона: латиница, цифры, _ и -, до 24 знаков. */
+export const cleanSource = (v: unknown): string | null => (typeof v === 'string' && /^[\w-]{1,24}$/.test(v) ? v.toLowerCase() : null);
+
+/** Группы «до какого уровня дошли». */
+export const REACH = [
+  { label: 'Ни одного уровня', to: 0 },
+  { label: '1 уровень', to: 1 },
+  { label: '2 уровня', to: 2 },
+  { label: '3 уровня', to: 3 },
+  { label: '4–5', to: 5 },
+  { label: '6–10', to: 10 },
+  { label: '11–20', to: 20 },
+  { label: '21–50', to: 50 },
+  { label: '51–100', to: 100 },
+  { label: 'Больше 100', to: Infinity },
+] as const;
 
 interface Data {
   days: Day[];
@@ -89,6 +113,8 @@ interface Data {
   levels: Record<string, [number, number, number]>;
   // Дата (по Москве), за которую уже ушла утренняя сводка.
   summaryOn?: string;
+  // С какого дня считаем источник и дальний уровень: у игроков до него их нет.
+  trackSince?: number;
 }
 
 export interface Alert {
@@ -162,6 +188,7 @@ const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/[\u
 export class Telemetry {
   private data: Data = { days: [], users: {}, errors: [], levels: {} };
   private active = new Map<number, Set<string>>();
+  private sources = new Set<string>();
   private alerts: Alert[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly key: Buffer;
@@ -173,13 +200,16 @@ export class Telemetry {
     key?: Buffer,
   ) {
     this.key = key ?? this.loadKey();
-    if (!file) return;
-    try {
-      this.data = { ...this.data, ...(JSON.parse(readFileSync(file, 'utf8')) as Data) };
-      for (const d of this.data.days) this.active.set(d.day, new Set(d.active));
-    } catch {
-      // Файла ещё нет.
+    if (file) {
+      try {
+        this.data = { ...this.data, ...(JSON.parse(readFileSync(file, 'utf8')) as Data) };
+        for (const d of this.data.days) this.active.set(d.day, new Set(d.active));
+      } catch {
+        // Файла ещё нет.
+      }
     }
+    this.data.trackSince ??= mskDay(this.now());
+    for (const u of Object.values(this.data.users)) if (u.o) this.sources.add(u.o);
   }
 
   /** Секретный ключ для хеша id и подписи ссылок админа. Создаётся один раз. */
@@ -235,11 +265,17 @@ export class Telemetry {
     for (const [id, u] of Object.entries(this.data.users)) if (u.l <= usersKeep) delete this.data.users[id];
   }
 
-  private touch(uid: string, d: Day): UserRec {
+  private touch(uid: string, d: Day, src: string | null): UserRec {
     let u = this.data.users[uid];
     if (!u) {
-      u = this.data.users[uid] = { f: d.day, l: d.day, s: 0 };
+      let o = src ?? 'unknown';
+      if (!this.sources.has(o)) {
+        if (this.sources.size >= MAX_SOURCES) o = 'other';
+        this.sources.add(o);
+      }
+      u = this.data.users[uid] = { f: d.day, l: d.day, s: 0, o };
       d.newUsers++;
+      this.count(d, `src:${o}`);
     }
     if (d.day > u.l) u.l = d.day;
     if (u.l > u.f) u.s |= 1 << 6;
@@ -265,7 +301,7 @@ export class Telemetry {
     const anon = typeof b.anon === 'string' && /^[0-9a-f]{16,64}$/.test(b.anon) ? b.anon : null;
     if (!anon) return 400;
     const d = this.dayRec(mskDay(now));
-    const u = this.touch(this.uid(anon), d);
+    const u = this.touch(this.uid(anon), d, cleanSource(b.src));
     const events = Array.isArray(b.events) ? b.events.slice(0, 50) : [];
     for (const e of events) {
       if (!e || typeof e !== 'object') continue;
@@ -305,6 +341,7 @@ export class Telemetry {
     if (n === 'mission_start' && p === '1') u.s |= 16;
     if (n === 'mission_win' && p === '1') u.s |= 32;
     if (n === 'duel_start' || n === 'raid_start' || n === 'program_start' || n === 'event_start') u.s |= 128;
+    if (n === 'mission_win' && p && /^\d+$/.test(p) && Number(p) <= 1000) u.m = Math.max(u.m ?? 0, Number(p));
     if (n.startsWith('mission_') && p && /^\d+$/.test(p) && Number(p) <= 1000) {
       const l = (this.data.levels[p] ??= [0, 0, 0]);
       l[n === 'mission_start' ? 0 : n === 'mission_win' ? 1 : 2]++;
@@ -390,12 +427,46 @@ export class Telemetry {
       .sort((a, b) => b[0] - a[0])
       .map(([day, ids]) => ({ date: dayDate(day), cohort: ids.length, d1: back(ids, day + 1), d7: back(ids, day + 7) }));
     const users = Object.values(this.data.users);
-    const funnel = FUNNEL.map((f) => ({ label: f.label, users: users.filter((u) => u.s & (1 << f.bit)).length }));
+    // Воронка — по новичкам за период: так видно, что происходит сейчас, а не полгода назад.
+    const fresh = users.filter((u) => u.f > today - days);
+    const funnel = FUNNEL.map((f) => ({ label: f.label, users: fresh.filter((u) => u.s & (1 << f.bit)).length }));
+    // Источник и дальний уровень есть только у пришедших после обновления статистики.
+    const since = this.data.trackSince ?? today;
+    const tracked = Object.entries(this.data.users).filter(([, u]) => u.f > today - days && u.f >= since);
+    const bySource = new Map<string, [string, UserRec][]>();
+    for (const e of tracked) {
+      const o = e[1].o ?? 'unknown';
+      (bySource.get(o) ?? bySource.set(o, []).get(o)!).push(e);
+    }
+    const has = (list: [string, UserRec][], bit: number) => list.filter(([, u]) => u.s & (1 << bit)).length;
+    const sources = [...bySource.entries()]
+      .map(([source, list]) => {
+        const old = list.filter(([, u]) => u.f < today);
+        return {
+          source,
+          users: list.length,
+          camera: has(list, 3),
+          won: has(list, 5),
+          played: has(list, 7),
+          returned: has(list, 6),
+          // D1 считаем только у тех, у кого «завтра» уже наступило.
+          d1Of: old.length,
+          d1: old.filter(([id, u]) => this.active.get(u.f + 1)?.has(id) ?? false).length,
+        };
+      })
+      .sort((a, b) => b.users - a.users);
+    // До какого уровня дошли: отдельно ушедшие (не заходят GONE_DAYS дней) и те, кто ещё играет.
+    const reach = REACH.map((r, i) => {
+      const from = i ? REACH[i - 1].to + 1 : 0;
+      const inside = tracked.filter(([, u]) => (u.m ?? 0) >= from && (u.m ?? 0) <= r.to);
+      const gone = inside.filter(([, u]) => today - u.l >= GONE_DAYS).length;
+      return { label: r.label, gone, playing: inside.length - gone };
+    });
     const errors = [...this.data.errors].sort((a, b) => b.lastSeen - a.lastSeen || b.count - a.count);
     const levels = Object.entries(this.data.levels)
       .map(([id, [start, win, lose]]) => ({ id: Number(id), start, win, lose }))
       .sort((a, b) => a.id - b.id);
-    return { today: dayDate(today), dau, retention, funnel, errors, levels, totalUsers: users.length };
+    return { today: dayDate(today), days, dau, retention, funnel, sources, reach, trackSince: dayDate(since), errors, levels, totalUsers: users.length };
   }
 
   /** Текст утренней сводки для бота: вчерашний день по Москве. */
@@ -406,9 +477,15 @@ export class Telemetry {
     const ev = (k: string) => y.events[k] ?? 0;
     const cohort = s.retention.find((r) => r.d1 != null && r.date < y.date);
     const fresh = s.errors.filter((e) => e.lastSeen > this.now() - DAY_MS).sort((a, b) => b.count - a.count).slice(0, 3);
+    const from = Object.entries(y.events)
+      .filter(([k]) => k.startsWith('src:'))
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k.slice(4)} ${n}`)
+      .join(', ');
     return [
       `Сводка NikitenokArena за ${y.date}`,
       `Игроков: ${y.users} (новых ${y.newUsers}), за неделю суммарно ${week}`,
+      from ? `Откуда новые: ${from}` : '',
       `Уровни: начато ${ev('mission_start')}, побед ${ev('mission_win')}, поражений ${ev('mission_lose')}`,
       `Дуэли ${ev('duel_start')}, рейды ${ev('raid_start')}, программы ${ev('program_start')}, события ${ev('event_start')}`,
       `Камера: разрешили ${ev('camera_granted')}, отказали ${ev('camera_denied')}`,
