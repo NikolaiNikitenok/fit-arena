@@ -287,7 +287,7 @@ export function HeroHome(props: Props) {
         <More onClick={onStrength} title="Сила" sub="рекорды" icon={<Dumbbell size={22} />} tone="mint" />
         <More onClick={onGym} title="Зал" sub={gym.run ? 'идёт' : gymToday ? 'сегодня' : 'дневник'} dot={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} icon={<Kettlebell size={22} />} tone="teal" />
         <More onClick={onCollections} title="Коллекции" sub={`${colsDone} из ${cols.length}`} icon={<Album size={22} />} tone="violet" />
-        <More onClick={onCity} title="Мой город" sub="топ недели" icon={<City size={22} />} tone="blue" />
+        <More onClick={onCity} title="Битва городов" sub="карта России" icon={<City size={22} />} tone="blue" />
         <More onClick={onFriends} title="Друзья" sub="и вызовы" icon={<Users size={22} />} tone="rose" />
         {w.live ? (
           <More onClick={onAchievements} title="Достижения" sub={`${achGot.length} из ${achAll.length}`} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} tone="pet" />

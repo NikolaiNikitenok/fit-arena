@@ -16,7 +16,8 @@ export interface CityBoard {
   to: string;
   top: CityRow[];
   me: { place: number; reps: number; players: number } | null;
-  cities: { city: string; reps: number; players: number; mine?: boolean }[];
+  // players — тренировались на этой неделе, members — выбрали город, best — самый высокий уровень героя.
+  cities: { city: string; reps: number; players: number; members: number; best: number | null; mine?: boolean }[];
   suggest?: string;
 }
 

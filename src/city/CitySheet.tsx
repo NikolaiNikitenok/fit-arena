@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { canonicalKey, citySuggest } from '../../shared/cityNames';
+import { RU_CITIES } from '../../shared/russiaCities';
 import { City } from '../icons';
 import { Sheet } from '../Sheet';
 import { type CityBoard, cityApi, NotSignedIn } from './api';
+import type { MapCity } from './RussiaMap';
 import '../game/holiday.css';
+import './city.css';
 
-// Топ по городу: повторы за эту неделю (с понедельника по Москве). Свой город, место в нём и рейтинг городов.
+// Битва городов: карта России, где города светятся своими повторами за неделю (с понедельника по Москве),
+// рейтинг городов по повторам, героям или сильнейшему герою, свой город и место в нём.
+
+const RussiaMap = lazy(() => import('./RussiaMap').then((m) => ({ default: m.RussiaMap })));
 
 const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('ru', { day: 'numeric', month: 'long' });
 const word = (n: number, forms: [string, string, string]) => {
@@ -12,6 +19,17 @@ const word = (n: number, forms: [string, string, string]) => {
   const m100 = n % 100;
   return forms[m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2];
 };
+/** Коротко для карты: 9 870, 12,4 тыс., 1,2 млн. */
+const compact = (n: number) => (n < 10_000 ? n.toLocaleString('ru') : n < 1_000_000 ? `${(n / 1000).toLocaleString('ru', { maximumFractionDigits: 1 })} тыс.` : `${(n / 1_000_000).toLocaleString('ru', { maximumFractionDigits: 1 })} млн`);
+
+type Metric = 'reps' | 'players' | 'best';
+type BoardCity = CityBoard['cities'][number];
+
+const METRICS: { id: Metric; title: string; value: (c: BoardCity) => number; label: (n: number) => string; long: (n: number) => string }[] = [
+  { id: 'reps', title: 'Повторы', value: (c) => c.reps, label: compact, long: (n) => `${n.toLocaleString('ru')} ${word(n, ['повтор', 'повтора', 'повторов'])} за неделю` },
+  { id: 'players', title: 'Герои', value: (c) => c.players, label: (n) => `${n} ${word(n, ['герой', 'героя', 'героев'])}`, long: (n) => `${n} ${word(n, ['герой тренировался', 'героя тренировались', 'героев тренировались'])} на этой неделе` },
+  { id: 'best', title: 'Сильнейший', value: (c) => c.best ?? 0, label: (n) => `ур. ${n}`, long: (n) => `сильнейший герой — ${n} уровня` },
+];
 
 export function CitySheet({ onClose }: { onClose: () => void }) {
   const [board, setBoard] = useState<CityBoard | null>(null);
@@ -19,8 +37,11 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
   const [guest, setGuest] = useState(false);
   const [edit, setEdit] = useState(false);
   const [text, setText] = useState('');
-  const [tab, setTab] = useState<'city' | 'cities'>('city');
+  const [tab, setTab] = useState<'city' | 'cities'>('cities');
   const [busy, setBusy] = useState(false);
+  const [metric, setMetric] = useState<Metric>('reps');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [focus, setFocus] = useState<{ key: string; n: number } | undefined>();
 
   const run = (p: Promise<CityBoard>) => {
     setBusy(true);
@@ -29,40 +50,117 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
       setError(null);
       setEdit(!b.city);
       setText(b.city ?? b.suggest ?? '');
+      if (b.city) setTab('city');
     })
       .catch((e) => (e instanceof NotSignedIn ? setGuest(true) : setError((e as Error).message)))
       .finally(() => setBusy(false));
   };
   useEffect(() => run(cityApi.board()), []);
 
-  const save = () => text.trim() && run(cityApi.set(text.trim()));
+  const save = (city = text.trim()) => city && run(cityApi.set(city));
+  const m = METRICS.find((x) => x.id === metric)!;
+
+  // Рейтинг городов по выбранному показателю и точки на карте.
+  const ranked = useMemo(() => (board?.cities ?? []).filter((c) => m.value(c) > 0).sort((a, b) => m.value(b) - m.value(a) || b.members - a.members), [board, m]);
+  const byKey = useMemo(() => new Map((board?.cities ?? []).map((c) => [canonicalKey(c.city), c])), [board]);
+  const place = useMemo(() => new Map(ranked.map((c, i) => [canonicalKey(c.city), i + 1])), [ranked]);
+  const mapCities = useMemo<MapCity[]>(
+    () =>
+      RU_CITIES.map(([name, x, y, popK]) => {
+        const key = canonicalKey(name);
+        const c = byKey.get(key);
+        const value = c ? m.value(c) : 0;
+        return { key, name, x, y, popK, value, label: m.label(value), place: place.get(key), mine: c?.mine };
+      }),
+    [byKey, place, m],
+  );
+  const onMap = useMemo(() => new Set(mapCities.map((c) => c.key)), [mapCities]);
+
+  const sel = selected ? (byKey.get(selected) ?? null) : null;
+  const selName = selected ? (mapCities.find((c) => c.key === selected)?.name ?? sel?.city ?? '') : '';
+  const pick = (key: string) => {
+    setSelected(key);
+    if (!onMap.has(key)) return;
+    setFocus((f) => ({ key, n: (f?.n ?? 0) + 1 }));
+    document.querySelector('.rmap')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  const suggestions = edit ? citySuggest(text).filter((c) => c !== text.trim()) : [];
 
   return (
-    <Sheet onClose={onClose} bodyClassName="hol-sheet">
+    <Sheet onClose={onClose} bodyClassName="hol-sheet city-sheet">
       <div className="level-title">
-        <City size={20} /> Топ города
+        <City size={20} /> Битва городов
       </div>
       {board && (
         <div className="muted">
-          Повторы за неделю: {fmtDay(board.from)} – {fmtDay(board.to)}. В понедельник всё начинается заново.
+          Неделя {fmtDay(board.from)} – {fmtDay(board.to)}: каждый повтор зажигает твой город. В понедельник всё начинается заново.
         </div>
       )}
-      {guest && <div className="city-empty">Топ города — для тех, кто вошёл через Telegram, Max или Яндекс. Войди в настройках, и твои повторы попадут в рейтинг.</div>}
+      {guest && <div className="city-empty">Битва городов — для тех, кто вошёл через Telegram, Max или Яндекс. Войди в настройках, и твои повторы зажгут твой город.</div>}
       {!board && !guest && !error && <div className="city-empty">Загружаем…</div>}
       {error && <div className="error">{error}</div>}
 
+      {board && (
+        <>
+          <div className="tabs city-metric">
+            {METRICS.map((x) => (
+              <button key={x.id} className={metric === x.id ? 'active' : ''} onClick={() => setMetric(x.id)}>
+                {x.title}
+              </button>
+            ))}
+          </div>
+          <Suspense fallback={<div className="rmap" />}>
+            <RussiaMap cities={mapCities} selected={selected} onSelect={setSelected} focus={focus} />
+          </Suspense>
+
+          {selected && (
+            <div className={`city-card${sel?.mine ? ' mine' : ''}`}>
+              <div className="city-card-head">
+                <b>{selName}</b>
+                {place.get(selected) && <span className="city-place">{place.get(selected)}-е место</span>}
+                <button className="sheet-x city-card-x" onClick={() => setSelected(null)} aria-label="Закрыть">
+                  ×
+                </button>
+              </div>
+              {sel && (sel.reps > 0 || sel.members > 0) ? (
+                <div className="city-card-stats">
+                  <span>
+                    <b>{sel.reps.toLocaleString('ru')}</b> {word(sel.reps, ['повтор', 'повтора', 'повторов'])}
+                  </span>
+                  <span>
+                    <b>{sel.players}</b> из {sel.members} {word(sel.members, ['героя', 'героев', 'героев'])} в деле
+                  </span>
+                  {sel.best != null && (
+                    <span>
+                      сильнейший — <b>ур. {sel.best}</b>
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="muted">Здесь пока никто не сражается. Зажги этот город первым!</div>
+              )}
+              {!sel?.mine && (
+                <button className="small-btn" disabled={busy} onClick={() => save(selName)}>
+                  Это мой город
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       {board && edit && (
         <>
-          <div className="section-title">{board.city ? 'Сменить город' : 'Где ты тренируешься?'}</div>
+          <div className="section-title">{board.city ? 'Сменить город' : 'За какой город ты сражаешься?'}</div>
           <div className="city-form">
             <input value={text} maxLength={30} placeholder="Москва" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
-            <button className="small-btn" disabled={busy || !text.trim()} onClick={save}>
+            <button className="small-btn" disabled={busy || !text.trim()} onClick={() => save()}>
               Готово
             </button>
           </div>
-          {(board.suggest || board.cities.length > 0) && (
+          {(suggestions.length > 0 || board.suggest || ranked.length > 0) && (
             <div className="city-suggest">
-              {[board.suggest, ...board.cities.map((c) => c.city)]
+              {(suggestions.length ? suggestions : [board.suggest, ...ranked.map((c) => c.city)])
                 .filter((c, i, a): c is string => !!c && a.indexOf(c) === i)
                 .slice(0, 8)
                 .map((c) => (
@@ -74,7 +172,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
           )}
           {board.city && (
             <button className="link" onClick={() => run(cityApi.set(null))}>
-              Убрать меня из топа городов
+              Убрать меня из битвы городов
             </button>
           )}
         </>
@@ -104,7 +202,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
               {board.city ?? 'Мой город'}
             </button>
             <button className={tab === 'cities' ? 'active' : ''} onClick={() => setTab('cities')}>
-              Города
+              Все города
             </button>
           </div>
           {tab === 'city' ? (
@@ -126,22 +224,24 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )
-          ) : board.cities.length === 0 ? (
+          ) : ranked.length === 0 ? (
             <div className="city-empty">На этой неделе ещё ни один город не тренировался.</div>
           ) : (
             <div className="city-rows">
-              {board.cities.map((c, i) => (
-                <div key={c.city} className={`city-row p${i + 1} ${c.mine ? 'me' : ''}`}>
-                  <span className="place">{i + 1}</span>
-                  <span className="who">
-                    <b>{c.city}</b>
-                    <small>
-                      {c.players} {word(c.players, ['герой', 'героя', 'героев'])}
-                    </small>
-                  </span>
-                  <span className="reps">{c.reps.toLocaleString('ru')}</span>
-                </div>
-              ))}
+              {[...ranked.slice(0, 50), ...ranked.slice(50).filter((c) => c.mine)].map((c) => {
+                const key = canonicalKey(c.city);
+                const n = m.value(c);
+                return (
+                  <button key={key} className={`city-row p${place.get(key)} ${c.mine ? 'me' : ''} ${key === selected ? 'sel' : ''}`} onClick={() => pick(key)}>
+                    <span className="place">{place.get(key)}</span>
+                    <span className="who">
+                      <b>{c.city}</b>
+                      <small>{onMap.has(key) ? m.long(n) : `${m.long(n)} · не на карте`}</small>
+                    </span>
+                    <span className="reps">{metric === 'best' ? n : metric === 'players' ? n : compact(n)}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </>
