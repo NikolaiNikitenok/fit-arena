@@ -248,7 +248,7 @@ export function HeroHome(props: Props) {
           <WorldBackdrop world={LANDS[current.land].world} />
           {pro && <GoldShieldArt className="gold-art" />}
           <Suspense fallback={null}>
-            <HeroStage progress={progress} />
+            <HeroStage progress={progress} world={LANDS[current.land].world} />
           </Suspense>
         </div>
         <div className="hb-hero-bar">
