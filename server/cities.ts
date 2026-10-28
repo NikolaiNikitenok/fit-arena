@@ -1,8 +1,10 @@
 // Топ по городу: игрок сам выбирает город (в приложении сразу подставляется город его клана).
 // Сервер считает повторы за неделю из копии прогресса (server/saves.ts, дни тренировок) — с тем же пределом
 // в день, что и для видимого уровня, — и строит топ города и рейтинг городов. Неделя — с понедельника по Москве.
+// Города из справочника (shared/cityNames.ts) склеиваются по любому написанию и попадают на карту.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { canonicalKey, cityKey, knownCity } from '../shared/cityNames';
 import { badName } from '../shared/profanity';
 import { DAY_REPS_MAX } from './saves';
 
@@ -31,7 +33,8 @@ export interface CityBoard {
   top: CityRow[];
   // Моё место и повторы, если я в городе.
   me: { place: number; reps: number; players: number } | null;
-  cities: { city: string; reps: number; players: number; mine?: boolean }[];
+  // players — тренировались на этой неделе, members — выбрали город, best — самый высокий уровень героя в городе.
+  cities: { city: string; reps: number; players: number; members: number; best: number | null; mine?: boolean }[];
   // Город клана: предложить, если свой ещё не выбран.
   suggest?: string;
 }
@@ -39,23 +42,17 @@ export interface CityBoard {
 const DAY = 86_400_000;
 const MSK = 3 * 3_600_000;
 export const CITY_TOP = 50;
-export const CITIES_TOP = 20;
+// Городов в ответе: хватает и на карту, и на таблицу.
+export const CITIES_TOP = 300;
 
-/** Ключ города: регистр, ё и лишние пробелы не важны. */
-export const cityKey = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-    .replace(/[^a-zа-я0-9 -]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+export { cityKey };
 
-/** Город как его покажем: без лишних пробелов, с заглавной буквы. */
+/** Город как его покажем: из справочника — как в справочнике, иначе без лишних пробелов, с заглавной буквы. */
 export function cleanCity(s: unknown): string | null {
   if (typeof s !== 'string') return null;
   const t = s.replace(/[^\p{L}0-9 .-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 30);
   if (cityKey(t).length < 2 || badName(t)) return null;
-  return t[0].toUpperCase() + t.slice(1);
+  return knownCity(t)?.[0] ?? t[0].toUpperCase() + t.slice(1);
 }
 
 /** Дни этой недели по Москве: с понедельника по воскресенье. */
@@ -103,7 +100,7 @@ export class CityStore {
     }
     const clean = cleanCity(city);
     if (!clean) return 'Напиши настоящее название города';
-    const e: CityEntry = { id, city: clean, key: cityKey(clean), name, at: now };
+    const e: CityEntry = { id, city: clean, key: canonicalKey(clean), name, at: now };
     this.entries.set(id, e);
     this.save();
     return e;
@@ -124,31 +121,38 @@ export class CityStore {
   board(d: CityDeps, id: string, now: number): CityBoard {
     const week = weekDays(now);
     const mine = this.entries.get(id);
-    // Повторы всех за неделю, по городам. Без повторов за неделю — не в топе.
+    // Ключ пересчитываем: записи до справочника могли сохранить «Питер» отдельно от «Санкт-Петербурга».
+    const mineKey = mine && canonicalKey(mine.city);
+    // Повторы всех за неделю, по городам. В город входят все, кто его выбрал: для карты и рекорда уровня.
     const byCity = new Map<string, { city: string; rows: (CityRow & { id: string })[] }>();
     for (const e of this.entries.values()) {
-      const reps = weekReps(d.days(e.id), week);
-      if (reps <= 0 && e.id !== id) continue;
-      let c = byCity.get(e.key);
-      if (!c) byCity.set(e.key, (c = { city: e.city, rows: [] }));
-      // Название города — как у того, кто выбрал его первым.
-      c.rows.push({ id: e.id, name: e.name, reps, level: null });
+      const key = canonicalKey(e.city);
+      let c = byCity.get(key);
+      // Название города — из справочника, иначе как у того, кто выбрал его первым.
+      if (!c) byCity.set(key, (c = { city: knownCity(e.city)?.[0] ?? e.city, rows: [] }));
+      c.rows.push({ id: e.id, name: e.name, reps: weekReps(d.days(e.id), week), level: d.level(e.id) });
     }
     const cities = [...byCity.entries()]
-      .map(([key, c]) => ({ city: c.city, reps: c.rows.reduce((s, r) => s + r.reps, 0), players: c.rows.filter((r) => r.reps > 0).length, mine: key === mine?.key || undefined }))
-      .filter((c) => c.reps > 0)
-      .sort((a, b) => b.reps - a.reps);
-    const own = mine ? (byCity.get(mine.key)?.rows ?? []).sort((a, b) => b.reps - a.reps || (a.id === id ? -1 : 1)) : [];
+      .map(([key, c]) => ({
+        city: c.city,
+        reps: c.rows.reduce((s, r) => s + r.reps, 0),
+        players: c.rows.filter((r) => r.reps > 0).length,
+        members: c.rows.length,
+        best: c.rows.reduce<number | null>((m, r) => (r.level != null && (m == null || r.level > m) ? r.level : m), null),
+        mine: key === mineKey || undefined,
+      }))
+      .sort((a, b) => b.reps - a.reps || b.members - a.members);
+    const own = mineKey ? (byCity.get(mineKey)?.rows ?? []).sort((a, b) => b.reps - a.reps || (a.id === id ? -1 : 1)) : [];
     const place = own.findIndex((r) => r.id === id);
     const top = own
       .filter((r) => r.reps > 0)
       .slice(0, CITY_TOP)
-      .map(({ id: rid, name, reps }) => ({ name, reps, level: d.level(rid), pro: d.isPro(rid) || undefined, me: rid === id || undefined }));
+      .map(({ id: rid, name, reps, level }) => ({ name, reps, level, pro: d.isPro(rid) || undefined, me: rid === id || undefined }));
     const myCities = cities.slice(0, CITIES_TOP);
     const mineCity = cities.find((c) => c.mine);
     if (mineCity && !myCities.includes(mineCity)) myCities.push(mineCity);
     return {
-      city: mine?.city ?? null,
+      city: mine ? (knownCity(mine.city)?.[0] ?? mine.city) : null,
       from: week[0],
       to: week[6],
       top,

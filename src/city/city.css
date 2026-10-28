@@ -1,0 +1,48 @@
+/* Битва городов: карта России и карточка города. */
+.sheet-body.city-sheet { max-height: min(92vh, calc(100dvh - var(--safe-top) - 8px)); }
+
+.rmap { position: relative; flex: none; height: min(46vh, 340px); min-height: 230px; margin: 0 -16px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; background: radial-gradient(120% 90% at 30% 35%, #151a2b 0%, #0d0f17 70%); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.rmap:active { cursor: grabbing; }
+.rmap svg { display: block; }
+.rmap-grid { fill: none; stroke: rgba(255, 255, 255, .045); stroke-width: .6; vector-effect: non-scaling-stroke; }
+.rmap-world { fill: #171b29; stroke: #232839; stroke-width: .7; vector-effect: non-scaling-stroke; }
+.rmap-glow { fill: none; stroke: rgba(255, 138, 92, .16); stroke-linejoin: round; }
+.rmap-edge { fill: none; stroke: #ff8a5c; stroke-linejoin: round; }
+.rmap-land { fill: url(#rmap-land); }
+.rmap-dot { fill: rgba(152, 160, 179, .38); }
+.rmap-core { fill: #fff3dc; }
+.rmap-ring { fill: none; stroke: #ffd27a; }
+.rmap-ring.mine { stroke: var(--mint); animation: rmap-pulse 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes rmap-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+.rmap-label { pointer-events: none; }
+.rmap-label text { font: 800 11.5px var(--font); paint-order: stroke; stroke: rgba(13, 15, 23, .92); stroke-width: 3.5px; stroke-linejoin: round; }
+.rmap-label .nm { fill: #eef0f5; }
+.rmap-label .val { fill: var(--gold); font-weight: 900; }
+.rmap-label.empty .nm { fill: var(--hint); font-weight: 700; font-size: 10.5px; }
+.rmap-label.p1 .nm { fill: #ffd54a; }
+.rmap-label.mine .nm { fill: var(--mint); }
+.rmap-label.sel .nm { fill: #fff; }
+.rmap-label.sel text { font-size: 13px; }
+
+.rmap-zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.rmap-zoom button { width: 34px; height: 34px; padding: 0; border-radius: 10px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); font-size: 20px; font-weight: 900; line-height: 1; display: grid; place-items: center; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.rmap-zoom button.all { font-size: 17px; }
+.rmap-zoom button:active { transform: scale(.92); }
+.rmap-soon { position: absolute; left: 10px; bottom: 8px; padding: 3px 9px; border-radius: 9px; background: var(--glass); border: 1px solid var(--glass-line); color: var(--hint); font-size: 11px; font-weight: 800; pointer-events: none; }
+
+.city-metric button { padding: 7px 6px; font-size: 13px; }
+
+.city-card { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid rgba(255, 210, 122, .3); animation: city-in .18s ease-out; }
+@keyframes city-in { from { opacity: 0; transform: translateY(6px); } }
+.city-card.mine { border-color: rgba(110, 231, 183, .45); }
+.city-card-head { display: flex; align-items: baseline; gap: 8px; padding-right: 30px; }
+.city-card-head b { font-size: 17px; font-weight: 900; }
+.city-place { color: var(--gold); font-size: 13px; font-weight: 900; }
+.city-card-x.sheet-x { top: 6px; right: 6px; width: 26px; height: 26px; font-size: 18px; background: var(--surface-3); }
+.city-card-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--hint); font-weight: 700; }
+.city-card-stats b { color: var(--text); font-weight: 900; }
+.city-card .small-btn { align-self: flex-start; }
+
+button.city-row { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.city-row.sel { border-color: var(--gold); }

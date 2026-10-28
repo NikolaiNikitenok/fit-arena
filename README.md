@@ -47,6 +47,10 @@ npm run build   # сборка в dist/
 
 Кроме угла, в каждом кадре проверяется положение тела: для отжиманий упор лёжа и ладони на полу, для приседаний стойка, для пресса таз и стопы на полу; стопы должны быть в кадре. Повторы быстрее 400 мс не засчитываются. Модель (`public/models/pose_landmarker_lite.task`) и WASM раздаются со своего хостинга, без внешних CDN.
 
+## Карта «Битвы городов»
+
+Контуры России и соседей, сетка и 260 городов с координатами собраны из [Natural Earth](https://www.naturalearthdata.com/) (общественное достояние), границы — в варианте «с точки зрения России». Готовые файлы — `src/city/mapShapes.ts` и `shared/russiaCities.ts`; пересобрать их можно так: скачать `ne_10m_admin_0_countries_rus.geojson` и `ne_10m_populated_places.geojson` из [natural-earth-vector](https://github.com/nvkelso/natural-earth-vector/tree/master/geojson) в одну папку и запустить `node scripts/build-map.mjs <папка>`. Разговорные названия городов («Питер», «екб») — в `shared/cityNames.ts`.
+
 ## 3D-модели
 
 Персонажи, постройки, космическая база и город — наборы [KayKit](https://kaylousberg.itch.io/) от Kay Lousberg (лицензия CC0). Исходники лежат в ветке `assets-kaykit`; `node scripts/build-assets.mjs <папка kaykit>` собирает из них сжатые файлы в `public/models/chars` и `public/models/lib`.
