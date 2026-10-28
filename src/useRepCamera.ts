@@ -9,6 +9,7 @@ import { Calibrator, CalibrationView, calibrationSink, personalThresholds } from
 import { repSound } from './audio';
 import { hapticRep } from './telegram';
 import { reportCameraFailure, trackOnce } from './telemetry';
+import { Flames } from './flames';
 
 // Модель общая на всё приложение: грузится один раз.
 let landmarker: Promise<PoseLandmarker> | null = null;
@@ -40,6 +41,8 @@ export function useRepCamera(preload = true) {
   const frameRef = useRef(0);
   const counterRef = useRef<Counter | null>(null);
   const lastRepsReset = useRef(false);
+  // Огонь на кулаках: сила комбо (0 — не горит), ставит экран боя.
+  const flameRef = useRef(0);
   const [hint, setHint] = useState<string | null>(null);
   const [active, setActive] = useState(false);
   // Камера включена — идёт подход, обновление игры подождёт.
@@ -104,6 +107,7 @@ export function useRepCamera(preload = true) {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
     const drawing = new vision.DrawingUtils(ctx);
+    const flames = new Flames();
     let lastReps = 0;
     // Новый кадр камеры: видео обычно идёт 30 кадров в секунду, а экран 60 — один кадр дважды не распознаём.
     let lastVideoTime = -1;
@@ -138,6 +142,7 @@ export function useRepCamera(preload = true) {
           drawing.drawConnectors(lm, vision.PoseLandmarker.POSE_CONNECTIONS, { color: '#ff5a36', lineWidth: 4 });
           drawing.drawLandmarks(lm, { color: '#ffffff', radius: 3 });
         }
+        flames.step(ctx, lm, flameRef.current, now, getSettings().lowPower);
         const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight, frameRotations());
         const c = calibRef.current;
         if (c && !c.doneAt) {
@@ -198,5 +203,10 @@ export function useRepCamera(preload = true) {
     setCalib(null);
   };
 
-  return { videoRef, canvasRef, start, stop, switchExercise, skipCalib, hint, active, angle, limits, calib };
+  /** Сила огня на кулаках (0 — погасить). */
+  const setFlame = (tier: number) => {
+    flameRef.current = tier;
+  };
+
+  return { videoRef, canvasRef, start, stop, switchExercise, skipCalib, setFlame, hint, active, angle, limits, calib };
 }

@@ -21,8 +21,12 @@ import { bossCard, ShareVictory } from './ShareCard';
 import { Dialog, Remark } from './Dialog';
 import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
+import { type Combo, comboLive, comboShout, comboTier, nextCombo, NO_COMBO } from './combo';
+import { sfx } from '../audio';
 
 const PREP_S = 5;
+// Тряска сцены при ударе — не для тех, кто просил телефон меньше двигать картинку.
+const calm = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 
 type Status = 'story' | 'ready' | 'loading' | 'running' | 'won' | 'lost' | 'error';
@@ -86,6 +90,29 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [countdown, setCountdown] = useState(0);
   // Засчитанные повторы по упражнениям — для семейного сайта.
   const repsBy = useRef<Partial<Record<Exercise, number>>>({});
+  // Комбо: повторы без пауз. Вспышка, тряска, выкрики и огонь на кулаках — только ощущения, урон не меняется.
+  const comboRef = useRef<Combo>(NO_COMBO);
+  const [combo, setCombo] = useState<Combo>(NO_COMBO);
+  const [hit, setHit] = useState(0);
+  const [shout, setShout] = useState<{ text: string; key: number } | null>(null);
+  const arenaRef = useRef<HTMLDivElement>(null);
+  const onHit = (now: number) => {
+    const c = nextCombo(comboRef.current, now);
+    comboRef.current = c;
+    setCombo(c);
+    setHit((h) => h + 1);
+    const tier = comboTier(c.n);
+    camera.setFlame(tier);
+    const text = comboShout(c.n);
+    if (text) {
+      setShout({ text, key: now });
+      sfx('combo');
+    }
+    if (!calm()) {
+      const a = 2 + tier * 2;
+      arenaRef.current?.animate([{ transform: 'translate(0,0)' }, { transform: `translate(${-a}px,${a / 2}px)` }, { transform: `translate(${a}px,${-a / 2}px)` }, { transform: 'translate(0,0)' }], { duration: 160 + tier * 30, easing: 'ease-out' });
+    }
+  };
   useMissionSounds(status, countdown, view, level.type === 'boss');
   const calibrating = status === 'running' && camera.calib != null;
   useVoiceCoach(status === 'running' && countdown <= 0 && !calibrating, view.reps, Math.ceil(view.leftMs / 1000), camera.hint, level.seconds, level.type === 'trial' ? undefined : mission.current.target);
@@ -129,6 +156,11 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     mission.current = m;
     exercise.current = level.exercises[0];
     repsBy.current = {};
+    comboRef.current = NO_COMBO;
+    setCombo(NO_COMBO);
+    setHit(0);
+    setShout(null);
+    camera.setFlame(0);
     setView(m.view(0));
     let lastPaint = 0;
     let firstFrame = 0;
@@ -140,7 +172,10 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           const now = performance.now();
           const before = m.view(now).reps;
           m.rep(now);
-          if (m.view(now).reps > before) repsBy.current[exercise.current] = (repsBy.current[exercise.current] ?? 0) + 1;
+          if (m.view(now).reps > before) {
+            repsBy.current[exercise.current] = (repsBy.current[exercise.current] ?? 0) + 1;
+            onHit(now);
+          }
           lastPaint = 0;
         },
         () => {
@@ -154,6 +189,12 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             m.start(now);
           }
           m.tick(now);
+          // Пауза затянулась — серия кончилась, огонь гаснет.
+          if (comboRef.current.n && !comboLive(comboRef.current, now)) {
+            comboRef.current = { ...comboRef.current, n: 0 };
+            setCombo(comboRef.current);
+            camera.setFlame(0);
+          }
           const v = m.view(now);
           if (v.exercise !== exercise.current) {
             exercise.current = v.exercise;
@@ -201,7 +242,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
 
   return (
     <>
-      <div className="arena mission">
+      <div className="arena mission" ref={arenaRef}>
         <MissionScene3D
           level={level}
           land={land}
@@ -235,6 +276,19 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             {level.type === 'boss' ? `${land.boss.name} · ${view.hp} HP · ${view.label}` : level.type === 'chase' ? `${view.label} · отрыв ${Math.round((view.gap ?? 1) * 100)}%` : view.label}
           </div>
         </div>
+        {/* Удар: вспышка по краям экрана, ярче с ростом комбо. */}
+        {status === 'running' && hit > 0 && <div key={`hit${hit}`} className={`hit-flash t${comboTier(combo.n)}`} />}
+        {status === 'running' && combo.n >= 3 && (
+          <div key={`c${combo.n}`} className={`combo-badge t${comboTier(combo.n)}`}>
+            ×{combo.n}
+            <small>комбо</small>
+          </div>
+        )}
+        {status === 'running' && shout && (
+          <div key={shout.key} className="combo-shout">
+            {shout.text}
+          </div>
+        )}
         {/* Урон каждого повтора всплывает над сценой. */}
         {status === 'running' && view.reps > 0 && view.damage > 0 && (
           <div key={view.reps} className="dmg-pop">
@@ -294,6 +348,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             <div className="muted light">
               {view.reps} повторов · +{result.reward.coins} монет
               {view.record != null && ` · рекорд ${view.record}`}
+              {combo.best >= 3 && ` · лучшее комбо ×${combo.best}`}
             </div>
             {result.reward.petFind && (
               <div className="muted light">

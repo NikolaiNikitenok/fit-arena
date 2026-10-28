@@ -24,6 +24,8 @@ import { villageOf } from './resources';
 import { Bolt, MonsterFace } from './match3/art';
 import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './match3/dungeon';
 import { homeBadges } from './homeBadges';
+import { WorldBackdrop } from './WorldBackdrop';
+import { LANDS } from './lands';
 import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
@@ -242,6 +244,8 @@ export function HeroHome(props: Props) {
 
       <div className={`hero-card hb-hero ${pro ? 'pro' : ''}`} role="button" tabIndex={0} aria-label="Герой и снаряжение" onClick={() => setHeroOpen(true)} onKeyDown={(e) => e.key === 'Enter' && setHeroOpen(true)}>
         <div className="hero-stage hb-stage">
+          {/* За героем — мир, в котором он сейчас сражается. */}
+          <WorldBackdrop world={LANDS[current.land].world} />
           {pro && <GoldShieldArt className="gold-art" />}
           <Suspense fallback={null}>
             <HeroStage progress={progress} />
