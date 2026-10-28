@@ -9,6 +9,8 @@ import { itemById, RARITY_COLORS } from './items';
 import { heroHands } from './power';
 import type { Progress } from './progress';
 import { heroAura } from './collections';
+import { HeroDiorama } from './HeroDiorama';
+import type { World } from './lands';
 
 // Герой на подставке на главном экране: крутится, тап — прыжок, рядом питомец.
 
@@ -61,7 +63,7 @@ export function Aura({ color }: { color: string }) {
   );
 }
 
-export function HeroStage({ progress }: { progress: Progress }) {
+export function HeroStage({ progress, world }: { progress: Progress; world?: World }) {
   const item = itemById(progress.equipped);
   const [pulse, setPulse] = useState(0);
   // Питомец стоит рядом с героем и радуется вместе с ним.
@@ -69,17 +71,24 @@ export function HeroStage({ progress }: { progress: Progress }) {
   const aura = heroAura(progress);
   return (
     <Canvas3D camera={{ position: [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 1.0, 0)}>
-      <hemisphereLight args={['#ffffff', '#3a3040', 1.3]} />
-      <directionalLight position={[3, 5, 3]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
       <pointLight position={[-2.5, 1.5, -1.5]} intensity={8} color={item.glow ?? RARITY_COLORS[item.rarity]} />
-      <mesh position={[0, -0.08, 0]} receiveShadow>
-        <cylinderGeometry args={[1.05, 1.15, 0.16, 6]} />
-        <meshStandardMaterial color="#3a3f52" flatShading />
-      </mesh>
-      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.92, 1.0, 6]} />
-        <meshBasicMaterial color={RARITY_COLORS[item.rarity]} />
-      </mesh>
+      {world ? (
+        // Подставка — кусочек мира, где герой сейчас сражается.
+        <HeroDiorama world={world} ring={RARITY_COLORS[item.rarity]} />
+      ) : (
+        <>
+          <hemisphereLight args={['#ffffff', '#3a3040', 1.3]} />
+          <directionalLight position={[3, 5, 3]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
+          <mesh position={[0, -0.08, 0]} receiveShadow>
+            <cylinderGeometry args={[1.05, 1.15, 0.16, 6]} />
+            <meshStandardMaterial color="#3a3f52" flatShading />
+          </mesh>
+          <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.92, 1.0, 6]} />
+            <meshBasicMaterial color={RARITY_COLORS[item.rarity]} />
+          </mesh>
+        </>
+      )}
       {aura && <Aura color={aura} />}
       <Suspense fallback={null}>
         <Turntable>
