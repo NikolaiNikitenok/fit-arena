@@ -16,6 +16,9 @@
 .hb-hero { position: relative; flex: none; display: flex; flex-direction: column; height: clamp(340px, 48dvh, 430px); cursor: pointer; transition: transform .15s ease; box-shadow: var(--hb-shadow); }
 .hb-hero:active { transform: scale(.985); }
 .hb-stage { position: relative; flex: 1; min-height: 0; height: auto; }
+/* Фон мира за героем (src/game/WorldBackdrop.tsx): приглушён и затемнён снизу, чтобы герой оставался главным. */
+.world-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .78; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%); }
+.hb-stage canvas { position: relative; z-index: 1; }
 .hb-hero-bar { position: relative; z-index: 2; margin: 0 8px 8px; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 7px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .hb-level { width: 40px; height: 40px; border-radius: 12px; font-size: 18px; flex-direction: column; line-height: 1; }
 .hb-level small { font-size: 9px; font-weight: 900; opacity: .75; margin-top: 1px; }
