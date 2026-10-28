@@ -4,6 +4,7 @@ import type { CharName } from '../three/kit';
 import type { RepExercise } from '../repCounter';
 import type { Baseline, Line } from './levels';
 import { NPCS, type NpcId } from './npcs';
+import { t } from '../i18n';
 
 export type TrainerId = 'lisa' | 'grom' | 'knyaz';
 
@@ -29,64 +30,64 @@ export const TRAINERS: Trainer[] = [
   {
     id: 'lisa',
     npc: 'lisa',
-    level: 'Лёгкий',
+    level: t('Лёгкий'),
     pace: 0.7,
     burst: [2, 4],
     look: { model: 'Rogue', tint: 'mul:1.25,0.95,0.7' },
-    about: 'Быстрая, но часто отвлекается',
-    intro: ['Дуэль со мной? Ладно, только не плачь потом. Я разомнусь вполсилы… наверное.', 'Спорим, я сделаю больше? Шучу. Хотя нет, не шучу.'],
-    beaten: ['Ладно, ладно, ты победил. Я просто не выспалась.', 'Ого. Я даже не успела заскучать. Ещё раз?'],
-    won: ['Ха! Не расстраивайся, я просто очень ловкая.', 'Почти догнал! Почти — не считается.'],
+    about: t('Быстрая, но часто отвлекается'),
+    intro: [t('Дуэль со мной? Ладно, только не плачь потом. Я разомнусь вполсилы… наверное.'), t('Спорим, я сделаю больше? Шучу. Хотя нет, не шучу.')],
+    beaten: [t('Ладно, ладно, ты победил. Я просто не выспалась.'), t('Ого. Я даже не успела заскучать. Ещё раз?')],
+    won: [t('Ха! Не расстраивайся, я просто очень ловкая.'), t('Почти догнал! Почти — не считается.')],
   },
   {
     id: 'grom',
     npc: 'grom',
-    level: 'Средний',
+    level: t('Средний'),
     pace: 0.95,
     burst: [3, 5],
     look: { model: 'Barbarian', tint: 'mul:1.15,0.85,0.7', glow: '#ff7043' },
-    about: 'Держит твой темп и не сбивается',
-    intro: ['Я тренировал чемпионов, ученик. Покажи, на что ты способен сегодня.', 'Ровный темп важнее рывка. Посмотрим, кто первый выдохнется.'],
-    beaten: ['Вот это я понимаю! Ты растёшь быстрее, чем я думал.', 'Хорошо. Очень хорошо. Теперь отдохни, мышцы растут в покое.'],
-    won: ['Неплохо, но я ещё держусь. Отдохни и попробуй снова.', 'Темп сбился в середине. Дыши ровнее, и я твой.'],
+    about: t('Держит твой темп и не сбивается'),
+    intro: [t('Я тренировал чемпионов, ученик. Покажи, на что ты способен сегодня.'), t('Ровный темп важнее рывка. Посмотрим, кто первый выдохнется.')],
+    beaten: [t('Вот это я понимаю! Ты растёшь быстрее, чем я думал.'), t('Хорошо. Очень хорошо. Теперь отдохни, мышцы растут в покое.')],
+    won: [t('Неплохо, но я ещё держусь. Отдохни и попробуй снова.'), t('Темп сбился в середине. Дыши ровнее, и я твой.')],
   },
   {
     id: 'knyaz',
     npc: 'knyaz',
-    level: 'Сложный',
+    level: t('Сложный'),
     pace: 1.2,
     burst: [4, 7],
     look: { model: 'Skeleton_Mage', tint: 'mul:1.2,0.6,1.4', glow: '#b388ff' },
     scale: 1.2,
-    about: 'Бывший чемпион. Быстрее тебя',
-    intro: ['Когда-то у меня была тысяча побед. Думаешь, стать тысяча первым будет легко?', 'Встань с дивана… то есть, встань в кадр. Посмотрим, чего ты стоишь.'],
-    beaten: ['Невероятно… Так быстро меня не били даже в лучшие годы.', 'Ты сильнее чемпиона. Я встаю и аплодирую. Стоя!'],
-    won: ['Не грусти. Я тоже не сразу стал чемпионом.', 'Быстро, но не быстрее меня. Пока.'],
+    about: t('Бывший чемпион. Быстрее тебя'),
+    intro: [t('Когда-то у меня была тысяча побед. Думаешь, стать тысяча первым будет легко?'), t('Встань с дивана… то есть, встань в кадр. Посмотрим, чего ты стоишь.')],
+    beaten: [t('Невероятно… Так быстро меня не били даже в лучшие годы.'), t('Ты сильнее чемпиона. Я встаю и аплодирую. Стоя!')],
+    won: [t('Не грусти. Я тоже не сразу стал чемпионом.'), t('Быстро, но не быстрее меня. Пока.')],
   },
 ];
 
-export const trainerById = (id: TrainerId): Trainer => TRAINERS.find((t) => t.id === id)!;
+export const trainerById = (id: TrainerId): Trainer => TRAINERS.find((tm) => tm.id === id)!;
 
-export const nextTrainer = (id: TrainerId): Trainer | null => TRAINERS[TRAINERS.findIndex((t) => t.id === id) + 1] ?? null;
+export const nextTrainer = (id: TrainerId): Trainer | null => TRAINERS[TRAINERS.findIndex((tm) => tm.id === id) + 1] ?? null;
 
 /** Реплика тренера для диалога: портрет и цвет из списка жителей. */
-export function trainerLine(t: Trainer, text: string): Line {
-  const npc = NPCS[t.npc];
-  return { who: npc.name, text, face: t.npc, color: npc.color };
+export function trainerLine(tm: Trainer, text: string): Line {
+  const npc = NPCS[tm.npc];
+  return { who: npc.name, text, face: tm.npc, color: npc.color };
 }
 
 /** Сколько повторов в минуту тренер в среднем делает против этого игрока. */
-export const trainerRate = (t: Trainer, baseline: Baseline, exercise: RepExercise): number => baseline[exercise] * t.pace;
+export const trainerRate = (tm: Trainer, baseline: Baseline, exercise: RepExercise): number => baseline[exercise] * tm.pace;
 
 /** Предсказуемый генератор случайных чисел (mulberry32): один и тот же seed — один и тот же бой. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    let tm = a;
+    tm = Math.imul(tm ^ (tm >>> 15), tm | 1);
+    tm ^= tm + Math.imul(tm ^ (tm >>> 7), tm | 61);
+    return ((tm ^ (tm >>> 14)) >>> 0) / 4294967296;
   };
 }
 
@@ -126,12 +127,12 @@ export function botSchedule(perMinute: number, durationMs: number, burst: [numbe
   const k = sum > 0 ? (end - start) / sum : 0;
   const times = [start];
   for (const g of gaps) times.push(times[times.length - 1] + Math.max(BOT_MIN_GAP_MS, g * k));
-  return times.filter((t) => t < durationMs).map(Math.round);
+  return times.filter((tm) => tm < durationMs).map(Math.round);
 }
 
 /** Расписание тренера на бой. */
-export const trainerSchedule = (t: Trainer, baseline: Baseline, exercise: RepExercise, durationMs: number, seed: number): number[] =>
-  botSchedule(trainerRate(t, baseline, exercise), durationMs, t.burst, seededRandom(seed));
+export const trainerSchedule = (tm: Trainer, baseline: Baseline, exercise: RepExercise, durationMs: number, seed: number): number[] =>
+  botSchedule(trainerRate(tm, baseline, exercise), durationMs, tm.burst, seededRandom(seed));
 
 /** Случайная реплика из списка, но предсказуемо для одного seed. */
 export const pickLine = (lines: string[], seed: number): string => lines[Math.abs(Math.floor(seed)) % lines.length];

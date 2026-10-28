@@ -3,6 +3,7 @@
 import { DEFAULT_PLANK_S, type RepExercise } from '../repCounter';
 import { LANDS } from './lands';
 import { storyFor } from './story';
+import { t } from '../i18n';
 
 export type MissionType = 'trial' | 'build' | 'chase' | 'climb' | 'defend' | 'rescue' | 'boss';
 
@@ -46,25 +47,25 @@ const PATTERN: MissionType[] = ['build', 'chase', 'rescue', 'climb', 'build', 'd
 
 const TITLES: Record<RepExercise, Partial<Record<MissionType, string[]>>> = {
   squat: {
-    build: ['Подпорки для моста', 'Новый частокол'],
-    chase: ['Бегство от сонного вепря', 'Догони вора'],
-    climb: ['Подъём на холм', 'Лестница к маяку'],
-    defend: ['Оборона ворот'],
-    rescue: ['Разбуди пастухов'],
+    build: [t('Подпорки для моста'), t('Новый частокол')],
+    chase: [t('Бегство от сонного вепря'), t('Догони вора')],
+    climb: [t('Подъём на холм'), t('Лестница к маяку')],
+    defend: [t('Оборона ворот')],
+    rescue: [t('Разбуди пастухов')],
   },
   pushup: {
-    build: ['Мост через пропасть', 'Каменная стена'],
-    chase: ['Толкай телегу', 'Уйди от лавины'],
-    climb: ['Лебёдка на утёс', 'Подъём ворот'],
-    defend: ['Щит против приспешников'],
-    rescue: ['Освободи кузнецов'],
+    build: [t('Мост через пропасть'), t('Каменная стена')],
+    chase: [t('Толкай телегу'), t('Уйди от лавины')],
+    climb: [t('Лебёдка на утёс'), t('Подъём ворот')],
+    defend: [t('Щит против приспешников')],
+    rescue: [t('Освободи кузнецов')],
   },
   situp: {
-    build: ['Колокол тревоги', 'Мельница'],
-    chase: ['Гребля по реке', 'Лодка против течения'],
-    climb: ['Канат к башне', 'Лифт в шахте'],
-    defend: ['Удержи плотину'],
-    rescue: ['Расколдуй детей'],
+    build: [t('Колокол тревоги'), t('Мельница')],
+    chase: [t('Гребля по реке'), t('Лодка против течения')],
+    climb: [t('Канат к башне'), t('Лифт в шахте')],
+    defend: [t('Удержи плотину')],
+    rescue: [t('Расколдуй детей')],
   },
 };
 
@@ -92,7 +93,7 @@ function makeLevel(id: number): LevelDef {
   if (num <= 3) {
     const ex = ORDER[num - 1];
     const story = storyFor({ id, world, land, num, pos, type: 'trial', rest: false });
-    return { ...base, type: 'trial', title: `Испытание силы: ${['приседания', 'отжимания', 'пресс'][num - 1]}`, exercises: [ex], load: 1, seconds: 60, rest: false, story, coins: 20 };
+    return { ...base, type: 'trial', title: t('Испытание силы: {0}', { 0: [t('приседания'), t('отжимания'), t('пресс')][num - 1] }), exercises: [ex], load: 1, seconds: 60, rest: false, story, coins: 20 };
   }
 
   if (pos === LAND_SIZE - 1) {
@@ -117,7 +118,7 @@ function makeLevel(id: number): LevelDef {
   return {
     ...base,
     type,
-    title: pick(TITLES[ex][type] ?? ['Испытание'], id),
+    title: pick(TITLES[ex][type] ?? [t('Испытание')], id),
     exercises: [ex],
     load: rest ? growth * 0.75 : growth,
     seconds: type === 'build' ? 180 : type === 'defend' ? 75 : 60,

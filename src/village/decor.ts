@@ -8,6 +8,7 @@ import { canPlace, GRID, NO_RES, type Bld, type Res, RES_KEYS, sizeOf, thLevel, 
 import type { Progress } from '../game/progress';
 import { villageOf } from '../game/resources';
 import { hasTown, townOf, withTown } from './state';
+import { t } from '../i18n';
 
 export type DecorKind = 'path' | 'oak' | 'pine' | 'bush' | 'flowers' | 'lantern' | 'bench' | 'well' | 'clanflag' | 'statue1' | 'statue2' | 'statue3' | 'pumpkin' | 'snowman';
 export type ThemeId = 'classic' | 'winter' | 'halloween';
@@ -46,27 +47,27 @@ export const STATUE_RECORDS = { statue1: 1, statue2: 10, statue3: 25 } as const;
 const per = (base: number, step: number) => (th: number) => base + step * Math.max(0, th - 1);
 
 export const DECOR: Record<DecorKind, DecorDef> = {
-  path: { kind: 'path', name: 'Дорожка', desc: 'Мощёная клетка. Жители ходят по дорожкам охотнее, чем по траве.', cost: { stone: 10 }, max: per(60, 20), group: 'town' },
-  oak: { kind: 'oak', name: 'Дуб', desc: 'Раскидистое дерево для тени у домов.', cost: { wood: 40 }, max: per(6, 2), group: 'nature' },
-  pine: { kind: 'pine', name: 'Ель', desc: 'Стройная ель. Зимой её припорошит снегом.', cost: { wood: 40 }, max: per(6, 2), group: 'nature' },
-  bush: { kind: 'bush', name: 'Куст', desc: 'Пышный куст вдоль дорожек и стен.', cost: { wood: 15 }, max: per(10, 3), group: 'nature' },
-  flowers: { kind: 'flowers', name: 'Клумба', desc: 'Цветы в деревянной кадке.', cost: { wood: 20, gold: 10 }, max: per(8, 2), group: 'nature' },
-  lantern: { kind: 'lantern', name: 'Фонарь', desc: 'Зажигается вечером и горит до утра.', cost: { wood: 30, stone: 20 }, max: per(6, 2), group: 'town' },
-  bench: { kind: 'bench', name: 'Скамейка', desc: 'Жители присаживаются отдохнуть.', cost: { wood: 50 }, max: per(3, 1), group: 'town' },
-  well: { kind: 'well', name: 'Колодец', desc: 'Каменный колодец с воротом.', cost: { stone: 150, wood: 80 }, max: (th) => (th >= 2 ? 2 : 1), group: 'town' },
-  clanflag: { kind: 'clanflag', name: 'Знамя клана', desc: 'Флаг твоего клана на высоком древке. Есть только у тех, кто в клане.', cost: {}, max: () => 3, group: 'earned' },
-  statue1: { kind: 'statue1', name: 'Бронзовая статуя', desc: `Герой на постаменте — за рекорд в зале (${STATUE_RECORDS.statue1}+ упражнение с рекордом).`, cost: {}, max: () => 1, group: 'earned' },
-  statue2: { kind: 'statue2', name: 'Серебряная статуя', desc: `За рекорды в ${STATUE_RECORDS.statue2} упражнениях в зале.`, cost: {}, max: () => 1, group: 'earned' },
-  statue3: { kind: 'statue3', name: 'Золотая статуя', desc: `За рекорды в ${STATUE_RECORDS.statue3} упражнениях в зале.`, cost: {}, max: () => 1, group: 'earned' },
-  pumpkin: { kind: 'pumpkin', name: 'Тыква-фонарь', desc: 'Светится по ночам. Есть, пока у тебя тема «Хэллоуин».', cost: { gold: 30 }, max: per(6, 2), group: 'season' },
-  snowman: { kind: 'snowman', name: 'Снеговик', desc: 'С морковкой и в шарфе. Есть, пока у тебя тема «Зима».', cost: { stone: 20 }, max: per(3, 1), group: 'season' },
+  path: { kind: 'path', name: t('Дорожка'), desc: t('Мощёная клетка. Жители ходят по дорожкам охотнее, чем по траве.'), cost: { stone: 10 }, max: per(60, 20), group: 'town' },
+  oak: { kind: 'oak', name: t('Дуб'), desc: t('Раскидистое дерево для тени у домов.'), cost: { wood: 40 }, max: per(6, 2), group: 'nature' },
+  pine: { kind: 'pine', name: t('Ель'), desc: t('Стройная ель. Зимой её припорошит снегом.'), cost: { wood: 40 }, max: per(6, 2), group: 'nature' },
+  bush: { kind: 'bush', name: t('Куст'), desc: t('Пышный куст вдоль дорожек и стен.'), cost: { wood: 15 }, max: per(10, 3), group: 'nature' },
+  flowers: { kind: 'flowers', name: t('Клумба'), desc: t('Цветы в деревянной кадке.'), cost: { wood: 20, gold: 10 }, max: per(8, 2), group: 'nature' },
+  lantern: { kind: 'lantern', name: t('Фонарь'), desc: t('Зажигается вечером и горит до утра.'), cost: { wood: 30, stone: 20 }, max: per(6, 2), group: 'town' },
+  bench: { kind: 'bench', name: t('Скамейка'), desc: t('Жители присаживаются отдохнуть.'), cost: { wood: 50 }, max: per(3, 1), group: 'town' },
+  well: { kind: 'well', name: t('Колодец'), desc: t('Каменный колодец с воротом.'), cost: { stone: 150, wood: 80 }, max: (th) => (th >= 2 ? 2 : 1), group: 'town' },
+  clanflag: { kind: 'clanflag', name: t('Знамя клана'), desc: t('Флаг твоего клана на высоком древке. Есть только у тех, кто в клане.'), cost: {}, max: () => 3, group: 'earned' },
+  statue1: { kind: 'statue1', name: t('Бронзовая статуя'), desc: t('Герой на постаменте — за рекорд в зале ({0}+ упражнение с рекордом).', { 0: STATUE_RECORDS.statue1 }), cost: {}, max: () => 1, group: 'earned' },
+  statue2: { kind: 'statue2', name: t('Серебряная статуя'), desc: t('За рекорды в {0} упражнениях в зале.', { 0: STATUE_RECORDS.statue2 }), cost: {}, max: () => 1, group: 'earned' },
+  statue3: { kind: 'statue3', name: t('Золотая статуя'), desc: t('За рекорды в {0} упражнениях в зале.', { 0: STATUE_RECORDS.statue3 }), cost: {}, max: () => 1, group: 'earned' },
+  pumpkin: { kind: 'pumpkin', name: t('Тыква-фонарь'), desc: t('Светится по ночам. Есть, пока у тебя тема «Хэллоуин».'), cost: { gold: 30 }, max: per(6, 2), group: 'season' },
+  snowman: { kind: 'snowman', name: t('Снеговик'), desc: t('С морковкой и в шарфе. Есть, пока у тебя тема «Зима».'), cost: { stone: 20 }, max: per(3, 1), group: 'season' },
 };
 export const DECOR_KINDS = Object.keys(DECOR) as DecorKind[];
 export const DECOR_GROUPS: { id: DecorDef['group']; name: string }[] = [
-  { id: 'town', name: 'Улица' },
-  { id: 'nature', name: 'Природа' },
-  { id: 'earned', name: 'За достижения' },
-  { id: 'season', name: 'Сезонные' },
+  { id: 'town', name: t('Улица') },
+  { id: 'nature', name: t('Природа') },
+  { id: 'earned', name: t('За достижения') },
+  { id: 'season', name: t('Сезонные') },
 ];
 
 export interface ThemeDef {
@@ -79,9 +80,9 @@ export interface ThemeDef {
 }
 
 export const THEMES: Record<ThemeId, ThemeDef> = {
-  classic: { id: 'classic', name: 'Лето', desc: 'Зелёная трава, цветы и птицы.', cost: {} },
-  winter: { id: 'winter', name: 'Зима', desc: 'Снег на земле и деревьях, снегопад чаще, снеговики.', cost: { gold: 3000 }, season: { from: [11, 1], to: [1, 28], label: 'с 1 декабря по 28 февраля' } },
-  halloween: { id: 'halloween', name: 'Хэллоуин', desc: 'Сумерки, тыквы-фонари, надгробия и летучие мыши.', cost: { gold: 3000 }, season: { from: [9, 15], to: [10, 10], label: 'с 15 октября по 10 ноября' } },
+  classic: { id: 'classic', name: t('Лето'), desc: t('Зелёная трава, цветы и птицы.'), cost: {} },
+  winter: { id: 'winter', name: t('Зима'), desc: t('Снег на земле и деревьях, снегопад чаще, снеговики.'), cost: { gold: 3000 }, season: { from: [11, 1], to: [1, 28], label: t('с 1 декабря по 28 февраля') } },
+  halloween: { id: 'halloween', name: t('Хэллоуин'), desc: t('Сумерки, тыквы-фонари, надгробия и летучие мыши.'), cost: { gold: 3000 }, season: { from: [9, 15], to: [10, 10], label: t('с 15 октября по 10 ноября') } },
 };
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
 
@@ -106,22 +107,22 @@ export function decorCtx(p: Progress, now: number): DecorCtx {
 
 /** Почему украшение пока нельзя поставить (null — можно). */
 export function decorLock(k: DecorKind, ctx: DecorCtx): string | null {
-  if (k === 'clanflag') return ctx.clanFlag ? null : 'Вступи в клан — и его знамя можно поставить в деревне.';
+  if (k === 'clanflag') return ctx.clanFlag ? null : t('Вступи в клан — и его знамя можно поставить в деревне.');
   if (k === 'statue1' || k === 'statue2' || k === 'statue3') {
     const need = STATUE_RECORDS[k];
-    return ctx.records >= need ? null : `Нужны рекорды в зале: ${ctx.records}/${need} упражнений.`;
+    return ctx.records >= need ? null : t('Нужны рекорды в зале: {0}/{1} упражнений.', { 0: ctx.records, 1: need });
   }
-  if (k === 'pumpkin') return ctx.themes.includes('halloween') ? null : 'Открой тему «Хэллоуин».';
-  if (k === 'snowman') return ctx.themes.includes('winter') ? null : 'Открой тему «Зима».';
+  if (k === 'pumpkin') return ctx.themes.includes('halloween') ? null : t('Открой тему «Хэллоуин».');
+  if (k === 'snowman') return ctx.themes.includes('winter') ? null : t('Открой тему «Зима».');
   return null;
 }
 
 /** Постройки и украшения как одна сетка: украшение — занятая клетка (как секция стены). */
-export function occupied(t: Pick<Town, 'b'>, decor: Decor[], ignoreDecor?: number): Pick<Town, 'b'> {
-  return { b: [...t.b, ...decor.filter((d) => d.i !== ignoreDecor).map((d): Bld => ({ i: -1 - d.i, t: 'wall', x: d.x, y: d.y, l: 1 }))] };
+export function occupied(tm: Pick<Town, 'b'>, decor: Decor[], ignoreDecor?: number): Pick<Town, 'b'> {
+  return { b: [...tm.b, ...decor.filter((d) => d.i !== ignoreDecor).map((d): Bld => ({ i: -1 - d.i, t: 'wall', x: d.x, y: d.y, l: 1 }))] };
 }
 
-export const canPlaceDecor = (t: Pick<Town, 'b'>, decor: Decor[], x: number, y: number, ignore?: number) => canPlace(occupied(t, decor, ignore), 'wall', x, y);
+export const canPlaceDecor = (tm: Pick<Town, 'b'>, decor: Decor[], x: number, y: number, ignore?: number) => canPlace(occupied(tm, decor, ignore), 'wall', x, y);
 
 /** Клетки с украшениями (номер клетки → украшение): для касания и для земли. */
 export function decorAt(decor: Decor[], x: number, y: number): Decor | undefined {
@@ -129,36 +130,36 @@ export function decorAt(decor: Decor[], x: number, y: number): Decor | undefined
 }
 
 export type DecorError = 'lock' | 'limit' | 'place' | 'cost';
-export const DECOR_ERRORS: Record<DecorError, string> = { lock: 'Это украшение ещё не открыто.', limit: 'Больше таких не поставить: улучши ратушу.', place: 'Здесь занято.', cost: 'Не хватает ресурсов.' };
+export const DECOR_ERRORS: Record<DecorError, string> = { lock: t('Это украшение ещё не открыто.'), limit: t('Больше таких не поставить: улучши ратушу.'), place: t('Здесь занято.'), cost: t('Не хватает ресурсов.') };
 
 const costRes = (k: DecorKind): Res => ({ ...NO_RES, ...DECOR[k].cost });
 
-function put(p: Progress, t: Town, decor: Decor[], extra: { dn?: number } = {}): Progress {
-  const q = withTown(p, t);
+function put(p: Progress, tm: Town, decor: Decor[], extra: { dn?: number } = {}): Progress {
+  const q = withTown(p, tm);
   return { ...q, village: { ...villageOf(q), decor, ...extra } };
 }
 
 /** Поставить украшение: цена списывается из запасов деревни. */
 export function placeDecor(p: Progress, k: DecorKind, x: number, y: number, ctx: DecorCtx): Progress | DecorError {
   if (!hasTown(p)) return 'place';
-  const t = townOf(p);
+  const tm = townOf(p);
   const list = decorOf(p);
   if (decorLock(k, ctx)) return 'lock';
-  if (list.filter((d) => d.k === k).length >= DECOR[k].max(thLevel(t))) return 'limit';
-  if (!canPlaceDecor(t, list, x, y)) return 'place';
+  if (list.filter((d) => d.k === k).length >= DECOR[k].max(thLevel(tm))) return 'limit';
+  if (!canPlaceDecor(tm, list, x, y)) return 'place';
   const cost = costRes(k);
-  if (!RES_KEYS.every((r) => t.res[r] >= cost[r])) return 'cost';
+  if (!RES_KEYS.every((r) => tm.res[r] >= cost[r])) return 'cost';
   const v = villageOf(p);
   const i = v.dn ?? list.reduce((m, d) => Math.max(m, d.i), 0) + 1;
-  const res = { wood: t.res.wood - cost.wood, stone: t.res.stone - cost.stone, gold: t.res.gold - cost.gold };
-  return put(p, { ...t, res }, [...list, { i, k, x, y }], { dn: i + 1 });
+  const res = { wood: tm.res.wood - cost.wood, stone: tm.res.stone - cost.stone, gold: tm.res.gold - cost.gold };
+  return put(p, { ...tm, res }, [...list, { i, k, x, y }], { dn: i + 1 });
 }
 
 export function moveDecor(p: Progress, i: number, x: number, y: number): Progress | null {
-  const t = townOf(p);
+  const tm = townOf(p);
   const list = decorOf(p);
-  if (!list.some((d) => d.i === i) || !canPlaceDecor(t, list, x, y, i)) return null;
-  return put(p, t, list.map((d) => (d.i === i ? { ...d, x, y } : d)));
+  if (!list.some((d) => d.i === i) || !canPlaceDecor(tm, list, x, y, i)) return null;
+  return put(p, tm, list.map((d) => (d.i === i ? { ...d, x, y } : d)));
 }
 
 /** Убрать украшение: цена возвращается в запасы. */
@@ -166,16 +167,16 @@ export function removeDecor(p: Progress, i: number): Progress {
   const list = decorOf(p);
   const d = list.find((v) => v.i === i);
   if (!d) return p;
-  const t = townOf(p);
+  const tm = townOf(p);
   const back = costRes(d.k);
-  return put(p, { ...t, res: { wood: t.res.wood + back.wood, stone: t.res.stone + back.stone, gold: t.res.gold + back.gold } }, list.filter((v) => v.i !== i));
+  return put(p, { ...tm, res: { wood: tm.res.wood + back.wood, stone: tm.res.stone + back.stone, gold: tm.res.gold + back.gold } }, list.filter((v) => v.i !== i));
 }
 
 /** Ближайшая к точке свободная клетка для украшения. */
-export function freeDecorSpot(t: Pick<Town, 'b'>, decor: Decor[], near: { x: number; y: number }): { x: number; y: number } | null {
+export function freeDecorSpot(tm: Pick<Town, 'b'>, decor: Decor[], near: { x: number; y: number }): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
   let bestD = Infinity;
-  const occ = occupied(t, decor);
+  const occ = occupied(tm, decor);
   for (let y = 0; y < GRID; y++)
     for (let x = 0; x < GRID; x++) {
       if (!canPlace(occ, 'wall', x, y)) continue;
@@ -192,10 +193,10 @@ export type ThemeError = 'cost' | 'owned';
 /** Забрать тему: в сезон бесплатно, иначе за золото. И сразу включить. */
 export function claimTheme(p: Progress, id: ThemeId, now: number): Progress | ThemeError {
   if (ownedThemes(p).includes(id)) return 'owned';
-  const t = townOf(p);
+  const tm = townOf(p);
   const cost: Res = inSeason(id, now) ? { ...NO_RES } : { ...NO_RES, ...THEMES[id].cost };
-  if (!RES_KEYS.every((r) => t.res[r] >= cost[r])) return 'cost';
-  const q = withTown(p, { ...t, res: { wood: t.res.wood - cost.wood, stone: t.res.stone - cost.stone, gold: t.res.gold - cost.gold } });
+  if (!RES_KEYS.every((r) => tm.res[r] >= cost[r])) return 'cost';
+  const q = withTown(p, { ...tm, res: { wood: tm.res.wood - cost.wood, stone: tm.res.stone - cost.stone, gold: tm.res.gold - cost.gold } });
   const v = villageOf(q);
   return { ...q, village: { ...v, themes: [...(v.themes ?? []), id], theme: id } };
 }
@@ -219,4 +220,4 @@ export function syncClanFlag(p: Progress, flag: string | null): Progress | null 
 export const pathCells = (decor: Decor[]) => decor.filter((d) => d.k === 'path').map((d) => d.y * GRID + d.x);
 
 /** Не стоит ли украшение на постройке (после переноса постройки сохранение могло разъехаться). */
-export const decorFits = (t: Pick<Town, 'b'>, d: Decor) => !t.b.some((b) => d.x >= b.x && d.x < b.x + sizeOf(b.t) && d.y >= b.y && d.y < b.y + sizeOf(b.t));
+export const decorFits = (tm: Pick<Town, 'b'>, d: Decor) => !tm.b.some((b) => d.x >= b.x && d.x < b.x + sizeOf(b.t) && d.y >= b.y && d.y < b.y + sizeOf(b.t));

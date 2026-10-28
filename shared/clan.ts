@@ -1,6 +1,7 @@
 // Кланы: сообщения между приложением и сервером (тот же WebSocket, что у дуэлей).
 import type { Exercise } from '../src/repCounter';
 import type { WarResult, WarView } from './war';
+import { t } from '../src/i18n';
 
 export type ClanRole = 'leader' | 'officer' | 'member';
 
@@ -167,10 +168,10 @@ export const defaultFlag = (tag: string) => {
 
 // Страны для местоположения клана; город игрок пишет сам.
 export const COUNTRIES: Record<string, string> = {
-  RU: 'Россия', BY: 'Беларусь', KZ: 'Казахстан', UA: 'Украина', UZ: 'Узбекистан', KG: 'Киргизия', TJ: 'Таджикистан', TM: 'Туркменистан',
-  AM: 'Армения', AZ: 'Азербайджан', GE: 'Грузия', MD: 'Молдова', LV: 'Латвия', LT: 'Литва', EE: 'Эстония', PL: 'Польша',
-  DE: 'Германия', CZ: 'Чехия', RS: 'Сербия', TR: 'Турция', IL: 'Израиль', AE: 'ОАЭ', TH: 'Таиланд', CY: 'Кипр',
-  ES: 'Испания', IT: 'Италия', FR: 'Франция', GB: 'Великобритания', FI: 'Финляндия', US: 'США', CA: 'Канада', OTHER: 'Другая страна',
+  RU: t('Россия'), BY: t('Беларусь'), KZ: t('Казахстан'), UA: t('Украина'), UZ: t('Узбекистан'), KG: t('Киргизия'), TJ: t('Таджикистан'), TM: t('Туркменистан'),
+  AM: t('Армения'), AZ: t('Азербайджан'), GE: t('Грузия'), MD: t('Молдова'), LV: t('Латвия'), LT: t('Литва'), EE: t('Эстония'), PL: t('Польша'),
+  DE: t('Германия'), CZ: t('Чехия'), RS: t('Сербия'), TR: t('Турция'), IL: t('Израиль'), AE: t('ОАЭ'), TH: t('Таиланд'), CY: t('Кипр'),
+  ES: t('Испания'), IT: t('Италия'), FR: t('Франция'), GB: t('Великобритания'), FI: t('Финляндия'), US: t('США'), CA: t('Канада'), OTHER: t('Другая страна'),
 };
 export const clanPlace = (c: { city: string; country: string }) => [c.city, COUNTRIES[c.country]].filter(Boolean).join(', ');
 export const CHAT_MAX = 300;

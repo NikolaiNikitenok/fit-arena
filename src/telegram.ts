@@ -1,5 +1,6 @@
 // Минимальная обёртка над Telegram WebApp API (скрипт подключён в index.html).
 import { friendLink, friendParam, isNamedParam, launchSource } from './friends/link';
+import { t } from './i18n';
 
 interface TelegramWebApp {
   ready(): void;
@@ -158,7 +159,7 @@ export function initTelegram(): void {
 }
 
 export function userName(): string {
-  return tg?.initDataUnsafe.user?.first_name ?? 'Гость';
+  return tg?.initDataUnsafe.user?.first_name ?? t('Гость');
 }
 
 export function hapticRep(): void {

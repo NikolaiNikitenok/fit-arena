@@ -246,7 +246,7 @@ function ProgramCard({ def, progress, onOpen }: { def: ProgramDef; progress: Pro
         <b>{def.title}</b>
         <small>{def.short}</small>
         <span className="prog-tags">
-          <span className="prog-tag">{def.level}</span>
+          <span className="prog-tag">{t(def.level)}</span>
           <span className="prog-tag">
             {def.days} {daysWord(def.days)}
           </span>
@@ -316,7 +316,7 @@ function ProgramDetail({ def, progress, update, select, setView }: { def: Progra
         <button className="pill btn" onClick={() => setView({ kind: 'list' })}>
           {t('‹ Программы')}
         </button>
-        <span className="prog-tag">{def.level}</span>
+        <span className="prog-tag">{t(def.level)}</span>
       </div>
       <div className="prog-hero" style={{ ['--pc' as string]: def.color }}>
         {FOCUS_ICON(def)}

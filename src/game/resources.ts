@@ -5,10 +5,11 @@
  */
 
 import type { VillageExtra } from '../village/types';
+import { t } from '../i18n';
 
 export type Resource = 'wood' | 'stone' | 'gold';
 export const RESOURCES: Resource[] = ['wood', 'stone', 'gold'];
-export const RESOURCE_LABELS: Record<Resource, string> = { wood: 'Дерево', stone: 'Камень', gold: 'Золото' };
+export const RESOURCE_LABELS: Record<Resource, string> = { wood: t('Дерево'), stone: t('Камень'), gold: t('Золото') };
 
 // Один повтор (или две секунды планки) — один заряд; больше предела не копится.
 export const CHARGE_MAX = 300;

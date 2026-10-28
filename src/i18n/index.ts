@@ -7,8 +7,8 @@ import { EN } from './en';
 export type Lang = 'ru' | 'en';
 
 const KEY = 'fit-arena-lang';
-// Сам выбирать английский по языку Telegram — когда переведена вся игра. Пока язык меняют в настройках.
-const AUTO_EN = false;
+// Без сохранённого выбора язык берём из Telegram (или браузера): русский для русского и языков СНГ, иначе английский.
+const AUTO_EN = true;
 // Языки, на которых говорят и по-русски: им русский интерфейс по умолчанию.
 const RU_LIKE = /^(ru|uk|be|kk|ky|uz|tg|tk|az|hy|ka|mo|ro)/;
 
@@ -19,7 +19,8 @@ function detect(): Lang {
   } catch {
     // Хранилище недоступно.
   }
-  if (!AUTO_EN) return 'ru';
+  // Сервер (Node.js тоже знает navigator.language) и тесты всегда на русском: бот и журналы — по-русски.
+  if (!AUTO_EN || typeof window === 'undefined') return 'ru';
   const w = globalThis as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { language_code?: string } } } }; navigator?: { language?: string } };
   const code = w.Telegram?.WebApp?.initDataUnsafe?.user?.language_code ?? w.navigator?.language ?? 'ru';
   return RU_LIKE.test(code.toLowerCase()) ? 'ru' : 'en';

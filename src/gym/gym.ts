@@ -2,7 +2,7 @@
 // Это просто удобство: ни серия, ни задание дня, ни рейтинг, ни опыт героя от зала не меняются.
 import { dayKey, type Progress } from '../game/progress';
 import { gymExercise, type GymKind } from './catalog';
-import { locale } from '../i18n';
+import { locale, t } from '../i18n';
 
 /** Подход: w — вес (кг), r — повторы, t — секунды (или минуты для кардио), d — км. */
 export interface GymSet {
@@ -76,15 +76,15 @@ const put = (p: Progress, g: GymState): Progress => ({ ...p, gym: g });
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/-/g, '').slice(0, 16);
 
 /** День недели с понедельника. */
-export const weekday = (t: number) => (new Date(t).getDay() + 6) % 7;
-export const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+export const weekday = (tm: number) => (new Date(tm).getDay() + 6) % 7;
+export const WEEKDAYS = [t('Пн'), t('Вт'), t('Ср'), t('Чт'), t('Пт'), t('Сб'), t('Вс')];
 
-export const todayTemplate = (g: GymState, now: number) => g.templates.find((t) => t.id === g.week[weekday(now)]);
+export const todayTemplate = (g: GymState, now: number) => g.templates.find((tm) => tm.id === g.week[weekday(now)]);
 
 // Готовые тренировки для начала: добавляются одной кнопкой и правятся как свои.
 export const STARTERS: { name: string; items: PlanItem[] }[] = [
   {
-    name: 'Всё тело A',
+    name: t('Всё тело A'),
     items: [
       { ex: 'squat.bb', sets: 3, reps: 8 },
       { ex: 'bench.bb', sets: 3, reps: 8 },
@@ -94,7 +94,7 @@ export const STARTERS: { name: string; items: PlanItem[] }[] = [
     ],
   },
   {
-    name: 'Всё тело B',
+    name: t('Всё тело B'),
     items: [
       { ex: 'deadlift.bb', sets: 3, reps: 5 },
       { ex: 'ohp.bb', sets: 3, reps: 8 },
@@ -104,7 +104,7 @@ export const STARTERS: { name: string; items: PlanItem[] }[] = [
     ],
   },
   {
-    name: 'Жим: грудь, плечи, трицепс',
+    name: t('Жим: грудь, плечи, трицепс'),
     items: [
       { ex: 'bench.bb', sets: 4, reps: 8 },
       { ex: 'incline.db', sets: 3, reps: 10 },
@@ -114,7 +114,7 @@ export const STARTERS: { name: string; items: PlanItem[] }[] = [
     ],
   },
   {
-    name: 'Тяга: спина, бицепс',
+    name: t('Тяга: спина, бицепс'),
     items: [
       { ex: 'pullup.bw', sets: 3, reps: 8 },
       { ex: 'row.bb', sets: 4, reps: 8 },
@@ -124,7 +124,7 @@ export const STARTERS: { name: string; items: PlanItem[] }[] = [
     ],
   },
   {
-    name: 'Ноги',
+    name: t('Ноги'),
     items: [
       { ex: 'squat.bb', sets: 4, reps: 6 },
       { ex: 'rdl.bb', sets: 3, reps: 8 },
@@ -135,16 +135,16 @@ export const STARTERS: { name: string; items: PlanItem[] }[] = [
   },
 ];
 
-export function saveTemplate(p: Progress, t: Omit<GymTemplate, 'id'> & { id?: string }): Progress {
+export function saveTemplate(p: Progress, tm: Omit<GymTemplate, 'id'> & { id?: string }): Progress {
   const g = gymOf(p);
-  const tpl: GymTemplate = { id: t.id ?? uid(), name: t.name.trim().slice(0, 40) || 'Тренировка', items: t.items.slice(0, 30) };
+  const tpl: GymTemplate = { id: tm.id ?? uid(), name: tm.name.trim().slice(0, 40) || t('Тренировка'), items: tm.items.slice(0, 30) };
   const templates = g.templates.some((x) => x.id === tpl.id) ? g.templates.map((x) => (x.id === tpl.id ? tpl : x)) : [...g.templates, tpl];
   return put(p, { ...g, templates });
 }
 
 export function deleteTemplate(p: Progress, id: string): Progress {
   const g = gymOf(p);
-  return put(p, { ...g, templates: g.templates.filter((t) => t.id !== id), week: g.week.map((w) => (w === id ? null : w)) });
+  return put(p, { ...g, templates: g.templates.filter((tm) => tm.id !== id), week: g.week.map((w) => (w === id ? null : w)) });
 }
 
 export function setWeekDay(p: Progress, day: number, id: string | null): Progress {
@@ -169,7 +169,7 @@ export function freshSets(g: GymState, ex: string, n = 3, reps?: number): GymSet
 export function startRun(p: Progress, now: number, tpl?: GymTemplate): Progress {
   const g = gymOf(p);
   const items = (tpl?.items ?? []).map((i) => ({ ex: i.ex, sets: freshSets(g, i.ex, i.sets, i.reps) }));
-  return put(p, { ...g, run: { id: uid(), name: tpl?.name ?? 'Свободная тренировка', tpl: tpl?.id, start: now, items } });
+  return put(p, { ...g, run: { id: uid(), name: tpl?.name ?? t('Свободная тренировка'), tpl: tpl?.id, start: now, items } });
 }
 
 export function updateRun(p: Progress, fn: (r: GymRun) => GymRun): Progress {
@@ -204,7 +204,7 @@ export function bestOf(kind: GymKind, sets: GymSet[]): GymBest {
   for (const s of sets) {
     const w = num(s.w);
     const r = num(s.r);
-    const t = num(s.t);
+    const tm = num(s.t);
     if (kind === 'w' || kind === 'bw') {
       if (w > 0 && r > 0) {
         b.w = Math.max(b.w ?? 0, w);
@@ -212,7 +212,7 @@ export function bestOf(kind: GymKind, sets: GymSet[]): GymBest {
       }
       if (kind === 'bw' && r > 0 && !w) b.r = Math.max(b.r ?? 0, r);
     }
-    if ((kind === 't' || kind === 'c') && t > 0) b.t = Math.max(b.t ?? 0, t);
+    if ((kind === 't' || kind === 'c') && tm > 0) b.t = Math.max(b.t ?? 0, tm);
   }
   return b;
 }
@@ -251,7 +251,7 @@ export function finishRun(p: Progress, now: number): GymResult | null {
     const b = bestOf(kind, sets);
     if (isRecord(best[it.ex], b)) prs.push(it.ex);
     best[it.ex] = merge(best[it.ex], b);
-    last[it.ex] = sets.map(({ w, r, t, d }) => ({ w, r, t, d }));
+    last[it.ex] = sets.map(({ w, r, t: tm, d }) => ({ w, r, t: tm, d }));
   }
   const session: GymSession = {
     id: run.id,
@@ -271,13 +271,13 @@ export const minutesOf = (s: Pick<GymSession, 'start' | 'end'>) => Math.max(1, M
 
 export function durationText(min: number): string {
   const h = Math.floor(min / 60);
-  return h ? `${h} ч ${min % 60} мин` : `${min} мин`;
+  return h ? t('{0} ч {1} мин', { 0: h, 1: min % 60 }) : t('{0} мин', { 0: min });
 }
 
 /** 5455 → «5 455». */
-export const kgText = (v: number) => `${Math.round(v).toLocaleString(locale()).replace(/ /g, ' ')} кг`;
+export const kgText = (v: number) => t('{0} кг', { 0: Math.round(v).toLocaleString(locale()).replace(/ /g, ' ') });
 
-export const setsWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'подход' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'подхода' : 'подходов');
+export const setsWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? t('подход') : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? t('подхода') : t('подходов'));
 
 /** Тренировки по дням: для отметок на неделе. */
 export function gymDays(g: GymState): Set<string> {

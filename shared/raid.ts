@@ -1,5 +1,6 @@
 // Рейд клана: по выходным весь клан бьёт одного огромного босса. Здоровье общее,
 // урон каждого — его повторы. Награда зависит от личного урона и от того, добит ли босс.
+import { t } from '../src/i18n';
 
 const DAY = 86_400_000;
 // Время рейда считаем по Москве: суббота 00:00 — понедельник 00:00.
@@ -27,8 +28,8 @@ export interface RaidWindow {
   key: string;
 }
 
-const mskDate = (t: number) => new Date(t + MSK);
-const fmtKey = (t: number) => mskDate(t).toISOString().slice(0, 10);
+const mskDate = (tm: number) => new Date(tm + MSK);
+const fmtKey = (tm: number) => mskDate(tm).toISOString().slice(0, 10);
 
 export function raidWindow(now: number): RaidWindow {
   const d = mskDate(now);
@@ -43,7 +44,7 @@ export function raidWindow(now: number): RaidWindow {
   return { active: now >= start && now < end, start, end, key: fmtKey(saturday) };
 }
 
-export const dayOf = (t: number) => fmtKey(t);
+export const dayOf = (tm: number) => fmtKey(tm);
 
 export interface RaidBoss {
   name: string;
@@ -55,10 +56,10 @@ export interface RaidBoss {
 
 // Босс меняется каждую неделю по кругу.
 export const RAID_BOSSES: RaidBoss[] = [
-  { name: 'Великан Лень', title: 'Спит на горе одеял и тянет силы из всего королевства', model: 'Skeleton_Warrior', tint: 'mul:1.1,0.85,1.2', glow: '#b388ff' },
-  { name: 'Король Прокрастин', title: 'Обещает начать с понедельника уже тысячу лет', model: 'Skeleton_Mage', tint: 'mul:0.8,1,1.3', glow: '#4fc3f7' },
-  { name: 'Обжора Пончик', title: 'Сладкая армия идёт за ним по пятам', model: 'Skeleton_Minion', tint: 'mul:1.35,0.9,0.7', glow: '#ff8a65' },
-  { name: 'Тень Дивана', title: 'Правая рука Князя, мастер «ещё пять минут»', model: 'Skeleton_Rogue', tint: 'mul:0.6,0.6,0.8', glow: '#7c4dff' },
+  { name: t('Великан Лень'), title: t('Спит на горе одеял и тянет силы из всего королевства'), model: 'Skeleton_Warrior', tint: 'mul:1.1,0.85,1.2', glow: '#b388ff' },
+  { name: t('Король Прокрастин'), title: t('Обещает начать с понедельника уже тысячу лет'), model: 'Skeleton_Mage', tint: 'mul:0.8,1,1.3', glow: '#4fc3f7' },
+  { name: t('Обжора Пончик'), title: t('Сладкая армия идёт за ним по пятам'), model: 'Skeleton_Minion', tint: 'mul:1.35,0.9,0.7', glow: '#ff8a65' },
+  { name: t('Тень Дивана'), title: t('Правая рука Князя, мастер «ещё пять минут»'), model: 'Skeleton_Rogue', tint: 'mul:0.6,0.6,0.8', glow: '#7c4dff' },
 ];
 
 export const raidBoss = (key: string): RaidBoss => {
@@ -81,11 +82,11 @@ export interface RaidTier {
 }
 
 export const RAID_TIERS: RaidTier[] = [
-  { id: 'none', name: 'Без награды', from: 0, coins: 0, potions: {}, chest: false },
-  { id: 'part', name: 'Участник', from: 0.0001, coins: 40, potions: {}, chest: false },
-  { id: 'bronze', name: 'Бронза', from: 0.25, coins: 120, potions: { vigor: 1 }, chest: false },
-  { id: 'silver', name: 'Серебро', from: 0.6, coins: 260, potions: { might: 1, swap: 1 }, chest: false },
-  { id: 'gold', name: 'Золото', from: 1, coins: 450, potions: { might: 2, vigor: 1 }, chest: true },
+  { id: 'none', name: t('Без награды'), from: 0, coins: 0, potions: {}, chest: false },
+  { id: 'part', name: t('Участник'), from: 0.0001, coins: 40, potions: {}, chest: false },
+  { id: 'bronze', name: t('Бронза'), from: 0.25, coins: 120, potions: { vigor: 1 }, chest: false },
+  { id: 'silver', name: t('Серебро'), from: 0.6, coins: 260, potions: { might: 1, swap: 1 }, chest: false },
+  { id: 'gold', name: t('Золото'), from: 1, coins: 450, potions: { might: 2, vigor: 1 }, chest: true },
 ];
 // Если босс повержен: монеты удваиваются и всем, кто бил, достаётся сундук рейда.
 export const KILL_COIN_FACTOR = 2;
@@ -94,7 +95,7 @@ export const fairShare = (hpMax: number, members: number) => hpMax / Math.max(RA
 
 export function raidTier(damage: number, hpMax: number, members: number): RaidTier {
   const share = damage / fairShare(hpMax, members);
-  return [...RAID_TIERS].reverse().find((t) => share >= t.from && (t.id !== 'none' || damage <= 0)) ?? RAID_TIERS[0];
+  return [...RAID_TIERS].reverse().find((tm) => share >= tm.from && (tm.id !== 'none' || damage <= 0)) ?? RAID_TIERS[0];
 }
 
 export interface RaidReward {

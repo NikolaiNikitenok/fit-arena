@@ -1,5 +1,6 @@
 // Кампания: три мира по пять уровней, в конце каждого мира босс.
 import type { Exercise } from './repCounter';
+import { t } from './i18n';
 
 export interface ZoneTheme {
   name: string;
@@ -29,9 +30,9 @@ export interface Level {
 }
 
 export const ZONES: ZoneTheme[] = [
-  { name: 'Подвальный зал', background: '#120d0a', ring: '#7c4a1e', ropes: ['#d97706', '#f5f5f4'], light: '#ffd8a8' },
-  { name: 'Неоновый город', background: '#0a0716', ring: '#4c1d95', ropes: ['#ec4899', '#22d3ee'], light: '#c4b5fd' },
-  { name: 'Орбитальная станция', background: '#03060d', ring: '#0f3d5e', ropes: ['#38bdf8', '#e2e8f0'], light: '#bae6fd' },
+  { name: t('Подвальный зал'), background: '#120d0a', ring: '#7c4a1e', ropes: ['#d97706', '#f5f5f4'], light: '#ffd8a8' },
+  { name: t('Неоновый город'), background: '#0a0716', ring: '#4c1d95', ropes: ['#ec4899', '#22d3ee'], light: '#c4b5fd' },
+  { name: t('Орбитальная станция'), background: '#03060d', ring: '#0f3d5e', ropes: ['#38bdf8', '#e2e8f0'], light: '#bae6fd' },
 ];
 
 const L = (
@@ -57,32 +58,32 @@ const L = (
 });
 
 export const LEVELS: Level[] = [
-  L(1, 'Ржавый Болт', 'squat', '#a16207', 50, 4000, { power: 0.6 }),
-  L(2, 'Гайка', 'pushup', '#b45309', 60, 3600, { power: 0.7 }),
-  L(3, 'Шестерёнка', 'situp', '#78716c', 70, 3300, { power: 0.8 }),
-  L(4, 'Поршень', 'squat', '#9a3412', 85, 3000, { power: 0.9 }),
-  L(5, 'Железный Гриша', 'pushup', '#94a3b8', 150, 2800, {
+  L(1, t('Ржавый Болт'), 'squat', '#a16207', 50, 4000, { power: 0.6 }),
+  L(2, t('Гайка'), 'pushup', '#b45309', 60, 3600, { power: 0.7 }),
+  L(3, t('Шестерёнка'), 'situp', '#78716c', 70, 3300, { power: 0.8 }),
+  L(4, t('Поршень'), 'squat', '#9a3412', 85, 3000, { power: 0.9 }),
+  L(5, t('Железный Гриша'), 'pushup', '#94a3b8', 150, 2800, {
     power: 1.2,
     seconds: 90,
-    boss: { enrageAt: 0.5, enrageSpeedup: 0.65, taunt: 'Гриша в ярости!' },
+    boss: { enrageAt: 0.5, enrageSpeedup: 0.65, taunt: t('Гриша в ярости!') },
   }),
-  L(6, 'Неонка', 'situp', '#db2777', 100, 2800),
-  L(7, 'Глитч', 'pushup', '#7c3aed', 110, 2600),
-  L(8, 'Вольт', 'squat', '#0891b2', 120, 2500, { power: 1.1 }),
-  L(9, 'Хром', 'situp', '#a1a1aa', 130, 2400, { power: 1.1 }),
-  L(10, 'Кибер-Медведь', 'squat', '#be185d', 220, 2200, {
+  L(6, t('Неонка'), 'situp', '#db2777', 100, 2800),
+  L(7, t('Глитч'), 'pushup', '#7c3aed', 110, 2600),
+  L(8, t('Вольт'), 'squat', '#0891b2', 120, 2500, { power: 1.1 }),
+  L(9, t('Хром'), 'situp', '#a1a1aa', 130, 2400, { power: 1.1 }),
+  L(10, t('Кибер-Медведь'), 'squat', '#be185d', 220, 2200, {
     power: 1.4,
     seconds: 90,
-    boss: { enrageAt: 0.5, enrageSpeedup: 0.6, taunt: 'Медведь перегрелся!' },
+    boss: { enrageAt: 0.5, enrageSpeedup: 0.6, taunt: t('Медведь перегрелся!') },
   }),
-  L(11, 'Квазар', 'pushup', '#2563eb', 140, 2200, { power: 1.2 }),
-  L(12, 'Пульсар', 'squat', '#0d9488', 150, 2100, { power: 1.2 }),
-  L(13, 'Комета', 'situp', '#e2e8f0', 160, 2000, { power: 1.3 }),
-  L(14, 'Туманность', 'pushup', '#6366f1', 170, 1900, { power: 1.3 }),
-  L(15, 'Титан', 'squat', '#facc15', 300, 1800, {
+  L(11, t('Квазар'), 'pushup', '#2563eb', 140, 2200, { power: 1.2 }),
+  L(12, t('Пульсар'), 'squat', '#0d9488', 150, 2100, { power: 1.2 }),
+  L(13, t('Комета'), 'situp', '#e2e8f0', 160, 2000, { power: 1.3 }),
+  L(14, t('Туманность'), 'pushup', '#6366f1', 170, 1900, { power: 1.3 }),
+  L(15, t('Титан'), 'squat', '#facc15', 300, 1800, {
     power: 1.6,
     seconds: 120,
-    boss: { enrageAt: 0.4, enrageSpeedup: 0.55, taunt: 'Титан включил форсаж!' },
+    boss: { enrageAt: 0.4, enrageSpeedup: 0.55, taunt: t('Титан включил форсаж!') },
   }),
 ];
 

@@ -6,6 +6,7 @@ import { seasonEndsAt } from '../../shared/rating';
 import { bossDrop, Gear, gearById, itemById, openChest, PotionId, potionById } from './items';
 import type { Baseline } from './levels';
 import { addPotions, dayKey, passOf, passSeason, type PassStat, Progress, saveProgress, streakOf } from './progress';
+import { t } from '../i18n';
 
 export const PASS_TIERS = 30;
 export const XP_PER_TIER = 250;
@@ -34,7 +35,7 @@ export type PassReward =
 const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 2166136261);
 const round5 = (n: number) => Math.max(10, Math.round(n / 5) * 5);
 const EXERCISES: RepExercise[] = ['squat', 'pushup', 'situp'];
-const exTitle = (ex: Exercise, n: number) => `${EXERCISE_LABELS[ex]}: ${n} повторов`;
+const exTitle = (ex: Exercise, n: number) => t('{0}: {1} повторов', { 0: EXERCISE_LABELS[ex], 1: n });
 
 // Местная дата как полдень UTC: так у даты один сезон и одна неделя в любом часовом поясе.
 const noon = (date: string) => Date.parse(`${date}T12:00:00Z`);
@@ -56,12 +57,12 @@ export function dailyQuests(date: string, base: Baseline): Quest[] {
   const general: Omit<Quest, 'id' | 'kind'>[] = [
     { stat: 'reps', target: 80 + ((h >>> 9) % 3) * 20, xp: 50, title: '' },
     { stat: 'win', target: 2 + ((h >>> 9) % 2), xp: 50, title: '' },
-    { stat: 'stars3', target: 1, xp: 50, title: 'Пройди уровень на три звезды' },
+    { stat: 'stars3', target: 1, xp: 50, title: t('Пройди уровень на три звезды') },
   ];
   const g = general[(h >>> 7) % general.length];
-  g.title ||= g.stat === 'reps' ? `Сделай ${g.target} любых повторов` : `Победи на ${g.target} уровнях карты`;
+  g.title ||= g.stat === 'reps' ? t('Сделай {0} любых повторов', { 0: g.target }) : t('Победи на {0} уровнях карты', { 0: g.target });
   const n2 = round5(base[ex2] * 1.5);
-  const third: Omit<Quest, 'id' | 'kind'> = (h >>> 11) % 3 !== 0 ? { stat: 'daily', target: 1, xp: 60, title: 'Выполни задание дня жителя' } : { stat: ex2, target: n2, xp: 60, title: exTitle(ex2, n2) };
+  const third: Omit<Quest, 'id' | 'kind'> = (h >>> 11) % 3 !== 0 ? { stat: 'daily', target: 1, xp: 60, title: t('Выполни задание дня жителя') } : { stat: ex2, target: n2, xp: 60, title: exTitle(ex2, n2) };
   return [{ stat: ex, target: n, xp: 60, title: exTitle(ex, n) }, g, third].map((q, i) => ({ ...q, id: id(i), kind: 'daily' as const }));
 }
 
@@ -74,16 +75,16 @@ export function weeklyQuests(date: string, base: Baseline): Quest[] {
   const exN = round5(base[ex] * 12);
   const wins = 8 + ((h >>> 6) % 3) * 2;
   const extra: Omit<Quest, 'id' | 'kind'>[] = [
-    { stat: 'boss', target: 1, xp: 200, title: 'Победи босса (можно уже пройденного)' },
-    { stat: 'duel', target: 2, xp: 200, title: 'Сразись в 2 дуэлях' },
-    { stat: 'raid', target: 3, xp: 200, title: 'Атакуй рейд-босса клана 3 раза' },
-    { stat: 'daily', target: 5, xp: 200, title: 'Выполни 5 заданий жителей' },
-    { stat: 'stars3', target: 5, xp: 200, title: 'Пройди 5 уровней на три звезды' },
+    { stat: 'boss', target: 1, xp: 200, title: t('Победи босса (можно уже пройденного)') },
+    { stat: 'duel', target: 2, xp: 200, title: t('Сразись в 2 дуэлях') },
+    { stat: 'raid', target: 3, xp: 200, title: t('Атакуй рейд-босса клана 3 раза') },
+    { stat: 'daily', target: 5, xp: 200, title: t('Выполни 5 заданий жителей') },
+    { stat: 'stars3', target: 5, xp: 200, title: t('Пройди 5 уровней на три звезды') },
   ];
   const list: Omit<Quest, 'id' | 'kind'>[] = [
-    { stat: 'reps', target: reps, xp: 200, title: `Сделай ${reps} повторов за неделю` },
+    { stat: 'reps', target: reps, xp: 200, title: t('Сделай {0} повторов за неделю', { 0: reps }) },
     { stat: ex, target: exN, xp: 180, title: exTitle(ex, exN) },
-    { stat: 'win', target: wins, xp: 180, title: `Победи на ${wins} уровнях карты` },
+    { stat: 'win', target: wins, xp: 180, title: t('Победи на {0} уровнях карты', { 0: wins }) },
     extra[(h >>> 9) % extra.length],
   ];
   return list.map((q, i) => ({ ...q, id: `w:${key}:${i}`, kind: 'weekly' as const }));
@@ -92,13 +93,13 @@ export function weeklyQuests(date: string, base: Baseline): Quest[] {
 /** Задания на весь сезон: большие цели, по одной на каждое дело в игре. */
 export function seasonQuests(season: number): Quest[] {
   const list: Omit<Quest, 'id' | 'kind'>[] = [
-    { stat: 'reps', target: 5000, xp: 500, title: 'Сделай 5000 повторов за сезон' },
-    { stat: 'streak', target: 14, xp: 500, title: 'Держи серию 14 дней' },
-    { stat: 'win', target: 40, xp: 400, title: 'Победи на 40 уровнях карты' },
-    { stat: 'boss', target: 5, xp: 400, title: 'Победи 5 боссов' },
-    { stat: 'daily', target: 15, xp: 400, title: 'Выполни 15 заданий жителей' },
-    { stat: 'duelWin', target: 5, xp: 400, title: 'Выиграй 5 дуэлей' },
-    { stat: 'raid', target: 10, xp: 400, title: 'Атакуй рейд-босса клана 10 раз' },
+    { stat: 'reps', target: 5000, xp: 500, title: t('Сделай 5000 повторов за сезон') },
+    { stat: 'streak', target: 14, xp: 500, title: t('Держи серию 14 дней') },
+    { stat: 'win', target: 40, xp: 400, title: t('Победи на 40 уровнях карты') },
+    { stat: 'boss', target: 5, xp: 400, title: t('Победи 5 боссов') },
+    { stat: 'daily', target: 15, xp: 400, title: t('Выполни 15 заданий жителей') },
+    { stat: 'duelWin', target: 5, xp: 400, title: t('Выиграй 5 дуэлей') },
+    { stat: 'raid', target: 10, xp: 400, title: t('Атакуй рейд-босса клана 10 раз') },
   ];
   return list.map((q, i) => ({ ...q, id: `s:${season}:${i}`, kind: 'season' as const }));
 }
@@ -165,15 +166,15 @@ export function passRewards(tier: number): { free: PassReward; pro: PassReward }
 export function rewardLabel(r: PassReward): string {
   switch (r.kind) {
     case 'coins':
-      return `${r.n} монет`;
+      return t('{0} монет', { 0: r.n });
     case 'potion':
       return `${potionById(r.id).name}${r.n > 1 ? ` ×${r.n}` : ''}`;
     case 'chest':
-      return 'Сундук';
+      return t('Сундук');
     case 'gear':
-      return 'Снаряжение';
+      return t('Снаряжение');
     case 'passGear':
-      return gearById(r.id)?.name ?? 'Снаряжение';
+      return gearById(r.id)?.name ?? t('Снаряжение');
     case 'outfit':
       return itemById(r.id).name;
   }
@@ -205,7 +206,7 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
     if (found) next.items = [...next.items, found];
     if (loot.potion) next.potions = addPotions(next.potions, loot.potion, 1);
     gear = loot.gear;
-    label = loot.item?.name ?? loot.gear?.name ?? (loot.potion ? potionById(loot.potion).name : `${loot.coins} монет`);
+    label = loot.item?.name ?? loot.gear?.name ?? (loot.potion ? potionById(loot.potion).name : t('{0} монет', { 0: loot.coins }));
   }
   if (r.kind === 'gear') {
     gear = bossDrop(land + (track === 'pro' ? 3 : 2), next.items);
@@ -214,7 +215,7 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
       label = gear.name;
     } else {
       coins(track === 'pro' ? 1200 : 600);
-      label = `${track === 'pro' ? 1200 : 600} монет`;
+      label = t('{0} монет', { 0: track === 'pro' ? 1200 : 600 });
     }
   }
   if (r.kind === 'passGear') {
@@ -225,14 +226,14 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
     } else {
       // Уже есть с прошлого сезона.
       coins(1500);
-      label = '1500 монет';
+      label = t('1500 монет');
     }
   }
   if (r.kind === 'outfit') {
     // Облик уже есть с прошлого сезона: вместо него монеты.
     if (next.items.includes(r.id)) {
       coins(track === 'pro' ? 2500 : 1000);
-      label = `${track === 'pro' ? 2500 : 1000} монет`;
+      label = t('{0} монет', { 0: track === 'pro' ? 2500 : 1000 });
     } else next.items = [...next.items, r.id];
   }
   const claimed = track === 'free' ? { free: [...pass.free, tier] } : { pro: [...pass.pro, tier] };
@@ -245,7 +246,7 @@ export function passReady(p: Progress, pro: boolean, now: number): number {
   const quests = passQuests(p, now).filter((q) => !pass.quests.includes(q.id) && questValue(p, q, now) >= q.target).length;
   const { tier } = passTier(pass.xp);
   let tiers = 0;
-  for (let t = 1; t <= tier; t++) tiers += Number(!pass.free.includes(t)) + Number(pro && !pass.pro.includes(t));
+  for (let tm = 1; tm <= tier; tm++) tiers += Number(!pass.free.includes(tm)) + Number(pro && !pass.pro.includes(tm));
   return quests + tiers;
 }
 

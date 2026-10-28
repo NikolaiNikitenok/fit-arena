@@ -28,6 +28,7 @@
  * по уровню ратуши. Набеги Князя Дивана уносят вдвое меньше (NPC_LOOT_MUL, src/village/raids.ts).
  */
 import type { TroopId } from './villageBattle';
+import { t } from '../src/i18n';
 
 export type ResKey = 'wood' | 'stone' | 'gold';
 export type Res = Record<ResKey, number>;
@@ -48,7 +49,7 @@ export const STARTER_RES: Res = { wood: 300, stone: 300, gold: 150 };
 
 export type BuildingType = 'townhall' | 'lumbermill' | 'quarry' | 'goldmine' | 'storage' | 'barracks' | 'forge' | 'tavern' | 'market' | 'tower' | 'catapult' | 'wall' | 'lab' | 'bomb' | 'snare';
 export type Category = 'economy' | 'army' | 'defense' | 'village';
-export const CATEGORY_LABELS: Record<Category, string> = { economy: 'Хозяйство', army: 'Войско', defense: 'Оборона', village: 'Жители' };
+export const CATEGORY_LABELS: Record<Category, string> = { economy: t('Хозяйство'), army: t('Войско'), defense: t('Оборона'), village: t('Жители') };
 
 export interface DefenseStats {
   // Дальность в клетках, урон за выстрел по уровню, выстрел раз в every секунд.
@@ -109,7 +110,7 @@ const RATE_GOLD = [8, 12, 17, 24, 33, 44, 57, 72];
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   townhall: {
-    type: 'townhall', name: 'Ратуша', desc: 'Сердце деревни. Её уровень открывает новые постройки и уровни.', size: 3, category: 'village',
+    type: 'townhall', name: t('Ратуша'), desc: t('Сердце деревни. Её уровень открывает новые постройки и уровни.'), size: 3, category: 'village',
     count: all(1), levelCap: [1, 2, 3, 4, 5, 6, 7, 8],
     cost: [{}, { wood: 500, stone: 500, gold: 200 }, { wood: 1500, stone: 1500, gold: 700 }, { wood: 4000, stone: 4000, gold: 2000 }, { wood: 9000, stone: 9000, gold: 4500 }, { wood: 18000, stone: 18000, gold: 9000 }, { wood: 32000, stone: 32000, gold: 16000 }, { wood: 50000, stone: 50000, gold: 25000 }],
     time: [0, 1800, 7200, 14400, 28800, 43200, 86400, 129600],
@@ -118,76 +119,76 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     lootWeight: 3,
   },
   lumbermill: {
-    type: 'lumbermill', name: 'Лесопилка', desc: 'Сама пилит дерево, пока ты тренируешься.', size: 2, category: 'economy',
+    type: 'lumbermill', name: t('Лесопилка'), desc: t('Сама пилит дерево, пока ты тренируешься.'), size: 2, category: 'economy',
     count: COLLECTOR_COUNT, levelCap: COLLECTOR_CAP, cost: costs({ stone: 60, gold: 20 }), time: TIMES, hp: hps(300),
     collector: { res: 'wood', perHour: RATE_BASIC, capHours: 10 }, lootWeight: 1,
   },
   quarry: {
-    type: 'quarry', name: 'Каменоломня', desc: 'Добывает камень для стен и построек.', size: 2, category: 'economy',
+    type: 'quarry', name: t('Каменоломня'), desc: t('Добывает камень для стен и построек.'), size: 2, category: 'economy',
     count: COLLECTOR_COUNT, levelCap: COLLECTOR_CAP, cost: costs({ wood: 60, gold: 20 }), time: TIMES, hp: hps(300),
     collector: { res: 'stone', perHour: RATE_BASIC, capHours: 10 }, lootWeight: 1,
   },
   goldmine: {
-    type: 'goldmine', name: 'Золотой рудник', desc: 'Понемногу намывает золото на войско.', size: 2, category: 'economy',
+    type: 'goldmine', name: t('Золотой рудник'), desc: t('Понемногу намывает золото на войско.'), size: 2, category: 'economy',
     count: [1, 1, 1, 2, 2, 3, 3, 4], levelCap: COLLECTOR_CAP, cost: costs({ wood: 50, stone: 50 }), time: TIMES, hp: hps(300),
     collector: { res: 'gold', perHour: RATE_GOLD, capHours: 10 }, lootWeight: 1,
   },
   storage: {
-    type: 'storage', name: 'Склад', desc: 'Вмещает урожай сборщиков и прячет четверть запасов от набегов.', size: 2, category: 'economy',
+    type: 'storage', name: t('Склад'), desc: t('Вмещает урожай сборщиков и прячет четверть запасов от набегов.'), size: 2, category: 'economy',
     count: [1, 1, 2, 2, 3, 3, 4, 4], levelCap: [1, 2, 3, 4, 5, 6, 7, 8], cost: costs({ wood: 120, stone: 120 }), time: TIMES, hp: hps(400),
     storage: [1000, 2000, 3500, 5500, 8000, 11000, 15000, 20000], lootWeight: 2,
   },
   barracks: {
-    type: 'barracks', name: 'Казармы', desc: 'Обучают войско. Уровень открывает новые отряды, усиливает их и даёт больше мест.', size: 2, category: 'army',
+    type: 'barracks', name: t('Казармы'), desc: t('Обучают войско. Уровень открывает новые отряды, усиливает их и даёт больше мест.'), size: 2, category: 'army',
     count: all(1), levelCap: [1, 2, 3, 4, 5, 6, 7, 8], cost: costs({ wood: 150, stone: 100 }), time: TIMES, hp: hps(350),
   },
   lab: {
-    type: 'lab', name: 'Лаборатория', desc: 'Здесь прокачивают отряды: каждый уровень отряда — +15% здоровья и урона. Повторы на тренировке ускоряют исследование.', size: 2, category: 'army',
+    type: 'lab', name: t('Лаборатория'), desc: t('Здесь прокачивают отряды: каждый уровень отряда — +15% здоровья и урона. Повторы на тренировке ускоряют исследование.'), size: 2, category: 'army',
     count: [0, 1, 1, 1, 1, 1, 1, 1], levelCap: [0, 1, 2, 3, 4, 5, 6, 7], cost: costs({ wood: 200, stone: 200, gold: 100 }), time: TIMES, hp: hps(400),
   },
   forge: {
-    type: 'forge', name: 'Кузница', desc: 'Точит оружие героя: +1% урона в походах за каждый уровень.', size: 2, category: 'village',
+    type: 'forge', name: t('Кузница'), desc: t('Точит оружие героя: +1% урона в походах за каждый уровень.'), size: 2, category: 'village',
     count: [0, 1, 1, 1, 1, 1, 1, 1], levelCap: [0, 2, 3, 4, 5, 6, 7, 8], cost: costs({ wood: 200, stone: 250, gold: 100 }), time: TIMES, hp: hps(450),
   },
   tavern: {
-    type: 'tavern', name: 'Таверна', desc: 'Здесь герой отдыхает: +1 жизнь, с 5 уровня — +2.', size: 2, category: 'village',
+    type: 'tavern', name: t('Таверна'), desc: t('Здесь герой отдыхает: +1 жизнь, с 5 уровня — +2.'), size: 2, category: 'village',
     count: [0, 0, 1, 1, 1, 1, 1, 1], levelCap: [0, 0, 2, 3, 4, 5, 6, 7], cost: costs({ wood: 250, stone: 150, gold: 100 }), time: TIMES, hp: hps(450),
   },
   market: {
-    type: 'market', name: 'Рынок', desc: 'Купцы платят щедрее: +2% монет за победы за каждый уровень.', size: 2, category: 'village',
+    type: 'market', name: t('Рынок'), desc: t('Купцы платят щедрее: +2% монет за победы за каждый уровень.'), size: 2, category: 'village',
     count: [0, 0, 0, 1, 1, 1, 1, 1], levelCap: [0, 0, 0, 2, 3, 4, 5, 6], cost: costs({ wood: 200, stone: 200, gold: 150 }), time: TIMES, hp: hps(450),
   },
   tower: {
-    type: 'tower', name: 'Башня лучников', desc: 'Стреляет по ближайшему врагу.', size: 2, category: 'defense',
+    type: 'tower', name: t('Башня лучников'), desc: t('Стреляет по ближайшему врагу.'), size: 2, category: 'defense',
     count: [1, 2, 2, 3, 3, 4, 4, 5], levelCap: [2, 3, 4, 5, 6, 7, 8, 8], cost: costs({ wood: 150, stone: 100, gold: 50 }), time: TIMES, hp: hps(400),
     defense: { range: 6, damage: [7, 9, 12, 15, 19, 24, 30, 37], every: 0.8 },
   },
   catapult: {
-    type: 'catapult', name: 'Катапульта', desc: 'Медленно, но больно бьёт по толпе. Вблизи не достаёт.', size: 2, category: 'defense',
+    type: 'catapult', name: t('Катапульта'), desc: t('Медленно, но больно бьёт по толпе. Вблизи не достаёт.'), size: 2, category: 'defense',
     count: [0, 0, 1, 1, 2, 2, 3, 3], levelCap: [0, 0, 2, 3, 4, 5, 6, 7], cost: costs({ wood: 300, stone: 400, gold: 200 }), time: TIMES, hp: hps(500),
     defense: { range: 8, minRange: 2.5, damage: [30, 40, 52, 66, 82, 100, 120, 145], every: 4, splash: 1.5, flight: 1.2 },
   },
   wall: {
-    type: 'wall', name: 'Стена', desc: 'Задерживает врагов: им придётся ломать или обходить.', size: 1, category: 'defense',
+    type: 'wall', name: t('Стена'), desc: t('Задерживает врагов: им придётся ломать или обходить.'), size: 1, category: 'defense',
     count: [0, 15, 25, 35, 45, 55, 65, 75], levelCap: [0, 2, 3, 4, 5, 6, 7, 8],
     cost: [{ stone: 20 }, { stone: 60 }, { stone: 160 }, { stone: 400 }, { stone: 900, gold: 200 }, { stone: 1800, gold: 500 }, { stone: 3200, gold: 1000 }, { stone: 5200, gold: 1800 }],
     time: all(0), hp: [150, 300, 550, 900, 1400, 2000, 2800, 3800],
   },
   // Ловушки ставятся сразу (без строителя) и после боя взводятся сами.
   bomb: {
-    type: 'bomb', name: 'Скрытая бомба', desc: 'Прячется в траве и взрывается под ногами у толпы. Нападающий её не видит.', size: 1, category: 'defense',
+    type: 'bomb', name: t('Скрытая бомба'), desc: t('Прячется в траве и взрывается под ногами у толпы. Нападающий её не видит.'), size: 1, category: 'defense',
     count: [0, 2, 3, 4, 5, 6, 7, 8], levelCap: [0, 2, 3, 4, 5, 6, 7, 8], cost: costs({ gold: 80, stone: 20 }), time: all(0), hp: hps(1),
     trap: { trigger: 1, splash: 1.6, damage: [40, 52, 66, 82, 100, 120, 145, 175] },
   },
   snare: {
-    type: 'snare', name: 'Капкан', desc: 'Хватает первого, кто наступит, и держит на месте. Даже великана.', size: 1, category: 'defense',
+    type: 'snare', name: t('Капкан'), desc: t('Хватает первого, кто наступит, и держит на месте. Даже великана.'), size: 1, category: 'defense',
     count: [0, 0, 2, 3, 4, 5, 6, 7], levelCap: [0, 0, 2, 3, 4, 5, 6, 7], cost: costs({ wood: 60, gold: 60 }), time: all(0), hp: hps(1),
     trap: { trigger: 0.7, damage: [15, 20, 26, 33, 41, 50, 60, 72], hold: [40, 45, 50, 55, 60, 65, 70, 80] },
   },
 };
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingType[];
-export const isDefense = (t: BuildingType) => !!BUILDINGS[t].defense;
-export const isTrap = (t: BuildingType) => !!BUILDINGS[t].trap;
+export const isDefense = (tm: BuildingType) => !!BUILDINGS[tm].defense;
+export const isTrap = (tm: BuildingType) => !!BUILDINGS[tm].trap;
 
 // Строители: двое, третий с ратуши 4, четвёртый с ратуши 7.
 export const buildersAt = (th: number) => (th >= 7 ? 4 : th >= 4 ? 3 : 2);
@@ -222,7 +223,7 @@ export interface Town {
   r?: { t: TroopId; end: number };
 }
 
-export const thLevel = (t: Pick<Town, 'b'>) => t.b.find((b) => b.t === 'townhall')?.l ?? 1;
+export const thLevel = (tm: Pick<Town, 'b'>) => tm.b.find((b) => b.t === 'townhall')?.l ?? 1;
 export const thIdx = (th: number) => Math.max(0, Math.min(TH_MAX, th) - 1);
 
 /** Новая деревня: ратуша посередине. */
@@ -231,7 +232,7 @@ export function newTown(res: Res = { ...STARTER_RES }): Town {
   return { res, b: [{ i: 1, t: 'townhall', x: (GRID - s) >> 1, y: (GRID - s) >> 1, l: 1 }], n: 2, army: {}, q: [] };
 }
 
-export const countOf = (t: Pick<Town, 'b'>, type: BuildingType) => t.b.filter((b) => b.t === type).length;
+export const countOf = (tm: Pick<Town, 'b'>, type: BuildingType) => tm.b.filter((b) => b.t === type).length;
 export const maxCount = (type: BuildingType, th: number) => BUILDINGS[type].count[thIdx(th)];
 export const levelCap = (type: BuildingType, th: number) => BUILDINGS[type].levelCap[thIdx(th)];
 export const costOf = (type: BuildingType, level: number): Res => ({ ...NO_RES, ...BUILDINGS[type].cost[level - 1] });
@@ -247,18 +248,18 @@ export function thFor(type: BuildingType, level: number): number {
   return i < 0 ? TH_MAX + 1 : i + 1;
 }
 
-export const busyBuilders = (t: Pick<Town, 'b'>) => t.b.filter((b) => b.u != null).length;
-export const freeBuilders = (t: Pick<Town, 'b'>) => buildersAt(thLevel(t)) - busyBuilders(t);
+export const busyBuilders = (tm: Pick<Town, 'b'>) => tm.b.filter((b) => b.u != null).length;
+export const freeBuilders = (tm: Pick<Town, 'b'>) => buildersAt(thLevel(tm)) - busyBuilders(tm);
 
 // ── Сетка ──────────────────────────────────────────────────────────────────────────────────────────
 
 export const sizeOf = (type: BuildingType) => BUILDINGS[type].size;
 
 /** Можно ли поставить постройку (или передвинуть ту, что с номером ignore). */
-export function canPlace(t: Pick<Town, 'b'>, type: BuildingType, x: number, y: number, ignore?: number): boolean {
+export function canPlace(tm: Pick<Town, 'b'>, type: BuildingType, x: number, y: number, ignore?: number): boolean {
   const s = sizeOf(type);
   if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x + s > GRID || y + s > GRID) return false;
-  return t.b.every((b) => {
+  return tm.b.every((b) => {
     if (b.i === ignore) return true;
     const bs = sizeOf(b.t);
     return x + s <= b.x || b.x + bs <= x || y + s <= b.y || b.y + bs <= y;
@@ -266,13 +267,13 @@ export function canPlace(t: Pick<Town, 'b'>, type: BuildingType, x: number, y: n
 }
 
 /** Ближайшее к центру свободное место под постройку — для первой расстановки. */
-export function freeSpot(t: Pick<Town, 'b'>, type: BuildingType, near: { x: number; y: number } = { x: GRID / 2, y: GRID / 2 }): { x: number; y: number } | null {
+export function freeSpot(tm: Pick<Town, 'b'>, type: BuildingType, near: { x: number; y: number } = { x: GRID / 2, y: GRID / 2 }): { x: number; y: number } | null {
   const s = sizeOf(type);
   let best: { x: number; y: number } | null = null;
   let bestD = Infinity;
   for (let y = 0; y + s <= GRID; y++)
     for (let x = 0; x + s <= GRID; x++) {
-      if (!canPlace(t, type, x, y)) continue;
+      if (!canPlace(tm, type, x, y)) continue;
       const d = (x + s / 2 - near.x) ** 2 + (y + s / 2 - near.y) ** 2;
       if (d < bestD) {
         bestD = d;
@@ -286,13 +287,13 @@ export function freeSpot(t: Pick<Town, 'b'>, type: BuildingType, near: { x: numb
 
 export type BuildError = 'limit' | 'place' | 'builders' | 'cost' | 'max' | 'th' | 'busy';
 export const BUILD_ERRORS: Record<BuildError, string> = {
-  limit: 'Больше таких не построить: улучши ратушу.',
-  place: 'Здесь не поместится.',
-  builders: 'Все строители заняты.',
-  cost: 'Не хватает ресурсов.',
-  max: 'Это наивысший уровень.',
-  th: 'Сначала улучши ратушу.',
-  busy: 'Уже строится.',
+  limit: t('Больше таких не построить: улучши ратушу.'),
+  place: t('Здесь не поместится.'),
+  builders: t('Все строители заняты.'),
+  cost: t('Не хватает ресурсов.'),
+  max: t('Это наивысший уровень.'),
+  th: t('Сначала улучши ратушу.'),
+  busy: t('Уже строится.'),
 };
 
 /** Сборщик: сколько накопилось к моменту now. */
@@ -304,11 +305,11 @@ export function accrued(b: Bld, now: number): number {
 }
 
 /** Закончить стройки, срок которых прошёл. Сборщик сохраняет накопленное и дальше копит быстрее. */
-export function finishDue<T extends Town>(t: T, now: number): T {
-  if (!t.b.some((b) => b.u != null && b.u <= now)) return t;
+export function finishDue<T extends Town>(tm: T, now: number): T {
+  if (!tm.b.some((b) => b.u != null && b.u <= now)) return tm;
   return {
-    ...t,
-    b: t.b.map((b) => {
+    ...tm,
+    b: tm.b.map((b) => {
       if (b.u == null || b.u > now) return b;
       const end = b.u;
       const next: Bld = { ...b, l: b.l + 1 };
@@ -324,40 +325,40 @@ export function finishDue<T extends Town>(t: T, now: number): T {
 }
 
 /** Заложить новую постройку. */
-export function build<T extends Town>(t: T, type: BuildingType, x: number, y: number, now: number): T | BuildError {
-  const th = thLevel(t);
-  if (type === 'townhall' || countOf(t, type) >= maxCount(type, th)) return 'limit';
-  if (!canPlace(t, type, x, y)) return 'place';
+export function build<T extends Town>(tm: T, type: BuildingType, x: number, y: number, now: number): T | BuildError {
+  const th = thLevel(tm);
+  if (type === 'townhall' || countOf(tm, type) >= maxCount(type, th)) return 'limit';
+  if (!canPlace(tm, type, x, y)) return 'place';
   const time = timeOf(type, 1);
-  if (time > 0 && freeBuilders(t) <= 0) return 'builders';
+  if (time > 0 && freeBuilders(tm) <= 0) return 'builders';
   const cost = costOf(type, 1);
-  if (!affordable(t.res, cost)) return 'cost';
-  const b: Bld = time > 0 ? { i: t.n, t: type, x, y, l: 0, u: now + time * 1000 } : { i: t.n, t: type, x, y, l: 1 };
+  if (!affordable(tm.res, cost)) return 'cost';
+  const b: Bld = time > 0 ? { i: tm.n, t: type, x, y, l: 0, u: now + time * 1000 } : { i: tm.n, t: type, x, y, l: 1 };
   if (time <= 0 && BUILDINGS[type].collector) b.c = now;
-  return { ...t, res: minus(t.res, cost), n: t.n + 1, b: [...t.b, b] };
+  return { ...tm, res: minus(tm.res, cost), n: tm.n + 1, b: [...tm.b, b] };
 }
 
 /** Почему нельзя улучшить (или null, если можно). */
-export function upgradeBlock(t: Town, id: number): BuildError | null {
-  const b = t.b.find((x) => x.i === id);
+export function upgradeBlock(tm: Town, id: number): BuildError | null {
+  const b = tm.b.find((x) => x.i === id);
   if (!b) return 'place';
   if (b.u != null) return 'busy';
   if (b.l >= MAX_LEVEL || b.l >= BUILDINGS[b.t].cost.length) return 'max';
-  if (b.l + 1 > levelCap(b.t, thLevel(t)) && b.t !== 'townhall') return 'th';
+  if (b.l + 1 > levelCap(b.t, thLevel(tm)) && b.t !== 'townhall') return 'th';
   if (b.t === 'townhall' && b.l >= TH_MAX) return 'max';
-  if (timeOf(b.t, b.l + 1) > 0 && freeBuilders(t) <= 0) return 'builders';
-  if (!affordable(t.res, costOf(b.t, b.l + 1))) return 'cost';
+  if (timeOf(b.t, b.l + 1) > 0 && freeBuilders(tm) <= 0) return 'builders';
+  if (!affordable(tm.res, costOf(b.t, b.l + 1))) return 'cost';
   return null;
 }
 
-export function upgrade<T extends Town>(t: T, id: number, now: number): T | BuildError {
-  const err = upgradeBlock(t, id);
+export function upgrade<T extends Town>(tm: T, id: number, now: number): T | BuildError {
+  const err = upgradeBlock(tm, id);
   if (err) return err;
-  const b = t.b.find((x) => x.i === id)!;
+  const b = tm.b.find((x) => x.i === id)!;
   const level = b.l + 1;
   const time = timeOf(b.t, level);
-  const res = minus(t.res, costOf(b.t, level));
-  const next = { ...t, res, b: t.b.map((x) => (x.i === id ? { ...x, u: now + time * 1000 } : x)) };
+  const res = minus(tm.res, costOf(b.t, level));
+  const next = { ...tm, res, b: tm.b.map((x) => (x.i === id ? { ...x, u: now + time * 1000 } : x)) };
   return time > 0 ? next : finishDue(next, now);
 }
 
@@ -365,22 +366,22 @@ export function upgrade<T extends Town>(t: T, id: number, now: number): T | Buil
 export const speedUpCharge = (b: Bld, now: number) => (b.u == null ? 0 : Math.max(1, Math.ceil((b.u - now) / 60_000 / SPEEDUP_MIN_PER_CHARGE)));
 
 /** Закончить стройку сразу (заряд списывает вызывающий). */
-export function finishNow<T extends Town>(t: T, id: number, now: number): T {
-  return finishDue({ ...t, b: t.b.map((b) => (b.i === id && b.u != null ? { ...b, u: now } : b)) }, now);
+export function finishNow<T extends Town>(tm: T, id: number, now: number): T {
+  return finishDue({ ...tm, b: tm.b.map((b) => (b.i === id && b.u != null ? { ...b, u: now } : b)) }, now);
 }
 
-export function move<T extends Town>(t: T, id: number, x: number, y: number): T | null {
-  const b = t.b.find((v) => v.i === id);
-  if (!b || !canPlace(t, b.t, x, y, id)) return null;
-  return { ...t, b: t.b.map((v) => (v.i === id ? { ...v, x, y } : v)) };
+export function move<T extends Town>(tm: T, id: number, x: number, y: number): T | null {
+  const b = tm.b.find((v) => v.i === id);
+  if (!b || !canPlace(tm, b.t, x, y, id)) return null;
+  return { ...tm, b: tm.b.map((v) => (v.i === id ? { ...v, x, y } : v)) };
 }
 
 // ── Склады и сборщики ─────────────────────────────────────────────────────────────────────────────
 
 /** Вместимость: ратуша и склады. Добыча подземелья не теряется, но сборщики сверх неё не собрать. */
-export function capacity(t: Pick<Town, 'b'>): number {
+export function capacity(tm: Pick<Town, 'b'>): number {
   let cap = 0;
-  for (const b of t.b) {
+  for (const b of tm.b) {
     const s = BUILDINGS[b.t].storage;
     if (s && b.l >= 1) cap += s[b.l - 1];
   }
@@ -388,24 +389,24 @@ export function capacity(t: Pick<Town, 'b'>): number {
 }
 
 /** Собрать урожай одного сборщика (сколько влезет в склады); остаток копится дальше. */
-export function collect<T extends Town>(t: T, id: number, now: number): { town: T; got: number; res?: ResKey } {
-  const b = t.b.find((v) => v.i === id);
+export function collect<T extends Town>(tm: T, id: number, now: number): { town: T; got: number; res?: ResKey } {
+  const b = tm.b.find((v) => v.i === id);
   const c = b && BUILDINGS[b.t].collector;
-  if (!b || !c) return { town: t, got: 0 };
+  if (!b || !c) return { town: tm, got: 0 };
   const have = accrued(b, now);
-  const room = Math.max(0, capacity(t) - t.res[c.res]);
+  const room = Math.max(0, capacity(tm) - tm.res[c.res]);
   const got = Math.min(have, room);
-  if (got <= 0) return { town: t, got: 0, res: c.res };
+  if (got <= 0) return { town: tm, got: 0, res: c.res };
   const rest = have - got;
   const rate = c.perHour[b.l - 1];
   const nc = now - Math.floor((rest / rate) * 3_600_000);
-  return { town: { ...t, res: { ...t.res, [c.res]: t.res[c.res] + got }, b: t.b.map((v) => (v.i === id ? { ...v, c: nc } : v)) }, got, res: c.res };
+  return { town: { ...tm, res: { ...tm.res, [c.res]: tm.res[c.res] + got }, b: tm.b.map((v) => (v.i === id ? { ...v, c: nc } : v)) }, got, res: c.res };
 }
 
 /** Несобранное во всех сборщиках. */
-export function uncollected(t: Pick<Town, 'b'>, now: number): Res {
+export function uncollected(tm: Pick<Town, 'b'>, now: number): Res {
   const out = { ...NO_RES };
-  for (const b of t.b) {
+  for (const b of tm.b) {
     const c = BUILDINGS[b.t].collector;
     if (c) out[c.res] += accrued(b, now);
   }
@@ -413,12 +414,12 @@ export function uncollected(t: Pick<Town, 'b'>, now: number): Res {
 }
 
 /** Сколько можно унести набегом: 20% незащищённого и половина несобранного, не больше предела ратуши. */
-export function lootAvailable(t: Town, now: number, mul = 1): Res {
-  const prot = Math.floor(capacity(t) * PROTECT_SHARE);
-  const un = uncollected(t, now);
-  const cap = LOOT_CAP[thIdx(thLevel(t))];
+export function lootAvailable(tm: Town, now: number, mul = 1): Res {
+  const prot = Math.floor(capacity(tm) * PROTECT_SHARE);
+  const un = uncollected(tm, now);
+  const cap = LOOT_CAP[thIdx(thLevel(tm))];
   const out = { ...NO_RES };
-  for (const k of RES_KEYS) out[k] = Math.floor(mul * Math.min(cap, LOOT_SHARE * Math.max(0, t.res[k] - prot) + COLLECTOR_LOOT_SHARE * un[k]));
+  for (const k of RES_KEYS) out[k] = Math.floor(mul * Math.min(cap, LOOT_SHARE * Math.max(0, tm.res[k] - prot) + COLLECTOR_LOOT_SHARE * un[k]));
   return out;
 }
 
@@ -426,9 +427,9 @@ export function lootAvailable(t: Town, now: number, mul = 1): Res {
  * Списать унесённое набегом: сначала из несобранного в сборщиках (половина его доступна),
  * остальное — из запасов. Запасы не уходят ниже нуля.
  */
-export function applyLoss<T extends Town>(t: T, loss: Res, now: number): T {
-  const res = { ...t.res };
-  let b = t.b;
+export function applyLoss<T extends Town>(tm: T, loss: Res, now: number): T {
+  const res = { ...tm.res };
+  let b = tm.b;
   for (const k of RES_KEYS) {
     let left = loss[k];
     b = b.map((v) => {
@@ -441,7 +442,7 @@ export function applyLoss<T extends Town>(t: T, loss: Res, now: number): T {
     });
     res[k] = Math.max(0, res[k] - left);
   }
-  return { ...t, res, b };
+  return { ...tm, res, b };
 }
 
 // ── Польза деревни для основной игры ─────────────────────────────────────────────────────────────
@@ -455,7 +456,7 @@ export interface VillageBonus {
 
 /** Готовые (достроенные) кузница, таверна и рынок дают небольшие бонусы. */
 export function villageBonus(b: Bld[] | undefined): VillageBonus {
-  const lvl = (t: BuildingType) => Math.max(0, ...(b ?? []).filter((x) => x.t === t).map((x) => x.l));
+  const lvl = (tm: BuildingType) => Math.max(0, ...(b ?? []).filter((x) => x.t === tm).map((x) => x.l));
   const tavern = lvl('tavern');
   return { damage: 0.01 * lvl('forge'), lives: tavern >= 5 ? 2 : tavern >= 1 ? 1 : 0, coins: 0.02 * lvl('market') };
 }

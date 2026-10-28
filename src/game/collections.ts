@@ -3,6 +3,7 @@
 import { FIRST_YEAR, HOLIDAYS, holidayKey, holidayOutfitId, yearOf } from './holidayDefs';
 import { itemById, type Item } from './items';
 import type { Progress } from './progress';
+import { t } from '../i18n';
 
 export interface Collection {
   id: string;
@@ -21,13 +22,13 @@ export interface Collection {
 const bosses = (ids: string[]) => ids.map((id) => `event-${id}`);
 
 export const BASE_COLLECTIONS: Collection[] = [
-  { id: 'shop', name: 'Лавка Фёдора', text: 'Всё, что продаёт купец', items: ['forest', 'sky', 'iron', 'cosmo', 'shadow', 'gold'], aura: '#ffd27a', title: 'Лучший покупатель' },
-  { id: 'trophy', name: 'Трофеи сундуков', text: 'Облики, что находят только в сундуках', items: ['zombie-hunter', 'crystal', 'dragon'], aura: '#ff6e40', title: 'Кладоискатель' },
-  { id: 'winter', name: 'Боссы зимы', text: 'События выходных декабря, января и февраля', items: bosses(['olivier', 'ice', 'remote']), aura: '#80deea', title: 'Гроза зимы' },
-  { id: 'spring', name: 'Боссы весны', text: 'События выходных марта, апреля и мая', items: bosses(['pizza', 'excuse', 'grill']), aura: '#aed581', title: 'Гроза весны' },
-  { id: 'summer', name: 'Боссы лета', text: 'События выходных июня, июля и августа', items: bosses(['lounger', 'icecream', 'siesta']), aura: '#ffd54f', title: 'Гроза лета' },
-  { id: 'autumn', name: 'Боссы осени', text: 'События выходных сентября, октября и ноября', items: bosses(['alarm', 'pumpkin', 'blanket']), aura: '#ff9100', title: 'Гроза осени' },
-  { id: 'school', name: 'Школа Грома', text: 'Награды за программы тренировок', items: ['prog-fist', 'prog-bogatyr', 'prog-stone', 'prog-champion'], aura: '#ff8a5c', title: 'Лучший ученик Грома' },
+  { id: 'shop', name: t('Лавка Фёдора'), text: t('Всё, что продаёт купец'), items: ['forest', 'sky', 'iron', 'cosmo', 'shadow', 'gold'], aura: '#ffd27a', title: t('Лучший покупатель') },
+  { id: 'trophy', name: t('Трофеи сундуков'), text: t('Облики, что находят только в сундуках'), items: ['zombie-hunter', 'crystal', 'dragon'], aura: '#ff6e40', title: t('Кладоискатель') },
+  { id: 'winter', name: t('Боссы зимы'), text: t('События выходных декабря, января и февраля'), items: bosses(['olivier', 'ice', 'remote']), aura: '#80deea', title: t('Гроза зимы') },
+  { id: 'spring', name: t('Боссы весны'), text: t('События выходных марта, апреля и мая'), items: bosses(['pizza', 'excuse', 'grill']), aura: '#aed581', title: t('Гроза весны') },
+  { id: 'summer', name: t('Боссы лета'), text: t('События выходных июня, июля и августа'), items: bosses(['lounger', 'icecream', 'siesta']), aura: '#ffd54f', title: t('Гроза лета') },
+  { id: 'autumn', name: t('Боссы осени'), text: t('События выходных сентября, октября и ноября'), items: bosses(['alarm', 'pumpkin', 'blanket']), aura: '#ff9100', title: t('Гроза осени') },
+  { id: 'school', name: t('Школа Грома'), text: t('Награды за программы тренировок'), items: ['prog-fist', 'prog-bogatyr', 'prog-stone', 'prog-champion'], aura: '#ff8a5c', title: t('Лучший ученик Грома') },
 ];
 
 /** Праздничный год: с Ночи тыкв до Летних игр следующего года. 2026 — это 2026/27. */
@@ -35,11 +36,11 @@ export function holidayYear(year: number): Collection {
   const keys = HOLIDAYS.map((h) => holidayKey(h.id, yearOf(h, year)));
   return {
     id: `hy-${year}`,
-    name: `Праздники ${year}/${String(year + 1).slice(2)}`,
-    text: 'Все четыре праздника года. Каждый облик можно получить только в свой праздник',
+    name: t('Праздники {0}/{1}', { 0: year, 1: String(year + 1).slice(2) }),
+    text: t('Все четыре праздника года. Каждый облик можно получить только в свой праздник'),
     items: keys.map(holidayOutfitId),
     aura: '#f48fb1',
-    title: `Душа праздников ${year}/${String(year + 1).slice(2)}`,
+    title: t('Душа праздников {0}/{1}', { 0: year, 1: String(year + 1).slice(2) }),
     limited: true,
   };
 }

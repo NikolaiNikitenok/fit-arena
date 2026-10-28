@@ -1,4 +1,5 @@
 // Правила боя на арене: каждый повтор — удар по сопернику.
+import { t } from '../src/i18n';
 
 export const MAX_HP = 100;
 export const HIT_DAMAGE = 8;
@@ -49,16 +50,16 @@ export function newBattle(setup: { player?: FighterSetup; bot?: FighterSetup } =
 }
 
 /** Повтор бойца side в момент t: возвращает новое состояние и нанесённый удар. */
-export function strike(battle: Battle, side: Side, t: number): { battle: Battle; strike: Strike } {
+export function strike(battle: Battle, side: Side, tm: number): { battle: Battle; strike: Strike } {
   const attacker = battle[side];
   const target: Side = side === 'player' ? 'bot' : 'player';
-  const streak = t - attacker.lastHitAt <= COMBO_WINDOW_MS ? attacker.streak + 1 : 1;
+  const streak = tm - attacker.lastHitAt <= COMBO_WINDOW_MS ? attacker.streak + 1 : 1;
   const combo = streak % COMBO_EVERY === 0;
   const damage = Math.round((combo ? COMBO_DAMAGE : HIT_DAMAGE) * attacker.power);
   return {
     battle: {
       ...battle,
-      [side]: { ...attacker, hits: attacker.hits + 1, streak, lastHitAt: t },
+      [side]: { ...attacker, hits: attacker.hits + 1, streak, lastHitAt: tm },
       [target]: { ...battle[target], hp: Math.max(0, battle[target].hp - damage) },
     },
     strike: { side, damage, combo },
@@ -84,9 +85,9 @@ export interface BotLevel {
 }
 
 export const BOT_LEVELS: BotLevel[] = [
-  { name: 'Новичок', intervalMs: 3200, jitterMs: 800 },
-  { name: 'Боец', intervalMs: 2300, jitterMs: 600 },
-  { name: 'Чемпион', intervalMs: 1600, jitterMs: 400 },
+  { name: t('Новичок'), intervalMs: 3200, jitterMs: 800 },
+  { name: t('Боец'), intervalMs: 2300, jitterMs: 600 },
+  { name: t('Чемпион'), intervalMs: 1600, jitterMs: 400 },
 ];
 
 export function nextBotDelay(level: BotLevel, random = Math.random): number {

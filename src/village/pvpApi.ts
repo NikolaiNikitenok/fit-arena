@@ -13,6 +13,7 @@ import type { AttackOutcome, AttackSubmit, PvpInbox, PvpMe, PvpTopRow, TargetVie
 import { syncNow } from '../cloud';
 import { guestId, tg, userName } from '../telegram';
 import type { DefenseEntry } from './types';
+import { t } from '../i18n';
 
 export type { AttackOutcome, AttackSubmit, TargetView } from '../../shared/villagePvp';
 
@@ -26,7 +27,7 @@ export class PvpError extends Error {
   }
 }
 
-export const OFFLINE = 'Нужен интернет';
+export const OFFLINE = t('Нужен интернет');
 export const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false;
 
 async function call<T>(path: string, body: object = {}): Promise<T> {
@@ -38,11 +39,11 @@ async function call<T>(path: string, body: object = {}): Promise<T> {
     throw new PvpError(OFFLINE, 0);
   }
   const data = (await r.json().catch(() => ({}))) as T & { error?: string };
-  if (!r.ok) throw new PvpError(data.error ?? (r.status === 401 ? 'Набеги на игроков — только в Telegram' : 'Сервер не ответил. Попробуй позже.'), r.status);
+  if (!r.ok) throw new PvpError(data.error ?? (r.status === 401 ? t('Набеги на игроков — только в Telegram') : t('Сервер не ответил. Попробуй позже.')), r.status);
   return data;
 }
 
-export const NO_SERVER = 'Нет связи с сервером';
+export const NO_SERVER = t('Нет связи с сервером');
 
 /**
  * Сервер на связи? Короткий запрос с таймаутом: перед набегом лучше знать заранее,
@@ -67,7 +68,7 @@ async function syncFirst(): Promise<void> {
   try {
     await syncNow();
   } catch {
-    throw new PvpError(`${NO_SERVER}: войско не сохранилось на сервере, итог набега не засчитали бы. Проверь интернет и попробуй ещё раз.`, 0);
+    throw new PvpError(t('{0}: войско не сохранилось на сервере, итог набега не засчитали бы. Проверь интернет и попробуй ещё раз.', { 0: NO_SERVER }), 0);
   }
 }
 

@@ -83,5 +83,5 @@ export const HINT_GAP_MS = 9000;
 /** Сказать ли подсказку позы: только новую, не слишком часто и не про «встань в кадр» каждые секунды. */
 export function hintLine(hint: string | null, prevHint: string | null, msSinceLastHint: number): Line | null {
   if (!hint || hint === prevHint || msSinceLastHint < HINT_GAP_MS) return null;
-  return { text: hint.replace(/^Повтор не засчитан: /, 'Не засчитал: ').replace(/^Rep didn't count: /, "Didn't count: "), important: false };
+  return { text: hint.replace(/^Повтор не засчитан: /, t('Не засчитал: ')).replace(/^Rep didn't count: /, "Didn't count: "), important: false };
 }

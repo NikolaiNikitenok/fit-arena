@@ -38,6 +38,7 @@ import type { Progress } from '../progress';
 import { dayKey } from '../progress';
 import { landDef, seededRng, type MonsterShape } from './lands';
 import { createBoard, GEM_KINDS, type Board, type BlockKind, type Cell, type Counts, finale, type Finale, type GemKind, type Pos, type Special, type SwapResult, trySwap } from './engine';
+import { t } from '../../i18n';
 
 export const FLOOR_COST = 20;
 export const LAND_COUNT = 10;
@@ -133,15 +134,15 @@ function makeFloor(id: number): FloorDef {
   const endless = id > FLOOR_COUNT;
   // Уровень сложности препятствий: земли 1–10 как раньше, дальше — как на десятой и глубже.
   const tier = Math.min(land, LAND_COUNT - 1);
-  const t = endlessDepth(id);
+  const tm = endlessDepth(id);
   const pattern = endless ? ENDLESS_PATTERNS[Math.floor(seededRng(land * 31 + 5)() * ENDLESS_PATTERNS.length)] : PATTERN;
   const goal = boss ? 'monster' : pattern[num - 1];
   const L = landDef(land);
   const seed = (id * 7919 + 13) >>> 0;
   const rnd = seededRng(seed);
   // Здоровье: +0,6% за этаж до сотого (×1,594), дальше — ещё до +30% с потолком.
-  const hpScale = (1 + 0.006 * (Math.min(id, FLOOR_COUNT) - 1)) * (id === 1 ? 0.7 : 1) * (1 + ENDLESS_HP * t);
-  const atkScale = 1 + ENDLESS_ATK * t;
+  const hpScale = (1 + 0.006 * (Math.min(id, FLOOR_COUNT) - 1)) * (id === 1 ? 0.7 : 1) * (1 + ENDLESS_HP * tm);
+  const atkScale = 1 + ENDLESS_ATK * tm;
   const atkId = Math.min(id, FLOOR_COUNT);
   const [name, shape, color] = boss ? L.boss : L.monsters[(num - 1) % L.monsters.length];
   let monster: Monster | undefined;
@@ -173,8 +174,8 @@ function makeFloor(id: number): FloorDef {
   };
   if (goal === 'crates') {
     // Ящики посередине, с третьей земли — и валуны; за сотым этажом их до 12 и валунов больше.
-    const n = 6 + Math.min(4, Math.floor(tier / 2)) + Math.round(t);
-    const every = t > 0.5 ? 2 : 3;
+    const n = 6 + Math.min(4, Math.floor(tier / 2)) + Math.round(tm);
+    const every = tm > 0.5 ? 2 : 3;
     for (let i = 0; i < n; i++) {
       const p = place(2, 6);
       if (p) blocks.push({ ...p, kind: tier >= 2 && i % every === 0 ? 'boulder' : 'crate' });
@@ -182,8 +183,8 @@ function makeFloor(id: number): FloorDef {
   }
   if (goal === 'ice') {
     // Лёд внизу: там больше каскадов. С пятой земли часть клеток — в два слоя, глубже — чаще.
-    const n = 6 + Math.min(2, Math.floor(tier / 4)) + Math.round(2 * t);
-    const every = t > 0.8 ? 2 : t > 0.4 ? 3 : 4;
+    const n = 6 + Math.min(2, Math.floor(tier / 4)) + Math.round(2 * tm);
+    const every = tm > 0.8 ? 2 : tm > 0.4 ? 3 : 4;
     for (let i = 0; i < n; i++) {
       const p = place(4, 7, 1, 6);
       if (p) ice.push({ ...p, layers: tier >= 6 && i % every === 0 ? 2 : 1 });
@@ -191,13 +192,13 @@ function makeFloor(id: number): FloorDef {
   }
   // Глубже — пара валунов и на боевых этажах.
   if ((goal === 'monster' || goal === 'survive') && tier >= 3) {
-    for (let i = 0; i < Math.min(4, tier - 2) + (boss ? 0 : Math.round(t)); i++) {
+    for (let i = 0; i < Math.min(4, tier - 2) + (boss ? 0 : Math.round(tm)); i++) {
       const p = place(3, 5);
       if (p) blocks.push({ ...p, kind: 'boulder' });
     }
   }
   const res = endless ? RESOURCES[Math.floor(seededRng(seed ^ 0x5bd1e995)() * RESOURCES.length)] : COLLECT_RES[num];
-  const collect = goal === 'collect' && res ? { res, n: Math.round((res === 'gold' ? 18 : 20) + tier * 1.2 + 3 * t) } : undefined;
+  const collect = goal === 'collect' && res ? { res, n: Math.round((res === 'gold' ? 18 : 20) + tier * 1.2 + 3 * tm) } : undefined;
   return { id, land, num, boss, goal, moves, monster, collect, blocks, ice, seed };
 }
 
@@ -217,17 +218,17 @@ export const floorDef = (id: number): FloorDef => {
 };
 
 export const GOAL_TEXT: Record<GoalKind, string> = {
-  monster: 'Победи чудовище',
-  collect: 'Собери ресурс',
-  ice: 'Разбей весь лёд',
-  crates: 'Разбей ящики и валуны',
-  survive: 'Продержись до конца',
+  monster: t('Победи чудовище'),
+  collect: t('Собери ресурс'),
+  ice: t('Разбей весь лёд'),
+  crates: t('Разбей ящики и валуны'),
+  survive: t('Продержись до конца'),
 };
 
 export function goalText(f: FloorDef): string {
-  if (f.boss) return `Хранитель: ${f.monster!.name}`;
-  if (f.goal === 'collect' && f.collect) return `Собери ${f.collect.n} ${f.collect.res === 'wood' ? 'дерева' : f.collect.res === 'stone' ? 'камня' : 'золота'}`;
-  if (f.goal === 'survive') return `Продержись ${f.moves} ходов`;
+  if (f.boss) return t('Хранитель: {0}', { 0: f.monster!.name });
+  if (f.goal === 'collect' && f.collect) return t('Собери {0} {1}', { 0: f.collect.n, 1: f.collect.res === 'wood' ? t('дерева') : f.collect.res === 'stone' ? t('камня') : t('золота') });
+  if (f.goal === 'survive') return t('Продержись {0} ходов', { 0: f.moves });
   return GOAL_TEXT[f.goal];
 }
 

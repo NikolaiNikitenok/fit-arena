@@ -10,6 +10,7 @@ import { heroLevel, heroXp, type Progress } from '../game/progress';
 import { villageOf } from '../game/resources';
 import { hasTown, packBase, townOf, withTown } from './state';
 import type { DefenseEntry } from './types';
+import { t } from '../i18n';
 
 export const NPC_LOOT_MUL = 0.5;
 const H = 3600_000;
@@ -29,15 +30,15 @@ export function knyazDeploys(army: BattleArmy, seed: number): Deploy[] {
   };
   const order: TroopId[] = ['giant', 'wallbreaker', 'warrior', 'archer', 'healer'];
   const out: Deploy[] = [];
-  let t = 0;
+  let tm = 0;
   let k = 0;
   for (const id of order) {
     for (let n = 0; n < (army.troops[id] ?? 0); n++) {
       const [x, y] = at(k++);
-      out.push({ t, u: id, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
-      t += 2;
+      out.push({ t: tm, u: id, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+      tm += 2;
     }
-    t += 20;
+    tm += 20;
   }
   return out;
 }
@@ -48,18 +49,18 @@ export function dueRaid(p: Progress, now: number): Progress | null {
   const v = villageOf(p);
   const at = v.raidAt;
   if (at == null || now < at) return null;
-  const t = townOf(p);
-  const th = thLevel(t);
+  const tm = townOf(p);
+  const th = thLevel(tm);
   const seed = Math.floor(at / 1000) | 0;
   if (th < 2) return { ...p, village: { ...v, raidAt: nextRaidAt(now, seed) } };
   const army = knyazArmy(th);
   // Герой охраняет деревню и от лентяев Князя.
-  const base = baseOf(t, p.days ? heroLevel(heroXp(p)).level : null);
+  const base = baseOf(tm, p.days ? heroLevel(heroXp(p)).level : null);
   const deploys = knyazDeploys(army, seed);
-  const loot = lootAvailable(t, at, NPC_LOOT_MUL);
+  const loot = lootAvailable(tm, at, NPC_LOOT_MUL);
   const r = simulateBattle({ base, army, deploys, loot, seed });
-  const lost = withTown(p, applyLoss(t, r.loot, at));
-  const entry: DefenseEntry = { at, who: 'Лентяи Князя Дивана', stars: r.stars, pct: r.destruction, loot: r.loot, avail: loot, seed, army, deploys, base: packBase(base), hero: base.hero };
+  const lost = withTown(p, applyLoss(tm, r.loot, at));
+  const entry: DefenseEntry = { at, who: t('Лентяи Князя Дивана'), stars: r.stars, pct: r.destruction, loot: r.loot, avail: loot, seed, army, deploys, base: packBase(base), hero: base.hero };
   return { ...lost, village: { ...villageOf(lost), log: addLog(v.log, entry), raidAt: nextRaidAt(now, seed) } };
 }
 

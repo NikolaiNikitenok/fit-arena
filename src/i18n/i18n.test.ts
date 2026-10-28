@@ -6,6 +6,7 @@ import { pl, setLangForTest, t } from './index';
 
 // Все строки, что код переводит через t('…'), должны быть в английском словаре, с теми же подстановками.
 const SRC = join(__dirname, '..');
+const SHARED = join(__dirname, '../../shared');
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
     const p = join(dir, f);
@@ -14,7 +15,7 @@ function files(dir: string): string[] {
   });
 }
 const KEY = /\bt\('((?:[^'\\]|\\.)*)'/g;
-const keys = new Set(files(SRC).flatMap((f) => [...readFileSync(f, 'utf8').matchAll(KEY)].map((m) => m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'))));
+const keys = new Set([...files(SRC), ...files(SHARED)].flatMap((f) => [...readFileSync(f, 'utf8').matchAll(KEY)].map((m) => m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'))));
 const slots = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
 
 describe('английский перевод', () => {

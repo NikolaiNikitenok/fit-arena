@@ -71,7 +71,7 @@ export function UpdateBanner() {
           </div>
           <div className="upd-titles">
             <div className="upd-kicker">{mode === 'update' ? t('Вышло обновление') : t('Игра обновилась')}</div>
-            <div className="upd-title">{entries.length === 1 ? entries[0].title : entries.length ? t('Что нового') : t('Улучшения и исправления')}</div>
+            <div className="upd-title">{entries.length === 1 ? t(entries[0].title) : entries.length ? t('Что нового') : t('Улучшения и исправления')}</div>
           </div>
           {mode === 'fresh' && (
             <button className="upd-x" aria-label={t('Закрыть')} onClick={() => close(() => setFresh([]))}>
@@ -83,11 +83,11 @@ export function UpdateBanner() {
           <div className="upd-list">
             {entries.map((e) => (
               <div key={e.n} className="upd-entry">
-                {entries.length > 1 && <div className="upd-entry-title">{e.title}</div>}
+                {entries.length > 1 && <div className="upd-entry-title">{t(e.title)}</div>}
                 {e.items.map((it, i) => (
                   <div key={i} className="upd-item">
                     <Check size={14} />
-                    <span>{it}</span>
+                    <span>{t(it)}</span>
                   </div>
                 ))}
               </div>
@@ -140,11 +140,11 @@ export function ChangesList({ entries }: { entries: ChangeEntry[] }) {
       {entries.map((e) => (
         <div key={e.n} className="upd-history-entry">
           <div className="upd-history-date">{new Date(e.date + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-          <div className="upd-history-title">{e.title}</div>
+          <div className="upd-history-title">{t(e.title)}</div>
           {e.items.map((it, i) => (
             <div key={i} className="upd-item">
               <Check size={14} />
-              <span>{it}</span>
+              <span>{t(it)}</span>
             </div>
           ))}
         </div>

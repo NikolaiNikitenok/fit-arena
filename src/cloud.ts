@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
 import { guestId, setMaxBot, tg } from './telegram';
 import { reportError } from './telemetry';
+import { t } from './i18n';
 
 const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId() });
 
@@ -245,7 +246,7 @@ export async function giftTrial(forId: string): Promise<void> {
       listeners.forEach((fn) => fn(cloud!));
     }
   } catch (e) {
-    throw new Error((e as { body?: { error?: string } }).body?.error ?? 'Нет связи с сервером');
+    throw new Error((e as { body?: { error?: string } }).body?.error ?? t('Нет связи с сервером'));
   }
 }
 

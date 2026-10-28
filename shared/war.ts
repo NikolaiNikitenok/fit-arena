@@ -19,6 +19,7 @@
 // прошлых войнах (без истории — WAR_GHOST_BASE), очки она набирает ровно по ходу выходных.
 // Призрака получает тот, кому он не доставался на прошлой неделе, из таких — самый слабый.
 import { raidWindow } from './raid';
+import { t } from '../src/i18n';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -32,16 +33,16 @@ export const WAR_MIN_POINTS = 30;
 export const WAR_PAIR_BEFORE = 5 * HOUR;
 export const WAR_GHOST_BASE = 150;
 export const WAR_GHOST_ID = 'ghost';
-export const WAR_GHOST = { name: 'Дружина Князя Дивана', tag: 'ДИВ', flag: '10.4.6.7', level: 0 };
+export const WAR_GHOST = { name: t('Дружина Князя Дивана'), tag: t('ДИВ'), flag: '10.4.6.7', level: 0 };
 // Бойцы призрачной дружины и их доли в общем счёте.
 export const GHOST_FIGHTERS: [string, number][] = [
-  ['Князь Диван', 0.24],
-  ['Тень Дивана', 0.2],
-  ['Обжора Пончик', 0.17],
-  ['Король Прокрастин', 0.14],
-  ['Великан Лень', 0.11],
-  ['Сонный Плед', 0.08],
-  ['Барон Пульт', 0.06],
+  [t('Князь Диван'), 0.24],
+  [t('Тень Дивана'), 0.2],
+  [t('Обжора Пончик'), 0.17],
+  [t('Король Прокрастин'), 0.14],
+  [t('Великан Лень'), 0.11],
+  [t('Сонный Плед'), 0.08],
+  [t('Барон Пульт'), 0.06],
 ];
 
 export interface WarWindow {
@@ -64,7 +65,7 @@ export function warWindow(now: number): WarWindow {
 export const warStartOf = (key: string) => Date.parse(`${key}T00:00:00+03:00`);
 export const warEndOf = (key: string) => warStartOf(key) + 2 * DAY;
 
-export const dayMsk = (t: number) => new Date(t + MSK).toISOString().slice(0, 10);
+export const dayMsk = (tm: number) => new Date(tm + MSK).toISOString().slice(0, 10);
 
 /** Счёт стороны: сумма n лучших участников. */
 export function warScore(points: Record<string, number>, n: number): number {

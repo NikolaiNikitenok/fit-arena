@@ -5,6 +5,7 @@ import { bossDrop, type Gear, itemById, type Item, type PotionId } from './items
 import { cycleOf, FIRST_YEAR, HOLIDAYS, type HolidayDef, holidayKey, holidayOutfitId } from './holidayDefs';
 import { LAND_SIZE, LEVEL_COUNT, LEVELS } from './levels';
 import { addPotions, currentLevel, dayKey, type Progress, saveProgress } from './progress';
+import { t } from '../i18n';
 
 export interface HolidayState {
   key: string;
@@ -120,29 +121,29 @@ export function claimHoliday(p: Progress, at: number, now: number): HolidayClaim
   let gear: Gear | undefined;
   if ('coins' in step) {
     next.coins = p.coins + step.coins;
-    label = `+${step.coins} монет`;
+    label = t('+{0} монет', { 0: step.coins });
   } else if ('potion' in step) {
     next.potions = addPotions(p.potions, step.potion, step.n);
-    label = step.potion === 'vigor' ? `Зелья жизни ×${step.n}` : `Эликсиры силы ×${step.n}`;
+    label = step.potion === 'vigor' ? t('Зелья жизни ×{0}', { 0: step.n }) : t('Эликсиры силы ×{0}', { 0: step.n });
   } else if ('chest' in step) {
     // Праздничный сундук: вещь уровня дальних земель или монеты, если всё уже собрано.
     const land = Math.floor((currentLevel(p, LEVEL_COUNT) - 1) / LAND_SIZE);
     gear = bossDrop(Math.min(LEVELS[LEVELS.length - 1].land, land + 3), p.items);
     if (gear) next.items = [...p.items, gear.id];
     else next.coins = p.coins + 500;
-    label = gear ? `Праздничный сундук: ${gear.name}` : 'Праздничный сундук: +500 монет';
+    label = gear ? t('Праздничный сундук: {0}', { 0: gear.name }) : t('Праздничный сундук: +500 монет');
   } else if ('title' in step) {
     // Титул сразу надевается и считается забранным достижением: монет за него нет, он сам награда.
     const id = holidayTitleId(w.key);
     next.achClaimed = [...new Set([...(p.achClaimed ?? []), id])];
     next.achSeen = [...new Set([...(p.achSeen ?? []), id])];
     next.title = id;
-    label = `Титул «${holidayTitleName(w)}»`;
+    label = t('Титул «{0}»', { 0: holidayTitleName(w) });
   } else {
     const outfit = holidayOutfit(w);
     if (!p.items.includes(outfit.id)) next.items = [...p.items, outfit.id];
     next.equipped = outfit.id;
-    label = `Облик «${outfit.name}»`;
+    label = t('Облик «{0}»', { 0: outfit.name });
   }
   return { progress: saveProgress(next), label, gear };
 }

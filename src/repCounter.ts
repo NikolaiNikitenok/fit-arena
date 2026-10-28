@@ -1,9 +1,9 @@
 // Подсчёт повторов по ключевым точкам MediaPipe Pose (33 точки, координаты 0..1).
 // Планка — не повторы, а секунды в правильной позе: её считает PlankTimer.
+import { t } from './i18n';
 
 // Упражнения на повторы: только они годятся для дуэлей, рейда и боя с тренером.
 export type RepExercise = 'pushup' | 'squat' | 'situp';
-import { t } from './i18n';
 export type Exercise = RepExercise | 'plank';
 
 export const REP_EXERCISES: RepExercise[] = ['squat', 'pushup', 'situp'];

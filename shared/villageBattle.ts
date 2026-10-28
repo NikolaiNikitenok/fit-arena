@@ -27,6 +27,7 @@
  */
 import { BUILDINGS, Bld, BuildingType, GRID, isTrap, NO_RES, Res, RES_KEYS, sizeOf, hpOf, thLevel, type Town } from './village';
 import { CRY, GUARD, isSkill, QUAKE, RAGE, SkillId, skillsFor, SQUAD, STORM } from './heroSkills';
+import { t } from '../src/i18n';
 
 export type TroopId = 'warrior' | 'archer' | 'giant' | 'wallbreaker' | 'healer';
 export type UnitKind = TroopId | 'hero';
@@ -59,19 +60,19 @@ export interface TroopDef {
 }
 
 export const TROOPS: Record<TroopId, TroopDef> = {
-  warrior: { id: 'warrior', name: 'Воин', desc: 'Крепкий и дешёвый. Бьёт ближайшую постройку.', hp: 70, damage: 10, every: 1, range: 0.9, speed: 1.6, housing: 1, cost: { gold: 10 }, train: 15, unlock: 1, prefer: 'any' },
-  archer: { id: 'archer', name: 'Лучник', desc: 'Стреляет издалека, даже через стены. Хрупкий.', hp: 30, damage: 8, every: 1, range: 3.5, speed: 1.8, housing: 1, cost: { gold: 15, wood: 5 }, train: 20, unlock: 2, prefer: 'any' },
-  giant: { id: 'giant', name: 'Великан', desc: 'Принимает удары на себя и идёт прямо к башням.', hp: 400, damage: 21, every: 1.5, range: 1, speed: 1, housing: 5, cost: { gold: 80, stone: 30 }, train: 90, unlock: 3, prefer: 'defense' },
-  wallbreaker: { id: 'wallbreaker', name: 'Подрывник', desc: 'Бежит к стене и взрывает её вместе с собой.', hp: 25, damage: 12, every: 1, range: 0.5, speed: 2.4, housing: 2, cost: { gold: 40 }, train: 45, unlock: 4, prefer: 'wall', splash: 1.5, wallMul: 40 },
-  healer: { id: 'healer', name: 'Целитель', desc: 'Летит над стенами и лечит отряды рядом с собой.', hp: 120, damage: 0, every: 1, range: 3, speed: 1.4, housing: 8, cost: { gold: 160, wood: 60 }, train: 180, unlock: 5, prefer: 'heal', heal: 18, flying: true },
+  warrior: { id: 'warrior', name: t('Воин'), desc: t('Крепкий и дешёвый. Бьёт ближайшую постройку.'), hp: 70, damage: 10, every: 1, range: 0.9, speed: 1.6, housing: 1, cost: { gold: 10 }, train: 15, unlock: 1, prefer: 'any' },
+  archer: { id: 'archer', name: t('Лучник'), desc: t('Стреляет издалека, даже через стены. Хрупкий.'), hp: 30, damage: 8, every: 1, range: 3.5, speed: 1.8, housing: 1, cost: { gold: 15, wood: 5 }, train: 20, unlock: 2, prefer: 'any' },
+  giant: { id: 'giant', name: t('Великан'), desc: t('Принимает удары на себя и идёт прямо к башням.'), hp: 400, damage: 21, every: 1.5, range: 1, speed: 1, housing: 5, cost: { gold: 80, stone: 30 }, train: 90, unlock: 3, prefer: 'defense' },
+  wallbreaker: { id: 'wallbreaker', name: t('Подрывник'), desc: t('Бежит к стене и взрывает её вместе с собой.'), hp: 25, damage: 12, every: 1, range: 0.5, speed: 2.4, housing: 2, cost: { gold: 40 }, train: 45, unlock: 4, prefer: 'wall', splash: 1.5, wallMul: 40 },
+  healer: { id: 'healer', name: t('Целитель'), desc: t('Летит над стенами и лечит отряды рядом с собой.'), hp: 120, damage: 0, every: 1, range: 3, speed: 1.4, housing: 8, cost: { gold: 160, wood: 60 }, train: 180, unlock: 5, prefer: 'heal', heal: 18, flying: true },
 };
 
 export const heroDef = (level: number): TroopDef => {
   const l = Math.max(1, Math.min(60, Math.floor(level)));
-  return { id: 'hero', name: 'Герой', desc: 'Твой герой. Один на бой, обучать не нужно.', hp: 250 + 15 * l, damage: 20 + l, every: 1, range: 1, speed: 1.5, housing: 0, cost: {}, train: 0, unlock: 1, prefer: 'any' };
+  return { id: 'hero', name: t('Герой'), desc: t('Твой герой. Один на бой, обучать не нужно.'), hp: 250 + 15 * l, damage: 20 + l, every: 1, range: 1, speed: 1.5, housing: 0, cost: {}, train: 0, unlock: 1, prefer: 'any' };
 };
 
-export const UNIT_NAMES: Record<UnitKind, string> = { warrior: 'Воин', archer: 'Лучник', giant: 'Великан', wallbreaker: 'Подрывник', healer: 'Целитель', hero: 'Герой' };
+export const UNIT_NAMES: Record<UnitKind, string> = { warrior: t('Воин'), archer: t('Лучник'), giant: t('Великан'), wallbreaker: t('Подрывник'), healer: t('Целитель'), hero: t('Герой') };
 
 // Мест в лагере по уровню казарм.
 export const ARMY_CAP = [20, 30, 40, 50, 65, 80, 100, 120];
@@ -81,9 +82,9 @@ export const LEVEL_BONUS = 0.15;
 export const levelMul = (level: number | undefined) => 1 + LEVEL_BONUS * (Math.max(1, level ?? 1) - 1);
 /** Во сколько раз отряд в бою сильнее базового: казармы × уровень отряда. */
 export const unitMul = (army: Pick<BattleArmy, 'level' | 'lv'>, id: TroopId) => troopMul(army.level) * levelMul(army.lv?.[id]);
-export const barracksLevel = (t: Pick<Town, 'b'>) => Math.max(0, ...t.b.filter((b) => b.t === 'barracks').map((b) => b.l));
-export const armyCap = (t: Pick<Town, 'b'>) => {
-  const l = barracksLevel(t);
+export const barracksLevel = (tm: Pick<Town, 'b'>) => Math.max(0, ...tm.b.filter((b) => b.t === 'barracks').map((b) => b.l));
+export const armyCap = (tm: Pick<Town, 'b'>) => {
+  const l = barracksLevel(tm);
   return l >= 1 ? ARMY_CAP[l - 1] : 0;
 };
 export const housingOf = (army: Partial<Record<TroopId, number>>) => TROOP_IDS.reduce((s, id) => s + (army[id] ?? 0) * TROOPS[id].housing, 0);
@@ -91,43 +92,43 @@ export const housingOf = (army: Partial<Record<TroopId, number>>) => TROOP_IDS.r
 // ── Обучение ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Обученные к моменту now отряды переходят из очереди в лагерь. */
-export function finishTraining<T extends Town>(t: T, now: number): T {
-  if (!t.q.length || t.q[0].end > now) return t;
-  const army = { ...t.army };
-  const q = t.q.filter((e) => {
+export function finishTraining<T extends Town>(tm: T, now: number): T {
+  if (!tm.q.length || tm.q[0].end > now) return tm;
+  const army = { ...tm.army };
+  const q = tm.q.filter((e) => {
     if (e.end > now) return true;
     army[e.t] = (army[e.t] ?? 0) + 1;
     return false;
   });
-  return { ...t, army, q };
+  return { ...tm, army, q };
 }
 
 export type TrainError = 'locked' | 'space' | 'cost';
-export const TRAIN_ERRORS: Record<TrainError, string> = { locked: 'Нужны казармы выше уровнем.', space: 'В лагере нет мест.', cost: 'Не хватает ресурсов.' };
+export const TRAIN_ERRORS: Record<TrainError, string> = { locked: t('Нужны казармы выше уровнем.'), space: t('В лагере нет мест.'), cost: t('Не хватает ресурсов.') };
 
 /** Поставить отряд в очередь: ресурсы списываются сразу, места считаются вместе с очередью. */
-export function train<T extends Town>(t: T, id: TroopId, now: number): T | TrainError {
+export function train<T extends Town>(tm: T, id: TroopId, now: number): T | TrainError {
   const def = TROOPS[id];
-  if (barracksLevel(t) < def.unlock) return 'locked';
-  const queued = t.q.reduce((s, e) => s + TROOPS[e.t].housing, 0);
-  if (housingOf(t.army) + queued + def.housing > armyCap(t)) return 'space';
+  if (barracksLevel(tm) < def.unlock) return 'locked';
+  const queued = tm.q.reduce((s, e) => s + TROOPS[e.t].housing, 0);
+  if (housingOf(tm.army) + queued + def.housing > armyCap(tm)) return 'space';
   const cost = { ...NO_RES, ...def.cost };
-  if (!RES_KEYS.every((k) => t.res[k] >= cost[k])) return 'cost';
-  const start = Math.max(now, t.q.length ? t.q[t.q.length - 1].end : now);
-  return { ...t, res: { wood: t.res.wood - cost.wood, stone: t.res.stone - cost.stone, gold: t.res.gold - cost.gold }, q: [...t.q, { t: id, end: start + def.train * 1000 }] };
+  if (!RES_KEYS.every((k) => tm.res[k] >= cost[k])) return 'cost';
+  const start = Math.max(now, tm.q.length ? tm.q[tm.q.length - 1].end : now);
+  return { ...tm, res: { wood: tm.res.wood - cost.wood, stone: tm.res.stone - cost.stone, gold: tm.res.gold - cost.gold }, q: [...tm.q, { t: id, end: start + def.train * 1000 }] };
 }
 
 /** Убрать последний такой отряд из очереди с возвратом цены. */
-export function untrain<T extends Town>(t: T, id: TroopId): T {
-  const i = t.q.map((e) => e.t).lastIndexOf(id);
-  if (i < 0) return t;
+export function untrain<T extends Town>(tm: T, id: TroopId): T {
+  const i = tm.q.map((e) => e.t).lastIndexOf(id);
+  if (i < 0) return tm;
   const cost = { ...NO_RES, ...TROOPS[id].cost };
-  const q = t.q.slice();
+  const q = tm.q.slice();
   const [gone] = q.splice(i, 1);
   // Отряды после него выйдут раньше.
   const shift = TROOPS[gone.t].train * 1000;
   for (let k = i; k < q.length; k++) q[k] = { ...q[k], end: q[k].end - shift };
-  return { ...t, q, res: { wood: t.res.wood + cost.wood, stone: t.res.stone + cost.stone, gold: t.res.gold + cost.gold } };
+  return { ...tm, q, res: { wood: tm.res.wood + cost.wood, stone: tm.res.stone + cost.stone, gold: tm.res.gold + cost.gold } };
 }
 
 // ── Бой ───────────────────────────────────────────────────────────────────────────────────────────
@@ -196,8 +197,8 @@ export interface BattleResult {
 }
 
 /** Раскладка защитника из его деревни: недостроенное в бою не участвует. hero — уровень героя-защитника. */
-export const baseOf = (t: Pick<Town, 'b'>, hero?: number | null): BattleBase => {
-  const base: BattleBase = { buildings: t.b.filter((b) => b.l >= 1).map((b: Bld) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l })) };
+export const baseOf = (tm: Pick<Town, 'b'>, hero?: number | null): BattleBase => {
+  const base: BattleBase = { buildings: tm.b.filter((b) => b.l >= 1).map((b: Bld) => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l })) };
   if (hero && hero >= 1) base.hero = Math.min(60, Math.floor(hero));
   return base;
 };
@@ -286,10 +287,10 @@ export interface BattleState {
 // mulberry32: целочисленный генератор, одинаковый везде.
 function rand(s: BattleState): number {
   s.rng = (s.rng + 0x6d2b79f5) | 0;
-  let t = s.rng;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  let tm = s.rng;
+  tm = Math.imul(tm ^ (tm >>> 15), tm | 1);
+  tm ^= tm + Math.imul(tm ^ (tm >>> 7), tm | 61);
+  return ((tm ^ (tm >>> 14)) >>> 0) / 4294967296;
 }
 
 const cellIdx = (cx: number, cy: number) => (cy + MARGIN) * FIELD + (cx + MARGIN);
@@ -469,11 +470,11 @@ function chooseTarget(s: BattleState, u: SimUnit): number {
     });
     return best;
   };
-  let t = -1;
-  if (pref === 'defense') t = pick((b) => !!BUILDINGS[b.t].defense);
-  else if (pref === 'wall') t = pick((b) => b.wall);
-  if (t < 0) t = pick((b) => !b.wall);
-  return t;
+  let tm = -1;
+  if (pref === 'defense') tm = pick((b) => !!BUILDINGS[b.t].defense);
+  else if (pref === 'wall') tm = pick((b) => b.wall);
+  if (tm < 0) tm = pick((b) => !b.wall);
+  return tm;
 }
 
 // Двоичная куча по ключу (f, номер клетки): одинаковый порядок обхода везде.
@@ -806,20 +807,20 @@ function stepKeeper(s: BattleState) {
 
 /** Ловушки: срабатывают под первым наземным отрядом, который к ним подошёл. */
 function stepTraps(s: BattleState) {
-  for (const t of s.traps) {
-    if (t.fired >= 0) continue;
-    const def = BUILDINGS[t.t].trap!;
-    const cx = t.x + 0.5;
-    const cy = t.y + 0.5;
+  for (const tm of s.traps) {
+    if (tm.fired >= 0) continue;
+    const def = BUILDINGS[tm.t].trap!;
+    const cx = tm.x + 0.5;
+    const cy = tm.y + 0.5;
     const who = s.units.find((u) => u.alive && !u.def.flying && dist(u.x, u.y, cx, cy) <= def.trigger);
     if (!who) continue;
-    t.fired = s.tick;
-    const dmg = def.damage[t.l - 1];
+    tm.fired = s.tick;
+    const dmg = def.damage[tm.l - 1];
     if (def.splash) {
       for (const u of s.units) if (u.alive && !u.def.flying && dist(u.x, u.y, cx, cy) <= def.splash) damageUnit(s, u, dmg);
       s.fx.push({ k: 'boom', x0: cx, y0: cy, x1: cx, y1: cy });
     } else {
-      who.root = s.tick + (def.hold?.[t.l - 1] ?? 0);
+      who.root = s.tick + (def.hold?.[tm.l - 1] ?? 0);
       damageUnit(s, who, dmg);
       s.fx.push({ k: 'snap', x0: cx, y0: cy, x1: who.x, y1: who.y });
     }
@@ -885,17 +886,17 @@ export function simulateBattle(input: BattleInput): BattleResult {
 export function validateDeploys(input: BattleInput): string | null {
   const left: Partial<Record<DeployKind, number>> = { ...input.army.troops, hero: input.army.hero ? 1 : 0 };
   for (const k of skillsFor(input.army.hero)) left[k] = 1;
-  if (input.deploys.length > 300) return 'слишком много высадок';
+  if (input.deploys.length > 300) return t('слишком много высадок');
   let heroAt = -1;
   for (const d of input.deploys) {
-    if (!Number.isInteger(d.t) || d.t < 0 || d.t > BATTLE_TICKS) return 'неверный тик';
-    if (!Number.isFinite(d.x) || !Number.isFinite(d.y)) return 'неверная точка';
+    if (!Number.isInteger(d.t) || d.t < 0 || d.t > BATTLE_TICKS) return t('неверный тик');
+    if (!Number.isFinite(d.x) || !Number.isFinite(d.y)) return t('неверная точка');
     const skill = isSkill(d.u);
-    if (!skill && !Object.prototype.hasOwnProperty.call(UNIT_NAMES, d.u)) return 'неизвестный отряд';
-    if ((left[d.u] = (left[d.u] ?? 0) - 1) < 0) return skill ? 'умение не открыто или уже было' : 'отрядов больше, чем есть';
+    if (!skill && !Object.prototype.hasOwnProperty.call(UNIT_NAMES, d.u)) return t('неизвестный отряд');
+    if ((left[d.u] = (left[d.u] ?? 0) - 1) < 0) return skill ? t('умение не открыто или уже было') : t('отрядов больше, чем есть');
     if (skill) {
-      if (heroAt < 0 || d.t < heroAt) return 'умение до высадки героя';
-    } else if (!canDeploy(input.base, d.x, d.y)) return 'высадка слишком близко к постройкам';
+      if (heroAt < 0 || d.t < heroAt) return t('умение до высадки героя');
+    } else if (!canDeploy(input.base, d.x, d.y)) return t('высадка слишком близко к постройкам');
     if (d.u === 'hero') heroAt = d.t;
   }
   return null;
