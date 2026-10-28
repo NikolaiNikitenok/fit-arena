@@ -121,6 +121,30 @@ function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', onCli
   );
 }
 
+/** Кнопка боковой колонки главной «во весь экран»: значок-плитка, подпись и точка. */
+function Side({ title, sub, icon, color, dot, onClick }: { title: string; sub?: string; icon: ReactNode; color: string; dot?: number | boolean; onClick: () => void }) {
+  return (
+    <button className="hv-btn" style={{ ['--c' as string]: color }} onClick={onClick}>
+      <span className="hv-ico">
+        {icon}
+        <Dot n={dot ?? 0} />
+      </span>
+      <b>{title}</b>
+      {sub && <small>{sub}</small>}
+    </button>
+  );
+}
+
+// Вид главной: «лента» (прокрутка) или «сцена» — герой во весь экран, кнопки по бокам, без прокрутки.
+// Пока прототип: включается в localStorage (home-layout = stage).
+const homeLayout = (): 'feed' | 'stage' => {
+  try {
+    return localStorage.getItem('home-layout') === 'stage' ? 'stage' : 'feed';
+  } catch {
+    return 'feed';
+  }
+};
+
 type Tone = 'accent' | 'gold' | 'mint' | 'teal' | 'blue' | 'violet' | 'rose' | 'pet';
 /** Плитка сетки «Ещё»: яркий значок-«иконка приложения» и подпись. */
 function More({ title, sub, icon, tone, dot, cls = '', style, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; onClick: () => void }) {
@@ -135,6 +159,13 @@ function More({ title, sub, icon, tone, dot, cls = '', style, onClick }: { title
     </button>
   );
 }
+
+/** Значок «все разделы»: четыре квадратика. */
+const MoreIcon = () => (
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+    {[3, 13].flatMap((x) => [3, 13].map((y) => <rect key={`${x}${y}`} x={x} y={y} width="8" height="8" rx="2.5" fill="currentColor" />))}
+  </svg>
+);
 
 /** Часы раз в 30 секунд: отсчёт события на плитке. */
 function useNow(ms = 30000) {
@@ -152,6 +183,8 @@ export function HeroHome(props: Props) {
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
   const [heroOpen, setHeroOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [layout] = useState(homeLayout);
   const badges = homeBadges(progress, daily, pro, now);
   const item = itemById(progress.equipped);
   const lvl = heroLevel(heroXp(progress));
@@ -222,25 +255,164 @@ export function HeroHome(props: Props) {
     <Feat color="#ffd27a" onClick={onAchievements} title="Достижения" sub={`${achGot.length} из ${achAll.length}`} bar={achAll.length ? achGot.length / achAll.length : 0} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={44} />} />
   );
 
-  return (
-    <div className="home hb">
-      <div className="app-head hb-head">
-        <button className="pill btn icon-only hb-hit" onClick={onSettings} aria-label="Настройки">
-          <Cog />
+  // Шапка: настройки, жизни, серия, монеты, заряд — одна на оба вида главной.
+  const head = (
+    <div className="app-head hb-head">
+      <button className="pill btn icon-only hb-hit" onClick={onSettings} aria-label="Настройки">
+        <Cog />
+      </button>
+      <div className="stats">
+        {lives}
+        <button className="pill btn hb-hit" onClick={onStrength} aria-label="Серия и сила">
+          <Flame className="flame" /> {series.days}
         </button>
-        <div className="stats">
-          {lives}
-          <button className="pill btn hb-hit" onClick={onStrength} aria-label="Серия и сила">
-            <Flame className="flame" /> {series.days}
-          </button>
-          <button className="pill btn hb-hit" onClick={() => onShop()} aria-label="Монеты: лавка">
-            <Coin className="coin" /> {progress.coins}
-          </button>
-          <button className="pill btn hb-hit" onClick={onDungeon} aria-label="Заряд подземелья">
-            <Bolt className="hb-bolt" /> {charge}
+        <button className="pill btn hb-hit" onClick={() => onShop()} aria-label="Монеты: лавка">
+          <Coin className="coin" /> {progress.coins}
+        </button>
+        <button className="pill btn hb-hit" onClick={onDungeon} aria-label="Заряд подземелья">
+          <Bolt className="hb-bolt" /> {charge}
+        </button>
+      </div>
+    </div>
+  );
+
+  // Полоса самого важного события сейчас (Титан, итоги, праздник).
+  const eventBanner = (
+    <>
+      {slot === 'titan' && titanShown && (
+        <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>
+          <MonsterFace shape="golem" color={titanShown.def.color} boss angry size={44} />
+          <span className="hb-titan-text">
+            <b>{titanShown.def.name}</b>
+            <small>{titanShown.live ? `Вся страна бьёт Титана · ещё ${fmtLeft(titanShown.end - now)}` : now < titanShown.start ? `Нападёт ${fmtDays(Math.ceil((titanShown.start - now) / 86_400_000))} — готовься` : 'Битва окончена: итоги и награда'}</small>
+          </span>
+          <Dot n={titanShown.live} />
+        </button>
+      )}
+
+      {slot === 'recap' && recapM && (
+        <button className="hb-recap" onClick={() => onRecap(recapM)}>
+          <span className="hb-recap-emoji">🎉</span>
+          <span className="hb-recap-text">
+            <b>Итоги {MONTHS_OF[Number(recapM.slice(5)) - 1]} готовы</b>
+            <small>Твой месяц в цифрах — посмотри и поделись</small>
+          </span>
+          <Dot n={progress.recapSeen !== recapM} />
+        </button>
+      )}
+
+      {slot === 'holiday' && (
+        <button className="hb-holiday" style={{ ['--hs1' as string]: hol.def.sky[0], ['--hs2' as string]: hol.def.sky[1], ['--hg' as string]: hol.def.glow }} onClick={onHoliday}>
+          <HolidayToken id={hol.def.id} size={30} />
+          <span className="hb-holiday-text">
+            <b>{hol.def.name}</b>
+            <small>{hol.live ? `${holTokens.toLocaleString('ru')} ${tokenWord(hol.def, holTokens)} · ещё ${fmtLeft(hol.end - now)}` : `праздник ${fmtDays(daysUntil({ ...hol, live: false }, now))}`}</small>
+            <span className="hb-holiday-bar">
+              <span style={{ width: `${Math.min(100, (holTokens / HOLIDAY_GOAL) * 100)}%` }} />
+            </span>
+          </span>
+          <OutfitFace id={holidayOutfit(hol).id} size={34} />
+          <Dot n={badges.holiday} />
+        </button>
+      )}
+    </>
+  );
+
+  // Главная «как в играх»: герой во весь экран на своём мире, главные разделы столбиками по бокам,
+  // внизу задание дня и бой. Остальное — под «Ещё». Без прокрутки.
+  if (layout === 'stage') {
+    const world = LANDS[current.land].world;
+    const moreDot = badges.achievements || (extra.includes('titan') && titanShown?.live) || (extra.includes('recap') && recapFresh);
+    return (
+      <div className="hv">
+        <div className="hv-stage" role="button" tabIndex={0} aria-label="Герой и снаряжение" onClick={() => setHeroOpen(true)} onKeyDown={(e) => e.key === 'Enter' && setHeroOpen(true)}>
+          <WorldBackdrop world={world} />
+          <Suspense fallback={null}>
+            <HeroStage progress={progress} world={world} far />
+          </Suspense>
+        </div>
+
+        <div className="hv-top">
+          {head}
+          {slot && <div className="hv-event">{eventBanner}</div>}
+        </div>
+
+        <div className="hv-col left">
+          <Side title="Пропуск" sub={`${passT.tier} из ${PASS_TIERS}`} color={pro ? '#ffd27a' : '#8fb3ff'} dot={badges.pass} onClick={onPass} icon={<PassShield size={34} gold={pro} label={passT.tier} />} />
+          {w.live ? (
+            <Side title="Событие" sub={ev.won ? 'победа!' : fmtLeft(w.end - now)} color={boss.glow} dot={badges.event} onClick={onEvent} icon={<Portrait line={bossFace} size={44} />} />
+          ) : (
+            <Side title="Награды" sub={`${achGot.length} из ${achAll.length}`} color="#ffd27a" dot={badges.achievements} onClick={onAchievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} />
+          )}
+          <Side title="Подземелье" sub={unfinished ? 'не доигран' : floors ? `×${floors}` : `${FLOOR_COST - charge} повт.`} color={land.accent} dot={badges.dungeon} onClick={onDungeon} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={42} />} />
+          <Side title="Программы" sub={prog && run ? `день ${run.day}` : 'план'} color="#ff8a5c" dot={badges.programs} onClick={onPrograms} icon={<Plan size={26} />} />
+        </div>
+
+        <div className="hv-col right">
+          <Side title="Лавка" sub="Фёдора" color="#ffd27a" onClick={() => onShop()} icon={<Bag size={26} />} />
+          <Side title={pet ? petName(progress, pet) : 'Питомец'} sub={pet ? `ур. ${petLvl}` : 'яйцо'} color="#ffb46b" dot={badges.pets} onClick={onPets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} />
+          <Side title="Друзья" sub="и вызовы" color="#ff6b81" onClick={onFriends} icon={<Users size={26} />} />
+          <Side title="Ещё" sub="все разделы" color="#a78bfa" dot={moreDot} onClick={() => setMoreOpen(true)} icon={<MoreIcon />} />
+        </div>
+
+        <button className={`hv-hero ${pro ? 'pro' : ''}`} onClick={() => setHeroOpen(true)}>
+          <span className="hero-level hb-level">
+            {lvl.level}
+            <small>ур.</small>
+          </span>
+          <span className="hb-hero-meta">
+            <span className="hb-hero-title">
+              <span className={pro ? 'pro-name' : ''}>{heroTitle(lvl.level)}</span>
+              {pro && <span className="pro-chip">PRO</span>}
+            </span>
+            <span className="xp-bar">
+              <span style={{ display: 'block', width: `${(lvl.into / lvl.need) * 100}%` }} />
+            </span>
+          </span>
+          <span className="chev">›</span>
+        </button>
+
+        <div className="hv-bottom">
+          <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
+          <button className="primary hb-cta" onClick={onTrain}>
+            <Swords size={24} />
+            <span className="hb-cta-text">
+              В бой
+              <small>
+                Уровень карты {current.num} · {current.title}
+              </small>
+            </span>
           </button>
         </div>
+
+        {moreOpen && (
+          <Sheet onClose={() => setMoreOpen(false)}>
+            <div className="level-title">Все разделы</div>
+            <div className="hb-more">
+              {extra.includes('titan') && titanShown && <More onClick={onTitan} title="Титан" sub={titanShown.live ? 'битва идёт' : now < titanShown.start ? fmtDays(Math.ceil((titanShown.start - now) / 86_400_000)) : 'итоги'} dot={titanShown.live} icon={<MonsterFace shape="golem" color={titanShown.def.color} boss size={40} />} tone="pet" />}
+              {extra.includes('holiday') && <More onClick={onHoliday} title={hol.def.name} sub={hol.live ? `ещё ${fmtLeft(hol.end - now)}` : fmtDays(daysUntil({ ...hol, live: false }, now))} dot={badges.holiday} icon={<HolidayToken id={hol.def.id} size={32} />} tone="pet" />}
+              {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title="Итоги" sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
+              <More onClick={() => setHeroOpen(true)} title="Вещи" sub="и зелья" icon={<Swords size={22} />} tone="accent" />
+              <More onClick={onStrength} title="Сила" sub="рекорды" icon={<Dumbbell size={22} />} tone="mint" />
+              <More onClick={onGym} title="Зал" sub={gym.run ? 'идёт' : gymToday ? 'сегодня' : 'дневник'} icon={<Kettlebell size={22} />} tone="teal" />
+              <More onClick={onCollections} title="Коллекции" sub={`${colsDone} из ${cols.length}`} icon={<Album size={22} />} tone="violet" />
+              <More onClick={onCity} title="Битва городов" sub="карта России" icon={<City size={22} />} tone="blue" />
+              {w.live ? (
+                <More onClick={onAchievements} title="Достижения" sub={`${achGot.length} из ${achAll.length}`} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} tone="pet" />
+              ) : (
+                <More onClick={onEvent} cls="hb-event-soon" style={{ ['--eg' as string]: boss.glow }} title="Событие" sub={fmtDays(daysUntil(w, now))} icon={<Portrait line={bossFace} size={40} />} tone="pet" />
+              )}
+            </div>
+          </Sheet>
+        )}
+        {heroOpen && <HeroSheet {...props} onClose={() => setHeroOpen(false)} />}
       </div>
+    );
+  }
+
+  return (
+    <div className="home hb">
+      {head}
 
       <div className={`hero-card hb-hero ${pro ? 'pro' : ''}`} role="button" tabIndex={0} aria-label="Герой и снаряжение" onClick={() => setHeroOpen(true)} onKeyDown={(e) => e.key === 'Enter' && setHeroOpen(true)}>
         <div className="hero-stage hb-stage">
@@ -286,42 +458,7 @@ export function HeroHome(props: Props) {
 
       <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
 
-      {slot === 'titan' && titanShown && (
-        <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>
-          <MonsterFace shape="golem" color={titanShown.def.color} boss angry size={44} />
-          <span className="hb-titan-text">
-            <b>{titanShown.def.name}</b>
-            <small>{titanShown.live ? `Вся страна бьёт Титана · ещё ${fmtLeft(titanShown.end - now)}` : now < titanShown.start ? `Нападёт ${fmtDays(Math.ceil((titanShown.start - now) / 86_400_000))} — готовься` : 'Битва окончена: итоги и награда'}</small>
-          </span>
-          <Dot n={titanShown.live} />
-        </button>
-      )}
-
-      {slot === 'recap' && recapM && (
-        <button className="hb-recap" onClick={() => onRecap(recapM)}>
-          <span className="hb-recap-emoji">🎉</span>
-          <span className="hb-recap-text">
-            <b>Итоги {MONTHS_OF[Number(recapM.slice(5)) - 1]} готовы</b>
-            <small>Твой месяц в цифрах — посмотри и поделись</small>
-          </span>
-          <Dot n={progress.recapSeen !== recapM} />
-        </button>
-      )}
-
-      {slot === 'holiday' && (
-        <button className="hb-holiday" style={{ ['--hs1' as string]: hol.def.sky[0], ['--hs2' as string]: hol.def.sky[1], ['--hg' as string]: hol.def.glow }} onClick={onHoliday}>
-          <HolidayToken id={hol.def.id} size={30} />
-          <span className="hb-holiday-text">
-            <b>{hol.def.name}</b>
-            <small>{hol.live ? `${holTokens.toLocaleString('ru')} ${tokenWord(hol.def, holTokens)} · ещё ${fmtLeft(hol.end - now)}` : `праздник ${fmtDays(daysUntil({ ...hol, live: false }, now))}`}</small>
-            <span className="hb-holiday-bar">
-              <span style={{ width: `${Math.min(100, (holTokens / HOLIDAY_GOAL) * 100)}%` }} />
-            </span>
-          </span>
-          <OutfitFace id={holidayOutfit(hol).id} size={34} />
-          <Dot n={badges.holiday} />
-        </button>
-      )}
+      {eventBanner}
 
       <div className="hb-feats">
         <Feat cls={`hb-dungeon ${unfinished || floors ? 'ready' : ''}`} color={land.accent} onClick={onDungeon} title="Подземелье" sub={unfinished ? `этаж ${floor.id} не доигран` : floors ? `этаж ${floor.id} · ×${floors}` : `ещё ${FLOOR_COST - charge} повт.`} bar={unfinished || floors ? 1 : charge / FLOOR_COST} dot={badges.dungeon} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={44} />} />

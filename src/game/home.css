@@ -128,3 +128,28 @@
 .hb-titan-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .hb-titan-text b { font-size: 15px; font-weight: 900; }
 .hb-titan-text small { font-size: 12px; color: var(--hint); font-weight: 700; }
+
+/* Главная «во весь экран» (вид stage): герой на мире, кнопки столбиками по бокам, бой внизу, без прокрутки. */
+.hv { position: fixed; top: 0; left: 0; right: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; overflow: hidden; background: var(--bg); }
+.hv-stage { position: absolute; inset: 0; cursor: pointer; }
+.hv-stage canvas { position: relative; z-index: 1; }
+.hv-stage .world-backdrop { opacity: .9; -webkit-mask-image: linear-gradient(180deg, #000 62%, transparent 100%); mask-image: linear-gradient(180deg, #000 62%, transparent 100%); }
+/* Затемнение сверху и снизу: кнопки и текст читаются поверх сцены. */
+.hv::before, .hv::after { content: ''; position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+.hv::before { top: 0; height: 150px; background: linear-gradient(180deg, rgba(13, 15, 23, .75), transparent); }
+.hv::after { bottom: 0; height: 230px; background: linear-gradient(0deg, rgba(13, 15, 23, .95) 30%, transparent); }
+.hv-top { position: absolute; z-index: 3; top: calc(var(--safe-top) + 10px); left: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
+.hv-event > button { padding-top: 7px; padding-bottom: 7px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.hv-col { position: absolute; z-index: 3; top: 50%; transform: translateY(-58%); display: flex; flex-direction: column; gap: 10px; }
+.hv-col.left { left: 8px; }
+.hv-col.right { right: 8px; }
+.hv-btn { --c: var(--accent); position: relative; width: 74px; padding: 0; border: 0; background: none; color: var(--text); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hv-btn:active .hv-ico { transform: scale(.92); }
+.hv-ico { position: relative; width: 54px; height: 54px; display: grid; place-items: center; border-radius: 18px; color: var(--c); background: radial-gradient(120% 120% at 30% 20%, color-mix(in srgb, var(--c) 30%, transparent), transparent 70%), rgba(13, 15, 23, .72); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); box-shadow: 0 6px 16px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: transform .12s ease; }
+.hv-ico .hb-dot { top: -3px; right: -3px; }
+.hv-btn b { font-size: 11.5px; font-weight: 900; line-height: 1.1; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+.hv-btn small { font-size: 10.5px; font-weight: 800; line-height: 1.05; color: color-mix(in srgb, var(--c) 55%, #dfe3ea); text-shadow: 0 1px 4px rgba(0, 0, 0, .8); white-space: nowrap; }
+.hv-hero { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); bottom: 168px; width: min(260px, calc(100% - 170px)); display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--glass-line); color: var(--text); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); text-align: left; }
+.hv-hero.pro { border-color: var(--pro-line); }
+.hv-hero .chev { color: var(--hint); font-size: 20px; }
+.hv-bottom { position: absolute; z-index: 3; left: 12px; right: 12px; bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
