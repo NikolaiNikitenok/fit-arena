@@ -211,6 +211,15 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
 }
 
 // Предмет из набора другого героя: берём меш вместе с его положением на кости руки.
+/** Обводка всех мешей предмета (оружие, щит) — уже прикреплённого к кости. */
+function outlineAll(obj: THREE.Object3D) {
+  const meshes: THREE.Mesh[] = [];
+  obj.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
+  obj.updateWorldMatrix(true, true);
+  // Оружие тоньше тела: обводка чуть толще, чтобы читалась наравне с ним.
+  meshes.forEach((m) => addOutline(m, 0.024));
+}
+
 function HandItem({ root, gear, outline }: { root: THREE.Object3D; gear: HandGear; outline: boolean }) {
   const src = useGltf(charUrl(gear.source));
   useEffect(() => {
@@ -219,6 +228,7 @@ function HandItem({ root, gear, outline }: { root: THREE.Object3D; gear: HandGea
       if (!bone) return;
       const item = gear.make();
       bone.add(item);
+      if (outline && outlinesOn()) outlineAll(item);
       return () => {
         bone.remove(item);
       };
@@ -248,13 +258,9 @@ function HandItem({ root, gear, outline }: { root: THREE.Object3D; gear: HandGea
       }
       m.material = mat;
     });
-    if (outline && outlinesOn()) {
-      const meshes: THREE.Mesh[] = [];
-      copy.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
-      copy.updateWorldMatrix(true, true);
-      meshes.forEach((m) => addOutline(m));
-    }
     bone.add(copy);
+    // Обводка — когда предмет уже в руке: его мировая величина зависит от скелета.
+    if (outline && outlinesOn()) outlineAll(copy);
     return () => {
       bone.remove(copy);
     };
