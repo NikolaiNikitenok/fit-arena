@@ -28,6 +28,7 @@ const TOGGLES: Record<string, { key: ToggleKey; title: string; text: string }> =
   dayNight: { key: 'dayNight', title: 'День и ночь в деревне', text: 'Деревня живёт по твоим часам: золотой вечер, ночью горят фонари. Без этого всегда светлый день.' },
   villageFx: { key: 'villageFx', title: 'Погода и эффекты деревни', text: 'Дождь и снег, светлячки, пыль от разрушений, летящие монеты и салют. Выключи, если телефон греется.' },
   flyIn: { key: 'flyIn', title: 'Пролёт над деревней', text: 'Камера плавно облетает деревню, когда ты в неё заходишь.' },
+  homeList: { key: 'homeList', title: 'Главная списком', text: 'Все разделы друг под другом, с прокруткой — как раньше. Без этого герой во весь экран, а кнопки по бокам.' },
   lowPower: { key: 'lowPower', title: 'Экономный режим', text: 'Без теней и сглаживания, 3D попроще и в меньшем разрешении. Помогает, если телефон слабый или греется. На слабых телефонах включается сам.' },
 };
 
@@ -56,7 +57,7 @@ type Tone = 'accent' | 'mint' | 'violet' | 'gold' | 'blue' | 'grey' | 'rose';
 
 const SOUND: ToggleKey[] = ['sound', 'music', 'voice', 'haptics'];
 const TRAINING: ToggleKey[] = ['guide', 'story', 'skeleton'];
-const GRAPHICS: ToggleKey[] = ['lowPower', 'dayNight', 'villageFx', 'flyIn'];
+const GRAPHICS: ToggleKey[] = ['lowPower', 'dayNight', 'villageFx', 'flyIn', 'homeList'];
 
 /**
  * Настройки: короткий список разделов, каждый открывается своей шторкой.

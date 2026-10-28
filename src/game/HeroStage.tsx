@@ -63,14 +63,15 @@ export function Aura({ color }: { color: string }) {
   );
 }
 
-export function HeroStage({ progress, world }: { progress: Progress; world?: World }) {
+/** far — главная во весь экран: камера дальше, чтобы герой стоял в середине между кнопками. */
+export function HeroStage({ progress, world, far }: { progress: Progress; world?: World; far?: boolean }) {
   const item = itemById(progress.equipped);
   const [pulse, setPulse] = useState(0);
   // Питомец стоит рядом с героем и радуется вместе с ним.
   const pet = petLook(progress, Date.now());
   const aura = heroAura(progress);
   return (
-    <Canvas3D sharp camera={{ position: [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 1.0, 0)}>
+    <Canvas3D sharp camera={{ position: far ? [0, 2.6, 12.5] : [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, far ? 0.55 : 1.0, 0)}>
       <pointLight position={[-2.5, 1.5, -1.5]} intensity={8} color={item.glow ?? RARITY_COLORS[item.rarity]} />
       {world ? (
         // Подставка — кусочек мира, где герой сейчас сражается.
