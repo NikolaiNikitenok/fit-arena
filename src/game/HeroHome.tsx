@@ -9,7 +9,7 @@ import { AchBadge } from './Achievements';
 import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
-import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streak } from './progress';
+import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streakOf } from './progress';
 import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
 import { HOLIDAY_GOAL, holidayAt, holidayOutfit, holidayTokens, tokenWord } from './holidays';
 import { collectionDone, visibleCollections } from './collections';
@@ -152,7 +152,7 @@ export function HeroHome(props: Props) {
   const badges = homeBadges(progress, daily, pro, now);
   const item = itemById(progress.equipped);
   const lvl = heroLevel(heroXp(progress));
-  const series = streak(progress.days, now);
+  const series = streakOf(progress, now);
   const weapon = gearById(progress.weapon);
   const offhand = gearById(progress.offhand);
   const charge = villageOf(progress).charge;

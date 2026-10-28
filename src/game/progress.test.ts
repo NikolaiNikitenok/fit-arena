@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { claimChest, dailyProgress, dayKey, equipGear, LIFE_MS, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, recordOutsideReps, spendLife, spendMight, spendSwaps, streak, swapsLeft, usePotion } from './progress';
+import { applyFreeze, claimChest, dailyProgress, dayKey, equipGear, LIFE_MS, livesNow, loadProgress, MAX_LIVES, Progress, recordActivity, recordOutsideReps, spendLife, spendMight, spendSwaps, streak, streakOf, swapsLeft, usePotion } from './progress';
 
 const DAY = 86400000;
 const NOW = new Date(2026, 9, 19, 12).getTime();
@@ -34,6 +34,30 @@ describe('серия', () => {
   it('сегодня ещё не занимался — серия не сгорает', () => expect(streak(days(1, 2), NOW)).toMatchObject({ days: 2, today: false }));
   it('два дня отдыха в неделю серию не рвут', () => expect(streak(days(0, 2, 4, 5), NOW).days).toBe(6));
   it('три пропуска подряд рвут', () => expect(streak(days(0, 4, 5), NOW).days).toBe(1));
+});
+
+describe('заморозка серии с Pro', () => {
+  // Вчера тренировался, потом три пропуска подряд: без заморозки серия — 1 день.
+  const p = { ...loadProgress(), days: days(1, 5, 6, 7) };
+  it('спасает серию один раз в неделю и остаётся, когда Pro закончится', () => {
+    expect(streakOf(p, NOW).days).toBe(1);
+    expect(applyFreeze(p, false, NOW)).toBe(p);
+    const frozen = applyFreeze(p, true, NOW);
+    expect(frozen.freezes).toEqual([dayKey(NOW - 2 * DAY)]);
+    expect(streakOf(frozen, NOW).days).toBe(7);
+    // Вторая заморозка на этой неделе не положена.
+    expect(applyFreeze(frozen, true, NOW)).toBe(frozen);
+    // Сегодня потренировался, а завтра Pro уже нет: замороженный день так и остаётся в серии.
+    const next = { ...frozen, days: { ...frozen.days, [dayKey(NOW)]: 10 } };
+    expect(streakOf(next, NOW + DAY).days).toBe(8);
+    expect(streak(next.days, NOW + DAY).days).toBe(2);
+  });
+  it('не тратится, когда спасать нечего', () => {
+    const steady = { ...loadProgress(), days: days(0, 1, 2) };
+    expect(applyFreeze(steady, true, NOW)).toBe(steady);
+    const gone = { ...loadProgress(), days: days(10, 11, 12) };
+    expect(applyFreeze(gone, true, NOW)).toBe(gone);
+  });
 });
 
 describe('рекорды', () => {

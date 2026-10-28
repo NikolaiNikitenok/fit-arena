@@ -5,7 +5,7 @@ import { EXERCISE_LABELS, type Exercise, type RepExercise } from '../repCounter'
 import { seasonEndsAt } from '../../shared/rating';
 import { bossDrop, Gear, gearById, itemById, openChest, PotionId, potionById } from './items';
 import type { Baseline } from './levels';
-import { addPotions, dayKey, passOf, passSeason, type PassStat, Progress, saveProgress, streak } from './progress';
+import { addPotions, dayKey, passOf, passSeason, type PassStat, Progress, saveProgress, streakOf } from './progress';
 
 export const PASS_TIERS = 30;
 export const XP_PER_TIER = 250;
@@ -110,7 +110,7 @@ export function passQuests(p: Progress, now: number): Quest[] {
 
 /** Сколько сделано по заданию: за сегодня, за неделю или за сезон. */
 export function questValue(p: Progress, q: Quest, now: number): number {
-  if (q.stat === 'streak') return streak(p.days, now).days;
+  if (q.stat === 'streak') return streakOf(p, now).days;
   const pass = passOf(p, now);
   const date = dayKey(now);
   const stat = q.stat;
@@ -121,12 +121,16 @@ export function questValue(p: Progress, q: Quest, now: number): number {
 }
 
 /** Забрать опыт за выполненное задание. */
-export function claimQuest(p: Progress, q: Quest, now: number): Progress | null {
+// С Pro задания дают на четверть больше опыта: ступени открываются быстрее, сила героя не меняется.
+export const PRO_XP_BONUS = 1.25;
+export const questXp = (q: Pick<Quest, 'xp'>, pro: boolean) => (pro ? Math.round(q.xp * PRO_XP_BONUS) : q.xp);
+
+export function claimQuest(p: Progress, q: Quest, now: number, pro = false): Progress | null {
   const pass = passOf(p, now);
   if (pass.quests.includes(q.id) || questValue(p, q, now) < q.target) return null;
   // Задания прошлых дней и недель больше не нужны: оставляем только сезонные и нынешние.
   const live = new Set(passQuests(p, now).map((x) => x.id));
-  return saveProgress({ ...p, pass: { ...pass, xp: pass.xp + q.xp, quests: [...pass.quests.filter((id) => live.has(id) || id.startsWith('s:')), q.id] } });
+  return saveProgress({ ...p, pass: { ...pass, xp: pass.xp + questXp(q, pro), quests: [...pass.quests.filter((id) => live.has(id) || id.startsWith('s:')), q.id] } });
 }
 
 /** Открытая ступень щита по опыту: 0 — ещё ни одной. */

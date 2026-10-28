@@ -656,6 +656,7 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .pass-bar { height: 10px; margin-top: 6px; border-radius: 5px; background: rgba(255, 255, 255, .1); overflow: hidden; }
 .pass-bar > * { height: 100%; border-radius: 5px; background: var(--pro-grad); background-size: 250% 100%; animation: pro-shine 3.6s linear infinite; transition: width .3s ease-out; }
 .pass-pro-note { font-size: 12.5px; line-height: 1.4; color: var(--hint); text-align: center; }
+.pass-perks { width: fit-content; margin: 8px auto; text-align: left; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; color: var(--text); font-weight: 700; }
 .pass-pro-note b { color: var(--gold); }
 .pass-pro-box { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .pass-buy { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; padding: 10px 20px; border-radius: 999px; font: inherit; font-weight: 900; font-size: 15px; cursor: pointer; }

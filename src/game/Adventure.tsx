@@ -48,9 +48,10 @@ import {
   REST_PER_WEEK,
   spendLife,
   spendSwaps,
-  streak,
+  streakOf,
   swapsLeft,
   saveProgress,
+  applyFreeze,
 } from './progress';
 import { Chest, Coin, Flask, Heart, Lock, Star, Swords } from '../icons';
 import { heroHands, heroPower } from './power';
@@ -205,10 +206,20 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const item = itemById(progress.equipped);
   useMusic(playing ? missionTheme(playing.world, playing.type === 'boss') : tab === 'map' ? worldTheme(world) : 'calm');
 
-  const showToast = (text: string) => {
+  const showToast = (text: string, ms = 2600) => {
     setToast(text);
-    setTimeout(() => setToast((t) => (t === text ? null : t)), 2600);
+    setTimeout(() => setToast((t) => (t === text ? null : t)), ms);
   };
+
+  // Заморозка Pro: пропуск на этой неделе не рвёт серию (раз в 7 дней, только если серия иначе оборвётся).
+  useEffect(() => {
+    const now = Date.now();
+    const next = applyFreeze(latest.current, pro, now);
+    if (next === latest.current) return;
+    setProgress(saveProgress(next));
+    showToast(`❄️ Заморозка Pro спасла серию: ${streakOf(next, now).days} дн. подряд`, 5000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pro, progress.days]);
 
   // Новый уровень героя: монеты и сообщение, как только миссия закончилась.
   const [levelUp, setLevelUp] = useState<string | null>(null);
@@ -385,6 +396,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
       )}
       {strength && (
         <StrengthSheet
+          pro={pro}
           progress={progress}
           now={now}
           onClose={() => setStrength(false)}
@@ -509,7 +521,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
 
   const L = LANDS[focusLand];
   const worldOpen = (w: number) => isUnlocked(progress, levelsOf(w)[0].id);
-  const series = streak(progress.days, now);
+  const series = streakOf(progress, now);
 
   // Карта на весь экран: листается только сама сцена, страница и Telegram не двигаются.
   return (
@@ -802,8 +814,8 @@ const SHOP_TABS: { tab: ShopTab; label: string }[] = [
 const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
 /** «Твоя сила»: рост по упражнениям, серия и повторы за две недели. */
-function StrengthSheet({ progress, now, onClose, onRecap }: { progress: Progress; now: number; onClose: () => void; onRecap: (month: string) => void }) {
-  const series = streak(progress.days, now);
+function StrengthSheet({ pro, progress, now, onClose, onRecap }: { pro: boolean; progress: Progress; now: number; onClose: () => void; onRecap: (month: string) => void }) {
+  const series = streakOf(progress, now);
   const months = recapMonths(progress, now).slice(0, 6);
   const [view, setView] = useState<'week' | 'month' | 'chart'>('week');
   const last = Array.from({ length: 14 }, (_, i) => {
@@ -820,7 +832,7 @@ function StrengthSheet({ progress, now, onClose, onRecap }: { progress: Progress
           <div className="level-title">Твоя сила</div>
           <div className="muted">
             {series.days > 0
-              ? `Серия ${series.days} ${series.days === 1 ? 'день' : series.days < 5 ? 'дня' : 'дней'}. Отдыхать можно ${REST_PER_WEEK} дня в неделю, серия не сгорит.`
+              ? `Серия ${series.days} ${series.days === 1 ? 'день' : series.days < 5 ? 'дня' : 'дней'}. Отдыхать можно ${REST_PER_WEEK} дня в неделю, серия не сгорит.${pro ? ' С Pro — ещё заморозка раз в неделю.' : ''}`
               : 'Начни серию сегодня: одна тренировка в день, отдыхать можно два дня в неделю.'}
           </div>
         </div>

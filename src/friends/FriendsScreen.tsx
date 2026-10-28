@@ -5,7 +5,7 @@ import { leagueOf } from '../../shared/rating';
 import { Check, Cross, Flame, Star, Swords, UserPlus, Users } from '../icons';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { friendInviteCode, friendInviteLink, openPassInTelegram, platform, share } from '../telegram';
-import { useProOffer } from '../cloud';
+import { giftTrial, useProOffer } from '../cloud';
 import { payStars } from '../payments';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
@@ -179,10 +179,41 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
 
       {menu && (
         <PlayerMenu target={menu} onBlocked={() => void run('state', friendsApi.state())} onClose={() => setMenu(null)}>
+          {menu.where === 'friend' && <GiftTrial id={menu.id} name={menu.name} />}
           {menu.where === 'friend' && <GiftPro id={menu.id} name={menu.name} onDone={() => void run('state', friendsApi.state())} />}
         </PlayerMenu>
       )}
       {adding && <AddFriendSheet data={data} busy={busy === 'add'} onAdd={(code) => run('add', friendsApi.add({ code })).then((r) => r && !r.error && setAdding(false))} onClose={() => setAdding(false)} />}
+    </>
+  );
+}
+
+/** Подарить другу 3 дня Pro бесплатно: можно с Pro, раз в сезон, другу, который Pro ещё не пробовал. */
+function GiftTrial({ id, name }: { id: string; name: string }) {
+  const offer = useProOffer();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  if (!offer?.trial?.canGive && !note) return null;
+  const give = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      await giftTrial(id);
+      setNote(`Готово! У ${name} три дня Pro — бот напишет ${name}, от кого подарок.`);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {offer?.trial?.canGive && (
+        <button className="pass-buy ghost" disabled={busy} onClick={give}>
+          🎁 Подарить 3 дня Pro бесплатно
+        </button>
+      )}
+      <div className="pass-buy-note">{note ?? 'Подарок от твоего Pro: один раз в сезон. Друг попробует золотые награды, заморозку серии и бонус опыта.'}</div>
     </>
   );
 }

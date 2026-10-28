@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Chest, Coin, Flask, Lock, PassShield, Star, Swords } from '../icons';
 import { gearIcon, itemById, potionById } from './items';
 import { portraitUrl } from './npcs';
-import { claimPassTier, claimQuest, PASS_TIERS, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
+import { claimPassTier, claimQuest, PASS_TIERS, questXp, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';
 import { sfx } from '../audio';
 import { useProOffer } from '../cloud';
@@ -54,13 +54,13 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
     show(`Ступень ${tier}: ${r.label}!`);
   };
   const claim = (q: Quest) => {
-    const next = claimQuest(progress, q, Date.now());
+    const next = claimQuest(progress, q, Date.now(), pro);
     if (!next) return;
     const before = t.tier;
     setProgress(next);
     const after = passTier(passOf(next, Date.now()).xp).tier;
     sfx(after > before ? 'levelup' : 'coin');
-    show(after > before ? `Новая ступень щита: ${after}!` : `+${q.xp} опыта пропуска`);
+    show(after > before ? `Новая ступень щита: ${after}!` : `+${questXp(q, pro)} опыта пропуска${pro ? ' (с бонусом Pro)' : ''}`);
   };
 
   return (
@@ -133,9 +133,9 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
         </div>
       ) : (
         <div className="pass-quests">
-          <QuestGroup title="Задания дня" note={`обновятся через ${fmtLeft(untilMidnight(now))}`} quests={quests.filter((q) => q.kind === 'daily')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
-          <QuestGroup title="Задания недели" note={`обновятся через ${fmtLeft(passWeekEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
-          <QuestGroup title="Задания сезона" note={`до конца сезона ${fmtLeft(passEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} onClaim={claim} />
+          <QuestGroup title="Задания дня" note={`обновятся через ${fmtLeft(untilMidnight(now))}`} quests={quests.filter((q) => q.kind === 'daily')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
+          <QuestGroup title="Задания недели" note={`обновятся через ${fmtLeft(passWeekEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
+          <QuestGroup title="Задания сезона" note={`до конца сезона ${fmtLeft(passEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
         </div>
       )}
       {toast && <div className="toast global">{toast}</div>}
@@ -170,6 +170,16 @@ const DAY = 86_400_000;
 const fmtDay = (t: number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
 /** Pro Pass за звёзды Telegram: покупка в Telegram, в Max и браузере — ссылка в бота. Pro действует по аккаунту везде. */
+// Что даёт Pro: кратко — под активным Pro, списком — у кнопки покупки.
+const PRO_PERKS = 'золотые награды, заморозка серии, +25% опыта пропуска';
+const PRO_PERK_LIST = [
+  '❄️ Заморозка серии раз в неделю: пропуск не обнулит серию',
+  '⚡ +25% опыта за задания пропуска',
+  '🏆 Золотая дорожка наград и облик «Страж Золотого щита»',
+  '✨ Золотое имя в клане, чате и рейтинге',
+  '🎁 3 дня Pro в подарок другу — раз в сезон',
+];
+
 function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text: string) => void }) {
   const offer = useProOffer();
   const [busy, setBusy] = useState(false);
@@ -193,13 +203,16 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
       {price} <Star size={13} />
     </span>
   ) : null;
-  if (pro)
+  // Пробный Pro от друга: свой Pro не оплачен, но три дня золото включено.
+  const trialOnly = pro && !offer?.until && !!offer?.trial?.until;
+  if (pro && !trialOnly)
     return (
       <div className="pass-pro-box">
         <div className="pass-pro-note">
           <span className="pro-name">Pro Pass активен</span>
-          {offer?.until ? ` до ${fmtDay(offer.until)}` : ''} · золотые награды открыты, имя светится золотом
+          {offer?.until ? ` до ${fmtDay(offer.until)}` : ''} · {PRO_PERKS}
         </div>
+        {offer?.trial?.canGive && <div className="pass-buy-note">🎁 Подари другу 3 дня Pro бесплатно: «Друзья» → нажми на друга. Один подарок в сезон.</div>}
         {offer?.until && offer.canBuy && late && (
           <button className="pass-buy ghost" disabled={busy} onClick={buy}>
             Продлить на следующий сезон {cost}
@@ -211,7 +224,19 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
   return (
     <div className="pass-pro-box">
       <div className="pass-pro-note">
-        <b>Pro Pass на сезон</b> · золотая дорожка наград, облик «Страж Золотого щита», золотое имя в клане и рейтинге. Силы в дуэлях не прибавляет: там решают только твои повторы.
+        {trialOnly ? (
+          <>
+            <span className="pro-name">Пробный Pro</span> до {fmtDay(offer!.trial!.until!)}. Понравилось? Оставь Pro на весь сезон.
+          </>
+        ) : (
+          <b>Pro Pass на сезон</b>
+        )}
+        <ul className="pass-perks">
+          {PRO_PERK_LIST.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+        Силы в дуэлях не прибавляет: там решают только твои повторы.
       </div>
       <button className="pass-buy primary" disabled={busy} onClick={buy}>
         {platform === 'tg' ? 'Купить Pro' : 'Купить в Telegram'} {cost}
@@ -254,7 +279,7 @@ function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassRewa
   );
 }
 
-function QuestGroup({ title, note, quests, progress, now, claimed, onClaim }: { title: string; note?: string; quests: Quest[]; progress: Progress; now: number; claimed: string[]; onClaim: (q: Quest) => void }) {
+function QuestGroup({ title, note, quests, progress, now, claimed, pro, onClaim }: { title: string; note?: string; quests: Quest[]; progress: Progress; now: number; claimed: string[]; pro: boolean; onClaim: (q: Quest) => void }) {
   return (
     <>
       <div className="section-title">
@@ -282,10 +307,10 @@ function QuestGroup({ title, note, quests, progress, now, claimed, onClaim }: { 
               </span>
             ) : ready ? (
               <button className="small-btn pass-claim" onClick={() => onClaim(q)}>
-                +{q.xp}
+                +{questXp(q, pro)}
               </button>
             ) : (
-              <span className="pass-quest-xp">+{q.xp}</span>
+              <span className="pass-quest-xp">+{questXp(q, pro)}</span>
             )}
           </div>
         );
