@@ -7,6 +7,7 @@ import { Pet } from '../three/Pet';
 import { Dialog, Remark } from './Dialog';
 import { say } from './story';
 import { sfx } from '../audio';
+import { useBusy } from '../updates/busy';
 import {
   bonusText,
   buyPet,
@@ -380,6 +381,8 @@ function EggScene({ taps, hatched }: { taps: number; hatched: boolean }) {
 
 /** Мастер Гром дарит яйцо: разговор, три стука по скорлупе, дракончик и выбор клички. */
 export function PetHatch({ onDone, onLater }: { onDone: (name: string) => void; onLater: () => void }) {
+  // Пока вылупляется яйцо, плашка «Игра обновилась» ждёт: окна не встают друг на друга.
+  useBusy(true);
   const [step, setStep] = useState<'talk' | 'egg' | 'name'>('talk');
   const [taps, setTaps] = useState(0);
   const [name, setName] = useState(petById('dragon')!.name);

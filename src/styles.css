@@ -206,7 +206,8 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .week-days { display: flex; gap: 4px; font-size: 11px; font-weight: 700; color: var(--hint); }
 .week-days span { flex: 1; text-align: center; }
 .toast { position: absolute; top: 40%; left: 16px; right: 16px; padding: 12px 14px; border-radius: var(--r-md); background: rgba(22,25,37,.95); border: 1px solid var(--line); color: var(--gold); text-align: center; font-weight: 900; pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,.35); animation: rise .25s ease-out; }
-.toast.global { position: fixed; top: calc(14px + var(--safe-top)); max-width: 448px; margin: 0 auto; z-index: 12; }
+/* Сообщения поверх всего — внизу, над панелью вкладок: не закрывают шапку с жизнями и монетами. */
+.toast.global { position: fixed; top: auto; bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom)); max-width: 448px; margin: 0 auto; z-index: 12; }
 .power-toast small { display: block; margin-top: 2px; color: var(--hint); font-weight: 700; font-size: 12px; }
 /* Экран докачивается (код разбит на части). */
 .lazy-loading { display: flex; align-items: center; justify-content: center; min-height: 40vh; font-weight: 700; }

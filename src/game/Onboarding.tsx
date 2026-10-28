@@ -7,11 +7,14 @@ import { track } from '../telemetry';
 import { openPrivacy } from '../privacy';
 import { HaveHeroButton } from '../account/Account';
 import { WebLoginButtons } from '../account/WebLogin';
+import { useBusy } from '../updates/busy';
 
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
 
 /** Знакомство при первом запуске: Мастер Гром рассказывает, как всё устроено, и ведёт на первое испытание. */
 export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => void; replay?: boolean }) {
+  // Знакомство с игрой — без плашки «Игра обновилась» поверх.
+  useBusy(true);
   const [step, setStep] = useState(0);
   const steps = [
     {
