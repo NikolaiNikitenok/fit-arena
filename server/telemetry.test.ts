@@ -87,6 +87,44 @@ describe('счётчики', () => {
     expect(s.dau.filter((d) => d.users).length).toBe(3);
   });
 
+  it('откуда пришли и до какого уровня дошли', () => {
+    const { t, at, ip } = make();
+    t.ingest({ anon: anon(1), src: 'VK', events: [{ n: 'app_open' }, { n: 'camera_granted' }, { n: 'mission_win', p: 1 }, { n: 'mission_win', p: 4 }, { n: 'mission_win', p: 'daily' }] }, ip(1));
+    t.ingest({ anon: anon(2), src: 'vk', events: [{ n: 'app_open' }] }, ip(2));
+    t.ingest({ anon: anon(3), src: 'friend', events: [{ n: 'app_open' }, { n: 'mission_win', p: 1 }] }, ip(3));
+    t.ingest({ anon: anon(4), src: '<script>', events: [{ n: 'app_open' }] }, ip(4));
+    // Источник запоминается по первому входу, позже не меняется.
+    t.ingest({ anon: anon(2), src: 'friend', events: [{ n: 'mission_win', p: 2 }] }, ip(2));
+    expect(t.stats(30).dau.at(-1)!.events).toMatchObject({ 'src:vk': 2, 'src:friend': 1, 'src:unknown': 1 });
+
+    // Через неделю: первый и третий не заходили, второй вернулся на следующий день.
+    at(T0 + DAY);
+    t.ingest({ anon: anon(2), events: [{ n: 'app_open' }] }, ip(2));
+    at(T0 + 7 * DAY);
+    const s = t.stats(30);
+    expect(s.sources.map((x) => [x.source, x.users, x.won, x.d1, x.d1Of])).toEqual([
+      ['vk', 2, 1, 1, 2],
+      ['friend', 1, 1, 0, 1],
+      ['unknown', 1, 0, 0, 1],
+    ]);
+    const reach = Object.fromEntries(s.reach.map((r) => [r.label, [r.gone, r.playing]]));
+    expect(reach).toMatchObject({ 'Ни одного уровня': [1, 0], '1 уровень': [1, 0], '2 уровня': [1, 0], '4–5': [1, 0] });
+    expect(s.trackSince).toBe('2026-10-01');
+
+    const html = statsHtml(s);
+    expect(html).toContain('Метка «vk»');
+    expect(html).toContain('Приглашение друга');
+    expect(html).toContain('Больше всего новичков пришло через «Метка «vk»»: 2');
+  });
+
+  it('меток не больше 50: дальше всё в «прочие»', () => {
+    const { t, ip } = make();
+    for (let i = 0; i < 60; i++) t.ingest({ anon: anon(i), src: `ad${i}` }, ip(i));
+    const s = t.stats(30);
+    expect(s.sources.length).toBe(51);
+    expect(s.sources[0]).toMatchObject({ source: 'other', users: 10 });
+  });
+
   it('старые дни выбрасываются, файл не растёт', () => {
     const { t, at, ip } = make();
     for (let d = 0; d < 80; d++) {

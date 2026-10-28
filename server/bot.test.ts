@@ -15,6 +15,8 @@ describe('бот /start', () => {
 
   it('дуэль и простой старт', () => {
     expect(startReply('/start K7P2', 'https://arena.example', clans)?.url).toBe('https://arena.example/?room=K7P2');
+    // Метка рекламы или поста доходит до приложения, а не путается с кодом боя.
+    expect(startReply('/start src-vk', 'https://arena.example', clans)).toMatchObject({ button: 'Играть', url: 'https://arena.example/?src=vk' });
     expect(startReply('/start', 'https://arena.example', clans)?.url).toBe('https://arena.example/');
     expect(startReply('привет', 'https://arena.example', clans)).toBeNull();
   });

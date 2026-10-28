@@ -1,9 +1,9 @@
 // Отчёты об ошибках и анонимная статистика на наш сервер (server/telemetry.ts).
 // Уходит: версия сборки, платформа Telegram, браузер, размер экрана, «экономия батареи»,
-// анонимный id (хеш, shared/anon.ts) и короткие события. Ни id в Telegram, ни имени, ни видео.
+// откуда открыли (метка ссылки), анонимный id (хеш, shared/anon.ts) и короткие события. Ни id в Telegram, ни имени, ни видео.
 import { anonId } from '../shared/anon';
 import { getSettings } from './settings';
-import { guestId, tg } from './telegram';
+import { appSource, guestId, tg } from './telegram';
 
 declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
@@ -116,6 +116,7 @@ export async function flush(): Promise<void> {
     screen: `${screen.width}x${screen.height}@${Math.round((devicePixelRatio || 1) * 10) / 10}`,
     lowPower: s.lowPower,
     path: location.pathname + location.search.replace(/initData=[^&]*/g, ''),
+    src: appSource(),
     ...batch,
   });
   try {

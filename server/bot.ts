@@ -40,7 +40,7 @@ export const helpText = (base: string) => `NikitenokArena: камера теле
 export const BOT_DESCRIPTION = 'NikitenokArena: отжимания, приседания и пресс под камеру телефона. Каждый повтор бьёт врага: приключение на 300 уровней, дуэли, кланы и рейд-боссы. Нажми «Старт», чтобы начать.';
 export const BOT_SHORT_DESCRIPTION = 'Тренировка-приключение: камера считает повторы, а каждый повтор бьёт врага.';
 
-/** Ответ на «/start [параметр]»: clan-КОД — клан, friend-ТОКЕН — друг, иначе код дуэли или просто вход. */
+/** Ответ на «/start [параметр]»: clan-КОД — клан, friend-ТОКЕН — друг, src-МЕТКА — вход с меткой источника, иначе код дуэли или просто вход. */
 export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined): StartReply | null {
   const m = /^\/(start|help|paysupport)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
   if (!m) return null;
@@ -69,7 +69,9 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
     };
   }
   if (/^[A-Z0-9]{4,8}$/i.test(param)) return { text: 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.', button: 'Принять вызов', url: `${base}/?room=${param.toUpperCase()}` };
-  return { text: WELCOME_TEXT, button: 'Играть', url: `${base}/`, photo: `${base}/bot/welcome.jpg` };
+  // Метка источника (реклама, пост, блогер): t.me/<бот>?start=src-МЕТКА — статистика покажет, сколько пришло.
+  const src = param.startsWith('src-') ? param.slice(4).replace(/[^\w-]/g, '').slice(0, 24) : '';
+  return { text: WELCOME_TEXT, button: 'Играть', url: src ? `${base}/?src=${src}` : `${base}/`, photo: `${base}/bot/welcome.jpg` };
 }
 
 export interface TgMessage {
