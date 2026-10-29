@@ -14,6 +14,8 @@ import { heroLevel, heroTitle, heroXp, Progress, streakOf } from './progress';
 import './ShareCard.css';
 import { Sheet } from '../Sheet';
 import { forms, locale, t } from '../i18n';
+import { canShareMessage, shareToChat } from '../shareChat';
+import { track } from '../telemetry';
 
 // Открытка «Я победил босса»: герой в победной позе рядом с поверженным боссом, статистика и ссылка на бота.
 // 3D-сцену рисуем на невидимом холсте, потом поверх неё на 2D-холсте — фон, надписи и приглашение.
@@ -572,6 +574,20 @@ export function ShareVictory({ card }: { card: () => CardData }) {
     if (r === 'saved') setNote(t('Картинка сохранена. Если не скачалась — зажми её и выбери «Сохранить».'));
   };
 
+  // В Telegram — сообщением с картинкой и кнопкой «Играть» в любой чат.
+  const toChat = async () => {
+    if (!img) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      if (await shareToChat(img.blob, `${shareText(img.boss)}`)) track('share_chat', 'victory');
+    } catch {
+      setNote(t('Не получилось отправить. Попробуй «Поделиться».'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const sendFriend = async () => {
     const r = await share(BOT_LINK, shareText(img?.boss ?? card().boss.name)).catch(() => null);
     if (r === 'copied') setNote(t('Ссылка скопирована'));
@@ -586,7 +602,12 @@ export function ShareVictory({ card }: { card: () => CardData }) {
         <Sheet onClose={() => setOpen(false)} bodyClassName="share-card">
           <div className="share-card-preview">{img ? <img src={img.url} alt={t('Открытка победы')} /> : <div className="share-card-wait">{busy ? t('Рисую открытку…') : ''}</div>}</div>
           {note && <div className="muted share-card-note">{note}</div>}
-          <button className="primary" disabled={!img} onClick={shareCard}>
+          {canShareMessage() && (
+            <button className="primary" disabled={!img || busy} onClick={toChat}>
+              {t('Отправить в чат')}
+            </button>
+          )}
+          <button className={canShareMessage() ? 'secondary' : 'primary'} disabled={!img} onClick={shareCard}>
             {t('Поделиться')}
           </button>
           <button className="secondary" onClick={sendFriend}>

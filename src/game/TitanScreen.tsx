@@ -29,6 +29,8 @@ interface TitanState {
   cities: { name: string; dealt: number; players: number; mine?: boolean }[];
   heroes: { name: string; reps: number; pro?: boolean; me?: boolean }[];
   myCity: { name: string; place: number; dealt: number } | null;
+  // Сколько лучших героев получат подарок Telegram при победе.
+  giftTop?: number;
 }
 
 const DAY = 86_400_000;
@@ -112,6 +114,7 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
       {upcoming ? (
         <div className="titan-box">
           {t('С 12-го по 18-е каждый твой повтор — в любом режиме — удар по Титану. Если страна его одолеет, всем, кто внёс хотя бы {0} повторов: {1} монет и легендарный облик «{2}».', { 0: TITAN_MIN_REPS, 1: n(TITAN_COINS), 2: itemById(TITAN_OUTFIT).name })}
+          {(s?.giftTop ?? 0) > 0 && <> {t('🎁 {0} лучших героев получат ещё и подарок Telegram в профиль.', { 0: s!.giftTop! })}</>}
         </div>
       ) : (
         s && (
@@ -137,6 +140,7 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
               !ended && (
                 <div className="muted">
                   {t('Одолеем Титана — всем, кто внёс {0}+ повторов: {1} монет и облик «{2}».', { 0: TITAN_MIN_REPS, 1: n(TITAN_COINS), 2: itemById(TITAN_OUTFIT).name })}
+                  {(s.giftTop ?? 0) > 0 && <> {t('🎁 {0} лучших героев получат ещё и подарок Telegram в профиль.', { 0: s.giftTop! })}</>}
                 </div>
               )
             )}

@@ -9,6 +9,7 @@ import { EX_COLOR } from './Stats';
 import './recap.css';
 import { locale, t } from '../i18n';
 import { cityName } from '../city/cityName';
+import { blobBase64, canShareMessage, shareToChat } from '../shareChat';
 
 // Итоги месяца, как Spotify Wrapped: слайды листаются касанием (слева — назад) и сами через несколько секунд.
 // Последний слайд — картинка для сторис: в Telegram она уходит в сторис, в остальных местах — в «Поделиться».
@@ -46,13 +47,6 @@ function Big({ n, on }: { n: number; on: boolean }) {
   return <div className="rc-big">{useCount(n, on).toLocaleString(locale())}</div>;
 }
 
-const blobBase64 = (b: Blob) =>
-  new Promise<string>((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(String(r.result).replace(/^data:[^,]*,/, ''));
-    r.onerror = () => rej(r.error);
-    r.readAsDataURL(b);
-  });
 
 export function RecapScreen({ progress, month, onClose }: { progress: Progress; month: string; onClose: () => void }) {
   const r = useMemo(() => monthRecap(progress, month), [progress, month]);
@@ -233,6 +227,11 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
                 {t('В сторис Telegram')}
               </button>
             )}
+            {canShareMessage() && (
+              <button className="secondary" disabled={!card || busy} onClick={toChat}>
+                {t('Отправить в чат')}
+              </button>
+            )}
             <button className={platform === 'tg' && tg?.shareToStory ? 'secondary' : 'primary'} disabled={!card || busy} onClick={shareFile}>
               {t('Поделиться картинкой')}
             </button>
@@ -297,6 +296,19 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
       track('recap_share', 'story');
     } catch {
       setNote(t('Не получилось открыть сторис. Попробуй «Поделиться картинкой».'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toChat() {
+    if (!card) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      if (await shareToChat(card.blob, `${text}\n${LINK}`)) track('share_chat', 'recap');
+    } catch {
+      setNote(t('Не получилось отправить. Попробуй «Поделиться картинкой».'));
     } finally {
       setBusy(false);
     }
