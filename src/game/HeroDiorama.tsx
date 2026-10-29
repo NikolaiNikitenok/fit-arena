@@ -87,7 +87,7 @@ const LOOKS: Record<World, Look> = {
 };
 
 /** Огоньки над подставкой: светлячки, звёздная пыль, споры или искры — медленно поднимаются по кругу. */
-function Motes({ color, speed, size, count }: Look['motes'] & { count: number }) {
+export function Motes({ color, speed, size, count }: Look['motes'] & { count: number }) {
   const points = useRef<THREE.Points>(null!);
   const { geo, seeds } = useMemo(() => {
     const geo = new THREE.BufferGeometry();

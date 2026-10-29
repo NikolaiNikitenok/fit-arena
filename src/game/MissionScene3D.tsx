@@ -124,7 +124,7 @@ function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow
       <Character
         model={hero}
         tint={heroTint}
-        glow={heroGlow}
+        aura={heroGlow}
         hands={heroHands}
         anim={heroBase(view, running)}
         pulse={chase || type === 'build' ? 0 : view.reps}

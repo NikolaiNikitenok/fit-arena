@@ -9,7 +9,8 @@ import { itemById, RARITY_COLORS } from './items';
 import { heroHands } from './power';
 import type { Progress } from './progress';
 import { heroAura } from './collections';
-import { HeroDiorama } from './HeroDiorama';
+import { HeroDiorama, Motes } from './HeroDiorama';
+import { getSettings } from '../settings';
 import type { World } from './lands';
 
 // Герой на подставке на главном экране: крутится, тап — прыжок, рядом питомец.
@@ -72,7 +73,9 @@ export function HeroStage({ progress, world, far }: { progress: Progress; world?
   const aura = heroAura(progress);
   return (
     <Canvas3D sharp camera={{ position: far ? [0, 2.9, 14.5] : [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, far ? 0.9 : 1.0, 0)}>
-      <pointLight position={[-2.5, 1.5, -1.5]} intensity={8} color={item.glow ?? RARITY_COLORS[item.rarity]} />
+      <pointLight position={[-2.5, 1.5, -1.5]} intensity={4} color={item.glow ?? RARITY_COLORS[item.rarity]} />
+      {/* Редкий облик: огоньки его цвета поднимаются вокруг героя. */}
+      {item.glow && <Motes color={item.glow} speed={0.18} size={0.045} count={getSettings().lowPower ? 8 : 18} />}
       {world ? (
         // Подставка — кусочек мира, где герой сейчас сражается.
         <HeroDiorama world={world} ring={RARITY_COLORS[item.rarity]} />
@@ -93,7 +96,7 @@ export function HeroStage({ progress, world, far }: { progress: Progress; world?
       {aura && <Aura color={aura} />}
       <Suspense fallback={null}>
         <Turntable>
-          <Character model={item.hero} tint={item.tint} glow={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
+          <Character model={item.hero} tint={item.tint} aura={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
         </Turntable>
         {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad} hop={pulse} lively outline position={[0.95, 0, 0.7]} rotation={-0.45} scale={1.35} onClick={() => setPulse((p) => p + 1)} />}
       </Suspense>
