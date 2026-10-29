@@ -30,6 +30,9 @@ export interface ChatMessage {
   at: number;
   // Системное сообщение: вступил, вышел, босс повержен.
   system?: boolean;
+  // У системного: фраза-ключ перевода и подстановки — каждый видит его на своём языке (text — по-русски).
+  key?: string;
+  vars?: Record<string, string | number>;
   // Автор с Pro Pass: сервер отмечает при отправке, в истории чата не хранится.
   pro?: boolean;
 }

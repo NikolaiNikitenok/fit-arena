@@ -13,6 +13,7 @@ import { warAdopt, warReps, warView, type ClanWar } from './wars';
 import { BAD_NAME, badName, censor, hasProfanity } from '../shared/profanity';
 import { muteText } from '../shared/moderation';
 import { SpamGuard } from './moderation';
+import { tk, tl } from '../src/i18n';
 
 interface Member {
   id: string;
@@ -209,7 +210,7 @@ export class ClanStore {
       createdAt: now,
     };
     this.add(clan);
-    this.system(clan, `${who.name} основал клан «${clan.name}»`, now);
+    this.system(clan, tk('{0} основал клан «{1}»'), now, { 0: who.name, 1: clan.name });
     this.save();
     return clan;
   }
@@ -239,7 +240,7 @@ export class ClanStore {
     if (c.members.length >= this.perks(c).slots) return 'В клане нет мест: клану нужно подрасти в уровне';
     c.members.push({ id: who.id, name: who.name, role: 'member', level: who.level, joinedAt: now, gift: this.level(c) });
     this.byPlayer.set(who.id, c.id);
-    this.system(c, `${who.name} вступил в клан`, now);
+    this.system(c, tk('{0} вступил в клан'), now, { 0: who.name });
     this.save();
     return c;
   }
@@ -259,9 +260,10 @@ export class ClanStore {
     if (m.role === 'leader') {
       const next = c.members.find((x) => x.role === 'officer') ?? [...c.members].sort((a, b) => a.joinedAt - b.joinedAt)[0];
       next.role = 'leader';
-      this.system(c, `${next.name} теперь глава клана`, now);
+      this.system(c, tk('{0} теперь глава клана'), now, { 0: next.name });
     }
-    this.system(c, kickedBy ? `${kickedBy} исключил ${m.name}` : `${m.name} покинул клан`, now);
+    if (kickedBy) this.system(c, tk('{0} исключил {1}'), now, { 0: kickedBy, 1: m.name });
+    else this.system(c, tk('{0} покинул клан'), now, { 0: m.name });
     this.save();
     return c;
   }
@@ -296,10 +298,10 @@ export class ClanStore {
     if (role === 'leader') {
       a.role = 'officer';
       t.role = 'leader';
-      this.system(c, `${t.name} теперь глава клана`, now);
+      this.system(c, tk('{0} теперь глава клана'), now, { 0: t.name });
     } else {
       t.role = role;
-      if (role === 'officer') this.system(c, `${t.name} назначен заместителем`, now);
+      if (role === 'officer') this.system(c, tk('{0} назначен заместителем'), now, { 0: t.name });
     }
     this.save();
     return c;
@@ -334,7 +336,7 @@ export class ClanStore {
     const m = this.member(c, playerId);
     if (m) m.xp = (m.xp ?? 0) + xp;
     const after = this.level(c);
-    if (after > before) this.system(c, `Клан достиг ${after} уровня! Подарок ждёт каждого`, now);
+    if (after > before) this.system(c, tk('Клан достиг {0} уровня! Подарок ждёт каждого'), now, { 0: after });
     this.save();
   }
 
@@ -446,10 +448,10 @@ export class ClanStore {
     const mutes = (c.mutes ??= {});
     if (hours) {
       mutes[target] = now + hours * 3_600_000;
-      this.system(c, `${a.name} запретил ${t.name} писать в чат на ${hours === 1 ? 'час' : 'сутки'}`, now);
+      this.system(c, hours === 1 ? tk('{0} запретил {1} писать в чат на час') : tk('{0} запретил {1} писать в чат на сутки'), now, { 0: a.name, 1: t.name });
     } else {
       delete mutes[target];
-      this.system(c, `${t.name} снова может писать в чат`, now);
+      this.system(c, tk('{0} снова может писать в чат'), now, { 0: t.name });
     }
     this.save();
     return c;
@@ -471,8 +473,9 @@ export class ClanStore {
     return c;
   }
 
-  system(c: Clan, text: string, now: number): ChatMessage {
-    return this.push(c, { id: c.nextMsg++, from: '', name: '', text, at: now, system: true });
+  /** Системное сообщение в чат: key — русская фраза с {0}…, vars — подстановки; игра переводит его на язык игрока. */
+  system(c: Clan, key: string, now: number, vars: Record<string, string | number> = {}): ChatMessage {
+    return this.push(c, { id: c.nextMsg++, from: '', name: '', text: tl('ru', key, vars), key, vars, at: now, system: true });
   }
 
   private push(c: Clan, msg: ChatMessage): ChatMessage {
@@ -622,7 +625,7 @@ export class ClanStore {
       r.killedAt = now;
       c.raidWins++;
       c.raidLevel++;
-      this.system(c, `${a.name} нанёс последний удар! Босс повержен, награды ждут всех, кто бился`, now);
+      this.system(c, tk('{0} нанёс последний удар! Босс повержен, награды ждут всех, кто бился'), now, { 0: a.name });
       this.addXp(c, '', CLAN_XP_KILL * r.level, now);
     }
     this.save();

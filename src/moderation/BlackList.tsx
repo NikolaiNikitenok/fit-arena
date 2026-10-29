@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { BlockedView } from '../../shared/moderation';
 import { moderationApi } from './api';
 import { Sheet } from '../Sheet';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 
 export function BlackListRow() {
   const [open, setOpen] = useState(false);
@@ -55,7 +55,7 @@ export function BlackListSheet({ onClose }: { onClose: () => void }) {
             <div key={b.id} className="friend blocked-row">
               <div className="friend-main">
                 <span className="friend-name">{b.name}</span>
-                <span className="muted">{t('в списке с {0}', { 0: new Date(b.at).toLocaleDateString('ru', { day: 'numeric', month: 'long' }) })}</span>
+                <span className="muted">{t('в списке с {0}', { 0: new Date(b.at).toLocaleDateString(locale(), { day: 'numeric', month: 'long' }) })}</span>
               </div>
               <button className="small-btn ghost" disabled={busy === b.id} onClick={() => unblock(b.id)}>
                 {t('Разблокировать')}

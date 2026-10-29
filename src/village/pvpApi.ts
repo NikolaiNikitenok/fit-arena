@@ -13,7 +13,7 @@ import type { AttackOutcome, AttackSubmit, PvpInbox, PvpMe, PvpTopRow, TargetVie
 import { syncNow } from '../cloud';
 import { guestId, tg, userName } from '../telegram';
 import type { DefenseEntry } from './types';
-import { t } from '../i18n';
+import { t, tErr } from '../i18n';
 
 export type { AttackOutcome, AttackSubmit, TargetView } from '../../shared/villagePvp';
 
@@ -38,7 +38,7 @@ async function call<T>(path: string, body: object = {}): Promise<T> {
   } catch {
     throw new PvpError(OFFLINE, 0);
   }
-  const data = (await r.json().catch(() => ({}))) as T & { error?: string };
+  const data = tErr((await r.json().catch(() => ({}))) as T & { error?: string });
   if (!r.ok) throw new PvpError(data.error ?? (r.status === 401 ? t('Набеги на игроков — только в Telegram') : t('Сервер не ответил. Попробуй позже.')), r.status);
   return data;
 }

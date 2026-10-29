@@ -19,7 +19,7 @@ import { muteText } from '../../shared/moderation';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
 import { syncClanFlag } from '../village/decor';
-import { locale, t } from '../i18n';
+import { locale, t, tMsg } from '../i18n';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: t('глава'), officer: t('заместитель'), member: '' };
@@ -545,7 +545,7 @@ function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: C
         {api.chat.filter((m) => !hidden.has(m.from)).map((m) =>
           m.system ? (
             <div key={m.id} className="chat-system">
-              {m.text}
+              {m.key ? tMsg(m.key, m.vars) : t(m.text)}
             </div>
           ) : (
             <div
@@ -558,7 +558,7 @@ function Chat({ api, clan, onClose }: { api: ReturnType<typeof useClan>; clan: C
               <span className={`chat-name ${m.pro ? 'pro-name' : ''}`} style={m.pro ? undefined : { color: nameColor(m.name || '?') }}>
                 {m.name}
               </span>
-              <span className="chat-time">{new Date(m.at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="chat-time">{new Date(m.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })}</span>
               <div className="chat-text">{m.text}</div>
             </div>
           ),
@@ -632,7 +632,7 @@ function Members({ clan, api }: { clan: ClanView; api: ReturnType<typeof useClan
                     {t('Исключить')}
                   </button>
                 )}
-                {(m.mutedUntil ?? 0) > Date.now() && <span className="muted">{t('Молчит до {0}', { 0: new Date(m.mutedUntil!).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) })}</span>}
+                {(m.mutedUntil ?? 0) > Date.now() && <span className="muted">{t('Молчит до {0}', { 0: new Date(m.mutedUntil!).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}</span>}
                 {!m.me && (
                   <button className="small-btn ghost" onClick={() => setMenu({ id: m.id, name: m.name, where: 'clan' })}>
                     {t('Ещё…')}

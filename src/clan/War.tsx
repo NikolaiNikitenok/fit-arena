@@ -14,7 +14,7 @@ const fmtLeft = (ms: number) => {
   return h >= 24 ? t('{0} д {1} ч', { 0: Math.floor(h / 24), 1: h % 24 }) : h >= 1 ? t('{0} ч {1} мин', { 0: h, 1: Math.floor((ms % 3600_000) / 60000) }) : t('{0} мин', { 0: Math.max(1, Math.ceil(ms / 60000)) });
 };
 const RESULT: Record<WarResult, string> = { win: t('Победа'), lose: t('Поражение'), draw: t('Ничья') };
-const dateRu = (key: string) => new Date(`${key}T12:00:00+03:00`).toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+const dateRu = (key: string) => new Date(`${key}T12:00:00+03:00`).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 
 interface Props {
   clan: ClanView;

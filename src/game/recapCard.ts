@@ -4,6 +4,7 @@ import { BOT_USERNAME } from '../telegram';
 import { EX_COLOR } from './Stats';
 import { amountLabel, MONTHS_OF, RECAP_TYPES, type Recap, recapWord } from './recap';
 import { locale, t } from '../i18n';
+import { cityName } from '../city/cityName';
 
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -165,7 +166,7 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   // Место среди игроков и города.
   const lines: string[] = [];
   if (extra.percent != null) lines.push(t('Сильнее {0}% героев', { 0: extra.percent }));
-  if (extra.city) lines.push(t('{0}: {1}-е место из {2}', { 0: extra.city.name, 1: extra.city.place, 2: extra.city.cities }));
+  if (extra.city) lines.push(t('{0}: {1}-е место из {2}', { 0: cityName(extra.city.name), 1: extra.city.place, 2: extra.city.cities }));
   g.fillStyle = '#ffd27a';
   g.font = `900 40px ${FONT}`;
   lines.slice(0, 2).forEach((l, i) => g.fillText(l, M, ty + 250 + i * 54, W - 2 * M));

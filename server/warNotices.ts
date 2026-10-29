@@ -7,7 +7,8 @@
 // Ночью (22–09 по Москве) не пишем: накопленное уйдёт утром.
 import { WAR_GHOST, WAR_MIN_POINTS, WAR_REPS_PER_DAY, dayMsk, warEndOf, warReward, warStartOf } from '../shared/war';
 import type { Clan, ClanStore } from './clans';
-import { num, plural, type RaidNotice } from './raidNotices';
+import { num, type RaidNotice, wordL } from './raidNotices';
+import { type Lang, tl } from '../src/i18n';
 import { warScores } from './wars';
 
 export type WarNoticeKind = 'warPair' | 'warRemind' | 'warResult';
@@ -21,9 +22,11 @@ const QUIET_FROM = 22;
 const QUIET_UNTIL = 9;
 
 const sent = (c: Clan, key: string, kind: WarNoticeKind) => !!c.notices?.[key]?.includes(kind);
-const clanName = (w: NonNullable<Clan['war']>) => (w.opp === 'ghost' ? WAR_GHOST.name : `клан «${w.oppLook.name}» [${w.oppLook.tag}]`);
+const clanName = (w: NonNullable<Clan['war']>, l: Lang) => (w.opp === 'ghost' ? tl(l, WAR_GHOST.name) : tl(l, 'клан «{0}» [{1}]', { 0: w.oppLook.name, 1: w.oppLook.tag }));
+const oppOf = (w: NonNullable<Clan['war']>, l: Lang) => (w.opp === 'ghost' ? tl(l, 'Дружины Князя Дивана') : tl(l, 'клана «{0}»', { 0: w.oppLook.name }));
 
-export function warNotices(store: ClanStore, now: number, skip: (playerId: string) => boolean = () => false): RaidNotice[] {
+// langOf — на каком языке писать каждому (выбран в игре).
+export function warNotices(store: ClanStore, now: number, skip: (playerId: string) => boolean = () => false, langOf: (playerId: string) => Lang = () => 'ru'): RaidNotice[] {
   const out: RaidNotice[] = [];
   const hourMsk = new Date(now + MSK).getUTCHours();
   if (hourMsk < QUIET_UNTIL || hourMsk >= QUIET_FROM) return out;
@@ -41,13 +44,16 @@ export function warNotices(store: ClanStore, now: number, skip: (playerId: strin
 
     if (!w.result && now < remindAt && !sent(c, w.key, 'warPair')) {
       const o = w.oppLook;
-      const who =
-        w.opp === 'ghost'
-          ? `⚔️ Война кланов! Ваш соперник — ${WAR_GHOST.name}: в эти выходные настоящего клана для пары не нашлось, и Князь Диван привёл своих бойцов — ровно ${w.counted}, как у вас.`
-          : `⚔️ Война кланов! Ваш соперник — клан «${o.name}» [${o.tag}], ${o.level} уровень, ${o.members} ${plural(o.members, 'участник', 'участника', 'участников')}.`;
-      const when = now < start ? 'Бой — с субботы 00:00 до конца воскресенья' : 'Бой уже идёт и продлится до конца воскресенья';
-      const text = `${who}\n\n${when}. Каждый повтор в любом режиме — очко клана «${c.name}» (до ${WAR_REPS_PER_DAY} в день от каждого). В зачёт идут ${w.counted} лучших с каждой стороны.`;
-      for (const m of members) push(m.id, 'warPair', text, 'К войне');
+      for (const m of members) {
+        const l = langOf(m.id);
+        const who =
+          w.opp === 'ghost'
+            ? tl(l, '⚔️ Война кланов! Ваш соперник — {0}: в эти выходные настоящего клана для пары не нашлось, и Князь Диван привёл своих бойцов — ровно {1}, как у вас.', { 0: tl(l, WAR_GHOST.name), 1: w.counted })
+            : tl(l, '⚔️ Война кланов! Ваш соперник — клан «{0}» [{1}], {2} уровень, {3} {4}.', { 0: o.name, 1: o.tag, 2: o.level, 3: o.members, 4: wordL(l, o.members, ['участник', 'участника', 'участников']) });
+        const when = now < start ? tl(l, 'Бой — с субботы 00:00 до конца воскресенья') : tl(l, 'Бой уже идёт и продлится до конца воскресенья');
+        const text = `${who}\n\n${when}. ${tl(l, 'Каждый повтор в любом режиме — очко клана «{0}» (до {1} в день от каждого). В зачёт идут {2} лучших с каждой стороны.', { 0: c.name, 1: WAR_REPS_PER_DAY, 2: w.counted })}`;
+        push(m.id, 'warPair', text, tl(l, 'К войне'));
+      }
     }
 
     if (!w.result && now >= remindAt && now < end - REMIND_LATEST && !sent(c, w.key, 'warRemind')) {
@@ -57,11 +63,12 @@ export function warNotices(store: ClanStore, now: number, skip: (playerId: strin
         const gap = s.them - s.us;
         for (const m of members) {
           if ((w.days[dayMsk(now)]?.[m.id] ?? 0) >= WAR_REPS_PER_DAY) continue;
+          const l = langOf(m.id);
           push(
             m.id,
             'warRemind',
-            `⏳ До конца войны ${hours} ${plural(hours, 'час', 'часа', 'часов')}, а клан «${c.name}» отстаёт на ${num(gap)} ${plural(gap, 'повтор', 'повтора', 'повторов')}: ${num(s.us)} : ${num(s.them)}.\n\nСоперник — ${clanName(w)}. Пара подходов сейчас — и счёт может перевернуться!`,
-            'К войне',
+            tl(l, '⏳ До конца войны {0} {1}, а клан «{2}» отстаёт на {3} {4}: {5} : {6}.\n\nСоперник — {7}. Пара подходов сейчас — и счёт может перевернуться!', { 0: hours, 1: wordL(l, hours, ['час', 'часа', 'часов']), 2: c.name, 3: num(gap), 4: wordL(l, gap, ['повтор', 'повтора', 'повторов']), 5: num(s.us), 6: num(s.them), 7: clanName(w, l) }),
+            tl(l, 'К войне'),
           );
         }
       }
@@ -69,22 +76,23 @@ export function warNotices(store: ClanStore, now: number, skip: (playerId: strin
 
     if (w.result && now >= end && now < end + RESULT_FOR && !sent(c, w.key, 'warResult')) {
       const vs = `${num(w.us ?? 0)} : ${num(w.them ?? 0)}`;
-      const head =
+      const head = (l: Lang) =>
         w.result === 'win'
-          ? `🏆 Победа! Клан «${c.name}» выиграл войну у ${w.opp === 'ghost' ? 'Дружины Князя Дивана' : `клана «${w.oppLook.name}»`} — ${vs}.`
+          ? tl(l, '🏆 Победа! Клан «{0}» выиграл войну у {1} — {2}.', { 0: c.name, 1: oppOf(w, l), 2: vs })
           : w.result === 'draw'
-            ? `🤝 Ничья! Война клана «${c.name}» против ${w.opp === 'ghost' ? 'Дружины Князя Дивана' : `клана «${w.oppLook.name}»`} — ${vs}.`
-            : `🛡 Война проиграна — ${vs}. Соперник (${clanName(w)}) в этот раз был сильнее. В следующие выходные — реванш!`;
-      const mvp = w.mvp ? `\nЛучший боец — ${w.roster[w.mvp]} (${num(w.points[w.mvp] ?? 0)}).` : '';
+            ? tl(l, '🤝 Ничья! Война клана «{0}» против {1} — {2}.', { 0: c.name, 1: oppOf(w, l), 2: vs })
+            : tl(l, '🛡 Война проиграна — {0}. Соперник ({1}) в этот раз был сильнее. В следующие выходные — реванш!', { 0: vs, 1: clanName(w, l) });
+      const mvp = (l: Lang) => (w.mvp ? `\n${tl(l, 'Лучший боец — {0} ({1}).', { 0: w.roster[w.mvp], 1: num(w.points[w.mvp] ?? 0) })}` : '');
       for (const m of members) {
+        const l = langOf(m.id);
         const mine = w.points[m.id] ?? 0;
         const r = warReward(w.result, mine, w.mvp === m.id);
         const me = r
-          ? `Твои повторы: ${num(mine)}${w.mvp === m.id ? ' — ты MVP!' : ''}\n🎁 Награда ждёт в приложении: ${num(r.coins)} ${plural(r.coins, 'монета', 'монеты', 'монет')}${r.chest ? ' и сундук' : ''}.`
+          ? tl(l, 'Твои повторы: {0}{1}\n🎁 Награда ждёт в приложении: {2} {3}{4}.', { 0: num(mine), 1: w.mvp === m.id ? tl(l, ' — ты MVP!') : '', 2: num(r.coins), 3: wordL(l, r.coins, ['монета', 'монеты', 'монет']), 4: r.chest ? tl(l, ' и сундук') : '' })
           : mine > 0
-            ? `Твои повторы: ${num(mine)}. Для награды нужно хотя бы ${WAR_MIN_POINTS} — в следующий раз получится!`
-            : 'Ты в этот раз не воевал. Следующая война — на выходных!';
-        push(m.id, 'warResult', `${head}${mvp}\n\n${me}`, r ? 'Забрать награду' : 'Открыть клан');
+            ? tl(l, 'Твои повторы: {0}. Для награды нужно хотя бы {1} — в следующий раз получится!', { 0: num(mine), 1: WAR_MIN_POINTS })
+            : tl(l, 'Ты в этот раз не воевал. Следующая война — на выходных!');
+        push(m.id, 'warResult', `${head(l)}${mvp(l)}\n\n${me}`, r ? tl(l, 'Забрать награду') : tl(l, 'Открыть клан'));
       }
     }
   }

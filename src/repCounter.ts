@@ -1,6 +1,6 @@
 // Подсчёт повторов по ключевым точкам MediaPipe Pose (33 точки, координаты 0..1).
 // Планка — не повторы, а секунды в правильной позе: её считает PlankTimer.
-import { t } from './i18n';
+import { getLang, type Lang, t, tl } from './i18n';
 
 // Упражнения на повторы: только они годятся для дуэлей, рейда и боя с тренером.
 export type RepExercise = 'pushup' | 'squat' | 'situp';
@@ -18,13 +18,14 @@ export const DEFAULT_PLANK_S = 30;
 export const repsEquivalent = (e: Exercise | null, n: number): number => (e === 'plank' ? Math.round(n / PLANK_S_PER_REP) : n);
 
 /** Сколько сделано или задано: «45 с», «2:30» или «12». */
-export function amountText(e: Exercise, n: number): string {
+export function amountText(e: Exercise, n: number, l: Lang = getLang()): string {
   if (!isTimed(e)) return String(n);
-  return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : t('{n} с', { n });
+  return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : tl(l, '{n} с', { n });
 }
 
 /** Цель словами: «отжимания × 20», «планка 45 с». */
-export const goalText = (e: Exercise, n: number): string => `${EXERCISE_LABELS[e].toLowerCase()}${isTimed(e) ? ' ' : ' × '}${amountText(e, n)}`;
+// l — язык (сервер пишет игроку на его языке); названия упражнений на сервере русские, tl переводит их.
+export const goalText = (e: Exercise, n: number, l: Lang = getLang()): string => `${tl(l, EXERCISE_LABELS[e]).toLowerCase()}${isTimed(e) ? ' ' : ' × '}${amountText(e, n, l)}`;
 
 export interface Landmark {
   x: number;

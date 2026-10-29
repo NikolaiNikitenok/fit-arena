@@ -8,6 +8,7 @@ import type { Progress } from './progress';
 import { EX_COLOR } from './Stats';
 import './recap.css';
 import { locale, t } from '../i18n';
+import { cityName } from '../city/cityName';
 
 // Итоги месяца, как Spotify Wrapped: слайды листаются касанием (слева — назад) и сами через несколько секунд.
 // Последний слайд — картинка для сторис: в Telegram она уходит в сторис, в остальных местах — в «Поделиться».
@@ -393,7 +394,7 @@ function RankSlide({ s, on }: { s: Standing; on: boolean }) {
       )}
       {s.city ? (
         <div className="rc-city rc-late">
-          <b>{s.city.name}</b> {t('— {0}-е место из {1} {2}', { 0: s.city.place, 1: s.city.cities, 2: recapWord(s.city.cities, [t('города'), t('городов'), t('городов')]) })}
+          <b>{cityName(s.city.name)}</b> {t('— {0}-е место из {1} {2}', { 0: s.city.place, 1: s.city.cities, 2: recapWord(s.city.cities, [t('города'), t('городов'), t('городов')]) })}
           {s.city.me > 0 && (
             <>
               <br />

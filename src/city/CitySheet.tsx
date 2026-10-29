@@ -8,13 +8,14 @@ import type { MapCity } from './RussiaMap';
 import '../game/holiday.css';
 import './city.css';
 import { forms, locale, t } from '../i18n';
+import { cityName } from './cityName';
 
 // Битва городов: карта России, где города светятся своими повторами за неделю (с понедельника по Москве),
 // рейтинг городов по повторам, героям или сильнейшему герою, свой город и место в нём.
 
 const RussiaMap = lazy(() => import('./RussiaMap').then((m) => ({ default: m.RussiaMap })));
 
-const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 const word = forms;
 /** Коротко для карты: 9 870, 12,4 тыс., 1,2 млн. */
 const compact = (n: number) => (n < 10_000 ? n.toLocaleString(locale()) : n < 1_000_000 ? t('{0} тыс.', { 0: (n / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 }) }) : t('{0} млн', { 0: (n / 1_000_000).toLocaleString(locale(), { maximumFractionDigits: 1 }) }));
@@ -46,7 +47,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
       setBoard(b);
       setError(null);
       setEdit(!b.city);
-      setText(b.city ?? b.suggest ?? '');
+      setText(cityName(b.city ?? b.suggest ?? ''));
       if (b.city) setTab('city');
     })
       .catch((e) => (e instanceof NotSignedIn ? setGuest(true) : setError((e as Error).message)))
@@ -67,14 +68,14 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
         const key = canonicalKey(name);
         const c = byKey.get(key);
         const value = c ? m.value(c) : 0;
-        return { key, name, x, y, popK, value, label: m.label(value), place: place.get(key), mine: c?.mine };
+        return { key, name: cityName(name), x, y, popK, value, label: m.label(value), place: place.get(key), mine: c?.mine };
       }),
     [byKey, place, m],
   );
   const onMap = useMemo(() => new Set(mapCities.map((c) => c.key)), [mapCities]);
 
   const sel = selected ? (byKey.get(selected) ?? null) : null;
-  const selName = selected ? (mapCities.find((c) => c.key === selected)?.name ?? sel?.city ?? '') : '';
+  const selName = selected ? (mapCities.find((c) => c.key === selected)?.name ?? (sel ? cityName(sel.city) : '')) : '';
   const pick = (key: string) => {
     setSelected(key);
     if (!onMap.has(key)) return;
@@ -161,8 +162,8 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
                 .filter((c, i, a): c is string => !!c && a.indexOf(c) === i)
                 .slice(0, 8)
                 .map((c) => (
-                  <button key={c} onClick={() => setText(c)}>
-                    {c}
+                  <button key={c} onClick={() => setText(cityName(c))}>
+                    {cityName(c)}
                   </button>
                 ))}
             </div>
@@ -179,7 +180,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
         <div className="city-me">
           <b>{board.me?.reps ? board.me.place : '—'}</b>
           <div>
-            <strong>{board.city}</strong>
+            <strong>{cityName(board.city)}</strong>
             <small>
               {board.me?.reps
                 ? t('{0}-е место из {1} · {2} {3} за неделю', { 0: board.me.place, 1: board.me.players, 2: board.me.reps.toLocaleString(locale()), 3: word(board.me.reps, [t('повтор'), t('повтора'), t('повторов')]) })
@@ -196,7 +197,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
         <>
           <div className="tabs">
             <button className={tab === 'city' ? 'active' : ''} onClick={() => setTab('city')}>
-              {board.city ?? t('Мой город')}
+              {board.city ? cityName(board.city) : t('Мой город')}
             </button>
             <button className={tab === 'cities' ? 'active' : ''} onClick={() => setTab('cities')}>
               {t('Все города')}
@@ -206,7 +207,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
             !board.city ? (
               <div className="city-empty">{t('Выбери город, чтобы увидеть его топ.')}</div>
             ) : board.top.length === 0 ? (
-              <div className="city-empty">{t('В городе {0} на этой неделе пока никто не тренировался. Будь первым!', { 0: board.city })}</div>
+              <div className="city-empty">{t('В городе {0} на этой неделе пока никто не тренировался. Будь первым!', { 0: cityName(board.city) })}</div>
             ) : (
               <div className="city-rows">
                 {board.top.map((r, i) => (
@@ -232,7 +233,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
                   <button key={key} className={`city-row p${place.get(key)} ${c.mine ? 'me' : ''} ${key === selected ? 'sel' : ''}`} onClick={() => pick(key)}>
                     <span className="place">{place.get(key)}</span>
                     <span className="who">
-                      <b>{c.city}</b>
+                      <b>{cityName(c.city)}</b>
                       <small>{onMap.has(key) ? m.long(n) : t('{0} · не на карте', { 0: m.long(n) })}</small>
                     </span>
                     <span className="reps">{metric === 'best' ? n : metric === 'players' ? n : compact(n)}</span>

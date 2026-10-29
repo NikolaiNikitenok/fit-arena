@@ -162,7 +162,7 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
           camera.stop();
           break;
         case 'error':
-          setError(msg.message);
+          setError(t(msg.message));
           break;
       }
     };

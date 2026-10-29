@@ -44,7 +44,8 @@ import {
 import { townOf } from '../src/village/state';
 import type { Progress } from '../src/game/progress';
 import { isQuiet } from './friends';
-import { num, plural } from './raidNotices';
+import { num } from './raidNotices';
+import { forms, type Lang, tl } from '../src/i18n';
 
 const DAY = 86_400_000;
 const KEEP_MS = 7 * DAY;
@@ -132,6 +133,8 @@ export interface VillageDeps {
   claim: (id: string, key: string) => boolean;
   // Под подозрением — не в общем топе.
   hidden: (id: string) => boolean;
+  // На каком языке писать игроку (выбран в игре).
+  lang: (id: string) => Lang;
   // Писать боту нельзя (остановил бота).
   botBlocked: (id: string) => boolean;
 }
@@ -153,6 +156,7 @@ const defaults: VillageDeps = {
   claim: () => true,
   hidden: () => false,
   botBlocked: () => false,
+  lang: () => 'ru',
 };
 
 export class VillageStore {
@@ -548,10 +552,12 @@ export class VillageStore {
 
   private notice(a: AttackRec): void {
     if (!/^tg:\d+$/.test(a.defender) || this.notifyOff.has(a.defender)) return;
-    const got = RES_KEYS.filter((k) => a.loot[k] > 0).map((k) => `${num(a.loot[k])} ${RES_WORDS[k]}`);
-    const loot = got.length ? `унёс ${got.length > 1 ? `${got.slice(0, -1).join(', ')} и ${got[got.length - 1]}` : got[0]}` : 'ничего не унёс';
-    const cups = a.defTrophies ? ` ${a.defTrophies > 0 ? '+' : '−'}${Math.abs(a.defTrophies)} ${plural(Math.abs(a.defTrophies), 'кубок', 'кубка', 'кубков')}.` : '';
-    const text = a.stars ? `⚔️ ${a.attackerName} напал на твою деревню: ${a.stars}★, ${loot}.${cups}\n\nОтомстить?` : `🛡 ${a.attackerName} напал на твою деревню, но оборона выстояла: 0★, ${loot}.${cups}\n\nОтомстить?`;
+    const l = this.d.lang(a.defender);
+    const got = RES_KEYS.filter((k) => a.loot[k] > 0).map((k) => `${num(a.loot[k])} ${tl(l, RES_WORDS[k])}`);
+    const loot = got.length ? tl(l, 'унёс {0}', { 0: got.length > 1 ? tl(l, '{0} и {1}', { 0: got.slice(0, -1).join(', '), 1: got[got.length - 1] }) : got[0] }) : tl(l, 'ничего не унёс');
+    const n = Math.abs(a.defTrophies);
+    const cups = a.defTrophies ? ` ${a.defTrophies > 0 ? '+' : '−'}${n} ${forms(n, [tl(l, 'кубок'), tl(l, 'кубка'), tl(l, 'кубков')], l)}.` : '';
+    const text = a.stars ? tl(l, '⚔️ {0} напал на твою деревню: {1}★, {2}.{3}\n\nОтомстить?', { 0: a.attackerName, 1: a.stars, 2: loot, 3: cups }) : tl(l, '🛡 {0} напал на твою деревню, но оборона выстояла: 0★, {1}.{2}\n\nОтомстить?', { 0: a.attackerName, 1: loot, 2: cups });
     this.notices.push({ to: a.defender, attack: a.id, at: a.at, text });
   }
 
@@ -572,7 +578,8 @@ export class VillageStore {
     this.save();
     return [...byTo.values()].map((list) => {
       const last = list.sort((x, y) => x.at - y.at)[list.length - 1];
-      return list.length > 1 ? { ...last, text: `${last.text}\n\nВсего ${list.length} ${plural(list.length, 'набег', 'набега', 'набегов')}, пока тебя не было.` } : last;
+      const l = this.d.lang(last.to);
+      return list.length > 1 ? { ...last, text: `${last.text}\n\n${tl(l, 'Всего {0} {1}, пока тебя не было.', { 0: list.length, 1: forms(list.length, [tl(l, 'набег'), tl(l, 'набега'), tl(l, 'набегов')], l) })}` } : last;
     });
   }
 

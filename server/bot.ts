@@ -8,7 +8,8 @@ import https from 'node:https';
 import net from 'node:net';
 import { join } from 'node:path';
 import tls from 'node:tls';
-import { PAY_SUPPORT_TEXT } from './proSales';
+import { paySupportText } from './proSales';
+import { type Lang, langOfCode, tl } from '../src/i18n';
 
 export interface StartReply {
   text: string;
@@ -18,66 +19,55 @@ export interface StartReply {
   photo?: string;
 }
 
-export const WELCOME_TEXT = `Привет! Это NikitenokArena, игра, в которой тренировка становится приключением.
-
-📷 Камера телефона сама считает отжимания, приседания и пресс. Видео никуда не уходит.
-⚔️ Каждый повтор бьёт врага: 300 уровней в трёх мирах, боссы и коварный Князь Диван.
-🥊 Дуэли с живыми соперниками, лиги и сезоны.
-🛡 Клан с друзьями и рейд-босс по выходным.
-🔥 Серия дней, задания от жителей и напоминания, чтобы не бросить.
-
-Нажми «Играть», и Мастер Гром проведёт тебя через первое испытание. Поставь телефон сбоку, чтобы камера видела тебя целиком.`;
+export const welcomeText = (l: Lang) =>
+  tl(l, 'Привет! Это NikitenokArena, игра, в которой тренировка становится приключением.\n\n📷 Камера телефона сама считает отжимания, приседания и пресс. Видео никуда не уходит.\n⚔️ Каждый повтор бьёт врага: 300 уровней в трёх мирах, боссы и коварный Князь Диван.\n🥊 Дуэли с живыми соперниками, лиги и сезоны.\n🛡 Клан с друзьями и рейд-босс по выходным.\n🔥 Серия дней, задания от жителей и напоминания, чтобы не бросить.\n\nНажми «Играть», и Мастер Гром проведёт тебя через первое испытание. Поставь телефон сбоку, чтобы камера видела тебя целиком.');
 
 /** Ответ на /help: как играть, приватность и связь с разработчиком. */
-export const helpText = (base: string) => `NikitenokArena: камера телефона считает отжимания, приседания, пресс и планку, а каждый повтор бьёт врага.
+export const helpText = (base: string, l: Lang = 'ru') =>
+  tl(l, 'NikitenokArena: камера телефона считает отжимания, приседания, пресс и планку, а каждый повтор бьёт врага.\n\n📷 Видео с камеры обрабатывается только на телефоне и никуда не отправляется.\n🔒 Политика конфиденциальности: {0}/privacy.html\n🗑 Удалить свои данные: в игре «Настройки» → «Удалить мои данные».\n✉️ Вопрос или ошибка — просто напиши сюда сообщением, его прочитает разработчик NikitenokArena.', { 0: base });
 
-📷 Видео с камеры обрабатывается только на телефоне и никуда не отправляется.
-🔒 Политика конфиденциальности: ${base}/privacy.html
-🗑 Удалить свои данные: в игре «Настройки» → «Удалить мои данные».
-✉️ Вопрос или ошибка — просто напиши сюда сообщением, его прочитает разработчик NikitenokArena.`;
-
-// «Что умеет этот бот?» до нажатия «Старт» и короткое описание в профиле бота.
-export const BOT_DESCRIPTION = 'NikitenokArena: отжимания, приседания и пресс под камеру телефона. Каждый повтор бьёт врага: приключение на 300 уровней, дуэли, кланы и рейд-боссы. Нажми «Старт», чтобы начать.';
-export const BOT_SHORT_DESCRIPTION = 'Тренировка-приключение: камера считает повторы, а каждый повтор бьёт врага.';
+// «Что умеет этот бот?» до нажатия «Старт» и короткое описание в профиле бота (Telegram показывает их на языке игрока).
+export const botDescription = (l: Lang) => tl(l, 'NikitenokArena: отжимания, приседания и пресс под камеру телефона. Каждый повтор бьёт врага: приключение на 300 уровней, дуэли, кланы и рейд-боссы. Нажми «Старт», чтобы начать.');
+export const botShortDescription = (l: Lang) => tl(l, 'Тренировка-приключение: камера считает повторы, а каждый повтор бьёт врага.');
 
 /** Ответ на «/start [параметр]»: clan-КОД — клан, friend-ТОКЕН — друг, src-МЕТКА — вход с меткой источника, иначе код дуэли или просто вход. */
-export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined): StartReply | null {
+export function startReply(text: string, appUrl: string, clanByCode: (code: string) => { name: string; tag: string; members: number } | undefined, l: Lang = 'ru'): StartReply | null {
   const m = /^\/(start|help|paysupport)(?:@\w+)?(?:\s+(\S+))?/.exec(text.trim());
   if (!m) return null;
   const param = (m[2] ?? '').replace(/[^\w-]/g, '').slice(0, 40);
   const base = appUrl.replace(/\/$/, '');
-  if (m[1] === 'paysupport') return { text: PAY_SUPPORT_TEXT, button: 'Открыть пропуск', url: `${base}/?tab=pass` };
-  if (m[1] === 'help') return { text: helpText(base), button: 'Играть', url: `${base}/` };
+  if (m[1] === 'paysupport') return { text: paySupportText(l), button: tl(l, 'Открыть пропуск'), url: `${base}/?tab=pass` };
+  if (m[1] === 'help') return { text: helpText(base, l), button: tl(l, 'Играть'), url: `${base}/` };
   if (param.startsWith('clan-')) {
     const code = param.slice(5).toUpperCase();
     const clan = clanByCode(code);
     if (clan)
       return {
-        text: `Тебя зовут в клан «${clan.name}» [${clan.tag}] — в нём уже ${clan.members}. По выходным клан бьёт огромного рейд-босса, а каждый твой повтор — удар по нему.\n\nНажми кнопку, и ты сразу окажешься в клане.`,
-        button: 'Вступить в клан',
+        text: tl(l, 'Тебя зовут в клан «{0}» [{1}] — в нём уже {2}. По выходным клан бьёт огромного рейд-босса, а каждый твой повтор — удар по нему.\n\nНажми кнопку, и ты сразу окажешься в клане.', { 0: clan.name, 1: clan.tag, 2: clan.members }),
+        button: tl(l, 'Вступить в клан'),
         url: `${base}/?clan=${code}`,
       };
-    return { text: 'Это приглашение устарело или клан распущен. Открой NikitenokArena и найди клан по названию.', button: 'Открыть NikitenokArena', url: `${base}/` };
+    return { text: tl(l, 'Это приглашение устарело или клан распущен. Открой NikitenokArena и найди клан по названию.'), button: tl(l, 'Открыть NikitenokArena'), url: `${base}/` };
   }
   // Ссылка друга (friend-ТОКЕН): после «Старт» приложение само добавит его в друзья.
   if (param.startsWith('friend-')) {
     const token = param.slice(7).toUpperCase().replace(/[^A-Z0-9]/g, '');
     return {
-      text: 'Тебя зовут в друзья в NikitenokArena! Друзья видят, кто тренировался сегодня, и вызывают друг друга на дуэль в один тап.\n\nНажми кнопку — и вы сразу станете друзьями.',
-      button: 'Добавить в друзья',
+      text: tl(l, 'Тебя зовут в друзья в NikitenokArena! Друзья видят, кто тренировался сегодня, и вызывают друг друга на дуэль в один тап.\n\nНажми кнопку — и вы сразу станете друзьями.'),
+      button: tl(l, 'Добавить в друзья'),
       url: `${base}/?friend=${token}`,
     };
   }
-  if (/^[A-Z0-9]{4,8}$/i.test(param)) return { text: 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.', button: 'Принять вызов', url: `${base}/?room=${param.toUpperCase()}` };
+  if (/^[A-Z0-9]{4,8}$/i.test(param)) return { text: tl(l, 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.'), button: tl(l, 'Принять вызов'), url: `${base}/?room=${param.toUpperCase()}` };
   // Метка источника (реклама, пост, блогер): t.me/<бот>?start=src-МЕТКА — статистика покажет, сколько пришло.
   const src = param.startsWith('src-') ? param.slice(4).replace(/[^\w-]/g, '').slice(0, 24) : '';
-  return { text: WELCOME_TEXT, button: 'Играть', url: src ? `${base}/?src=${src}` : `${base}/`, photo: `${base}/bot/welcome.jpg` };
+  return { text: welcomeText(l), button: tl(l, 'Играть'), url: src ? `${base}/?src=${src}` : `${base}/`, photo: `${base}/bot/welcome.jpg` };
 }
 
 export interface TgMessage {
   message_id?: number;
   chat: { id: number; type: string };
-  from?: { first_name?: string; username?: string };
+  from?: { id?: number; first_name?: string; username?: string; language_code?: string };
   text?: string;
   caption?: string;
   photo?: { file_id: string; width: number; height: number }[];
@@ -92,7 +82,7 @@ export interface Update {
   // Нажатие кнопки под сообщением бота (черновики постов для канала).
   callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; chat: { id: number } } };
   // Игрок нажал «Оплатить»: за 10 секунд нужно подтвердить или отказать.
-  pre_checkout_query?: { id: string; from: { id: number; first_name?: string }; currency: string; total_amount: number; invoice_payload: string };
+  pre_checkout_query?: { id: string; from: { id: number; first_name?: string; language_code?: string }; currency: string; total_amount: number; invoice_payload: string };
 }
 
 type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number } };
@@ -222,14 +212,28 @@ export const botStatus: { proxy: string | null; polling: boolean; webhook: boole
 /** Секрет вебхука: Telegram присылает его в заголовке, так чужие запросы к /api/tg отсекаются. */
 export const webhookSecret = (token: string) => createHash('sha256').update(`webhook:${token}`).digest('hex').slice(0, 40);
 
+/** Команды в меню бота. */
+export const botCommands = (l: Lang) => [
+  { command: 'start', description: tl(l, 'Начать игру') },
+  { command: 'help', description: tl(l, 'Помощь и приватность') },
+  { command: 'paysupport', description: tl(l, 'Вопрос об оплате') },
+];
+
+/** Кнопка меню в чате: общая — «Играть»; англоязычному игроку ставим свою, «Play». */
+export const menuButton = (appUrl: string, l: Lang) => ({ type: 'web_app', text: tl(l, 'Играть'), web_app: { url: `${appUrl.replace(/\/$/, '')}/` } });
+
+/** Язык, на котором отвечать написавшему: index.ts знает выбранный в игре, иначе — язык Telegram. */
+export type LangOf = (from: TgMessage['from']) => Lang;
+export const langOfFrom: LangOf = (from) => langOfCode(from?.language_code);
+
 /**
  * Ответ на обновление из вебхука. Если с сервера Telegram недоступен, ответить можно прямо
  * в теле ответа на вебхук: Telegram сам выполнит этот метод.
  */
-export function webhookReply(update: Update, appUrl: string, clanByCode: Parameters<typeof startReply>[2]): Record<string, unknown> | null {
+export function webhookReply(update: Update, appUrl: string, clanByCode: Parameters<typeof startReply>[2], langOf: LangOf = langOfFrom): Record<string, unknown> | null {
   const msg = update.message;
   if (!msg?.text || msg.chat.type !== 'private') return null;
-  const reply = startReply(msg.text, appUrl, clanByCode);
+  const reply = startReply(msg.text, appUrl, clanByCode, langOf(msg.from));
   if (!reply) return null;
   const reply_markup = { inline_keyboard: [[{ text: reply.button, web_app: { url: reply.url } }]] };
   return reply.photo ? { method: 'sendPhoto', chat_id: msg.chat.id, photo: reply.photo, caption: reply.text, reply_markup } : { method: 'sendMessage', chat_id: msg.chat.id, text: reply.text, reply_markup };
@@ -258,19 +262,17 @@ async function sendWelcomePhoto(token: string, chat_id: number, url: string, cap
 }
 
 /** Долгий опрос Telegram. onChat — игрок написал боту (например, перезапустил его после остановки). onCommand — свои команды (модерация, канал): вернуть ответ, пустую строку (ответит сам) или null. onUpdate — обновление разобрано целиком (кнопки черновиков). Если включён вебхук (Telegram отвечает 409), опрос останавливается: обновления придут на /api/tg. */
-export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void, onCommand?: (chatId: number, text: string) => string | null, onUpdate?: (u: Update) => boolean): void {
+export function runBot(token: string, appUrl: string, clanByCode: Parameters<typeof startReply>[2], onChat?: (chatId: number) => void, onText?: (msg: NonNullable<Update['message']>) => void, onCommand?: (chatId: number, text: string) => string | null, onUpdate?: (u: Update) => boolean, langOf: LangOf = langOfFrom): void {
   const api = botApi(token);
   let offset = 0;
   const loop = async () => {
-    await api('setMyDescription', { description: BOT_DESCRIPTION }).catch(() => null);
-    await api('setMyShortDescription', { short_description: BOT_SHORT_DESCRIPTION }).catch(() => null);
-    const commands = [
-      { command: 'start', description: 'Начать игру' },
-      { command: 'help', description: 'Помощь и приватность' },
-      { command: 'paysupport', description: 'Вопрос об оплате' },
-    ];
-    await api('setMyCommands', { commands }).catch(() => null);
-    await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Играть', web_app: { url: `${appUrl.replace(/\/$/, '')}/` } } }).catch(() => null);
+    // Без языка — для всех (по-русски), с language_code: 'en' — для тех, у кого Telegram по-английски.
+    for (const [l, language_code] of [['ru', undefined], ['en', 'en']] as const) {
+      await api('setMyDescription', { description: botDescription(l), language_code }).catch(() => null);
+      await api('setMyShortDescription', { short_description: botShortDescription(l), language_code }).catch(() => null);
+      await api('setMyCommands', { commands: botCommands(l), language_code }).catch(() => null);
+    }
+    await api('setChatMenuButton', { menu_button: menuButton(appUrl, 'ru') }).catch(() => null);
     for (;;) {
       try {
         const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'pre_checkout_query'] });
@@ -301,7 +303,9 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
             if (own) await api('sendMessage', { chat_id: msg.chat.id, text: own });
             continue;
           }
-          const reply = startReply(msg.text, appUrl, clanByCode);
+          const l = langOf(msg.from);
+          const reply = startReply(msg.text, appUrl, clanByCode, l);
+          if (reply && l === 'en') await api('setChatMenuButton', { chat_id: msg.chat.id, menu_button: menuButton(appUrl, l) }).catch(() => null);
           // Не команда: это сообщение разработчику.
           if (!reply) {
             onText?.(msg);

@@ -12,6 +12,7 @@ import { EXERCISE_LABELS, isRepExercise, type Exercise } from '../src/repCounter
 import { heroLevel, heroXp, streak, type Progress } from '../src/game/progress';
 import { type Challenge, CHALLENGE_TTL, type FriendStore, isQuiet } from './friends';
 import { isActive, isNewbie, type Referrals } from './referrals';
+import { type Lang, tl } from '../src/i18n';
 
 export interface FriendsDeps {
   friends: FriendStore;
@@ -35,7 +36,11 @@ export interface FriendsDeps {
   tellDuel: (id: string, text: string) => void;
   // «Приведи друга»: без него награды за приглашения не считаются.
   referrals?: Referrals;
+  // На каком языке писать игроку (выбран в игре); без него — по-русски.
+  lang?: (id: string) => Lang;
 }
+
+const langOf = (d: FriendsDeps, id: string): Lang => d.lang?.(id) ?? 'ru';
 
 export type ChallengeNote = 'app' | 'bot' | 'quiet' | 'off';
 
@@ -117,7 +122,8 @@ export function deliverChallenge(d: FriendsDeps, c: Challenge): ChallengeNote {
   if (isQuiet(d.now())) return 'quiet';
   const name = d.friends.get(c.from)?.name ?? c.fromName;
   const minutes = Math.round(CHALLENGE_TTL / 60_000);
-  d.sendBot(c.to, `⚔️ ${name} вызывает тебя на дуэль!\n\nУпражнение: ${EXERCISE_LABELS[c.exercise].toLowerCase()}, кто больше за минуту. Вызов действует ${minutes} минут.`, 'Принять вызов', `?room=${c.room}`);
+  const l = langOf(d, c.to);
+  d.sendBot(c.to, tl(l, '⚔️ {0} вызывает тебя на дуэль!\n\nУпражнение: {1}, кто больше за минуту. Вызов действует {2} минут.', { 0: name, 1: tl(l, EXERCISE_LABELS[c.exercise]).toLowerCase(), 2: minutes }), tl(l, 'Принять вызов'), `?room=${c.room}`);
   return 'bot';
 }
 
@@ -142,23 +148,26 @@ export function friendsApi(d: FriendsDeps, path: string, me: { id: string; name:
         if (typeof r === 'string') return fail(r);
         // Новичок по ссылке друга: обоим награда, когда он проведёт первый бой.
         if (d.referrals && isNewbie(d.progress(me.id))) d.referrals.add(r.id, me.id, d.now());
-        d.friends.notify(r.id, `🤝 ${me.name} принял твоё приглашение — теперь вы друзья в NikitenokArena. Вызови на дуэль: кто больше за минуту?`, 'Друзья', '?tab=friends');
+        const l = langOf(d, r.id);
+        d.friends.notify(r.id, tl(l, '🤝 {0} принял твоё приглашение — теперь вы друзья в NikitenokArena. Вызови на дуэль: кто больше за минуту?', { 0: me.name }), tl(l, 'Друзья'), '?tab=friends');
         return ok({ added: r.name });
       }
       const r = d.friends.request(me.id, body.code);
       if (typeof r === 'string') return fail(r);
       if (r.friends) {
-        d.friends.notify(r.to.id, `🤝 ${me.name} принял твою заявку — теперь вы друзья в NikitenokArena. Вызови на дуэль!`, 'Друзья', '?tab=friends');
+        const l = langOf(d, r.to.id);
+        d.friends.notify(r.to.id, tl(l, '🤝 {0} принял твою заявку — теперь вы друзья в NikitenokArena. Вызови на дуэль!', { 0: me.name }), tl(l, 'Друзья'), '?tab=friends');
         return ok({ added: r.to.name });
       }
-      d.friends.notify(r.to.id, `${me.name} хочет добавить тебя в друзья в NikitenokArena. Друзей можно вызывать на дуэль в один тап.`, 'Ответить', '?tab=friends');
+      const l = langOf(d, r.to.id);
+      d.friends.notify(r.to.id, tl(l, '{0} хочет добавить тебя в друзья в NikitenokArena. Друзей можно вызывать на дуэль в один тап.', { 0: me.name }), tl(l, 'Ответить'), '?tab=friends');
       return ok({ requested: r.to.name });
     }
     case '/api/friends/answer': {
       const accept = body.accept !== false;
       const r = d.friends.answer(me.id, other, accept);
       if (typeof r === 'string') return fail(r);
-      if (accept) d.friends.notify(r.id, `🤝 ${me.name} принял твою заявку — теперь вы друзья в NikitenokArena. Вызови на дуэль!`, 'Друзья', '?tab=friends');
+      if (accept) d.friends.notify(r.id, tl(langOf(d, r.id), '🤝 {0} принял твою заявку — теперь вы друзья в NikitenokArena. Вызови на дуэль!', { 0: me.name }), tl(langOf(d, r.id), 'Друзья'), '?tab=friends');
       return ok(accept ? { added: r.name } : {});
     }
     case '/api/friends/remove':
@@ -178,7 +187,7 @@ export function friendsApi(d: FriendsDeps, path: string, me: { id: string; name:
     }
     case '/api/friends/decline': {
       const c = d.friends.decline(String(body.challenge ?? ''), me.id);
-      if (c) d.tellDuel(c.from, `${me.name} сейчас не может принять вызов`);
+      if (c) d.tellDuel(c.from, tl(langOf(d, c.from), '{0} сейчас не может принять вызов', { 0: me.name }));
       return { status: 200, body: { challenges: inbox(d, me.id) } };
     }
   }

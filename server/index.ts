@@ -30,7 +30,8 @@ import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, botStatus, botUploadFiles, currentAgent, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
+import { botApi, botStatus, botUploadFiles, currentAgent, langOfFrom, menuButton, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
+import { type Lang, tl } from '../src/i18n';
 import { dueReminders, plausibleXp, SAVE_MAX_BYTES, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
@@ -165,6 +166,7 @@ const villages = new VillageStore(process.env.VILLAGES_FILE ?? join(dirname(proc
   claim: (id, key) => guard.claim(id, key),
   hidden: (id) => guard.flagged(id, Date.now()),
   botBlocked: (id) => !!saves.get(id)?.blocked,
+  lang: (id) => saves.langOf(id),
 });
 // Отметка Pro у автора ставится при отправке: список мог поменяться после сообщения.
 const proChat = (m: ChatMessage): ChatMessage => (m.from && isPro(m.from) ? { ...m, pro: true } : m);
@@ -379,6 +381,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   const body = await readJson(req).catch(() => null);
   const who = body && identify(body);
   if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
+  saves.setLang(who.id, body!.lang);
   if (path === '/api/progress/load') {
     if (who.guest) {
       saves.adopt(who.id, who.guest);
@@ -397,7 +400,8 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     // Друг, пришедший по приглашению, провёл первый бой: пригласившему — сообщение (один раз).
     if (referrals.by(who.id) && isActive(s.progress)) {
       const r = referrals.activated(who.id);
-      if (r) sendFriendBot(r.inviter, `🎉 ${friends.get(who.id)?.name ?? 'Твой друг'} провёл первый бой в NikitenokArena! Награда «Приведи друга» ждёт тебя в «Друзьях».`, 'Забрать награду', '?tab=friends');
+      const l = langOf(r?.inviter ?? '');
+      if (r) sendFriendBot(r.inviter, tl(l, '🎉 {0} провёл первый бой в NikitenokArena! Награда «Приведи друга» ждёт тебя в «Друзьях».', { 0: friends.get(who.id)?.name ?? tl(l, 'Твой друг') }), tl(l, 'Забрать награду'), '?tab=friends');
     }
     // Копия принята: обновляем снимок деревни для набегов (невозможный снимок отклоняется и отмечается).
     if (s.progress === body!.progress) villages.update(who.id, s.progress, villageName(who.id, body!));
@@ -547,7 +551,16 @@ async function notifyPlayer(to: string, text: string, button: string, query: str
   return r && { status: r.ok ? 200 : r.error_code, retryAfter: r.parameters?.retry_after };
 }
 const sendFriendBot = (to: string, text: string, button: string, query: string) => void notifyPlayer(to, text, button, query);
+/** На каком языке писать игроку: выбранный в игре (игра сообщает его серверу), иначе русский. */
+const langOf = (id: string): Lang => saves.langOf(id);
+/** Язык написавшего боту: если он уже играл — язык игры, иначе — язык его Telegram. */
+const langOfChat = (from: { id?: number; language_code?: string } | undefined): Lang => {
+  if (!from?.id) return langOfFrom(from);
+  const id = accounts.resolve(`tg:${from.id}`);
+  return saves.get(id) ? langOf(id) : langOfFrom(from);
+};
 const friendsDeps: FriendsDeps = {
+  lang: (id) => saves.langOf(id),
   friends,
   now: Date.now,
   bot: () => ({ username: botUsername, running: !!BOT_TOKEN }),
@@ -788,7 +801,7 @@ const onPlayerText = (msg: NonNullable<Update['message']>): Record<string, unkno
   const text = feedbackText(msg, Date.now());
   if (!text) return null;
   toAdmins(text);
-  return { method: 'sendMessage', chat_id: msg.chat.id, text: FEEDBACK_THANKS };
+  return { method: 'sendMessage', chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) };
 };
 
 /**
@@ -799,7 +812,7 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   const q = u.pre_checkout_query;
   if (q) {
     const error = sales.checkout(q.invoice_payload, q.currency, q.total_amount, proIds);
-    return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: !error, ...(error ? { error_message: error } : {}) };
+    return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: !error, ...(error ? { error_message: tl(langOfChat(q.from), error) } : {}) };
   }
   const msg = u.message;
   const pay = msg?.successful_payment;
@@ -807,12 +820,13 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   const p = sales.paid(pay.invoice_payload, pay.telegram_payment_charge_id, `tg:${msg.chat.id}`, pay.total_amount, proIds, cleanName(msg.from?.first_name ?? '') || undefined);
   if (!p) {
     toAdmins(`⚠️ Оплата ${pay.total_amount} ⭐ от tg:${msg.chat.id} с непонятным счётом (${pay.invoice_payload.slice(0, 60)}). Код платежа: ${pay.telegram_payment_charge_id}`);
-    return { method: 'sendMessage', chat_id: msg.chat.id, text: 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.' };
+    return { method: 'sendMessage', chat_id: msg.chat.id, text: tl(langOfChat(msg.from), 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.') };
   }
   toAdmins(saleAdminText(p));
   // Подарок: другу пишет бот туда, где он играет (Telegram или Max).
-  if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name), 'Открыть пропуск', '?tab=pass');
-  return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p, p.kind === 'gift' ? friends.get(p.account)?.name : undefined), reply_markup: { inline_keyboard: [[{ text: 'Открыть пропуск', web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
+  if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name, langOf(p.account)), tl(langOf(p.account), 'Открыть пропуск'), '?tab=pass');
+  const l = langOfChat(msg.from);
+  return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p, p.kind === 'gift' ? friends.get(p.account)?.name : undefined, l), reply_markup: { inline_keyboard: [[{ text: tl(l, 'Открыть пропуск'), web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
 };
 
 /** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
@@ -829,9 +843,10 @@ const proCommand = (chatId: number, text: string): boolean => {
     .then((r) => {
       if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
       sales.refunded(p.n);
-      const what = p.kind === 'starter' ? 'набор «Новичок»' : 'Pro Pass';
+      const l = langOf(accounts.resolve(p.payer));
+      const what = p.kind === 'starter' ? tl(l, 'набор «Новичок»') : 'Pro Pass';
       say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}).${p.kind === 'starter' ? ' Вещи из набора остаются в игре.' : ' Pro по ней снят.'}`);
-      say(`↩️ Мы вернули ${p.stars} ⭐ за ${what}.${p.kind === 'starter' ? '' : ' Pro по этой покупке отключён.'}`, Number(p.payer.slice(3)));
+      say(tl(l, '↩️ Мы вернули {0} ⭐ за {1}.', { 0: p.stars, 1: what }) + (p.kind === 'starter' ? '' : tl(l, ' Pro по этой покупке отключён.')), Number(p.payer.slice(3)));
     })
     .catch((e) => say(`Не вышло вернуть: ${e instanceof Error ? e.message : e}`));
   return true;
@@ -858,7 +873,7 @@ async function onProApi(path: string, req: IncomingMessage, res: ServerResponse)
     const now = Date.now();
     const t = trials.give(proIds(who.id), proIds(to), paidPro(who.id), sales.paidUntil(proIds(to)) > 0 || paidPro(to), now);
     if (typeof t === 'string') return reply(409, { error: t });
-    sendFriendBot(to, `🎁 ${who.name} дарит тебе 3 дня Pro Pass в NikitenokArena! Золотая дорожка наград, золотое имя, заморозка серии и +25% опыта пропуска.`, 'Открыть пропуск', '?tab=pass');
+    sendFriendBot(to, tl(langOf(to), '🎁 {0} дарит тебе 3 дня Pro Pass в NikitenokArena! Золотая дорожка наград, золотое имя, заморозка серии и +25% опыта пропуска.', { 0: who.name }), tl(langOf(to), 'Открыть пропуск'), '?tab=pass');
     return reply(200, { until: t.until, proOffer: proOfferOf(who.id) });
   }
   if (path !== '/api/pro/invoice') return reply(404, { error: 'not found' });
@@ -870,9 +885,12 @@ async function onProApi(path: string, req: IncomingMessage, res: ServerResponse)
   const why = sales.why(kind, proIds(to));
   if (why) return reply(409, { error: why });
   const inv = INVOICES[kind];
+  // Окно оплаты — на языке игры покупателя.
+  const l: Lang = body!.lang === 'en' ? 'en' : 'ru';
+  const title = tl(l, inv.title);
   const r = await botApi(BOT_TOKEN)(
     'createInvoiceLink',
-    { title: inv.title, description: inv.description, payload: invoicePayload(to, kind), currency: 'XTR', prices: [{ label: inv.title, amount: inv.price() }] },
+    { title, description: tl(l, inv.description), payload: invoicePayload(to, kind), currency: 'XTR', prices: [{ label: title, amount: inv.price() }] },
     20_000,
   ).catch((e: Error) => ({ ok: false, description: e.message }) as { ok: boolean; result?: unknown; description?: string });
   if (!r.ok || typeof r.result !== 'string') return reply(502, { error: 'Telegram не выдал счёт, попробуй ещё раз' });
@@ -901,8 +919,10 @@ const http = createServer((req, res) => {
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text)) : null;
-        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
+        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
+        // Англоязычному игроку — своя кнопка меню «Play» вместо общей «Играть».
+        if (BOT_TOKEN && msg?.text?.startsWith('/start') && chat?.type === 'private' && langOfChat(msg.from) === 'en') botApi(BOT_TOKEN)('setChatMenuButton', { chat_id: chat.id, menu_button: menuButton(APP_URL, 'en') }, 15_000).catch(() => null);
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
       })
       .catch(() => res.writeHead(400).end());
@@ -934,11 +954,12 @@ const http = createServer((req, res) => {
         return onMaxUpdate(u as MaxUpdate, {
           appUrl: APP_URL,
           clanByCode: clanInfo,
+          langOf: (id) => langOf(accounts.resolve(`max:${id}`)),
           onUser: (id) => saves.setBlocked(accounts.resolve(`max:${id}`), false),
           onText: (from, text) => {
             if (!feedbackLimit.take(`max:${from.id}`, Date.now())) return null;
             toAdmins(`✉️ Сообщение от игрока в Max ${[from.name, from.username && `@${from.username}`].filter(Boolean).join(' ')} (id max:${from.id}):\n\n${text.slice(0, 2000)}`);
-            return FEEDBACK_THANKS;
+            return tl(langOf(accounts.resolve(`max:${from.id}`)), FEEDBACK_THANKS);
           },
         });
       })
@@ -1305,11 +1326,12 @@ if (ANY_BOT)
       saves.markReminded(save.id, date);
       const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
       const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
+      const l = langOf(save.id);
       const text =
         p?.dailyDone === date
-          ? 'Мастер Гром: «Сегодня ещё ни одного повтора. Пять минут — и день не потерян!»'
-          : `${npcName(task.npc)}: «${task.ask}»\n\nЗадание дня: ${goalText(task.exercise, task.target)}. Награда: ${task.coins} монет.`;
-      void notifyPlayer(save.id, text, 'Тренироваться', '').then((r) => {
+          ? tl(l, 'Мастер Гром: «Сегодня ещё ни одного повтора. Пять минут — и день не потерян!»')
+          : tl(l, '{0}: «{1}»\n\nЗадание дня: {2}. Награда: {3} монет.', { 0: tl(l, npcName(task.npc)), 1: tl(l, task.ask), 2: goalText(task.exercise, task.target, l), 3: task.coins });
+      void notifyPlayer(save.id, text, tl(l, 'Тренироваться'), '').then((r) => {
         // Игрок остановил бота: больше не пишем.
         if (r?.status === 403) saves.setRemind(save.id, null);
       });
@@ -1336,7 +1358,7 @@ if (ANY_BOT)
   setInterval(() => {
     if (raidSending) return;
     const muted = (id: string) => saves.raidMuted(id);
-    const list = [...raidNotices(clans.all(), Date.now(), muted), ...warNotices(clans, Date.now(), muted)];
+    const list = [...raidNotices(clans.all(), Date.now(), muted, langOf), ...warNotices(clans, Date.now(), muted, langOf)];
     if (!list.length) return;
     for (const k of new Set(list.map((n) => `${n.clanId}|${n.key}|${n.kind}`))) {
       const [clan, key, kind] = k.split('|');
@@ -1366,7 +1388,7 @@ if (BOT_TOKEN)
     (chatId) => saves.setBlocked(accounts.resolve(`tg:${chatId}`), false),
     (msg) => {
       const thanks = onPlayerText(msg);
-      if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: FEEDBACK_THANKS }, 15_000).catch(() => null);
+      if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
     (chatId, text) => (proCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
     (u) => {
@@ -1378,11 +1400,12 @@ if (BOT_TOKEN)
       }
       return true;
     },
+    langOfChat,
   );
 // Набеги на деревню: защитнику пишет бот (ночные ждут 9 утра), раз в минуту, с кнопкой «Отомстить».
 if (ANY_BOT)
   setInterval(() => {
-    for (const n of villages.takeNotices()) sendFriendBot(n.to, n.text, 'Отомстить', '?tab=village');
+    for (const n of villages.takeNotices()) sendFriendBot(n.to, n.text, tl(langOf(n.to), 'Отомстить'), '?tab=village');
   }, 60_000);
 // Админам: тревога о новой частой ошибке (раз в минуту) и сводка в 9:00 по Москве.
 if (BOT_TOKEN)

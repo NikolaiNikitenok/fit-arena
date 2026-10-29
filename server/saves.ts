@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { LEVEL_COUNT } from '../src/game/levels';
 import { hasHero, heroLevel, type Progress, XP_PER_LEVEL_WON } from '../src/game/progress';
+import type { Lang } from '../src/i18n';
 
 const DAY = 86_400_000;
 // Больше повторов в день не засчитываем в уровень, который видят другие.
@@ -44,6 +45,8 @@ export interface Save {
   raidOff?: boolean;
   // Игрок остановил бота (Telegram ответил 403): не пишем, пока он снова не напишет боту.
   blocked?: boolean;
+  // Язык игры у игрока (выбран в настройках или по Telegram): на нём бот пишет ему сам. Русский не храним.
+  lang?: 'en';
   // Видимый другим опыт героя: xp — сейчас, cap — предел на сегодня, day — дата (UTC), с которой считали предел.
   pub?: { xp: number; cap: number; day: string };
 }
@@ -156,6 +159,21 @@ export class SaveStore {
     else s.raidOff = true;
     this.save();
     return s;
+  }
+
+  /** Язык игрока: игра сообщает его при загрузке прогресса. */
+  setLang(id: string, lang: unknown): void {
+    if (lang !== 'ru' && lang !== 'en') return;
+    const s = lang === 'en' ? this.touch(id) : this.saves.get(id);
+    if (!s || (s.lang ?? 'ru') === lang) return;
+    if (lang === 'en') s.lang = 'en';
+    else delete s.lang;
+    this.save();
+  }
+
+  /** На каком языке писать игроку; кого не знаем — по-русски. */
+  langOf(id: string): Lang {
+    return this.saves.get(id)?.lang ?? 'ru';
   }
 
   setBlocked(id: string, blocked: boolean): void {

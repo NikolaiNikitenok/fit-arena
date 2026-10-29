@@ -30,6 +30,14 @@ describe('сообщения бота о рейде', () => {
     expect(plural(21, 'час', 'часа', 'часов')).toBe('час');
   });
 
+  it('каждому — на его языке', () => {
+    const { s } = setup();
+    const list = raidNotices(s.all(), msk('2026-10-31T10:00:00'), () => false, (id) => (id === 'tg:2' ? 'en' : 'ru'));
+    expect(list[0].text).toContain('Босс проснулся');
+    expect(list[1]).toMatchObject({ button: 'Battle' });
+    expect(list[1].text).toContain('The boss is awake, and the “Железные” clan is waiting! You have 3 attacks per day');
+  });
+
   it('суббота: «Босс проснулся» всем из Telegram один раз, кроме выключивших', () => {
     const { s, clan } = setup();
     expect(raidNotices(s.all(), msk('2026-10-31T09:59:00'))).toEqual([]);

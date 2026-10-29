@@ -2,7 +2,7 @@
 import type { ChallengeView, FriendsState } from '../../shared/protocol';
 import type { Exercise } from '../repCounter';
 import { guestId, tg, userName } from '../telegram';
-import { t } from '../i18n';
+import { t, tErr } from '../i18n';
 
 export type FriendsReply = FriendsState & { error?: string; added?: string; requested?: string; room?: string; note?: 'app' | 'bot' | 'quiet' | 'off' };
 
@@ -17,7 +17,7 @@ async function post<T>(path: string, body: object = {}): Promise<T> {
   });
   if (r.status === 401) throw new NotTelegram();
   if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+  return tErr(await r.json());
 }
 
 export const friendsApi = {

@@ -10,6 +10,7 @@ import { type Progress, saveProgress } from './progress';
 import { canClaimTitan, claimTitan, TITAN_COINS, TITAN_OUTFIT } from './titan';
 import './titan.css';
 import { forms, locale, t } from '../i18n';
+import { cityName } from '../city/cityName';
 
 // Титан: вся страна бьёт одного босса с 12-го по 18-е число. Каждый повтор в любом режиме — удар.
 // Здоровье и урон — с сервера (server/titan.ts), экран обновляется сам, пока Титан жив.
@@ -159,7 +160,7 @@ export function TitanScreen({ progress, setProgress, onTrain, onClose }: { progr
             </button>
           </div>
           <div className="city-rows">
-            {(tab === 'cities' ? s.cities.map((c) => ({ name: c.name, value: c.dealt, sub: `${c.players} ${word(c.players, [t('герой'), t('героя'), t('героев')])}`, me: c.mine, pro: false })) : s.heroes.map((h) => ({ name: h.name, value: h.reps, sub: '', me: h.me, pro: h.pro }))).map((r, i) => (
+            {(tab === 'cities' ? s.cities.map((c) => ({ name: cityName(c.name), value: c.dealt, sub: `${c.players} ${word(c.players, [t('герой'), t('героя'), t('героев')])}`, me: c.mine, pro: false })) : s.heroes.map((h) => ({ name: h.name, value: h.reps, sub: '', me: h.me, pro: h.pro }))).map((r, i) => (
               <div key={`${tab}${i}`} className={`city-row p${i + 1} ${r.me ? 'me' : ''}`}>
                 <span className="place">{i + 1}</span>
                 <span className="who">

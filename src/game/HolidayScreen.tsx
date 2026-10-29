@@ -50,7 +50,7 @@ function OutfitStage({ w }: { w: HolidayWindow }) {
   );
 }
 
-const fmtDate = (tm: number) => new Date(tm).toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+const fmtDate = (tm: number) => new Date(tm).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 
 function StepPrize({ step, w }: { step: HolidayStep; w: HolidayWindow }) {
   if ('coins' in step)

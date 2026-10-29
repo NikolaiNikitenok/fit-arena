@@ -10,6 +10,7 @@ import https from 'node:https';
 import { join } from 'node:path';
 import tls from 'node:tls';
 import { startReply } from './bot';
+import type { Lang } from '../src/i18n';
 
 const MAX_API = (process.env.MAX_API_BASE ?? 'https://platform-api2.max.ru').replace(/\/$/, '');
 
@@ -114,6 +115,8 @@ export interface MaxUpdate {
 export interface MaxHandlers {
   appUrl: string;
   clanByCode: Parameters<typeof startReply>[2];
+  /** Язык игрока Max (выбранный в игре); без него — русский. */
+  langOf?: (userId: number) => Lang;
   /** Игрок написал боту: снова можно писать ему (вход max:ID). */
   onUser?: (userId: number) => void;
   /** Не команда: пересылаем разработчику, возвращаем ответ игроку или null. */
@@ -126,7 +129,7 @@ export async function onMaxUpdate(u: MaxUpdate, h: MaxHandlers): Promise<void> {
     const id = u.user?.user_id;
     if (!id) return;
     h.onUser?.(id);
-    const r = startReply(`/start ${u.payload ?? ''}`.trim(), h.appUrl, h.clanByCode);
+    const r = startReply(`/start ${u.payload ?? ''}`.trim(), h.appUrl, h.clanByCode, h.langOf?.(id));
     if (r) await maxSend(id, r.text, { text: r.button, url: r.url }).catch(() => null);
     maxStatus.handled++;
     return;
@@ -138,7 +141,7 @@ export async function onMaxUpdate(u: MaxUpdate, h: MaxHandlers): Promise<void> {
   // Только личка с ботом: в группах молчим.
   if (!id || !text || (m?.recipient?.chat_type && m.recipient.chat_type !== 'dialog')) return;
   h.onUser?.(id);
-  const r = startReply(text, h.appUrl, h.clanByCode);
+  const r = startReply(text, h.appUrl, h.clanByCode, h.langOf?.(id));
   if (r) await maxSend(id, r.text, { text: r.button, url: r.url }).catch(() => null);
   else if (!text.startsWith('/')) {
     const answer = h.onText?.({ id, name: m?.sender?.first_name ?? m?.sender?.name ?? 'Игрок', username: m?.sender?.username }, text);

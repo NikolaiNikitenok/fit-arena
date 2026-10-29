@@ -1,7 +1,7 @@
 // Запросы модерации к серверу (server/moderationApi.ts): чёрный список и жалобы.
 import type { ModerationReply, ReportReason, ReportWhere } from '../../shared/moderation';
 import { guestId, tg, userName } from '../telegram';
-import { t } from '../i18n';
+import { t, tErr } from '../i18n';
 
 async function post(path: string, body: object = {}): Promise<ModerationReply> {
   const r = await fetch(`/api/moderation${path}`, {
@@ -11,7 +11,7 @@ async function post(path: string, body: object = {}): Promise<ModerationReply> {
   });
   if (r.status === 401) throw new Error(t('Только в Telegram'));
   if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+  return tErr(await r.json());
 }
 
 export const moderationApi = {

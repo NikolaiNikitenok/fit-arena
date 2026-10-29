@@ -14,8 +14,10 @@ function files(dir: string): string[] {
     return /\.tsx?$/.test(f) && !/\.test\./.test(f) ? [p] : [];
   });
 }
-const KEY = /\bt\('((?:[^'\\]|\\.)*)'/g;
-const keys = new Set([...files(SRC), ...files(SHARED)].flatMap((f) => [...readFileSync(f, 'utf8').matchAll(KEY)].map((m) => m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'))));
+// t('…') и tl(язык, '…') — серверные сообщения.
+const KEY = /\b(?:t\(|tk\(|tl\([^,()]*(?:\([^()]*\))?, )'((?:[^'\\]|\\.)*)'/g;
+const SERVER = join(__dirname, '../../server');
+const keys = new Set([...files(SRC), ...files(SHARED), ...files(SERVER)].flatMap((f) => [...readFileSync(f, 'utf8').matchAll(KEY)].map((m) => m[1].replace(/\\'/g, "'").replace(/\\n/g, '\n').replace(/\\\\/g, '\\'))));
 const slots = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
 
 describe('английский перевод', () => {
