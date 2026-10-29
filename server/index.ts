@@ -111,8 +111,9 @@ const titan = new TitanBoard(process.env.TITANS_FILE ?? join(dirname(process.env
   isPro: (id) => isPro(id),
   giftTop: () => TITAN_GIFT_TOP,
 });
-// Подарки Telegram лучшим героям за победу над Титаном: сколько героев (0 — выключено). Отправляет админ командой /titan_gifts.
-const TITAN_GIFT_TOP = Math.max(0, Math.min(10, Number(process.env.TITAN_GIFT_TOP) || 0));
+// Подарки Telegram лучшим героям за победу над Титаном: сколько героев (по умолчанию — лучший один; 0 — выключено).
+// Отправляет админ командой /titan_gifts.
+const TITAN_GIFT_TOP = Math.max(0, Math.min(10, Math.floor(Number(process.env.TITAN_GIFT_TOP ?? 1)) || 0));
 // Значки достижений для emoji-статуса (набор создаёт админ командой /emoji_setup).
 const emojiBadges = new EmojiBadges(process.env.EMOJI_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'emoji.json'));
 const stories = new StoryImages(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'stories'));
