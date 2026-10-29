@@ -51,7 +51,7 @@ jobs:
         working-directory: out
         run: python3 ../promo/reels/build.py
       - uses: actions/upload-artifact@v4
-        with: { name: reel-${{ matrix.n }}, path: "out/reel.mp4\nout/cover.jpg\nout/script.json", retention-days: 7 }
+        with: { name: "reel-${{ matrix.n }}", path: "out/reel.mp4\nout/cover.jpg\nout/script.json", retention-days: 7 }
       - name: Send
         working-directory: out
         run: node ../promo/reels/send.mjs "$CHAT"
