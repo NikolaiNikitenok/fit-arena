@@ -49,6 +49,9 @@ export const EMOJI_BADGES: readonly (readonly [ach: string, emoji: string])[] = 
   ['prog-full4w', '⛈️'],
 ];
 
+/** Название набора: его видит каждый, кто нажал на значок у чужого имени, — сразу с ботом игры. */
+export const badgeSetTitle = (bot: string) => `NikitenokArena — @${bot}`.slice(0, 64);
+
 /** Версия рисунков: поменялись значки — новая версия, /emoji_setup создаст новый набор и удалит прежний. */
 const VERSION = 2;
 
@@ -99,7 +102,7 @@ export class EmojiBadges {
         {
           user_id: owner,
           name,
-          title: 'NikitenokArena',
+          title: badgeSetTitle(bot),
           sticker_type: 'custom_emoji',
           stickers: EMOJI_BADGES.map(([, emoji], i) => ({ sticker: `attach://b${i}`, format: 'static', emoji_list: [emoji] })),
         },
@@ -109,7 +112,10 @@ export class EmojiBadges {
       set = await api('getStickerSet', { name });
       if (!set.ok) return `Набор создан, но Telegram его не отдал: ${set.description ?? 'ошибка'}`;
     }
-    this.map = idsFromSet(set.result as { stickers?: { custom_emoji_id?: string }[] });
+    const got = set.result as { title?: string; stickers?: { custom_emoji_id?: string }[] };
+    // Набор создан раньше с другим названием — переименовываем.
+    if (got.title !== badgeSetTitle(bot)) await api('setStickerSetTitle', { name, title: badgeSetTitle(bot) });
+    this.map = idsFromSet(got);
     this.save();
     // Прежние наборы больше не нужны: игроки получают номера из нового.
     for (let v = 1; v < VERSION; v++) await api('deleteStickerSet', { name: badgeSetName(bot, v) }).catch(() => undefined);
