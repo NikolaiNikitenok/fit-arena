@@ -1,31 +1,59 @@
 // Emoji-статус в Telegram: значки достижений игры — набор эмодзи бота (custom emoji). Игрок с полученным
 // достижением ставит его значок рядом со своим именем (WebApp.setEmojiStatus, нужен Telegram Premium).
-// Набор создаёт админ командой /emoji_setup: бот загружает PNG из server/media/emoji и запоминает номера эмодзи.
+// Набор создаёт админ командой /emoji_setup: бот загружает PNG из public/emoji и запоминает номера эмодзи.
 //   EMOJI_FILE — где хранить номера (по умолчанию emoji.json рядом с DATA_FILE)
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-// Достижение → обычный эмодзи, к которому Telegram привяжет значок. Порядок = порядок в наборе.
+// Достижение → обычный эмодзи: он нарисован в центре значка, и к нему Telegram привяжет значок. Порядок = порядок в наборе.
+// Картинки — public/emoji/<достижение>.png (их же игра показывает в подсказке); перерисовать — scripts/emoji-badges.cjs.
 export const EMOJI_BADGES: readonly (readonly [ach: string, emoji: string])[] = [
-  ['reps10k', '💪'],
+  ['first', '👣'],
+  ['reps500', '💪'],
+  ['reps2k', '🏋️'],
+  ['reps10k', '🦾'],
   ['reps50k', '🏆'],
+  ['day100', '⚡'],
+  ['day300', '🏃'],
+  ['day600', '🌪️'],
   ['week', '🔥'],
-  ['month', '🔥'],
-  ['season', '🔥'],
+  ['month', '🌋'],
+  ['season', '🛡️'],
+  ['boss1', '👹'],
+  ['boss10', '🏹'],
   ['boss30', '💀'],
-  ['knyaz', '👑'],
-  ['world0', '🗺'],
+  ['stars50', '⭐'],
+  ['stars200', '🌟'],
+  ['world0', '🏰'],
   ['world1', '🚀'],
   ['world2', '🧟'],
-  ['stars200', '⭐'],
-  ['legendary', '💎'],
-  ['plank180', '🪨'],
-  ['raid10', '🚩'],
+  ['knyaz', '👑'],
+  ['arms', '🥊'],
+  ['legs', '🦵'],
+  ['core', '🍫'],
+  ['daily10', '🤝'],
   ['daily50', '📜'],
+  ['raid', '🚩'],
+  ['raid10', '🐉'],
+  ['legendary', '💎'],
+  ['plank60', '🧱'],
+  ['plank180', '🪨'],
+  ['dungeon10', '🕯️'],
+  ['dungeonBoss', '🗝️'],
+  ['combo6', '💥'],
+  ['prog-newbie14', '🌱'],
+  ['prog-pushup100', '💯'],
+  ['prog-abs21', '🔩'],
+  ['prog-legs28', '🐻'],
+  ['prog-plank5', '🗿'],
+  ['prog-full4w', '⛈️'],
 ];
 
+/** Версия рисунков: поменялись значки — новая версия, /emoji_setup создаст новый набор и удалит прежний. */
+const VERSION = 2;
+
 /** Имя набора: Telegram требует окончание _by_<имя бота>. */
-export const badgeSetName = (bot: string) => `arena_badges_by_${bot}`;
+export const badgeSetName = (bot: string, v = VERSION) => `arena_badges${v > 1 ? v : ''}_by_${bot}`;
 
 type Api = (method: string, params: Record<string, unknown>) => Promise<{ ok: boolean; result?: unknown; description?: string }>;
 type Upload = (method: string, fields: Record<string, unknown>, files: { field: string; name: string; type: string; data: Buffer }[]) => Promise<{ ok: boolean; result?: unknown; description?: string }>;
@@ -83,6 +111,8 @@ export class EmojiBadges {
     }
     this.map = idsFromSet(set.result as { stickers?: { custom_emoji_id?: string }[] });
     this.save();
+    // Прежние наборы больше не нужны: игроки получают номера из нового.
+    for (let v = 1; v < VERSION; v++) await api('deleteStickerSet', { name: badgeSetName(bot, v) }).catch(() => undefined);
     return `Набор эмодзи готов: ${Object.keys(this.map).length} значков. https://t.me/addemoji/${name}`;
   }
 

@@ -3495,7 +3495,6 @@ export const EN: Record<string, string> = {
   '📲 Добавить ярлык': '📲 Add shortcut',
   'Значок «{0}» теперь у твоего имени в Telegram': 'The “{0}” badge is now next to your name in Telegram',
   'Не вышло: emoji-статус есть только у Telegram Premium': 'Didn\'t work: emoji status is only available with Telegram Premium',
-  '✨ Значок у имени в Telegram': '✨ Badge next to my name in Telegram',
   'Отправить в чат': 'Send to a chat',
   'Не получилось отправить. Попробуй «Поделиться картинкой».': 'Couldn\'t send. Try “Share image”.',
   'Не получилось отправить. Попробуй «Поделиться».': 'Couldn\'t send. Try “Share”.',
@@ -3507,4 +3506,8 @@ export const EN: Record<string, string> = {
   'Значок полученного достижения можно поставить рядом со своим именем в Telegram (emoji-статус, нужен Premium).': 'You can put an earned achievement badge next to your name in Telegram (emoji status, Premium required).',
   'Игру можно добавить ярлыком на главный экран телефона: Настройки → «Об игре».': 'You can add the game as a shortcut on your phone\'s home screen: Settings → “About”.',
   'Редкие облики больше не засвечены: редкость видна по светящейся кромке и огонькам вокруг героя.': 'Rare outfits are no longer washed out: rarity now shows as a glowing edge and sparks around your hero.',
+  'Поставить значок у имени в Telegram': 'Set as badge next to my name in Telegram',
+  'Забери награду — и этот значок можно поставить у имени в Telegram': 'Claim the reward to set this badge next to your name in Telegram',
+  'Даст значок у имени в Telegram': 'Unlocks a badge for your name in Telegram',
+  '✨ За многие достижения — значок, который можно поставить рядом со своим именем в Telegram (нужен Telegram Premium).': '✨ Many achievements unlock a badge you can show next to your name in Telegram (Telegram Premium required).',
 };
