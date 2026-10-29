@@ -26,6 +26,13 @@ interface TelegramWebApp {
   // Bot API 8.0: скачать файл по https-ссылке; Bot API 7.8: история с картинкой по https-ссылке.
   downloadFile?(params: { url: string; file_name: string }, cb?: (accepted: boolean) => void): void;
   shareToStory?(mediaUrl: string, params?: { text?: string; widget_link?: { url: string; name?: string } }): void;
+  // Bot API 8.0: отправить в чат сообщение, заготовленное ботом (savePreparedInlineMessage).
+  shareMessage?(msgId: string, cb?: (sent: boolean) => void): void;
+  // Bot API 8.0: ярлык игры на главном экране телефона.
+  addToHomeScreen?(): void;
+  checkHomeScreenStatus?(cb: (status: 'unsupported' | 'unknown' | 'added' | 'missed') => void): void;
+  // Bot API 8.0: emoji-статус у имени игрока (Telegram сам спросит разрешения; работает у Premium).
+  setEmojiStatus?(customEmojiId: string, params?: { duration?: number }, cb?: (set: boolean) => void): void;
 }
 
 // Max (https://dev.max.ru/docs/webapps/bridge): window.WebApp из st.max.ru/js/max-web-app.js. Его index.html подключает,
@@ -265,3 +272,43 @@ export async function share(url: string, text: string): Promise<'shared' | 'copi
   await navigator.clipboard.writeText(`${text} ${url}`);
   return 'copied';
 }
+
+/** Есть ли новые возможности Telegram (Bot API 8.0): отправка в чат, ярлык, emoji-статус. */
+const tg8 = () => platform === 'tg' && !!tg?.isVersionAtLeast?.('8.0');
+
+/** Можно ли отправить заготовленное ботом сообщение в любой чат. */
+export const canShareMessage = () => tg8() && !!tg?.shareMessage;
+
+/** Отправить в чат сообщение, которое бот заготовил (id из /api/share/prepare). */
+export const shareMessage = (id: string): Promise<boolean> => new Promise((resolve) => tg!.shareMessage!(id, (sent) => resolve(!!sent)));
+
+/** Ярлык на главном экране: unsupported — нельзя, added — уже есть, missed — можно предложить. */
+export function homeScreenStatus(): Promise<'unsupported' | 'unknown' | 'added' | 'missed'> {
+  return new Promise((resolve) => {
+    if (!tg8() || !tg?.checkHomeScreenStatus || !tg.addToHomeScreen) return resolve('unsupported');
+    let done = false;
+    const fin = (s: 'unsupported' | 'unknown' | 'added' | 'missed') => !done && ((done = true), resolve(s));
+    try {
+      tg.checkHomeScreenStatus(fin);
+    } catch {
+      fin('unsupported');
+    }
+    // Ответа нет (старый клиент) — считаем, что нельзя.
+    setTimeout(() => fin('unsupported'), 1500);
+  });
+}
+
+export const addToHomeScreen = () => tg?.addToHomeScreen?.();
+
+/** Можно ли ставить emoji-статус. */
+export const canSetEmojiStatus = () => tg8() && !!tg?.setEmojiStatus;
+
+/** Поставить emoji-статус: Telegram спросит игрока; false — отказался или нет Premium. */
+export const setEmojiStatus = (customEmojiId: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    try {
+      tg!.setEmojiStatus!(customEmojiId, {}, (set) => resolve(!!set));
+    } catch {
+      resolve(false);
+    }
+  });

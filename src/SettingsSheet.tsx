@@ -9,6 +9,7 @@ import { tg } from './telegram';
 import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
 import { Sheet } from './Sheet';
+import { HomeShortcutRow } from './HomeShortcut';
 import { getLang, Lang, setLang, t, locale } from './i18n';
 import { AccountRow } from './account/Account';
 import { WebLoginRow } from './account/WebLogin';
@@ -222,6 +223,7 @@ function AboutSection({ onIntro }: { onIntro: () => void }) {
         {history ? t('Скрыть историю обновлений') : t('История обновлений')}
       </button>
       {history && <ChangesList entries={CHANGELOG} />}
+      <HomeShortcutRow />
       <div className="settings-note">
         <b>{t('Камера и приватность.')}</b> {t('Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.')} <PrivacyLink />
       </div>

@@ -73,6 +73,8 @@ import { isActive, Referrals } from './referrals';
 import { TitanBoard } from './titan';
 import { isMonth, RecapBoard } from './recap';
 import { StoryImages } from './storyImages';
+import { EmojiBadges } from './emojiBadges';
+import { TITANS } from '../shared/titan';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -107,7 +109,12 @@ const titan = new TitanBoard(process.env.TITANS_FILE ?? join(dirname(process.env
   cities: () => cities.all(),
   nameOf: (id) => cities.get(id)?.name ?? friends.get(id)?.name ?? titanNames.get(id),
   isPro: (id) => isPro(id),
+  giftTop: () => TITAN_GIFT_TOP,
 });
+// Подарки Telegram лучшим героям за победу над Титаном: сколько героев (0 — выключено). Отправляет админ командой /titan_gifts.
+const TITAN_GIFT_TOP = Math.max(0, Math.min(10, Number(process.env.TITAN_GIFT_TOP) || 0));
+// Значки достижений для emoji-статуса (набор создаёт админ командой /emoji_setup).
+const emojiBadges = new EmojiBadges(process.env.EMOJI_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'emoji.json'));
 const stories = new StoryImages(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'stories'));
 const pro = new ProList(process.env.PRO_FILE ?? join(__dirname, '.pro-ids'), process.env.PRO_IDS);
 // Единый аккаунт: вход tg:123 → аккаунт, под которым лежит всё остальное (server/accounts.ts).
@@ -389,7 +396,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -698,6 +705,31 @@ async function onRecapApi(path: string, req: IncomingMessage, res: ServerRespons
     if ('error' in r) return reply(r.code, { error: r.error });
     return reply(200, { url: `${APP_URL.replace(/\/$/, '')}/api/story/${r.id}.jpg` });
   }
+  // Результат в чат (Bot API 8.0): бот заготавливает сообщение с картинкой и кнопкой «Играть»,
+  // игра открывает выбор чата (shareMessage). Только для входа через Telegram.
+  if (path === '/api/share/prepare') {
+    const tgId = /^tg:(\d+)$/.exec(signedIn(body!)?.login ?? '')?.[1];
+    if (!BOT_TOKEN || !tgId) return reply(403, { error: 'Только в Telegram' });
+    const r = stories.put(who.id, body!.image, now);
+    if ('error' in r) return reply(r.code, { error: r.error });
+    const photo = `${APP_URL.replace(/\/$/, '')}/api/story/${r.id}.jpg`;
+    const l = langOf(who.id);
+    const caption = typeof body!.text === 'string' ? body!.text.slice(0, 900) : '';
+    const play = `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?startapp=src-share`;
+    const res = await botApi(BOT_TOKEN)(
+      'savePreparedInlineMessage',
+      {
+        user_id: Number(tgId),
+        result: { type: 'photo', id: r.id.slice(0, 64), photo_url: photo, thumbnail_url: photo, caption, reply_markup: { inline_keyboard: [[{ text: tl(l, 'Играть'), url: play }]] } },
+        allow_user_chats: true,
+        allow_group_chats: true,
+        allow_channel_chats: true,
+      },
+      15_000,
+    ).catch(() => null);
+    const id = (res?.result as { id?: string } | undefined)?.id;
+    return id ? reply(200, { id }) : reply(502, { error: 'Telegram не принял сообщение, попробуй ещё раз' });
+  }
   if (!isMonth(body!.month)) return reply(400, { error: 'Нет месяца' });
   reply(200, recap.standing(who.id, body!.month, now));
 }
@@ -829,6 +861,53 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   return { method: 'sendMessage', chat_id: msg.chat.id, text: paidText(p, p.kind === 'gift' ? friends.get(p.account)?.name : undefined, l), reply_markup: { inline_keyboard: [[{ text: tl(l, 'Открыть пропуск'), web_app: { url: `${APP_URL.replace(/\/$/, '')}/?tab=pass` } }]] } };
 };
 
+/**
+ * Админ: /emoji_setup — создать набор значков для emoji-статуса; /titan_gifts — подарки Telegram лучшим героям
+ * последнего побеждённого Титана (за звёзды бота).
+ */
+const giftCommand = (chatId: number, text: string): boolean => {
+  const m = /^\/(emoji_setup|titan_gifts)(?:@\w+)?$/.exec(text.trim());
+  if (!m || !BOT_TOKEN || !admins.has(`tg:${chatId}`)) return false;
+  const api = botApi(BOT_TOKEN);
+  const say = (t: string) => api('sendMessage', { chat_id: chatId, text: t }, 15_000).catch(() => null);
+  if (m[1] === 'emoji_setup') {
+    void emojiBadges
+      .setup((method, params) => api(method, params, 30_000), (method, fields, files) => botUploadFiles(BOT_TOKEN, method, fields, files), chatId, botUsername ?? 'ArenaNikitenokBot', join(__dirname, 'media', 'emoji'))
+      .then(say)
+      .catch((e: Error) => say(`Не вышло: ${e.message}`));
+    return true;
+  }
+  void sendTitanGifts().then(say);
+  return true;
+};
+
+/** Подарки за Титана: самый дешёвый подарок Telegram каждому из лучших героев с входом через Telegram. */
+async function sendTitanGifts(): Promise<string> {
+  if (!TITAN_GIFT_TOP) return 'Подарки за Титана выключены: задай TITAN_GIFT_TOP (сколько лучших героев награждать).';
+  const last = titan.lastWon(Date.now(), TITAN_GIFT_TOP);
+  if (!last) return 'Нет побеждённого Титана, за которого можно дарить.';
+  if (last.sent) return `Подарки за Титана ${last.key} уже отправлены: ${last.sent}.`;
+  const api = botApi(BOT_TOKEN);
+  const list = await api('getAvailableGifts', {}, 15_000).catch(() => null);
+  const gifts = ((list?.result as { gifts?: { id: string; star_count: number; remaining_count?: number }[] } | undefined)?.gifts ?? []).filter((g) => g.remaining_count !== 0);
+  const gift = gifts.sort((a, b) => a.star_count - b.star_count)[0];
+  if (!gift) return `Telegram не дал список подарков: ${list?.description ?? 'ошибка'}`;
+  const name = TITANS[Number(last.key.slice(5)) - 1]?.name ?? 'Титан';
+  let sent = 0;
+  const fails: string[] = [];
+  for (const [i, h] of last.top.entries()) {
+    // Подарок — только в Telegram, даже если уведомления игрок получает в Max.
+    const tgLogin = accounts.logins(h.id).find((x) => x.startsWith('tg:'));
+    if (!tgLogin) continue;
+    const l = langOf(h.id);
+    const r = await api('sendGift', { user_id: Number(tgLogin.slice(3)), gift_id: gift.id, text: tl(l, '{0}-е место в битве с Титаном «{1}» — NikitenokArena', { 0: i + 1, 1: tl(l, name) }).slice(0, 128) }, 15_000).catch((e: Error) => ({ ok: false, description: e.message }));
+    if (r.ok) sent++;
+    else fails.push(`${i + 1}: ${r.description ?? 'ошибка'}`);
+  }
+  if (sent) titan.markGifts(last.key, { sent });
+  return `🎁 Подарки за Титана ${last.key}: отправлено ${sent} из ${last.top.length} по ${gift.star_count} ⭐.${fails.length ? `\nНе ушли: ${fails.join('; ')}` : ''}`;
+}
+
 /** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
 const proCommand = (chatId: number, text: string): boolean => {
   const m = /^\/(?:refund_(\d+)|sales)(?:@\w+)?$/.exec(text.trim());
@@ -914,7 +993,7 @@ const http = createServer((req, res) => {
         const msg = (update as unknown as Update).message;
         const pay = payUpdate(update as unknown as Update);
         if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
-        if (proCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
@@ -982,7 +1061,7 @@ const http = createServer((req, res) => {
     onDeleteMe(req, res).catch(() => res.writeHead(500).end());
     return;
   }
-  if (path === '/api/recap' || path === '/api/story-image') {
+  if (path === '/api/recap' || path === '/api/story-image' || path === '/api/share/prepare') {
     onRecapApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
@@ -1390,7 +1469,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
-    (chatId, text) => (proCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
+    (chatId, text) => (proCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
     (u) => {
       const pay = payUpdate(u);
       if (pay === undefined) return channelUpdate(u);
@@ -1432,7 +1511,18 @@ const ADMIN_COMMANDS = [
   { command: 'carousel', description: 'Карусель для Instagram: /carousel tips|app [тема]' },
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
   { command: 'talk', description: 'Рилс, где рассказывает персонаж игры: /talk [тема]' },
+  { command: 'emoji_setup', description: 'Набор значков для emoji-статуса игроков' },
+  { command: 'titan_gifts', description: 'Подарки Telegram лучшим героям за Титана' },
 ];
+// Титан побеждён и неделя прошла: один раз спрашиваем админа, дарить ли подарки лучшим героям.
+if (BOT_TOKEN && TITAN_GIFT_TOP)
+  setInterval(() => {
+    const last = titan.lastWon(Date.now(), TITAN_GIFT_TOP);
+    if (!last || last.asked || last.sent) return;
+    titan.markGifts(last.key, { asked: true });
+    const top = last.top.map((h, i) => `${i + 1}. ${cities.get(h.id)?.name ?? friends.get(h.id)?.name ?? titanNames.get(h.id) ?? h.id} — ${h.reps}`).join('\n');
+    toAdmins(`🏆 Титан ${last.key} повержен! Лучшие герои:\n${top}\n\nПодарить им подарки Telegram (самый дешёвый, за звёзды бота)? Команда: /titan_gifts`);
+  }, 3_600_000);
 const adminMenus = new Set<string>();
 if (BOT_TOKEN)
   setInterval(() => {

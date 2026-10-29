@@ -104,7 +104,7 @@ export interface StarterOffer {
   price: number;
   bought: boolean;
 }
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean };
+type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -179,13 +179,14 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       proOffer?: ProOffer | null;
       starter?: StarterOffer | null;
       raidNotify?: boolean;
+      emoji?: Record<string, string>;
       admin?: boolean;
       account?: string;
       linkable?: boolean;
       maxBot?: string | null;
     };
     setMaxBot(r.maxBot);
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable };
+    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();

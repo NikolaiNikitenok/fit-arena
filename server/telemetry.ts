@@ -10,7 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { anonSource } from '../shared/anon';
 
 /** События клиента. Новое событие — сначала сюда, иначе сервер его не примет. */
-export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share'] as const;
+export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status'] as const;
 export type EventName = (typeof EVENTS)[number];
 
 /** Шаги воронки: бит в карточке игрока. */

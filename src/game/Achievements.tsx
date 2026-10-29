@@ -4,6 +4,9 @@ import { type AchIcon, type AchTier, achDone, type Achievement, visibleAchieveme
 import type { Progress } from './progress';
 import { Sheet } from '../Sheet';
 import { locale, t } from '../i18n';
+import { cloudState } from '../cloud';
+import { canSetEmojiStatus, setEmojiStatus } from '../telegram';
+import { track } from '../telemetry';
 
 const GLYPH: Record<AchIcon, string> = {
   flame: 'M12 22c4.2 0 7-2.8 7-6.8 0-3.2-1.8-5.6-3.6-7.6-.4 1.9-1.4 3.2-2.6 3.8.3-3.4-1-6.6-3.8-9.4-.2 3.4-1.8 5.4-3.4 7.4C4.3 11.1 5 13.4 5 15.2 5 19.2 7.8 22 12 22z',
@@ -42,6 +45,9 @@ export function AchBadge({ ach, done, size = 48 }: { ach: Achievement; done: boo
 export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: { progress: Progress; now: number; onClaim: (a: Achievement) => void; onTitle: (id: string | undefined) => void; onClose: () => void }) {
   const [tab, setTab] = useState<'all' | 'done'>('all');
   const all = visibleAchievements(progress, now);
+  // Значки достижений для emoji-статуса: номера эмодзи даёт сервер, когда админ создал набор.
+  const emoji = cloudState()?.emoji ?? {};
+  const [note, setNote] = useState<string | null>(null);
   const done = all.filter((x) => achDone(x, progress, now));
   // Сначала те, что можно забрать, потом выполненные, потом ближайшие к цели.
   const list = [...(tab === 'done' ? done : all)].sort((x, y) => {
@@ -62,6 +68,7 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
           {t('Полученные')}
         </button>
       </div>
+      {note && <div className="muted ach-hint">{note}</div>}
       <div className="ach-list">
         {list.map((x) => {
           const ok = achDone(x, progress, now);
@@ -76,6 +83,20 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
                   {x.title} <span className={`ach-tier ${x.tier}`}>{TIER[x.tier].name}</span>
                 </div>
                 <div className="muted">{x.text}</div>
+                {ok && claimed && emoji[x.id] && canSetEmojiStatus() && (
+                  <button
+                    className="ach-status"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void setEmojiStatus(emoji[x.id]).then((set) => {
+                        if (set) track('emoji_status', x.id);
+                        setNote(set ? t('Значок «{0}» теперь у твоего имени в Telegram', { 0: x.title }) : t('Не вышло: emoji-статус есть только у Telegram Premium'));
+                      });
+                    }}
+                  >
+                    {t('✨ Значок у имени в Telegram')}
+                  </button>
+                )}
                 {!ok && x.goal > 1 && (
                   <div className="ach-progress">
                     <div className="bar">

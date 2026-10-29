@@ -18,6 +18,7 @@ import { petLook } from './pets';
 import { MissionScene3D } from './MissionScene3D';
 import { Stars } from './Stars';
 import { bossCard, ShareVictory } from './ShareCard';
+import { HomeShortcutOffer } from '../HomeShortcut';
 import { Dialog, Remark } from './Dialog';
 import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
@@ -405,6 +406,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         </button>
       )}
       {status === 'won' && result && !epilogue && level.type === 'boss' && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
+      {status === 'won' && result && !epilogue && <HomeShortcutOffer />}
       {status === 'won' && onNext && (
         <button className="primary" onClick={onNext}>
           {t('Дальше')}

@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { canonicalKey, knownCity } from '../shared/cityNames';
-import { titanOf, type TitanWindow, titanWindow } from '../shared/titan';
+import { lastTitan, titanOf, titanWindow, type TitanWindow } from '../shared/titan';
 import { DAY_REPS_MAX } from './saves';
 
 export const TITAN_MIN_HP = 10_000;
@@ -19,6 +19,9 @@ export interface TitanRecord {
   wonAt?: number;
   // Итоговый урон: записывается, когда неделя закончилась.
   dealt?: number;
+  // Подарки Telegram лучшим героям: админа спросили / сколько отправлено.
+  giftAsked?: boolean;
+  giftsSent?: number;
 }
 
 export interface TitanState {
@@ -36,6 +39,8 @@ export interface TitanState {
   cities: { name: string; dealt: number; players: number; mine?: boolean }[];
   heroes: { name: string; reps: number; pro?: boolean; me?: boolean }[];
   myCity: { name: string; place: number; dealt: number } | null;
+  // Сколько лучших героев получат подарок Telegram при победе (0 — подарков нет).
+  giftTop: number;
 }
 
 export interface TitanDeps {
@@ -43,6 +48,8 @@ export interface TitanDeps {
   cities: () => Iterable<{ id: string; city: string; name: string }>;
   nameOf: (id: string) => string | undefined;
   isPro: (id: string) => boolean;
+  // Сколько лучших героев получат подарок Telegram (TITAN_GIFT_TOP); без него — подарков нет.
+  giftTop?: () => number;
 }
 
 /** Месяц перед этим: 2026-01 → 2025-12. */
@@ -175,7 +182,29 @@ export class TitanBoard {
       cities: t.cities.slice(0, 10).map((c) => ({ name: c.name, dealt: c.dealt, players: c.players, mine: c.key === myKey || undefined })),
       heroes: t.heroes.slice(0, 10).map(([pid, reps]) => ({ name: this.d.nameOf(pid) ?? 'Герой', reps, pro: this.d.isPro(pid) || undefined, me: pid === id || undefined })),
       myCity: ci >= 0 ? { name: t.cities[ci].name, place: ci + 1, dealt: t.cities[ci].dealt } : null,
+      giftTop: this.d.giftTop?.() ?? 0,
     };
+  }
+
+  /** Прошедший Титан, которого победили: лучшие n героев (id и повторы) и отметки о подарках. */
+  lastWon(now: number, n: number): { key: string; top: { id: string; reps: number }[]; asked: boolean; sent: number } | null {
+    const w = lastTitan(now);
+    if (now < w.end) return null;
+    // state() отмечает победу и итог, если их ещё не записали.
+    this.state('', now, w.key);
+    const rec = this.records[w.key];
+    if (!rec?.wonAt) return null;
+    const t = this.table(w, now);
+    return { key: w.key, top: t.heroes.slice(0, n).map(([id, reps]) => ({ id, reps })), asked: !!rec.giftAsked, sent: rec.giftsSent ?? 0 };
+  }
+
+  /** Отметить: админа о подарках спросили / подарки отправлены. */
+  markGifts(key: string, mark: { asked?: boolean; sent?: number }): void {
+    const rec = this.records[key];
+    if (!rec) return;
+    if (mark.asked) rec.giftAsked = true;
+    if (mark.sent != null) rec.giftsSent = mark.sent;
+    this.save();
   }
 
   flush(): void {
