@@ -8,7 +8,7 @@ describe('значки достижений для emoji-статуса', () => 
   it('у каждого значка есть достижение и картинка', () => {
     for (const [ach] of EMOJI_BADGES) {
       expect(ACHIEVEMENTS.some((a) => a.id === ach)).toBe(true);
-      expect(existsSync(join(__dirname, 'media/emoji', `${ach}.png`))).toBe(true);
+      expect(existsSync(join(__dirname, '../public/emoji', `${ach}.png`))).toBe(true);
     }
   });
 
@@ -19,9 +19,9 @@ describe('значки достижений для emoji-статуса', () => 
     const api = async (m: string) => (calls.push(m), m === 'getStickerSet' && made ? { ok: true, result: { stickers } } : { ok: false, description: 'STICKERSET_INVALID' });
     const upload = async (m: string, f: Record<string, unknown>) => (calls.push(m), (made = f.name === badgeSetName('ArenaBot')), { ok: true });
     const store = new EmojiBadges(null);
-    expect(await store.setup(api, upload, 1, 'ArenaBot', join(__dirname, 'media/emoji'))).toMatch(/готов: 15/);
-    expect(calls).toEqual(['getStickerSet', 'createNewStickerSet', 'getStickerSet']);
-    expect(store.ids().week).toBe('e2');
-    expect(idsFromSet({ stickers: [{ custom_emoji_id: 'x' }] })).toEqual({ reps10k: 'x' });
+    expect(await store.setup(api, upload, 1, 'ArenaBot', join(__dirname, '../public/emoji'))).toMatch(/готов: 39/);
+    expect(calls).toEqual(['getStickerSet', 'createNewStickerSet', 'getStickerSet', 'deleteStickerSet']);
+    expect(store.ids().week).toBe('e8');
+    expect(idsFromSet({ stickers: [{ custom_emoji_id: 'x' }] })).toEqual({ first: 'x' });
   });
 });

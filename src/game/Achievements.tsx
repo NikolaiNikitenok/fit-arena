@@ -29,6 +29,9 @@ const TIER: Record<AchTier, { ring: string; fill: string; name: string }> = {
   legend: { ring: '#c9a6ff', fill: '#3d2470', name: t('легенда') },
 };
 
+/** Картинка значка для emoji-статуса (те же PNG, что в наборе эмодзи бота). */
+const badgeUrl = (id: string) => `${import.meta.env.BASE_URL}emoji/${id}.png`;
+
 /** Медаль достижения: цвет рамки — редкость, внутри знак. Невыполненные — серые. */
 export function AchBadge({ ach, done, size = 48 }: { ach: Achievement; done: boolean; size?: number }) {
   const tm = TIER[ach.tier];
@@ -47,6 +50,7 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
   const all = visibleAchievements(progress, now);
   // Значки достижений для emoji-статуса: номера эмодзи даёт сервер, когда админ создал набор.
   const emoji = cloudState()?.emoji ?? {};
+  const badges = canSetEmojiStatus() && Object.keys(emoji).length > 0;
   const [note, setNote] = useState<string | null>(null);
   const done = all.filter((x) => achDone(x, progress, now));
   // Сначала те, что можно забрать, потом выполненные, потом ближайшие к цели.
@@ -60,6 +64,7 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
         {t('Достижения')} <span className="muted">{t('{0} из {1}', { 0: done.length, 1: all.length })}</span>
       </div>
       <div className="muted ach-hint">{t('За каждое — монеты и титул. Титул виден под именем героя; нажми на полученный, чтобы надеть.')}</div>
+      {badges && <div className="muted ach-hint">{t('✨ За многие достижения — значок, который можно поставить рядом со своим именем в Telegram (нужен Telegram Premium).')}</div>}
       <div className="tabs">
         <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
           {t('Все')}
@@ -83,20 +88,25 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
                   {x.title} <span className={`ach-tier ${x.tier}`}>{TIER[x.tier].name}</span>
                 </div>
                 <div className="muted">{x.text}</div>
-                {ok && claimed && emoji[x.id] && canSetEmojiStatus() && (
-                  <button
-                    className="ach-status"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void setEmojiStatus(emoji[x.id]).then((set) => {
-                        if (set) track('emoji_status', x.id);
-                        setNote(set ? t('Значок «{0}» теперь у твоего имени в Telegram', { 0: x.title }) : t('Не вышло: emoji-статус есть только у Telegram Premium'));
-                      });
-                    }}
-                  >
-                    {t('✨ Значок у имени в Telegram')}
-                  </button>
-                )}
+                {badges && emoji[x.id] &&
+                  (ok && claimed ? (
+                    <button
+                      className="ach-status"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void setEmojiStatus(emoji[x.id]).then((set) => {
+                          if (set) track('emoji_status', x.id);
+                          setNote(set ? t('Значок «{0}» теперь у твоего имени в Telegram', { 0: x.title }) : t('Не вышло: emoji-статус есть только у Telegram Premium'));
+                        });
+                      }}
+                    >
+                      <img src={badgeUrl(x.id)} alt="" /> {t('Поставить значок у имени в Telegram')}
+                    </button>
+                  ) : (
+                    <div className="ach-status-hint">
+                      <img src={badgeUrl(x.id)} alt="" /> {ok ? t('Забери награду — и этот значок можно поставить у имени в Telegram') : t('Даст значок у имени в Telegram')}
+                    </div>
+                  ))}
                 {!ok && x.goal > 1 && (
                   <div className="ach-progress">
                     <div className="bar">
