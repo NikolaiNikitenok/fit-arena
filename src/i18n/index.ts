@@ -83,7 +83,10 @@ export function tl(l: Lang, ru: string, vars?: Record<string, string | number | 
 }
 
 /** Язык по коду Telegram (language_code) или браузера: русский для русского и языков СНГ, иначе английский. */
-export const langOfCode = (code: string | null | undefined): Lang => (!code || RU_LIKE.test(code.toLowerCase()) ? 'ru' : 'en');
+// Объявление функции, а не стрелка: detect() вызывает её при загрузке модуля, раньше этой строки.
+export function langOfCode(code: string | null | undefined): Lang {
+  return !code || RU_LIKE.test(code.toLowerCase()) ? 'ru' : 'en';
+}
 
 /** Ошибка от сервера: сервер пишет по-русски, а здесь её переводим (если такая фраза есть в словаре). */
 export function tErr<T>(reply: T): T {

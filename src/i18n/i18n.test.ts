@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EN } from './en';
 import { pl, setLangForTest, t } from './index';
 
@@ -36,5 +36,19 @@ describe('английский перевод', () => {
     expect(t('Уровень карты {0} · {1}', { 0: 3, 1: 'X' })).toBe('Уровень карты 3 · X');
     expect(pl(3, ['день', 'дня', 'дней'], ['day', 'days'])).toBe('дня');
     expect(pl(11, ['день', 'дня', 'дней'], ['day', 'days'])).toBe('дней');
+  });
+});
+
+describe('запуск в браузере', () => {
+  // Регрессия: модуль определял язык при загрузке через функцию, объявленную ниже, — игра падала на заставке.
+  it('язык определяется при загрузке без ошибок: по Telegram, русский для СНГ', async () => {
+    for (const [code, want] of [['en', 'en'], ['ru', 'ru'], ['uk', 'ru']] as const) {
+      vi.resetModules();
+      vi.stubGlobal('window', {});
+      vi.stubGlobal('Telegram', { WebApp: { initDataUnsafe: { user: { language_code: code } } } });
+      const m = await import('./index');
+      expect(m.getLang()).toBe(want);
+      vi.unstubAllGlobals();
+    }
   });
 });
