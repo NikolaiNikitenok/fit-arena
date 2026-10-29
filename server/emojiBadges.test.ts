@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ACHIEVEMENTS } from '../src/game/achievements';
-import { badgeSetName, EMOJI_BADGES, EmojiBadges, idsFromSet } from './emojiBadges';
+import { badgeSetName, badgeSetTitle, EMOJI_BADGES, EmojiBadges, idsFromSet } from './emojiBadges';
 
 describe('значки достижений для emoji-статуса', () => {
   it('у каждого значка есть достижение и картинка', () => {
@@ -16,12 +16,19 @@ describe('значки достижений для emoji-статуса', () => 
     const calls: string[] = [];
     let made = false;
     const stickers = EMOJI_BADGES.map((_, i) => ({ custom_emoji_id: `e${i}` }));
-    const api = async (m: string) => (calls.push(m), m === 'getStickerSet' && made ? { ok: true, result: { stickers } } : { ok: false, description: 'STICKERSET_INVALID' });
+    const api = async (m: string) => (calls.push(m), m === 'getStickerSet' && made ? { ok: true, result: { title: 'NikitenokArena — @ArenaBot', stickers } } : { ok: false, description: 'STICKERSET_INVALID' });
     const upload = async (m: string, f: Record<string, unknown>) => (calls.push(m), (made = f.name === badgeSetName('ArenaBot')), { ok: true });
     const store = new EmojiBadges(null);
     expect(await store.setup(api, upload, 1, 'ArenaBot', join(__dirname, '../public/emoji'))).toMatch(/готов: 39/);
     expect(calls).toEqual(['getStickerSet', 'createNewStickerSet', 'getStickerSet', 'deleteStickerSet']);
     expect(store.ids().week).toBe('e8');
     expect(idsFromSet({ stickers: [{ custom_emoji_id: 'x' }] })).toEqual({ first: 'x' });
+  });
+
+  it('переименовывает набор со старым названием', async () => {
+    const calls: [string, Record<string, unknown>][] = [];
+    const api = async (m: string, p: Record<string, unknown>) => (calls.push([m, p]), m === 'getStickerSet' ? { ok: true, result: { title: 'NikitenokArena', stickers: [] } } : { ok: true });
+    await new EmojiBadges(null).setup(api, async () => ({ ok: true }), 1, 'ArenaBot', '');
+    expect(calls).toContainEqual(['setStickerSetTitle', { name: badgeSetName('ArenaBot'), title: badgeSetTitle('ArenaBot') }]);
   });
 });
