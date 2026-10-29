@@ -43,7 +43,7 @@ function OutfitStage({ w }: { w: HolidayWindow }) {
       </mesh>
       <Suspense fallback={null}>
         <Spin>
-          <Character model={item.hero} tint={item.tint} glow={item.glow} anim="idle" />
+          <Character model={item.hero} tint={item.tint} aura={item.glow} anim="idle" />
         </Spin>
       </Suspense>
     </Canvas3D>

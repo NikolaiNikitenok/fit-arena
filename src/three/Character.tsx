@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { parseTint } from './Instanced';
-import { addOutline, outlinesOn, toonOf } from './toon';
+import { addOutline, outlinesOn, setRim, toonOf } from './toon';
 import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
 
 // Персонажи KayKit: рыцарь, маг, варвар, разбойник и скелеты. Скелет у всех общий,
@@ -66,6 +66,8 @@ export interface CharacterProps {
   // Снаряжение героя по отдельности: оружие и вещь во второй руке. Если задано,
   // стандартное оружие набора прячется.
   hands?: { weapon?: HandGear; offhand?: HandGear };
+  // Редкость облика: кромка силуэта этого цвета, мягко пульсирует (тело не засвечивается, в отличие от glow).
+  aura?: string;
   // Тёмная обводка силуэта (src/three/toon.ts). В деревне сцена обводится целиком (StylePass) — там выключена.
   outline?: boolean;
 }
@@ -84,7 +86,7 @@ export interface HandGear {
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true }: CharacterProps) {
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, aura, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
@@ -179,8 +181,16 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   }, [hit]);
 
   const glowColor = useMemo(() => new THREE.Color(glow ?? '#000000'), [glow]);
+  const auraColor = useMemo(() => (aura ? new THREE.Color(aura) : null), [aura]);
+  useEffect(() => {
+    for (const m of materials) setRim(m, auraColor);
+  }, [auraColor, materials]);
   useFrame((_, delta) => {
     mixer.update(Math.min(delta, 0.1));
+    if (auraColor) {
+      const k = 1.5 + 0.4 * Math.sin(performance.now() / 450);
+      for (const m of materials) setRim(m, auraColor, k);
+    }
     const h = Math.min(1, (performance.now() - hitAt.current) / 300);
     const flash = h < 1 ? Math.sin(h * Math.PI) : 0;
     const g = glow ? 0.25 + 0.12 * Math.sin(performance.now() / 300) : 0;

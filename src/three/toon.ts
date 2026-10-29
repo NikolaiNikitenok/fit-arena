@@ -27,13 +27,30 @@ function toonGradient(): THREE.DataTexture {
 }
 
 // Ободок: светлая кромка по самому краю силуэта, в цвет поверхности (белый высвечивал тонкий плащ целиком).
+// У редкого облика кромка — цвета редкости и ярче (setRim): светится только край, сам облик виден как есть.
 const RIM = /* glsl */ `
   {
     vec3 viewDir = normalize(vViewPosition);
     float rim = smoothstep(0.62, 0.95, 1.0 - abs(dot(normal, viewDir)));
-    outgoingLight += diffuseColor.rgb * rim * 0.28;
+    outgoingLight += mix(diffuseColor.rgb, uRimColor, uRimMix) * rim * uRimStrength;
   }
 `;
+const RIM_BASE = 0.28;
+
+interface RimUniforms {
+  uRimColor: { value: THREE.Color };
+  uRimMix: { value: number };
+  uRimStrength: { value: number };
+}
+
+/** Цвет ободка: color — цвет редкости (null — обычный, в цвет поверхности), strength — яркость кромки. */
+export function setRim(m: THREE.Material, color: THREE.Color | null, strength = 0.9): void {
+  const u = m.userData.rim as RimUniforms | undefined;
+  if (!u) return;
+  if (color) u.uRimColor.value.copy(color);
+  u.uRimMix.value = color ? 1 : 0;
+  u.uRimStrength.value = color ? strength : RIM_BASE;
+}
 
 /** Мультяшный материал вместо обычного: та же текстура, цвет, прозрачность и свечение. */
 export function toonOf(src: THREE.MeshStandardMaterial): THREE.MeshToonMaterial {
@@ -49,8 +66,11 @@ export function toonOf(src: THREE.MeshStandardMaterial): THREE.MeshToonMaterial 
     gradientMap: toonGradient(),
   });
   m.name = src.name;
+  const rim: RimUniforms = { uRimColor: { value: new THREE.Color('#ffffff') }, uRimMix: { value: 0 }, uRimStrength: { value: RIM_BASE } };
+  m.userData.rim = rim;
   m.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `${RIM}\n#include <opaque_fragment>`);
+    Object.assign(shader.uniforms, rim);
+    shader.fragmentShader = `uniform vec3 uRimColor;\nuniform float uRimMix;\nuniform float uRimStrength;\n${shader.fragmentShader.replace('#include <opaque_fragment>', `${RIM}\n#include <opaque_fragment>`)}`;
   };
   // Свой ключ программы: иначе three возьмёт скомпилированный шейдер обычного мультяшного материала без ободка.
   m.customProgramCacheKey = () => 'toon-rim';
