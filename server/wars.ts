@@ -22,6 +22,7 @@ import {
   type WarView,
 } from '../shared/war';
 import type { Clan, ClanStore } from './clans';
+import { tk } from '../src/i18n';
 
 const HOUR = 3_600_000;
 // Если сервер лежал в пятницу, пары ещё можно составить до полудня субботы.
@@ -128,7 +129,8 @@ function startWar(store: ClanStore, c: Clan, opp: Clan | null, counted: number, 
     days: {},
     ...(opp ? {} : { ghostTarget: ghostTarget(pastPerMember(c)) }),
   };
-  store.system(c, opp ? `Война кланов! Соперник на выходных — клан «${opp.name}» [${opp.tag}]. Каждый повтор в субботу и воскресенье — очко клана` : `Война кланов! На выходных против нас ${WAR_GHOST.name}. Каждый повтор в субботу и воскресенье — очко клана`, now);
+  if (opp) store.system(c, tk('Война кланов! Соперник на выходных — клан «{0}» [{1}]. Каждый повтор в субботу и воскресенье — очко клана'), now, { 0: opp.name, 1: opp.tag });
+  else store.system(c, tk('Война кланов! На выходных против нас {0}. Каждый повтор в субботу и воскресенье — очко клана'), now, { 0: WAR_GHOST.name });
 }
 
 /** Пятница вечером: составить пары из записавшихся кланов. Возвращает кланы, которым досталась война. */

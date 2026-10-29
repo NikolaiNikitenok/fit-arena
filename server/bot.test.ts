@@ -22,6 +22,17 @@ describe('бот /start', () => {
   });
 });
 
+describe('бот по-английски', () => {
+  it('отвечает на языке игрока: английский Telegram — по-английски, русский и СНГ — по-русски', () => {
+    expect(startReply('/start clan-abc123', 'https://arena.example', clans, 'en')).toMatchObject({ button: 'Join the clan' });
+    expect(startReply('/start', 'https://arena.example', clans, 'en')?.text).toMatch(/^Hi! This is NikitenokArena/);
+    const en = webhookReply({ update_id: 3, message: { chat: { id: 7, type: 'private' }, from: { id: 7, language_code: 'en' }, text: '/start K7P2' } }, 'https://arena.example', clans);
+    expect(en).toMatchObject({ text: 'You\'ve been challenged to a duel! Tap the button to enter the fight room.' });
+    const uk = webhookReply({ update_id: 4, message: { chat: { id: 7, type: 'private' }, from: { id: 7, language_code: 'uk' }, text: '/start K7P2' } }, 'https://arena.example', clans);
+    expect(uk).toMatchObject({ text: 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.' });
+  });
+});
+
 describe('вебхук', () => {
   it('отвечает методом прямо в ответе на /start', () => {
     const r = webhookReply({ update_id: 1, message: { chat: { id: 7, type: 'private' }, text: '/start' } }, 'https://arena.example', clans);

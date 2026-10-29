@@ -8,6 +8,7 @@ import { openPrivacy } from '../privacy';
 import { HaveHeroButton } from '../account/Account';
 import { WebLoginButtons } from '../account/WebLogin';
 import { useBusy } from '../updates/busy';
+import { t } from '../i18n';
 
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
 
@@ -18,43 +19,43 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
   const [step, setStep] = useState(0);
   const steps = [
     {
-      title: 'Добро пожаловать в NikitenokArena!',
-      text: 'Я Мастер Гром. Князь Диван усыпил королевство Атлетию ленью, и разбудить его можно только движением. Здесь каждый твой повтор — удар по врагу, шаг по карте и сила героя.',
+      title: t('Добро пожаловать в NikitenokArena!'),
+      text: t('Я Мастер Гром. Князь Диван усыпил королевство Атлетию ленью, и разбудить его можно только движением. Здесь каждый твой повтор — удар по врагу, шаг по карте и сила героя.'),
     },
     {
-      title: 'Камера считает сама',
-      text: 'Поставь телефон сбоку на уровне пояса, чтобы в кадр попадало всё тело. Видео никуда не уходит: распознавание работает прямо на телефоне.',
+      title: t('Камера считает сама'),
+      text: t('Поставь телефон сбоку на уровне пояса, чтобы в кадр попадало всё тело. Видео никуда не уходит: распознавание работает прямо на телефоне.'),
       extra: (
         <>
           <CameraGuide exercise="squat" compact />
           <button className="link inline onb-privacy" onClick={openPrivacy}>
-            Политика конфиденциальности
+            {t('Политика конфиденциальности')}
           </button>
         </>
       ),
     },
     {
-      title: 'Четыре раздела',
+      title: t('Четыре раздела'),
       extra: (
         <div className="onb-tabs">
           <div>
-            <Shield size={20} /> <b>Герой</b> — твой уровень, снаряжение и задание дня от жителей.
+            <Shield size={20} /> <b>{t('Герой')}</b> {t('— твой уровень, снаряжение и задание дня от жителей.')}
           </div>
           <div>
-            <MapIcon size={20} /> <b>Карта</b> — 300 уровней в трёх мирах, боссы и сундуки.
+            <MapIcon size={20} /> <b>{t('Карта')}</b> {t('— 300 уровней в трёх мирах, боссы и сундуки.')}
           </div>
           <div>
-            <Banner size={20} /> <b>Клан</b> — друзья, чат и рейд-босс по выходным.
+            <Banner size={20} /> <b>{t('Клан')}</b> {t('— друзья, чат и рейд-босс по выходным.')}
           </div>
           <div>
-            <Swords size={20} /> <b>Дуэль</b> — бой с живым соперником: кто больше повторов.
+            <Swords size={20} /> <b>{t('Дуэль')}</b> {t('— бой с живым соперником: кто больше повторов.')}
           </div>
         </div>
       ),
     },
     {
-      title: 'Начнём с испытания',
-      text: 'Минута приседаний, сколько сможешь. Так я пойму твою форму и подберу врагов по силе: дальше они будут расти вместе с тобой.',
+      title: t('Начнём с испытания'),
+      text: t('Минута приседаний, сколько сможешь. Так я пойму твою форму и подберу врагов по силе: дальше они будут расти вместе с тобой.'),
     },
   ];
   // Статистика: до какого шага доходят новички (повтор из настроек не считаем).
@@ -82,10 +83,10 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
         {s.text && <div className="onb-text">{s.text}</div>}
         {s.extra}
         <button className="primary" onClick={() => (last ? done(true) : setStep(step + 1))}>
-          {last ? (replay ? 'Понятно' : 'Начать испытание') : 'Дальше'}
+          {last ? (replay ? t('Понятно') : t('Начать испытание')) : t('Дальше')}
         </button>
         <button className="link" onClick={() => done(false)}>
-          {last ? (replay ? 'Закрыть' : 'Сначала осмотрюсь') : 'Пропустить'}
+          {last ? (replay ? t('Закрыть') : t('Сначала осмотрюсь')) : t('Пропустить')}
         </button>
         {/* Уже играл на другой платформе: привязать этот вход к тому герою (src/account). */}
         {!replay && step === 0 && <HaveHeroButton />}

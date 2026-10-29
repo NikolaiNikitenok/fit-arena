@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage, ClanClaim, ClanClientMessage, ClanListItem, ClanView, RaidView } from '../../shared/clan';
 import type { ServerMessage } from '../../shared/protocol';
 import { guestId, tg, userName } from '../telegram';
+import { t } from '../i18n';
 
 export type ClanStatus = 'connecting' | 'online' | 'offline';
 
@@ -67,8 +68,8 @@ export function useClan(level: number) {
           break;
         case 'clanError':
         case 'error':
-          setError(msg.message);
-          setTimeout(() => setError((x) => (x === msg.message ? null : x)), 4000);
+          setError(t(msg.message));
+          setTimeout(() => setError((x) => (x === t(msg.message) ? null : x)), 4000);
           break;
       }
     };

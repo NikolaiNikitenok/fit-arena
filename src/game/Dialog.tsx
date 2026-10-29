@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Line } from './levels';
 import { portraitUrl } from './npcs';
+import { t } from '../i18n';
 
 export const Portrait = ({ line, size = 64 }: { line: Pick<Line, 'face' | 'color' | 'who'>; size?: number }) => (
   <div className="portrait" style={{ width: size, height: size, background: `radial-gradient(circle at 50% 35%, ${line.color}, #1b1d26 75%)`, borderColor: line.color }}>
@@ -17,8 +18,8 @@ export function Dialog({ lines, onDone }: { lines: Line[]; onDone: () => void })
 
   useEffect(() => {
     setShown(0);
-    const t = setInterval(() => setShown((n) => (n >= lines[i].text.length ? (clearInterval(t), n) : n + 2)), 30);
-    return () => clearInterval(t);
+    const tm = setInterval(() => setShown((n) => (n >= lines[i].text.length ? (clearInterval(tm), n) : n + 2)), 30);
+    return () => clearInterval(tm);
   }, [i, lines]);
 
   const next = () => {
@@ -36,7 +37,7 @@ export function Dialog({ lines, onDone }: { lines: Line[]; onDone: () => void })
         </div>
         <div className="dialog-text">{line.text.slice(0, shown)}</div>
         <div className="dialog-next">
-          {full ? (i + 1 < lines.length ? 'дальше ›' : 'понятно ›') : ''}
+          {full ? (i + 1 < lines.length ? t('дальше ›') : t('понятно ›')) : ''}
           {lines.length > 1 && <span className="dialog-count">{i + 1}/{lines.length}</span>}
         </div>
       </div>

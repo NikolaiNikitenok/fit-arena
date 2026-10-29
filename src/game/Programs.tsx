@@ -31,6 +31,7 @@ import {
 } from './programs';
 import { SetList, WorkoutSession } from './WorkoutSession';
 import './Programs.css';
+import { t } from '../i18n';
 
 // Карточка на главном экране и подходы задания дня живут отдельно: главный экран не тянет за собой тренировку с камерой и 3D.
 export { plankDailyWorkout, ProgramsEntry } from './ProgramsEntry';
@@ -39,7 +40,7 @@ export { plankDailyWorkout, ProgramsEntry } from './ProgramsEntry';
 
 const grom = (text: string): Line => ({ who: NPCS.grom.name, face: 'grom', color: NPCS.grom.color, text });
 const achOf = (id: ProgramId) => ACHIEVEMENTS.find((a) => a.id === `prog-${id}`)!;
-const daysWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней');
+const daysWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? t('день') : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? t('дня') : t('дней'));
 
 /** Быстрая тренировка вне программы: тест планки или задание дня на планку. */
 export interface QuickWorkout {
@@ -80,7 +81,7 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
     const def = programById(view.id)!;
     return (
       <WorkoutSession
-        tag={`${def.title} · день ${view.day} из ${def.days}`}
+        tag={t('{0} · день {1} из {2}', { 0: def.title, 1: view.day, 2: def.days })}
         title={planDay(def, view.day, st.run?.base, progress.baseline, st.run?.factor).title}
         sets={view.sets}
         model={model}
@@ -98,17 +99,17 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
           const kind = dayKind(def, view.day);
           const pct = Math.round(res.share * 100);
           const text = res.completed
-            ? `Ты прошёл «${def.title}». Я горжусь тобой, боец. Носи награду с честью!`
+            ? t('Ты прошёл «{0}». Я горжусь тобой, боец. Носи награду с честью!', { 0: def.title })
             : res.retry
-              ? `Финал взят на ${pct}%. Отдохни, а завтра добьём — я в тебя верю.`
+              ? t('Финал взят на {0}%. Отдохни, а завтра добьём — я в тебя верю.', { 0: pct })
               : kind === 'test'
-                ? `Записал твой старт: ${view.sets.map((s, i) => `${EXERCISE_LABELS[s.exercise].toLowerCase()} ${amountText(s.exercise, done[i])}`).join(', ')}. От этого и поведу.`
+                ? t('Записал твой старт: {0}. От этого и поведу.', { 0: view.sets.map((s, i) => `${EXERCISE_LABELS[s.exercise].toLowerCase()} ${amountText(s.exercise, done[i])}`).join(', ') })
                 : pct >= 100
-                  ? 'Всё сделано! Дальше будет чуть тяжелее — ты готов.'
+                  ? t('Всё сделано! Дальше будет чуть тяжелее — ты готов.')
                   : pct >= 80
-                    ? `Сделано ${pct}%. Хорошая работа, завтра продолжим.`
-                    : `Сделано ${pct}%. Ничего, следующие дни сделаю полегче.`;
-          setView({ kind: 'summary', title: res.completed ? 'Программа пройдена!' : res.retry ? 'Почти!' : `День ${view.day} пройден`, text, coins: res.coins, xp: res.xp, outfit: res.outfit, ach: res.completed ? def.id : undefined, back: { kind: 'detail', id: view.id } });
+                    ? t('Сделано {0}%. Хорошая работа, завтра продолжим.', { 0: pct })
+                    : t('Сделано {0}%. Ничего, следующие дни сделаю полегче.', { 0: pct });
+          setView({ kind: 'summary', title: res.completed ? t('Программа пройдена!') : res.retry ? t('Почти!') : t('День {0} пройден', { 0: view.day }), text, coins: res.coins, xp: res.xp, outfit: res.outfit, ach: res.completed ? def.id : undefined, back: { kind: 'detail', id: view.id } });
         }}
       />
     );
@@ -130,10 +131,10 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
           const text =
             q.kind === 'plank'
               ? best >= 10
-                ? `${amountText('plank', best)} в планке! Запомнил: задания на планку теперь под тебя.`
-                : 'Пока совсем немного. Встань боком к камере, локти под плечи — и держи.'
-              : 'Задание сделано, забери награду на главном экране.';
-          setView({ kind: 'summary', title: q.kind === 'plank' ? 'Планка на время' : 'Готово!', text, back: { kind: 'list' } });
+                ? t('{0} в планке! Запомнил: задания на планку теперь под тебя.', { 0: amountText('plank', best) })
+                : t('Пока совсем немного. Встань боком к камере, локти под плечи — и держи.')
+              : t('Задание сделано, забери награду на главном экране.');
+          setView({ kind: 'summary', title: q.kind === 'plank' ? t('Планка на время') : t('Готово!'), text, back: { kind: 'list' } });
         }}
       />
     );
@@ -151,16 +152,16 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
                 <Coin size={15} className="coin" /> +{view.coins}
               </span>
             )}
-            {!!view.xp && <span>+{view.xp} опыта</span>}
+            {!!view.xp && <span>{t('+{0} опыта', { 0: view.xp })}</span>}
           </div>
           {outfit && (
             <div className="prog-reward">
               <OutfitFace id={outfit.id} size={52} />
               <div>
                 <div className="prog-reward-name" style={{ color: RARITY_COLORS[outfit.rarity] }}>
-                  Облик: {outfit.name}
+                  {t('Облик: {0}', { 0: outfit.name })}
                 </div>
-                <div className="muted">{RARITY_NAMES[outfit.rarity]} · уже в инвентаре</div>
+                <div className="muted">{t('{0} · уже в инвентаре', { 0: RARITY_NAMES[outfit.rarity] })}</div>
               </div>
             </div>
           )}
@@ -168,15 +169,15 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
             <div className="prog-reward">
               <AchBadge ach={achOf(view.ach)} done size={48} />
               <div>
-                <div className="prog-reward-name">Титул: {achOf(view.ach).title}</div>
-                <div className="muted">Забери в «Достижениях» и носи под именем</div>
+                <div className="prog-reward-name">{t('Титул: {0}', { 0: achOf(view.ach).title })}</div>
+                <div className="muted">{t('Забери в «Достижениях» и носи под именем')}</div>
               </div>
             </div>
           )}
           <Remark line={grom(view.text)} />
         </div>
         <button className="primary" onClick={() => (quick ? onClose() : setView(view.back))}>
-          Дальше
+          {t('Дальше')}
         </button>
       </div>
     );
@@ -189,9 +190,9 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
     <div className="prog-screen">
       <div className="app-head">
         <button className="pill btn" onClick={onClose}>
-          ‹ Назад
+          {t('‹ Назад')}
         </button>
-        <h1>Программы</h1>
+        <h1>{t('Программы')}</h1>
         <span className="pill">
           <Coin className="coin" /> {progress.coins}
         </span>
@@ -199,29 +200,29 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
       <Remark
         line={grom(
           active
-            ? `Мы идём по программе «${active.title}». Не сворачивай с пути, боец.`
+            ? t('Мы идём по программе «{0}». Не сворачивай с пути, боец.', { 0: active.title })
             : st.done.length
-              ? 'Ещё одна программа? Уважаю. Выбирай — я поведу.'
-              : 'Хочешь настоящий результат — нужен план. Выбери программу: в первый день проверю твою силу и подберу нагрузку под тебя.',
+              ? t('Ещё одна программа? Уважаю. Выбирай — я поведу.')
+              : t('Хочешь настоящий результат — нужен план. Выбери программу: в первый день проверю твою силу и подберу нагрузку под тебя.'),
         )}
       />
       {active && st.run && <ActiveCard def={active} progress={progress} onOpen={() => setView({ kind: 'detail', id: active.id })} />}
 
       <button
         className="prog-quick"
-        onClick={() => setView({ kind: 'quick', quick: { kind: 'plank', tag: 'Планка на время', title: 'Сколько продержишься?', sets: [{ exercise: 'plank', target: progress.baseline.plank ?? 30, rest: 0, max: true }] } })}
+        onClick={() => setView({ kind: 'quick', quick: { kind: 'plank', tag: t('Планка на время'), title: t('Сколько продержишься?'), sets: [{ exercise: 'plank', target: progress.baseline.plank ?? 30, rest: 0, max: true }] } })}
       >
         <span className="prog-icon" style={{ ['--pc' as string]: '#c4b5fd' }}>
           <Timer size={22} />
         </span>
         <span className="prog-card-text">
-          <b>Планка на время</b>
-          <small>Сколько продержишься? Рекорд: {progress.best.plank ? amountText('plank', progress.best.plank.reps) : 'ещё нет'}</small>
+          <b>{t('Планка на время')}</b>
+          <small>{t('Сколько продержишься? Рекорд: {0}', { 0: progress.best.plank ? amountText('plank', progress.best.plank.reps) : t('ещё нет') })}</small>
         </span>
         <span className="chev">›</span>
       </button>
 
-      <div className="section-title">Все программы</div>
+      <div className="section-title">{t('Все программы')}</div>
       <div className="prog-list">
         {PROGRAMS.map((def) => (
           <ProgramCard key={def.id} def={def} progress={progress} onOpen={() => setView({ kind: 'detail', id: def.id })} />
@@ -245,15 +246,15 @@ function ProgramCard({ def, progress, onOpen }: { def: ProgramDef; progress: Pro
         <b>{def.title}</b>
         <small>{def.short}</small>
         <span className="prog-tags">
-          <span className="prog-tag">{def.level}</span>
+          <span className="prog-tag">{t(def.level)}</span>
           <span className="prog-tag">
             {def.days} {daysWord(def.days)}
           </span>
-          {outfit && <span className="prog-tag gift">облик «{outfit.name}»</span>}
-          {running && <span className="prog-tag live">идёт · день {st.run!.day}</span>}
+          {outfit && <span className="prog-tag gift">{t('облик «{0}»', { 0: outfit.name })}</span>}
+          {running && <span className="prog-tag live">{t('идёт · день {0}', { 0: st.run!.day })}</span>}
           {passed && (
             <span className="prog-tag done">
-              <Check size={11} /> пройдена
+              <Check size={11} /> {t('пройдена')}
             </span>
           )}
         </span>
@@ -270,7 +271,7 @@ function ActiveCard({ def, progress, onOpen }: { def: ProgramDef; progress: Prog
   return (
     <button className="prog-active" style={{ ['--pc' as string]: def.color }} onClick={onOpen}>
       <span className="prog-active-top">
-        <span className="level-tag">Сейчас</span>
+        <span className="level-tag">{t('Сейчас')}</span>
         <span className={`prog-chip ${av}`}>{AV_TEXT[av]}</span>
       </span>
       <b>{def.title}</b>
@@ -278,18 +279,18 @@ function ActiveCard({ def, progress, onOpen }: { def: ProgramDef; progress: Prog
         <span style={{ display: 'block', width: `${(done / def.days) * 100}%`, background: def.color }} />
       </span>
       <small>
-        День {run.day} из {def.days} · {planDay(def, run.day, run.base, progress.baseline, run.factor).title.toLowerCase()}
+        {t('День {0} из {1} · {2}', { 0: run.day, 1: def.days, 2: planDay(def, run.day, run.base, progress.baseline, run.factor).title.toLowerCase() })}
       </small>
     </button>
   );
 }
 
-const AV_TEXT = { ready: 'тренировка сегодня', rest: 'день отдыха', tomorrow: 'сегодня всё, до завтра', paused: 'на паузе' } as const;
+const AV_TEXT = { ready: t('тренировка сегодня'), rest: t('день отдыха'), tomorrow: t('сегодня всё, до завтра'), paused: t('на паузе') } as const;
 const KIND_NOTE: Record<DayKind, string> = {
-  test: 'Сделай столько, сколько сможешь, в каждом подходе. Подход закончится сам, когда остановишься.',
-  train: 'Цели посчитаны от твоего теста и того, как идут дни.',
-  rest: 'Мышцы растут, пока ты отдыхаешь. Сегодня без нагрузки.',
-  final: 'Покажи, чему научился.',
+  test: t('Сделай столько, сколько сможешь, в каждом подходе. Подход закончится сам, когда остановишься.'),
+  train: t('Цели посчитаны от твоего теста и того, как идут дни.'),
+  rest: t('Мышцы растут, пока ты отдыхаешь. Сегодня без нагрузки.'),
+  final: t('Покажи, чему научился.'),
 };
 
 function ProgramDetail({ def, progress, update, select, setView }: { def: ProgramDef; progress: Progress; update: Props['update']; select?: number; setView: (v: View) => void }) {
@@ -313,23 +314,23 @@ function ProgramDetail({ def, progress, update, select, setView }: { def: Progra
     <div className="prog-screen">
       <div className="app-head">
         <button className="pill btn" onClick={() => setView({ kind: 'list' })}>
-          ‹ Программы
+          {t('‹ Программы')}
         </button>
-        <span className="prog-tag">{def.level}</span>
+        <span className="prog-tag">{t(def.level)}</span>
       </div>
       <div className="prog-hero" style={{ ['--pc' as string]: def.color }}>
         {FOCUS_ICON(def)}
         <div>
           <div className="prog-hero-title">{def.title}</div>
           <div className="muted">
-            {def.focus.map((e) => EXERCISE_LABELS[e]).join(' · ')} · {def.days} {daysWord(def.days)}, отдых каждый {def.restEvery}-й
+            {def.focus.map((e) => EXERCISE_LABELS[e]).join(' · ')} · {t('{0} {1}, отдых каждый {2}-й', { 0: def.days, 1: daysWord(def.days), 2: def.restEvery })}
           </div>
         </div>
       </div>
       <Remark line={grom(def.about)} />
 
       <div className="prog-rewards">
-        <span className="prog-rewards-label">Награда за финал</span>
+        <span className="prog-rewards-label">{t('Награда за финал')}</span>
         <span className="prog-rewards-row">
           <span>
             <Coin size={14} className="coin" /> {def.coins}
@@ -340,7 +341,7 @@ function ProgramDetail({ def, progress, update, select, setView }: { def: Progra
             </span>
           )}
           <span>
-            <AchBadge ach={ach} done size={24} /> титул «{ach.title}»
+            <AchBadge ach={ach} done size={24} /> {t('титул «{0}»', { 0: ach.title })}
           </span>
         </span>
       </div>
@@ -361,7 +362,7 @@ function ProgramDetail({ def, progress, update, select, setView }: { def: Progra
       <div className="prog-dayplan">
         <div className="prog-dayplan-head">
           <b>
-            День {day} · {plan.title}
+            {t('День {0} · {1}', { 0: day, 1: plan.title })}
           </b>
           {plan.kind !== 'rest' && plan.kind !== 'final' && (
             <span className="daily-gift">
@@ -371,59 +372,59 @@ function ProgramDetail({ def, progress, update, select, setView }: { def: Progra
         </div>
         {plan.sets.length ? <SetList sets={plan.sets} done={[]} current={-1} /> : null}
         <div className="muted">
-          {run?.log[day] != null && day < run.day ? `Сделано ${Math.round(run.log[day] * 100)}%. ` : ''}
+          {run?.log[day] != null && day < run.day ? t('Сделано {0}%. ', { 0: Math.round(run.log[day] * 100) }) : ''}
           {KIND_NOTE[plan.kind]}
-          {plan.kind === 'train' && run && run.factor !== 1 && ` Поправка под тебя: ${run.factor > 1 ? '+' : ''}${Math.round((run.factor - 1) * 100)}%.`}
-          {plan.sets.length > 0 && ` Отдых между подходами ${restRange(plan.sets)}.`}
+          {plan.kind === 'train' && run && run.factor !== 1 && t(' Поправка под тебя: {0}{1}%.', { 0: run.factor > 1 ? '+' : '', 1: Math.round((run.factor - 1) * 100) })}
+          {plan.sets.length > 0 && t(' Отдых между подходами {0}.', { 0: restRange(plan.sets) })}
         </div>
       </div>
 
       {!run && !other && (
         <button className="primary" onClick={() => save((p) => startProgram(p, def.id, Date.now()))}>
-          {st.done.includes(def.id) ? 'Пройти ещё раз' : 'Начать программу'}
+          {st.done.includes(def.id) ? t('Пройти ещё раз') : t('Начать программу')}
         </button>
       )}
-      {other && <div className="muted prog-note">Сейчас идёт «{other.title}». Одна программа за раз: закончи или брось её, чтобы начать эту.</div>}
+      {other && <div className="muted prog-note">{t('Сейчас идёт «{0}». Одна программа за раз: закончи или брось её, чтобы начать эту.', { 0: other.title })}</div>}
       {run && av === 'ready' && (
         <button className="primary" onClick={() => (isToday ? setView({ kind: 'session', id: def.id, day: run.day, sets: planDay(def, run.day, run.base, progress.baseline, run.factor).sets }) : setDay(run.day))}>
-          {isToday ? `Начать день ${run.day}` : `К дню ${run.day}`}
+          {isToday ? t('Начать день {0}', { 0: run.day }) : t('К дню {0}', { 0: run.day })}
         </button>
       )}
       {run && av === 'rest' && (
         <button className="primary" onClick={() => save((p) => restDay(p, Date.now()))}>
-          <Moon size={18} /> Отдыхаю сегодня
+          <Moon size={18} /> {t('Отдыхаю сегодня')}
         </button>
       )}
       {run && av === 'tomorrow' && (
         <button className="primary" disabled>
-          Следующий день — завтра
+          {t('Следующий день — завтра')}
         </button>
       )}
       {run && av === 'paused' && (
         <button className="primary" onClick={() => save((p) => pauseProgram(p, false))}>
-          <Play size={16} /> Продолжить программу
+          <Play size={16} /> {t('Продолжить программу')}
         </button>
       )}
       {run && (
         <div className="prog-manage">
           {av !== 'paused' && (
             <button className="small-btn ghost" onClick={() => save((p) => pauseProgram(p, true))}>
-              <Pause size={14} /> Пауза
+              <Pause size={14} /> {t('Пауза')}
             </button>
           )}
           {confirm ? (
             <>
-              <span className="muted">Весь прогресс программы пропадёт.</span>
+              <span className="muted">{t('Весь прогресс программы пропадёт.')}</span>
               <button className="small-btn danger" onClick={() => save(abandonProgram)}>
-                Бросить
+                {t('Бросить')}
               </button>
               <button className="small-btn ghost" onClick={() => setConfirm(false)}>
-                Нет
+                {t('Нет')}
               </button>
             </>
           ) : (
             <button className="small-btn ghost" onClick={() => setConfirm(true)}>
-              Бросить программу
+              {t('Бросить программу')}
             </button>
           )}
         </div>
@@ -434,8 +435,8 @@ function ProgramDetail({ def, progress, update, select, setView }: { def: Progra
 
 const restRange = (sets: SetPlan[]) => {
   const rests = sets.slice(0, -1).map((s) => s.rest);
-  if (!rests.length) return 'не нужен';
+  if (!rests.length) return t('не нужен');
   const lo = Math.min(...rests);
   const hi = Math.max(...rests);
-  return lo === hi ? `${lo} с` : `${lo}–${hi} с`;
+  return lo === hi ? t('{0} с', { 0: lo }) : t('{0}–{1} с', { 0: lo, 1: hi });
 };

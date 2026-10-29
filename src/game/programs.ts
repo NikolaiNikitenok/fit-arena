@@ -7,6 +7,7 @@ import { DEFAULT_PLANK_S, type Exercise, isTimed } from '../repCounter';
 import { itemById } from './items';
 import type { Baseline } from './levels';
 import { dayKey, type Progress, saveProgress } from './progress';
+import { t } from '../i18n';
 
 export type ProgramId = 'newbie14' | 'pushup100' | 'abs21' | 'legs28' | 'plank5' | 'full4w';
 
@@ -47,12 +48,12 @@ export interface ProgramDef {
   outfit?: string;
   coins: number;
   // Подходы тренировочного дня: t — доля пути от 0 до 1, base — подход игрока, k — поправка под форму.
-  train: (t: number, base: Required<ProgramBase>, k: number) => SetPlan[];
+  train: (tm: number, base: Required<ProgramBase>, k: number) => SetPlan[];
   // Финал: чаще всего — та же тренировка на полную, у части программ — повтор теста.
   final: (base: Required<ProgramBase>) => SetPlan[];
 }
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const lerp = (a: number, b: number, tm: number) => a + (b - a) * tm;
 /** Цель подхода: повторы — от двух, секунды — от десяти, кратно пяти. */
 export function amount(ex: Exercise, n: number): number {
   return isTimed(ex) ? Math.max(10, Math.round(n / 5) * 5) : Math.max(2, Math.round(n));
@@ -73,23 +74,23 @@ const ALL4: Exercise[] = ['squat', 'pushup', 'situp', 'plank'];
 export const PROGRAMS: ProgramDef[] = [
   {
     id: 'newbie14',
-    title: 'Новичок: 14 дней в форму',
-    short: 'Все упражнения понемногу, без перегрузки',
-    about: 'Две недели, и тело вспомнит, что такое сила. Каждый день — короткий круг: приседания, отжимания, пресс и планка. Не геройствуй, главное — не пропускать.',
+    title: t('Новичок: 14 дней в форму'),
+    short: t('Все упражнения понемногу, без перегрузки'),
+    about: t('Две недели, и тело вспомнит, что такое сила. Каждый день — короткий круг: приседания, отжимания, пресс и планка. Не геройствуй, главное — не пропускать.'),
     days: 14,
     restEvery: 4,
     focus: ALL4,
     level: 'Новичок',
     color: '#6ee7b7',
     coins: 300,
-    train: (t, b, k) => circuit(ALL4, 2, (ex) => b[ex] * lerp(0.45, 0.85, t) * k, 60),
+    train: (tm, b, k) => circuit(ALL4, 2, (ex) => b[ex] * lerp(0.45, 0.85, tm) * k, 60),
     final: (b) => ALL4.map((ex) => test(ex, b[ex])),
   },
   {
     id: 'pushup100',
-    title: '100 отжиманий за 30 дней',
-    short: 'Сотня за тренировку к последнему дню',
-    about: 'Через месяц ты сделаешь сто отжиманий за одну тренировку. Пять подходов каждый день, отдых каждый третий. В первый день узнаем, с чего начинаешь.',
+    title: t('100 отжиманий за 30 дней'),
+    short: t('Сотня за тренировку к последнему дню'),
+    about: t('Через месяц ты сделаешь сто отжиманий за одну тренировку. Пять подходов каждый день, отдых каждый третий. В первый день узнаем, с чего начинаешь.'),
     days: 30,
     restEvery: 3,
     focus: ['pushup'],
@@ -98,32 +99,32 @@ export const PROGRAMS: ProgramDef[] = [
     outfit: 'prog-fist',
     coins: 600,
     // Объём за день растёт от двух с половиной подходов игрока до сотни.
-    train: (t, b, k) => ladder('pushup', lerp(Math.min(90, Math.max(15, b.pushup * 2.5)), pushupGoal(b), t ** 1.15) * k, [24, 22, 20, 18, 16], 75),
+    train: (tm, b, k) => ladder('pushup', lerp(Math.min(90, Math.max(15, b.pushup * 2.5)), pushupGoal(b), tm ** 1.15) * k, [24, 22, 20, 18, 16], 75),
     final: (b) => ladder('pushup', pushupGoal(b), [24, 22, 20, 18, 16], 75),
   },
   {
     id: 'abs21',
-    title: 'Стальной пресс 21 день',
-    short: 'Пресс и планка: корпус как броня',
-    about: 'Три недели работы над корпусом. Скручивания на пресс и планка каждый день, отдых каждый четвёртый. В финале сравним с первым днём.',
+    title: t('Стальной пресс 21 день'),
+    short: t('Пресс и планка: корпус как броня'),
+    about: t('Три недели работы над корпусом. Скручивания на пресс и планка каждый день, отдых каждый четвёртый. В финале сравним с первым днём.'),
     days: 21,
     restEvery: 4,
     focus: ['situp', 'plank'],
     level: 'Новичок',
     color: '#7dd3fc',
     coins: 400,
-    train: (t, b, k) => [
-      ...Array.from({ length: 4 }, () => set('situp', b.situp * lerp(0.55, 1.05, t) * k, 45)),
-      set('plank', b.plank * lerp(0.5, 1, t) * k, 60),
-      set('plank', b.plank * lerp(0.4, 0.8, t) * k, 0),
+    train: (tm, b, k) => [
+      ...Array.from({ length: 4 }, () => set('situp', b.situp * lerp(0.55, 1.05, tm) * k, 45)),
+      set('plank', b.plank * lerp(0.5, 1, tm) * k, 60),
+      set('plank', b.plank * lerp(0.4, 0.8, tm) * k, 0),
     ],
     final: (b) => [test('situp', b.situp), test('plank', b.plank)],
   },
   {
     id: 'legs28',
-    title: 'Ноги богатыря 28 дней',
-    short: 'Приседания до дрожи в земле',
-    about: 'Ноги держат бойца. Четыре недели приседаний: пять подходов, нагрузка растёт до полуторных твоих. Отдых каждый четвёртый день, без него мышцы не растут.',
+    title: t('Ноги богатыря 28 дней'),
+    short: t('Приседания до дрожи в земле'),
+    about: t('Ноги держат бойца. Четыре недели приседаний: пять подходов, нагрузка растёт до полуторных твоих. Отдых каждый четвёртый день, без него мышцы не растут.'),
     days: 28,
     restEvery: 4,
     focus: ['squat'],
@@ -131,14 +132,14 @@ export const PROGRAMS: ProgramDef[] = [
     color: '#ffb46b',
     outfit: 'prog-bogatyr',
     coins: 600,
-    train: (t, b, k) => [1, 0.9, 0.9, 0.8, 1].map((s, i, a) => set('squat', b.squat * s * lerp(0.6, 1.25, t) * k, i === a.length - 1 ? 0 : 60)),
+    train: (tm, b, k) => [1, 0.9, 0.9, 0.8, 1].map((s, i, a) => set('squat', b.squat * s * lerp(0.6, 1.25, tm) * k, i === a.length - 1 ? 0 : 60)),
     final: (b) => [1, 0.9, 0.9, 0.8, 1].map((s) => set('squat', b.squat * s * 1.3, 60)),
   },
   {
     id: 'plank5',
-    title: 'Планка 5 минут за 30 дней',
-    short: 'От первых секунд до пяти минут',
-    about: 'Пять минут в планке — это характер. Каждый день держим чуть дольше, отдых каждый пятый день. Таз ровно, локти под плечами, я слежу за секундами.',
+    title: t('Планка 5 минут за 30 дней'),
+    short: t('От первых секунд до пяти минут'),
+    about: t('Пять минут в планке — это характер. Каждый день держим чуть дольше, отдых каждый пятый день. Таз ровно, локти под плечами, я слежу за секундами.'),
     days: 30,
     restEvery: 5,
     focus: ['plank'],
@@ -146,18 +147,18 @@ export const PROGRAMS: ProgramDef[] = [
     color: '#c4b5fd',
     outfit: 'prog-stone',
     coins: 700,
-    train: (t, b, k) => {
-      const main = lerp(Math.min(240, Math.max(15, b.plank * 0.8)), PLANK_GOAL_S, t ** 1.3) * k;
-      const sets = [set('plank', main, 60), set('plank', main * 0.5, t < 0.5 ? 45 : 0)];
-      return t < 0.5 ? [...sets, set('plank', main * 0.4, 0)] : sets;
+    train: (tm, b, k) => {
+      const main = lerp(Math.min(240, Math.max(15, b.plank * 0.8)), PLANK_GOAL_S, tm ** 1.3) * k;
+      const sets = [set('plank', main, 60), set('plank', main * 0.5, tm < 0.5 ? 45 : 0)];
+      return tm < 0.5 ? [...sets, set('plank', main * 0.4, 0)] : sets;
     },
     final: () => [set('plank', PLANK_GOAL_S, 0)],
   },
   {
     id: 'full4w',
-    title: 'Полное тело 4 недели',
-    short: 'Три круга по всему телу',
-    about: 'Четыре недели, как у настоящих бойцов: три круга по всему телу, нагрузка растёт каждую неделю. Пройдёшь — сделаю тебе доспех чемпиона.',
+    title: t('Полное тело 4 недели'),
+    short: t('Три круга по всему телу'),
+    about: t('Четыре недели, как у настоящих бойцов: три круга по всему телу, нагрузка растёт каждую неделю. Пройдёшь — сделаю тебе доспех чемпиона.'),
     days: 28,
     restEvery: 4,
     focus: ALL4,
@@ -165,7 +166,7 @@ export const PROGRAMS: ProgramDef[] = [
     color: '#ffd27a',
     outfit: 'prog-champion',
     coins: 1000,
-    train: (t, b, k) => circuit(ALL4, 3, (ex) => b[ex] * lerp(0.5, 1, t) * k, 45),
+    train: (tm, b, k) => circuit(ALL4, 3, (ex) => b[ex] * lerp(0.5, 1, tm) * k, 45),
     final: (b) => circuit(ALL4, 3, (ex) => b[ex], 45),
   },
 ];
@@ -192,7 +193,7 @@ export function baseFor(base: ProgramBase | undefined, baseline: Baseline): Requ
   };
 }
 
-const TITLES: Record<DayKind, string> = { test: 'Входной тест', train: 'Тренировка', rest: 'Отдых', final: 'Финал' };
+const TITLES: Record<DayKind, string> = { test: t('Входной тест'), train: t('Тренировка'), rest: t('Отдых'), final: t('Финал') };
 
 /** План дня программы. */
 export function planDay(def: ProgramDef, day: number, base: ProgramBase | undefined, baseline: Baseline, factor = 1): DayPlan {
@@ -200,8 +201,8 @@ export function planDay(def: ProgramDef, day: number, base: ProgramBase | undefi
   const b = baseFor(base, baseline);
   // Номер тренировочного дня среди всех тренировочных: так рост ровный, без скачков после отдыха.
   const trainDays = Array.from({ length: def.days }, (_, i) => i + 1).filter((d) => dayKind(def, d) === 'train');
-  const t = trainDays.length > 1 ? Math.max(0, trainDays.indexOf(day)) / (trainDays.length - 1) : 1;
-  const sets = kind === 'test' ? def.focus.map((ex) => test(ex, b[ex])) : kind === 'final' ? def.final(b) : kind === 'rest' ? [] : def.train(t, b, factor);
+  const tm = trainDays.length > 1 ? Math.max(0, trainDays.indexOf(day)) / (trainDays.length - 1) : 1;
+  const sets = kind === 'test' ? def.focus.map((ex) => test(ex, b[ex])) : kind === 'final' ? def.final(b) : kind === 'rest' ? [] : def.train(tm, b, factor);
   // После последнего подхода отдыхать не нужно.
   if (sets.length) sets[sets.length - 1] = { ...sets[sets.length - 1], rest: 0 };
   return { day, kind, title: TITLES[kind], sets };

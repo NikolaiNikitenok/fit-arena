@@ -5,6 +5,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { Exercise } from './repCounter';
 import { CharName, charUrl, useGltf } from './three/kit';
 import { Canvas3D } from './three/Canvas3D';
+import { t } from './i18n';
 
 // Схема «как встать к камере» в 3D: герой повторяет упражнение, рядом стоит телефон
 // с тем же полем зрения, что у настоящей камеры. Анимаций упражнений у KayKit нет,
@@ -85,16 +86,16 @@ const SPECS: Record<Exercise, Spec> = {
 };
 
 const TIPS: Record<Exercise, string[]> = {
-  pushup: ['Телефон на полу сбоку, можно положить горизонтально', 'В кадре хотя бы до пояса', 'Опускайся, пока локти не согнутся под прямым углом'],
-  squat: ['Телефон сбоку или вполоборота, на уровне пояса', 'В кадре всё тело, от головы до стоп', 'Садись, пока бёдра не станут параллельны полу'],
-  plank: ['Телефон на полу сбоку, можно положить горизонтально', 'В кадре всё тело, от плеч до стоп', 'Локти под плечами, тело — ровная линия от головы до пяток'],
-  situp: ['Ляг боком к камере, колени согнуты', 'Стопы и таз на полу, всё тело в кадре', 'Поднимай корпус до коленей и плавно опускайся'],
+  pushup: [t('Телефон на полу сбоку, можно положить горизонтально'), t('В кадре хотя бы до пояса'), t('Опускайся, пока локти не согнутся под прямым углом')],
+  squat: [t('Телефон сбоку или вполоборота, на уровне пояса'), t('В кадре всё тело, от головы до стоп'), t('Садись, пока бёдра не станут параллельны полу')],
+  plank: [t('Телефон на полу сбоку, можно положить горизонтально'), t('В кадре всё тело, от плеч до стоп'), t('Локти под плечами, тело — ровная линия от головы до пяток')],
+  situp: [t('Ляг боком к камере, колени согнуты'), t('Стопы и таз на полу, всё тело в кадре'), t('Поднимай корпус до коленей и плавно опускайся')],
 };
 
 const DEG = Math.PI / 180;
 const dir = (a: number) => new THREE.Vector3(0, Math.sin(a * DEG), Math.cos(a * DEG));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const ease = (t: number) => 0.5 - 0.5 * Math.cos(t * Math.PI * 2); // 0 → 1 → 0 за повтор
+const lerp = (a: number, b: number, tm: number) => a + (b - a) * tm;
+const ease = (tm: number) => 0.5 - 0.5 * Math.cos(tm * Math.PI * 2); // 0 → 1 → 0 за повтор
 
 const BONES = ['hips', 'head', 'upperarm.l', 'upperarm.r', 'lowerarm.l', 'lowerarm.r', 'wrist.l', 'wrist.r', 'upperleg.l', 'upperleg.r', 'lowerleg.l', 'lowerleg.r', 'foot.l', 'foot.r'] as const;
 type BoneName = (typeof BONES)[number];
@@ -169,9 +170,9 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
     const g = holder.current;
     if (!g) return;
     const { root, bones: b, rest, size } = rig;
-    const t = ease((clock.elapsedTime / spec.period) % 1);
+    const tm = ease((clock.elapsedTime / spec.period) % 1);
     const [A, B] = spec.poses;
-    const pose = { torso: lerp(A.torso, B.torso, t), thigh: lerp(A.thigh, B.thigh, t), shin: lerp(A.shin, B.shin, t) };
+    const pose = { torso: lerp(A.torso, B.torso, tm), thigh: lerp(A.thigh, B.thigh, tm), shin: lerp(A.shin, B.shin, tm) };
     if (A.plank) {
       // На предплечьях плечи выше пола на длину плеча, на прямых руках — на всю руку.
       const lift = A.forearm ? size.arm1 + size.height * 0.05 : pose.torso * (size.arm1 + size.arm2) + size.height * 0.03;
@@ -208,7 +209,7 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
         const c = B.arm ?? a;
         // Углы рук для пресса заданы относительно корпуса.
         const rel = exercise === 'situp' ? pose.torso : 0;
-        angles = [rel + lerp(a[0], c[0], t), rel + lerp(a[1], c[1], t)];
+        angles = [rel + lerp(a[0], c[0], tm), rel + lerp(a[1], c[1], tm)];
       }
       aim(b[`upperarm.${s}`], b[`lowerarm.${s}`], dir(angles[0]));
       aim(b[`lowerarm.${s}`], b[`wrist.${s}`], dir(angles[1]));
@@ -321,12 +322,12 @@ export function CameraGuide({ exercise, compact, model = 'Knight' }: { exercise:
             <Rig key={exercise} exercise={exercise} model={model} />
           </Suspense>
         </Canvas3D>
-        <span className="guide-dist">1,5–2 м</span>
+        <span className="guide-dist">{t('1,5–2 м')}</span>
       </div>
       {!compact && (
         <ul className="guide-tips">
-          {TIPS[exercise].map((t) => (
-            <li key={t}>{t}</li>
+          {TIPS[exercise].map((tm) => (
+            <li key={tm}>{tm}</li>
           ))}
         </ul>
       )}

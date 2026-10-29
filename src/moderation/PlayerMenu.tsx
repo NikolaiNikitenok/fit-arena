@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react';
 import { REPORT_REASONS, type ReportReason, type ReportWhere } from '../../shared/moderation';
 import { moderationApi } from './api';
 import { Sheet } from '../Sheet';
+import { t } from '../i18n';
 
 export interface PlayerMenuTarget {
   id: string;
@@ -20,10 +21,10 @@ export function PlayerMenu({ target, children, onBlocked, onClose }: { target: P
   const run = (p: Promise<{ error?: string; note?: string }>, done?: () => void) => {
     setBusy(true);
     p.then((r) => {
-      setNote(r.error ?? r.note ?? 'Готово');
+      setNote(r.error ?? r.note ?? t('Готово'));
       if (!r.error) done?.();
     })
-      .catch(() => setNote('Нет связи с сервером. Попробуй ещё раз'))
+      .catch(() => setNote(t('Нет связи с сервером. Попробуй ещё раз')))
       .finally(() => setBusy(false));
   };
   const report = (reason: ReportReason) => run(moderationApi.report({ id: target.id, reason, where: target.where, msg: target.msg?.id }), () => setStep('menu'));
@@ -41,16 +42,16 @@ export function PlayerMenu({ target, children, onBlocked, onClose }: { target: P
         <>
           {children}
           <button className="secondary" disabled={busy} onClick={() => setStep('report')}>
-            Пожаловаться
+            {t('Пожаловаться')}
           </button>
           <button className="secondary danger-text" disabled={busy} onClick={() => setStep('block')}>
-            Заблокировать
+            {t('Заблокировать')}
           </button>
         </>
       )}
       {step === 'report' && (
         <>
-          <div className="muted">Что не так? Жалобу увидит модератор, автор не узнает, кто пожаловался.</div>
+          <div className="muted">{t('Что не так? Жалобу увидит модератор, автор не узнает, кто пожаловался.')}</div>
           <div className="report-reasons">
             {(Object.keys(REPORT_REASONS) as ReportReason[]).map((r) => (
               <button key={r} className="small-btn ghost" disabled={busy} onClick={() => report(r)}>
@@ -62,15 +63,15 @@ export function PlayerMenu({ target, children, onBlocked, onClose }: { target: P
       )}
       {step === 'block' && (
         <>
-          <div className="muted">Его сообщения в чате пропадут для тебя, а позвать тебя в друзья или на дуэль он не сможет. Если вы друзья, дружба удалится. Снять блок можно в настройках, в «Чёрном списке».</div>
+          <div className="muted">{t('Его сообщения в чате пропадут для тебя, а позвать тебя в друзья или на дуэль он не сможет. Если вы друзья, дружба удалится. Снять блок можно в настройках, в «Чёрном списке».')}</div>
           <button className="small-btn danger" disabled={busy} onClick={block}>
-            Заблокировать {target.name}
+            {t('Заблокировать {0}', { 0: target.name })}
           </button>
         </>
       )}
       {step !== 'menu' && (
         <button className="link" onClick={() => setStep('menu')}>
-          Назад
+          {t('Назад')}
         </button>
       )}
     </Sheet>

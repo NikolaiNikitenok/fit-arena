@@ -1,6 +1,7 @@
 // Топ по городу (server/cities.ts): повторы за неделю, топ своего города и рейтинг городов.
 import { post as cloudPost } from '../cloud';
 import { userName } from '../telegram';
+import { t } from '../i18n';
 
 export interface CityRow {
   name: string;
@@ -30,7 +31,7 @@ async function post(path: string, body: object = {}): Promise<CityBoard> {
   } catch (e) {
     const err = e as { status?: number; body?: { error?: string } };
     if (err.status === 401) throw new NotSignedIn();
-    throw new Error(err.body?.error ?? 'Нет связи с сервером');
+    throw new Error(err.body?.error ?? t('Нет связи с сервером'));
   }
 }
 

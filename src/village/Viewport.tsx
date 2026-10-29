@@ -1,6 +1,7 @@
 import { createContext, Suspense, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { bubbleAt, cellAt, Ctl, pan, SceneProps, stopCamera, Village3D, zoomAt } from './Village3D';
 import { SIZE } from './looks';
+import { t } from '../i18n';
 
 export interface ViewportProps extends Omit<SceneProps, 'ctl'> {
   ctl: React.MutableRefObject<Ctl>;
@@ -110,7 +111,7 @@ export function Viewport(props: ViewportProps) {
         zoomAt(ctl, ctl.zoom * (e.deltaY > 0 ? 0.9 : 1.1), c.x, c.y);
       }}
     >
-      <Suspense fallback={<div className="lazy-loading muted">Загружаем деревню…</div>}>
+      <Suspense fallback={<div className="lazy-loading muted">{t('Загружаем деревню…')}</div>}>
         <Village3D {...props} />
       </Suspense>
     </div>

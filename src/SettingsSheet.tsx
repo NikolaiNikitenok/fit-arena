@@ -9,6 +9,7 @@ import { tg } from './telegram';
 import { AdminChargeRow, AdminStatsRow, DeleteDataRow, PrivacyLink } from './SettingsExtra';
 import { BlackListRow } from './moderation/BlackList';
 import { Sheet } from './Sheet';
+import { getLang, Lang, setLang, t, locale } from './i18n';
 import { AccountRow } from './account/Account';
 import { WebLoginRow } from './account/WebLogin';
 import { ChangesList } from './updates/UpdateBanner';
@@ -18,18 +19,18 @@ import { Bell, Camera, ChevronLeft, Info, Sparkles, Speaker, UserCircle, Wrench 
 
 type ToggleKey = { [K in keyof Settings]-?: Settings[K] extends boolean ? K : never }[keyof Settings];
 const TOGGLES: Record<string, { key: ToggleKey; title: string; text: string }> = {
-  sound: { key: 'sound', title: 'Звуки', text: 'Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.' },
-  music: { key: 'music', title: 'Музыка', text: 'Тихая фоновая мелодия: своя в каждом мире, барабаны на арене.' },
-  voice: { key: 'voice', title: 'Голос тренера', text: 'Мастер Гром вслух считает повторы, подсказывает время и технику. Нужен русский голос в телефоне.' },
-  haptics: { key: 'haptics', title: 'Вибрация', text: 'Телефон коротко вибрирует на повтор.' },
-  guide: { key: 'guide', title: 'Подсказка перед уровнем', text: '3D-схема, как поставить телефон.' },
-  story: { key: 'story', title: 'Диалоги сюжета', text: 'Разговоры с героями перед уровнями. Без них сразу к тренировке.' },
-  skeleton: { key: 'skeleton', title: 'Скелет на видео', text: 'Линии позы поверх камеры: видно, что приложение тебя распознаёт.' },
-  dayNight: { key: 'dayNight', title: 'День и ночь в деревне', text: 'Деревня живёт по твоим часам: золотой вечер, ночью горят фонари. Без этого всегда светлый день.' },
-  villageFx: { key: 'villageFx', title: 'Погода и эффекты деревни', text: 'Дождь и снег, светлячки, пыль от разрушений, летящие монеты и салют. Выключи, если телефон греется.' },
-  flyIn: { key: 'flyIn', title: 'Пролёт над деревней', text: 'Камера плавно облетает деревню, когда ты в неё заходишь.' },
-  homeList: { key: 'homeList', title: 'Главная списком', text: 'Все разделы друг под другом, с прокруткой — как раньше. Без этого герой во весь экран, а кнопки по бокам.' },
-  lowPower: { key: 'lowPower', title: 'Экономный режим', text: 'Без теней и сглаживания, 3D попроще и в меньшем разрешении. Помогает, если телефон слабый или греется. На слабых телефонах включается сам.' },
+  sound: { key: 'sound', title: t('Звуки'), text: t('Сигнал на каждый повтор, удары, победа и монеты. Слышно темп, не глядя на экран.') },
+  music: { key: 'music', title: t('Музыка'), text: t('Тихая фоновая мелодия: своя в каждом мире, барабаны на арене.') },
+  voice: { key: 'voice', title: t('Голос тренера'), text: t('Мастер Гром вслух считает повторы, подсказывает время и технику. Нужен русский голос в телефоне.') },
+  haptics: { key: 'haptics', title: t('Вибрация'), text: t('Телефон коротко вибрирует на повтор.') },
+  guide: { key: 'guide', title: t('Подсказка перед уровнем'), text: t('3D-схема, как поставить телефон.') },
+  story: { key: 'story', title: t('Диалоги сюжета'), text: t('Разговоры с героями перед уровнями. Без них сразу к тренировке.') },
+  skeleton: { key: 'skeleton', title: t('Скелет на видео'), text: t('Линии позы поверх камеры: видно, что приложение тебя распознаёт.') },
+  dayNight: { key: 'dayNight', title: t('День и ночь в деревне'), text: t('Деревня живёт по твоим часам: золотой вечер, ночью горят фонари. Без этого всегда светлый день.') },
+  villageFx: { key: 'villageFx', title: t('Погода и эффекты деревни'), text: t('Дождь и снег, светлячки, пыль от разрушений, летящие монеты и салют. Выключи, если телефон греется.') },
+  flyIn: { key: 'flyIn', title: t('Пролёт над деревней'), text: t('Камера плавно облетает деревню, когда ты в неё заходишь.') },
+  homeList: { key: 'homeList', title: t('Главная списком'), text: t('Все разделы друг под другом, с прокруткой — как раньше. Без этого герой во весь экран, а кнопки по бокам.') },
+  lowPower: { key: 'lowPower', title: t('Экономный режим'), text: t('Без теней и сглаживания, 3D попроще и в меньшем разрешении. Помогает, если телефон слабый или греется. На слабых телефонах включается сам.') },
 };
 
 function Toggles({ keys }: { keys: ToggleKey[] }) {
@@ -37,12 +38,12 @@ function Toggles({ keys }: { keys: ToggleKey[] }) {
   return (
     <>
       {keys.map((k) => {
-        const t = TOGGLES[k];
+        const tm = TOGGLES[k];
         return (
           <label key={k} className="toggle-row">
             <div>
-              <div className="toggle-title">{t.title}</div>
-              <div className="muted">{t.text}</div>
+              <div className="toggle-title">{tm.title}</div>
+              <div className="muted">{tm.text}</div>
             </div>
             <input type="checkbox" className="switch" checked={s[k]} onChange={(e) => setSetting(k, e.target.checked)} />
           </label>
@@ -51,6 +52,11 @@ function Toggles({ keys }: { keys: ToggleKey[] }) {
     </>
   );
 }
+
+const LANGS: [Lang, string][] = [
+  ['ru', 'Русский'],
+  ['en', 'English'],
+];
 
 type Section = 'sound' | 'training' | 'graphics' | 'notify' | 'account' | 'about' | 'admin';
 type Tone = 'accent' | 'mint' | 'violet' | 'gold' | 'blue' | 'grey' | 'rose';
@@ -83,7 +89,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
             <Toggles keys={TRAINING} />
             <RecalibrateRow />
             <div className="settings-note">
-              <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.
+              <b>{t('Камера и приватность.')}</b> {t('Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.')}
             </div>
           </>
         )}
@@ -97,7 +103,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         {section === 'account' && (
           <>
             <div className="settings-note">
-              <b>Прогресс</b> сохраняется на сервере и вернётся на новом телефоне: герой {heroLevel(heroXp(progress)).level} уровня, {Object.keys(progress.stars).length} пройденных уровней.
+              <b>{t('Прогресс')}</b> {t('сохраняется на сервере и вернётся на новом телефоне: герой {0} уровня, {1} пройденных уровней.', { 0: heroLevel(heroXp(progress)).level, 1: Object.keys(progress.stars).length })}
             </div>
             <WebLoginRow />
             <AccountRow />
@@ -118,18 +124,26 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
     );
 
   const rows: { id: Section; tone: Tone; icon: ReactNode; sub: string }[] = [
-    { id: 'sound', tone: 'accent', icon: <Speaker />, sub: 'Звуки, музыка, голос тренера' },
-    { id: 'training', tone: 'mint', icon: <Camera />, sub: 'Подсказки, скелет, калибровка' },
-    { id: 'graphics', tone: 'violet', icon: <Sparkles />, sub: s.lowPower ? 'Включён экономный режим' : 'Погода, день и ночь, эффекты' },
-    { id: 'notify', tone: 'gold', icon: <Bell />, sub: 'Напоминания и рейды клана' },
-    { id: 'account', tone: 'blue', icon: <UserCircle />, sub: 'Вход, прогресс, чёрный список' },
-    { id: 'about', tone: 'grey', icon: <Info />, sub: 'Обновления и приватность' },
+    { id: 'sound', tone: 'accent', icon: <Speaker />, sub: t('Звуки, музыка, голос тренера') },
+    { id: 'training', tone: 'mint', icon: <Camera />, sub: t('Подсказки, скелет, калибровка') },
+    { id: 'graphics', tone: 'violet', icon: <Sparkles />, sub: s.lowPower ? t('Включён экономный режим') : t('Погода, день и ночь, эффекты') },
+    { id: 'notify', tone: 'gold', icon: <Bell />, sub: t('Напоминания и рейды клана') },
+    { id: 'account', tone: 'blue', icon: <UserCircle />, sub: t('Вход, прогресс, чёрный список') },
+    { id: 'about', tone: 'grey', icon: <Info />, sub: t('Обновления и приватность') },
   ];
-  if (admin) rows.push({ id: 'admin', tone: 'rose', icon: <Wrench />, sub: 'Статистика, FPS, заряд подземелья' });
+  if (admin) rows.push({ id: 'admin', tone: 'rose', icon: <Wrench />, sub: t('Статистика, FPS, заряд подземелья') });
 
   return (
     <Sheet key="list" onClose={onClose}>
-      <div className="level-title">Настройки</div>
+      <div className="level-title">{t('Настройки')}</div>
+      {/* Язык — названия на своих языках, чтобы найти свой, даже не понимая текущий. */}
+      <div className="tabs small" role="group" aria-label="Язык / Language">
+        {LANGS.map(([l, name]) => (
+          <button key={l} className={getLang() === l ? 'active' : ''} onClick={() => getLang() !== l && setLang(l)}>
+            {name}
+          </button>
+        ))}
+      </div>
       <div className="settings-menu">
         {rows.map((r) => (
           <button key={r.id} className="settings-menu-row" onClick={() => setSection(r.id)}>
@@ -149,20 +163,20 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
 }
 
 const SECTION_TITLES: Record<Section, string> = {
-  sound: 'Звук и вибрация',
-  training: 'Камера и тренировки',
-  graphics: 'Графика',
-  notify: 'Уведомления',
-  account: 'Аккаунт и данные',
-  about: 'Об игре',
-  admin: 'Админ',
+  sound: t('Звук и вибрация'),
+  training: t('Камера и тренировки'),
+  graphics: t('Графика'),
+  notify: t('Уведомления'),
+  account: t('Аккаунт и данные'),
+  about: t('Об игре'),
+  admin: t('Админ'),
 };
 
 /** Заголовок раздела со стрелкой назад к списку. */
 function SubHead({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <div className="settings-sub-head">
-      <button className="settings-back" onClick={onBack} aria-label="К настройкам">
+      <button className="settings-back" onClick={onBack} aria-label={t('К настройкам')}>
         <ChevronLeft size={20} />
       </button>
       <div className="level-title">{title}</div>
@@ -175,7 +189,7 @@ function ResetRow({ onReset, onClose }: { onReset: () => void; onClose: () => vo
   const [confirm, setConfirm] = useState(false);
   return confirm ? (
     <div className="danger-row">
-      <span>Стереть героя, предметы и монеты?</span>
+      <span>{t('Стереть героя, предметы и монеты?')}</span>
       <button
         className="small-btn danger"
         onClick={() => {
@@ -183,15 +197,15 @@ function ResetRow({ onReset, onClose }: { onReset: () => void; onClose: () => vo
           onClose();
         }}
       >
-        Стереть
+        {t('Стереть')}
       </button>
       <button className="small-btn ghost" onClick={() => setConfirm(false)}>
-        Отмена
+        {t('Отмена')}
       </button>
     </div>
   ) : (
     <button className="link danger-link" onClick={() => setConfirm(true)}>
-      Начать игру заново
+      {t('Начать игру заново')}
     </button>
   );
 }
@@ -202,29 +216,29 @@ function AboutSection({ onIntro }: { onIntro: () => void }) {
   return (
     <>
       <button className="secondary" onClick={onIntro}>
-        Посмотреть знакомство заново
+        {t('Посмотреть знакомство заново')}
       </button>
       <button className="secondary" onClick={() => setHistory((v) => !v)}>
-        {history ? 'Скрыть историю обновлений' : 'История обновлений'}
+        {history ? t('Скрыть историю обновлений') : t('История обновлений')}
       </button>
       {history && <ChangesList entries={CHANGELOG} />}
       <div className="settings-note">
-        <b>Камера и приватность.</b> Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс. <PrivacyLink />
+        <b>{t('Камера и приватность.')}</b> {t('Видео обрабатывается прямо на телефоне и никуда не отправляется. На сервер уходят только результаты и прогресс.')} <PrivacyLink />
       </div>
       {/* Лицензия банка звуков требует указать авторов. */}
       <small className="muted credits">
-        Версия {APP_VERSION}. Модели — KayKit (Kay Lousberg, CC0). Инструменты в музыке — FluidR3 GM (Frank Wen), CC BY 3.0.
+        {t('Версия {0}. Модели — KayKit (Kay Lousberg, CC0). Инструменты в музыке — FluidR3 GM (Frank Wen), CC BY 3.0.', { 0: APP_VERSION })}
       </small>
     </>
   );
 }
 
-const dateText = (at: number) => new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+const dateText = (at: number) => new Date(at).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 
 function statusText(st: CalibrationStatus): string {
-  if (st.kind === 'done') return `Откалибровано: вниз ${st.down}°, вверх ${st.up}°${st.at ? ` · ${dateText(st.at)}` : ''}`;
-  if (st.kind === 'skipped') return 'Пропущено: считаю по общим порогам';
-  return 'Не откалибровано: спрошу перед первым подходом';
+  if (st.kind === 'done') return t('Откалибровано: вниз {0}°, вверх {1}°{2}', { 0: st.down, 1: st.up, 2: st.at ? ` · ${dateText(st.at)}` : '' });
+  if (st.kind === 'skipped') return t('Пропущено: считаю по общим порогам');
+  return t('Не откалибровано: спрошу перед первым подходом');
 }
 
 /** Личные пороги счёта по каждому упражнению: статус и своя кнопка «Пройти заново». Планку калибровать не нужно. */
@@ -236,8 +250,8 @@ function RecalibrateRow() {
     <div className="toggle-row calib-row">
       <div className="calib-list">
         <div>
-          <div className="toggle-title">Калибровка камеры</div>
-          <div className="muted">3 медленных повтора, и счёт подстроится под твою амплитуду. Если повторы теряются, пройди заново только это упражнение.</div>
+          <div className="toggle-title">{t('Калибровка камеры')}</div>
+          <div className="muted">{t('3 медленных повтора, и счёт подстроится под твою амплитуду. Если повторы теряются, пройди заново только это упражнение.')}</div>
         </div>
         {REP_EXERCISES.map((e) => (
           <div key={e} className="calib-ex">
@@ -246,13 +260,13 @@ function RecalibrateRow() {
               <div className="muted">{statusText(calibrationStatus(e, saved))}</div>
             </div>
             <button className="small-btn ghost" onClick={() => setAgain(e)}>
-              Пройти заново
+              {t('Пройти заново')}
             </button>
           </div>
         ))}
         {confirm ? (
           <div className="danger-row">
-            <span>Сбросить калибровку всех упражнений?</span>
+            <span>{t('Сбросить калибровку всех упражнений?')}</span>
             <button
               className="small-btn danger"
               onClick={() => {
@@ -260,15 +274,15 @@ function RecalibrateRow() {
                 setConfirm(false);
               }}
             >
-              Сбросить
+              {t('Сбросить')}
             </button>
             <button className="small-btn ghost" onClick={() => setConfirm(false)}>
-              Отмена
+              {t('Отмена')}
             </button>
           </div>
         ) : (
           <button className="link danger-link calib-all" disabled={!Object.keys(saved).length} onClick={() => setConfirm(true)}>
-            Сбросить все
+            {t('Сбросить все')}
           </button>
         )}
       </div>
@@ -285,7 +299,7 @@ function TelegramIdRow() {
   return (
     <div className="settings-note tg-id-row">
       <span>
-        Твой ID в Telegram: <b>{id}</b>
+        {t('Твой ID в Telegram:')} <b>{id}</b>
       </span>
       <button
         className="small-btn ghost"
@@ -296,7 +310,7 @@ function TelegramIdRow() {
             .catch(() => null)
         }
       >
-        {copied ? 'Скопировано' : 'Копировать'}
+        {copied ? t('Скопировано') : t('Копировать')}
       </button>
     </div>
   );
@@ -326,8 +340,8 @@ function RaidNotifyRow() {
   return (
     <label className="toggle-row">
       <div>
-        <div className="toggle-title">Уведомления о рейде</div>
-        <div className="muted">Бот напишет в субботу, когда босс клана проснётся, напомнит в воскресенье вечером о несделанных атаках и пришлёт итог рейда.</div>
+        <div className="toggle-title">{t('Уведомления о рейде')}</div>
+        <div className="muted">{t('Бот напишет в субботу, когда босс клана проснётся, напомнит в воскресенье вечером о несделанных атаках и пришлёт итог рейда.')}</div>
       </div>
       <input type="checkbox" className="switch" checked={on} disabled={busy || !cloud?.bot || !cloud.telegram} onChange={(e) => change(e.target.checked)} />
     </label>
@@ -358,21 +372,21 @@ function RemindRow() {
   return (
     <div className="toggle-row remind-row">
       <div>
-        <div className="toggle-title">Напоминание в боте</div>
+        <div className="toggle-title">{t('Напоминание в боте')}</div>
         <div className="muted">
           {!cloud
-            ? 'Подключаюсь к серверу…'
+            ? t('Подключаюсь к серверу…')
             : !cloud.bot
-              ? 'Пока недоступно: сервер не может сам писать в мессенджер. Заработает, когда подключим пересылку.'
+              ? t('Пока недоступно: сервер не может сам писать в мессенджер. Заработает, когда подключим пересылку.')
               : !cloud.telegram
-                ? 'Работает, когда приложение открыто из Telegram или Max.'
-                : 'Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.'}
+                ? t('Работает, когда приложение открыто из Telegram или Max.')
+                : t('Мастер Гром напишет в бота, если к этому часу не было тренировки, и напомнит задание дня.')}
         </div>
         {hour != null && (
           <select className="remind-hour" value={hour} disabled={busy} onChange={(e) => change(Number(e.target.value))}>
             {Array.from({ length: 24 }, (_, h) => (
               <option key={h} value={h}>
-                в {String(h).padStart(2, '0')}:00
+                {t('в {0}:00', { 0: String(h).padStart(2, '0') })}
               </option>
             ))}
           </select>

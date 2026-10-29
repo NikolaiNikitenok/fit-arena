@@ -3,6 +3,7 @@
 import type { RepExercise } from '../repCounter';
 import { Baseline, LevelDef, targetReps } from './levels';
 import { BOSS_HEARTS, enemyHp, repsFor } from './power';
+import { t } from '../i18n';
 
 export type Outcome = 'running' | 'won' | 'lost';
 
@@ -157,29 +158,29 @@ export class Mission {
     const base = { outcome: this.outcome, exercise: this.exercise, reps: this.reps, leftMs, hpMax, hp: Math.round(hpMax * (1 - share)), damage: Math.round(hpMax / this.target) };
     switch (type) {
       case 'trial':
-        return { ...base, progress: elapsed / (seconds * 1000), label: `${this.reps} повторов`, record: this.reps };
+        return { ...base, progress: elapsed / (seconds * 1000), label: t('{0} повторов', { 0: this.reps }), record: this.reps };
       case 'chase':
-        return { ...base, progress: elapsed / (seconds * 1000), label: `Продержись ещё ${Math.ceil(leftMs / 1000)} с`, gap: this.gap };
+        return { ...base, progress: elapsed / (seconds * 1000), label: t('Продержись ещё {0} с', { 0: Math.ceil(leftMs / 1000) }), gap: this.gap };
       case 'rescue': {
         const savedOf = Math.max(1, Math.round(this.target / RESCUE_EVERY));
         const saved = Math.min(savedOf, Math.floor((this.reps / this.target) * savedOf));
-        return { ...base, progress: this.reps / this.target, label: `Спасено ${saved} из ${savedOf}`, saved, savedOf };
+        return { ...base, progress: this.reps / this.target, label: t('Спасено {0} из {1}', { 0: saved, 1: savedOf }), saved, savedOf };
       }
       case 'defend': {
         const wave = Math.min(DEFEND_WAVES, Math.floor(elapsed / ((seconds * 1000) / DEFEND_WAVES)) + 1);
-        return { ...base, progress: this.reps / this.target, label: `Волна ${wave} из ${DEFEND_WAVES} · ${this.reps}/${this.target}` };
+        return { ...base, progress: this.reps / this.target, label: t('Волна {0} из {1} · {2}/{3}', { 0: wave, 1: DEFEND_WAVES, 2: this.reps, 3: this.target }) };
       }
       case 'boss': {
         return {
           ...base,
           progress: share,
-          label: `Фаза ${Math.min(this.phase + 1, this.phaseTargets.length)} из ${this.phaseTargets.length}`,
+          label: t('Фаза {0} из {1}', { 0: Math.min(this.phase + 1, this.phaseTargets.length), 1: this.phaseTargets.length }),
           hearts: this.hearts,
           phase: this.phase,
         };
       }
       default:
-        return { ...base, progress: Math.min(1, this.reps / this.target), label: `${this.reps} из ${this.target}` };
+        return { ...base, progress: Math.min(1, this.reps / this.target), label: t('{0} из {1}', { 0: this.reps, 1: this.target }) };
     }
   }
 

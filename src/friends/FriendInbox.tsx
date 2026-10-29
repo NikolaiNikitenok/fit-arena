@@ -6,6 +6,7 @@ import { Swords } from '../icons';
 import { EXERCISE_LABELS } from '../repCounter';
 import { hapticRep } from '../telegram';
 import { friendsApi, NotTelegram } from './api';
+import { t } from '../i18n';
 
 const POLL_MS = 10_000;
 
@@ -49,24 +50,24 @@ export function FriendInbox({ paused, onAccept }: { paused: boolean; onAccept: (
   const hide = () => setHidden((h) => new Set(h).add(c.id));
   const minutes = Math.max(1, Math.ceil((c.expiresAt - now) / 60_000));
   return (
-    <div className="challenge-card" role="alertdialog" aria-label="Вызов на дуэль">
+    <div className="challenge-card" role="alertdialog" aria-label={t('Вызов на дуэль')}>
       <div className="challenge-icon">
         <Swords size={22} />
       </div>
       <div className="challenge-text">
         <b>
-          <span className={c.pro ? 'pro-name' : ''}>{c.name}</span> вызывает тебя на дуэль!
+          <span className={c.pro ? 'pro-name' : ''}>{c.name}</span> {t('вызывает тебя на дуэль!')}
         </b>
         <span className="muted">
-          {EXERCISE_LABELS[c.exercise]}, кто больше за минуту · ещё {minutes} мин
+          {t('{0}, кто больше за минуту · ещё {1} мин', { 0: EXERCISE_LABELS[c.exercise], 1: minutes })}
         </span>
       </div>
       <div className="challenge-actions">
         <button className="small-btn ghost" onClick={() => (hide(), friendsApi.decline(c.id).catch(() => null))}>
-          Отказаться
+          {t('Отказаться')}
         </button>
         <button className="small-btn" onClick={() => (hide(), onAccept(c))}>
-          Принять
+          {t('Принять')}
         </button>
       </div>
     </div>

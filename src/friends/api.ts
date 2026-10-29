@@ -2,6 +2,7 @@
 import type { ChallengeView, FriendsState } from '../../shared/protocol';
 import type { Exercise } from '../repCounter';
 import { guestId, tg, userName } from '../telegram';
+import { t, tErr } from '../i18n';
 
 export type FriendsReply = FriendsState & { error?: string; added?: string; requested?: string; room?: string; note?: 'app' | 'bot' | 'quiet' | 'off' };
 
@@ -16,7 +17,7 @@ async function post<T>(path: string, body: object = {}): Promise<T> {
   });
   if (r.status === 401) throw new NotTelegram();
   if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+  return tErr(await r.json());
 }
 
 export const friendsApi = {
@@ -32,11 +33,11 @@ export const friendsApi = {
 
 /** «Был сегодня», «вчера», «3 дн. назад» — по местной дате телефона. */
 export function lastDayText(day: string | null, now = Date.now()): string {
-  if (!day) return 'ещё не тренировался';
+  if (!day) return t('ещё не тренировался');
   const today = new Date(now);
   const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  if (day === key(today)) return 'тренировался сегодня';
+  if (day === key(today)) return t('тренировался сегодня');
   const days = Math.round((Date.parse(`${key(today)}T12:00:00`) - Date.parse(`${day}T12:00:00`)) / 86_400_000);
-  if (days === 1) return 'тренировался вчера';
-  return days > 0 ? `тренировался ${days} дн. назад` : 'тренировался сегодня';
+  if (days === 1) return t('тренировался вчера');
+  return days > 0 ? t('тренировался {0} дн. назад', { 0: days }) : t('тренировался сегодня');
 }

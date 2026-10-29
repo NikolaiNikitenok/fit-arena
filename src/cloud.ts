@@ -3,13 +3,15 @@ import { useEffect, useState } from 'react';
 import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
 import { guestId, setMaxBot, tg } from './telegram';
 import { reportError } from './telemetry';
+import { getLang, t, tErr } from './i18n';
 
-const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId() });
+// Язык — чтобы бот писал игроку на языке игры.
+const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId(), lang: getLang() });
 
 export const post = (path: string, body: object, keepalive = false) =>
   fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth(), ...body }), keepalive }).then(async (r) => {
-    if (!r.ok) throw Object.assign(new Error(String(r.status)), { status: r.status, body: await r.json().catch(() => null) });
-    return r.json();
+    if (!r.ok) throw Object.assign(new Error(String(r.status)), { status: r.status, body: tErr(await r.json().catch(() => null)) });
+    return tErr(await r.json());
   });
 
 // Аккаунт, чей прогресс сейчас в телефоне (server/accounts.ts). Сменился — значит, этот вход привязали к другому герою.
@@ -245,7 +247,7 @@ export async function giftTrial(forId: string): Promise<void> {
       listeners.forEach((fn) => fn(cloud!));
     }
   } catch (e) {
-    throw new Error((e as { body?: { error?: string } }).body?.error ?? 'Нет связи с сервером');
+    throw new Error((e as { body?: { error?: string } }).body?.error ?? t('Нет связи с сервером'));
   }
 }
 

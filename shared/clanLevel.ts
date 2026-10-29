@@ -1,4 +1,5 @@
 // Уровни клана 1–30. Опыт клан получает от тренировок участников и от рейда;
+import { t } from '../src/i18n';
 // с уровнем растут места в клане, атаки и награды рейда, а на каждом уровне всем дарят подарок.
 
 export const CLAN_MAX_LEVEL = 30;
@@ -52,10 +53,10 @@ export function clanUnlocks(level: number): string[] {
   const now = clanPerks(level);
   const was = clanPerks(level - 1);
   const out: string[] = [];
-  if (now.slots > was.slots) out.push(`${now.slots} мест в клане`);
-  if (now.attacks > was.attacks) out.push(`${now.attacks} атаки рейда в день`);
-  if (now.raidCoins > was.raidCoins) out.push(`+${Math.round(now.raidCoins * 100)}% монет за рейд`);
-  if (now.raidDamage > was.raidDamage) out.push(`+${Math.round(now.raidDamage * 100)}% урона в рейде`);
-  if (clanRank(level) !== clanRank(level - 1)) out.push({ silver: 'серебряное знамя', gold: 'золотое знамя', legend: 'легендарное знамя' }[clanRank(level) as 'silver'] ?? '');
+  if (now.slots > was.slots) out.push(t('{0} мест в клане', { 0: now.slots }));
+  if (now.attacks > was.attacks) out.push(t('{0} атаки рейда в день', { 0: now.attacks }));
+  if (now.raidCoins > was.raidCoins) out.push(t('+{0}% монет за рейд', { 0: Math.round(now.raidCoins * 100) }));
+  if (now.raidDamage > was.raidDamage) out.push(t('+{0}% урона в рейде', { 0: Math.round(now.raidDamage * 100) }));
+  if (clanRank(level) !== clanRank(level - 1)) out.push({ silver: t('серебряное знамя'), gold: t('золотое знамя'), legend: t('легендарное знамя') }[clanRank(level) as 'silver'] ?? '');
   return out;
 }

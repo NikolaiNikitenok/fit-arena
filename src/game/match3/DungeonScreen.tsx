@@ -53,6 +53,7 @@ import {
 } from './dungeon';
 import './dungeon.css';
 import { Sheet } from '../../Sheet';
+import { forms, t } from '../../i18n';
 
 // Подземелье «три в ряд»: список этажей, партия, итог и экран «заряд кончился».
 // Экран самостоятельный: его открывает главный экран героя, а может открыть и деревня.
@@ -168,7 +169,7 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
     const c = checkSavedRun(latest.current, Date.now());
     if (c.kind === 'settled') {
       setProgress(saveProgress(c.progress));
-      return showResult(c.reward, c.run, c.stale ? `Этаж ${c.run.floor.id} не доигран за сутки — засчитано поражение.` : undefined);
+      return showResult(c.reward, c.run, c.stale ? t('Этаж {0} не доигран за сутки — засчитано поражение.', { 0: c.run.floor.id }) : undefined);
     }
     if (c.progress !== latest.current) setProgress(saveProgress(c.progress));
     if (c.kind === 'resume') return;
@@ -215,7 +216,7 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
   const AdminButton = () =>
     admin ? (
       <button className="small-btn ghost m3-admin" onClick={adminCharge}>
-        Админ: +{CHARGE_MAX} <Bolt size={12} />
+        {t('Админ:')} +{CHARGE_MAX} <Bolt size={12} />
       </button>
     ) : null;
 
@@ -238,11 +239,11 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
             </div>
           )}
           <div className="m3-result-tag">
-            Этаж {r.floor.id} · {RL.name}
+            {t('Этаж {0} · {1}', { 0: r.floor.id, 1: RL.name })}
           </div>
-          <h2>{reward.won ? (r.floor.boss ? 'Хранитель повержен!' : 'Этаж пройден!') : r.heroHp <= 0 ? 'Герой отступил' : r.moves > 0 ? 'Этаж покинут' : 'Ходы кончились'}</h2>
+          <h2>{reward.won ? (r.floor.boss ? t('Хранитель повержен!') : t('Этаж пройден!')) : r.heroHp <= 0 ? t('Герой отступил') : r.moves > 0 ? t('Этаж покинут') : t('Ходы кончились')}</h2>
           {view.note && <div className="muted">{view.note}</div>}
-          {reward.won ? <StarStamps n={reward.stars} /> : <div className="muted">Половина добычи всё равно твоя. Попробуй ещё раз!</div>}
+          {reward.won ? <StarStamps n={reward.stars} /> : <div className="muted">{t('Половина добычи всё равно твоя. Попробуй ещё раз!')}</div>}
           <div className="m3-loot">
             {RESOURCES.map((res, i) => (
               <div key={res} className="m3-loot-item" style={{ animationDelay: `${0.25 + reward.stars * 0.3 + i * 0.12}s` }}>
@@ -257,38 +258,38 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
           {reward.won && (
             <div className="m3-result-notes">
               <span>
-                Бонус этажа: <ResRow res={reward.bonus} plus />
+                {t('Бонус этажа:')} <ResRow res={reward.bonus} plus />
               </span>
               {reward.daily && (
                 <span className="gift">
-                  Первая победа дня: <ResRow res={reward.daily} plus />
+                  {t('Первая победа дня:')} <ResRow res={reward.daily} plus />
                 </span>
               )}
-              {r.maxCombo >= 3 && <span>Лучшее комбо: ×{r.maxCombo}</span>}
+              {r.maxCombo >= 3 && <span>{t('Лучшее комбо: ×{0}', { 0: r.maxCombo })}</span>}
             </div>
           )}
           <div className="m3-result-charge">
             <ChargePill charge={v.charge} />
-            <span className="muted">в деревне: </span>
+            <span className="muted">{t('в деревне:')} </span>
             <ResRow res={v.res} />
           </div>
           {reward.won ? (
             <button className="primary" onClick={() => (enough ? play(nextId) : setView({ kind: 'empty', floor: nextId }))}>
-              Дальше: этаж {nextId}
+              {t('Дальше: этаж {0}', { 0: nextId })}
               <span className="m3-cost">
                 <Bolt size={14} /> {FLOOR_COST}
               </span>
             </button>
           ) : (
             <button className="primary" onClick={() => (enough ? play(r.floor.id) : setView({ kind: 'empty', floor: r.floor.id }))}>
-              Ещё раз
+              {t('Ещё раз')}
               <span className="m3-cost">
                 <Bolt size={14} /> {FLOOR_COST}
               </span>
             </button>
           )}
           <button className="secondary" onClick={() => setView({ kind: 'list' })}>
-            К этажам
+            {t('К этажам')}
           </button>
         </div>
       </div>
@@ -301,7 +302,7 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
       <div className="m3-screen">
         <div className="app-head">
           <button className="pill btn" onClick={() => setView({ kind: 'list' })}>
-            ‹ Назад
+            {t('‹ Назад')}
           </button>
           <ChargePill charge={v.charge} />
         </div>
@@ -310,27 +311,27 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
           <div className="m3-empty-bolt">
             <Bolt size={64} />
           </div>
-          <h2>Заряд кончился — сделай пару подходов</h2>
+          <h2>{t('Заряд кончился — сделай пару подходов')}</h2>
           <div className="m3-empty-need">
-            Ещё <b>{need}</b> {plural(need, 'повтор', 'повтора', 'повторов')} до этажа {view.floor}
+            {t('Осталось')} <b>{need}</b> {t('{0} до этажа {1}', { 0: plural(need, t('повтор'), t('повтора'), t('повторов')), 1: view.floor })}
           </div>
-          <div className="muted">Каждый повтор = 1 заряд, планка: 2 секунды = 1 заряд. Этаж стоит {FLOOR_COST}, копится до {CHARGE_MAX}.</div>
+          <div className="muted">{t('Каждый повтор = 1 заряд, планка: 2 секунды = 1 заряд. Этаж стоит {0}, копится до {1}.', { 0: FLOOR_COST, 1: CHARGE_MAX })}</div>
           <div className="m3-charge-bar">
             <span style={{ width: `${Math.min(100, (v.charge / FLOOR_COST) * 100)}%` }} />
           </div>
           {onDaily && (
             <button className="primary" onClick={onDaily}>
-              Задание дня
+              {t('Задание дня')}
             </button>
           )}
           {onTrain && (
             <button className="secondary" onClick={onTrain}>
-              Тренировка дня
+              {t('Тренировка дня')}
             </button>
           )}
           {onPrograms && (
             <button className="secondary" onClick={onPrograms}>
-              Программы Грома
+              {t('Программы Грома')}
             </button>
           )}
         </div>
@@ -351,10 +352,10 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
   const L = landDef(nextFloor.land);
   const jump = () => {
     const n = Math.floor(Number(jumpText));
-    if (!(n >= 1)) return setJumpMsg('Введи номер этажа');
+    if (!(n >= 1)) return setJumpMsg(t('Введи номер этажа'));
     if (n > d.reached) {
       setLandFocus(null);
-      return setJumpMsg(`Этаж ${n} ещё закрыт: открыты 1–${d.reached}`);
+      return setJumpMsg(t('Этаж {0} ещё закрыт: открыты 1–{1}', { 0: n, 1: d.reached }));
     }
     setJumpMsg(null);
     setLandFocus(floorDef(n).land);
@@ -364,18 +365,18 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
     <div className="m3-screen">
       <div className="app-head">
         <button className="pill btn" onClick={onClose}>
-          ‹ Назад
+          {t('‹ Назад')}
         </button>
-        <h1>Подземелье</h1>
+        <h1>{t('Подземелье')}</h1>
         <ChargePill charge={v.charge} />
       </div>
       <div className="m3-village-res">
-        <span className="muted">Добыто для деревни</span>
+        <span className="muted">{t('Добыто для деревни')}</span>
         <ResRow res={v.res} />
       </div>
       <div className="m3-tools">
         <button className="small-btn ghost" onClick={() => setHowto(true)}>
-          Как играть
+          {t('Как играть')}
         </button>
         <AdminButton />
       </div>
@@ -387,11 +388,11 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
         <span className="m3-next-face">{nextFloor.monster ? <MonsterFace shape={nextFloor.monster.shape} color={nextFloor.monster.color} boss={nextFloor.boss} size={64} /> : <GoalBadge f={nextFloor} size={64} />}</span>
         <span className="m3-next-text">
           <small>
-            {L.name} · этаж {nextFloor.num} из {FLOORS_PER_LAND}
+            {t('{0} · этаж {1} из {2}', { 0: L.name, 1: nextFloor.num, 2: FLOORS_PER_LAND })}
           </small>
           <b>{goalText(nextFloor)}</b>
           <small>
-            Этаж {nextFloor.id} · {nextFloor.moves} ходов{bonus ? ' · бонус первой победы дня' : ''}
+            {t('Этаж {0} · {1} ходов{2}', { 0: nextFloor.id, 1: nextFloor.moves, 2: bonus ? t(' · бонус первой победы дня') : '' })}
           </small>
         </span>
         <span className="m3-play-chip">
@@ -406,13 +407,13 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
           jump();
         }}
       >
-        <input inputMode="numeric" pattern="[0-9]*" placeholder={`Этаж 1–${d.reached}`} value={jumpText} onChange={(e) => setJumpText(e.target.value.replace(/\D/g, '').slice(0, 5))} aria-label="Номер этажа" />
+        <input inputMode="numeric" pattern="[0-9]*" placeholder={t('Этаж 1–{0}', { 0: d.reached })} value={jumpText} onChange={(e) => setJumpText(e.target.value.replace(/\D/g, '').slice(0, 5))} aria-label={t('Номер этажа')} />
         <button className="small-btn" type="submit">
-          Перейти к этажу
+          {t('Перейти к этажу')}
         </button>
         {focus !== curLand && (
           <button className="small-btn ghost" type="button" onClick={() => setLandFocus(null)}>
-            К текущей
+            {t('К текущей')}
           </button>
         )}
       </form>
@@ -420,7 +421,7 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
 
       {from > 0 && (
         <button className="m3-more" onClick={() => setLandFocus(Math.max(0, from - 2))}>
-          ▲ Земли 1–{from} · этажи 1–{from * FLOORS_PER_LAND}
+          {t('▲ Земли 1–{0} · этажи 1–{1}', { 0: from, 1: from * FLOORS_PER_LAND })}
         </button>
       )}
       {lands.map((land) => {
@@ -439,8 +440,8 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
               </span>
             </div>
             <div className="m3-land-sub">
-              Земля {land + 1} · этажи {ids[0]}–{ids[ids.length - 1]}
-              {ids[0] > FLOOR_COUNT && <span className="m3-endless">бесконечные земли</span>}
+              {t('Земля {0} · этажи {1}–{2}', { 0: land + 1, 1: ids[0], 2: ids[ids.length - 1] })}
+              {ids[0] > FLOOR_COUNT && <span className="m3-endless">{t('бесконечные земли')}</span>}
             </div>
             <div className="m3-floors">
               {ids.map((id) => {
@@ -460,19 +461,19 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
       })}
       {to < maxLand && (
         <button className="m3-more" onClick={() => setLandFocus(Math.min(maxLand, to + 2))}>
-          ▼ Дальше: земли {to + 2}–{maxLand + 1}
+          {t('▼ Дальше: земли {0}–{1}', { 0: to + 2, 1: maxLand + 1 })}
         </button>
       )}
       <div className="muted m3-foot">
-        Тренируйся — копи заряд: 1 повтор = 1 <Bolt size={12} />. Этаж — {FLOOR_COST} <Bolt size={12} />. Лучшее комбо: ×{d.bestCombo}, побед: {d.wins}.
+        {t('Тренируйся — копи заряд: 1 повтор = 1')} <Bolt size={12} />{t('. Этаж — {0}', { 0: FLOOR_COST })} <Bolt size={12} />{t('. Лучшее комбо: ×{0}, побед: {1}.', { 0: d.bestCombo, 1: d.wins })}
       </div>
 
       {giveUp && saved && (
         <Sheet onClose={() => setGiveUp(false)}>
-          <div className="level-title">Сдаться на этаже {saved.floor}?</div>
+          <div className="level-title">{t('Сдаться на этаже {0}?', { 0: saved.floor })}</div>
           <LeaveText loot={saved.loot} />
           <button className="primary" onClick={surrender}>
-            Сдаться
+            {t('Сдаться')}
           </button>
           <button
             className="secondary"
@@ -481,7 +482,7 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
               resume();
             }}
           >
-            Продолжить этаж {saved.floor}
+            {t('Продолжить этаж {0}', { 0: saved.floor })}
           </button>
         </Sheet>
       )}
@@ -494,47 +495,43 @@ export function DungeonScreen({ progress, setProgress, onClose, onTrain, onDaily
             {picked.monster ? <MonsterFace shape={picked.monster.shape} color={picked.monster.color} boss={picked.boss} size={72} /> : <GoalBadge f={picked} size={72} />}
             <div>
               <div className="m3-result-tag">
-                {landDef(picked.land).name} · этаж {picked.id}
+                {t('{0} · этаж {1}', { 0: landDef(picked.land).name, 1: picked.id })}
               </div>
               <div className="level-title">{goalText(picked)}</div>
               {picked.monster && (
                 <div className="muted">
-                  {picked.monster.name}: <Heart size={12} className="heart" /> {picked.monster.hp}, бьёт на {picked.monster.atk} раз в {picked.monster.every} {plural(picked.monster.every, 'ход', 'хода', 'ходов')}
+                  {picked.monster.name}: <Heart size={12} className="heart" /> {picked.monster.hp}{t(', бьёт на {0} раз в {1} {2}', { 0: picked.monster.atk, 1: picked.monster.every, 2: plural(picked.monster.every, t('ход'), t('хода'), t('ходов')) })}
                 </div>
               )}
               <div className="muted">
-                {picked.moves} ходов · <Stars n={d.stars[picked.id] ?? 0} />
+                {t('{0} ходов', { 0: picked.moves })} · <Stars n={d.stars[picked.id] ?? 0} />
               </div>
             </div>
           </div>
           <div className="m3-legend">
             <span>
-              <GemIcon kind="wood" /> <GemIcon kind="stone" /> <GemIcon kind="gold" /> ресурсы деревни
+              <GemIcon kind="wood" /> <GemIcon kind="stone" /> <GemIcon kind="gold" /> {t('ресурсы деревни')}
             </span>
             <span>
-              <GemIcon kind="sword" /> бьют чудовище · <GemIcon kind="heart" /> лечат
+              <GemIcon kind="sword" /> {t('бьют чудовище ·')} <GemIcon kind="heart" /> {t('лечат')}
             </span>
-            <span>4 в ряд — луч, уголок — бомба, 5 в ряд — радуга</span>
+            <span>{t('4 в ряд — луч, уголок — бомба, 5 в ряд — радуга')}</span>
           </div>
           <button className="primary" disabled={!floorOpen(progress, picked.id)} onClick={() => play(picked.id)}>
-            {d.stars[picked.id] ? 'Пройти ещё раз' : 'В бой'}
+            {d.stars[picked.id] ? t('Пройти ещё раз') : t('В бой')}
             <span className="m3-cost">
               <Bolt size={14} /> {FLOOR_COST}
             </span>
           </button>
-          {v.charge < FLOOR_COST && <div className="muted m3-center">Заряда {v.charge} из {FLOOR_COST}: ещё {repsToFloor(progress)} повторов</div>}
-          {saved && v.charge >= FLOOR_COST && <div className="muted m3-center">Незаконченный этаж {saved.floor} засчитается поражением: останется половина его добычи.</div>}
+          {v.charge < FLOOR_COST && <div className="muted m3-center">{t('Заряда {0} из {1}: ещё {2} повторов', { 0: v.charge, 1: FLOOR_COST, 2: repsToFloor(progress) })}</div>}
+          {saved && v.charge >= FLOOR_COST && <div className="muted m3-center">{t('Незаконченный этаж {0} засчитается поражением: останется половина его добычи.', { 0: saved.floor })}</div>}
         </Sheet>
       )}
     </div>
   );
 }
 
-const plural = (n: number, one: string, few: string, many: string) => {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many;
-};
+const plural = (n: number, one: string, few: string, many: string) => forms(n, [one, few, many]);
 
 const halfLoot = (loot: Resources): Resources => ({ wood: Math.round(loot.wood * FAIL_KEEP), stone: Math.round(loot.stone * FAIL_KEEP), gold: Math.round(loot.gold * FAIL_KEEP) });
 
@@ -542,7 +539,7 @@ const halfLoot = (loot: Resources): Resources => ({ wood: Math.round(loot.wood *
 function LeaveText({ loot }: { loot: Resources }) {
   return (
     <div className="muted m3-leave">
-      Это <b>поражение</b>: этаж не засчитается, звёзд и бонуса этажа не будет, заряд {FLOOR_COST} уже потрачен и не вернётся. В деревню уйдёт половина собранного: <ResRow res={halfLoot(loot)} plus />
+      {t('Это')} <b>{t('поражение')}</b>{t(': этаж не засчитается, звёзд и бонуса этажа не будет, заряд {0} уже потрачен и не вернётся. В деревню уйдёт половина собранного:', { 0: FLOOR_COST })} <ResRow res={halfLoot(loot)} plus />
     </div>
   );
 }
@@ -556,17 +553,17 @@ function ResumeCard({ saved, onResume, onGiveUp }: { saved: SavedRun; onResume: 
     <div className={`m3-next m3-resume ${f.boss ? 'boss' : ''}`} style={{ ['--la' as string]: L.accent, ['--lb' as string]: L.bg }}>
       <span className="m3-next-face">{f.monster ? <MonsterFace shape={f.monster.shape} color={f.monster.color} boss={f.boss} size={64} /> : <GoalBadge f={f} size={64} />}</span>
       <span className="m3-next-text">
-        <small>Незаконченный этаж · {L.name}</small>
+        <small>{t('Незаконченный этаж · {0}', { 0: L.name })}</small>
         <b>{goalText(f)}</b>
         <small>
-          Осталось {saved.moves} {plural(saved.moves, 'ход', 'хода', 'ходов')} · ждёт ещё {hoursLeft} ч
+          {t('Осталось {0} {1} · ждёт ещё {2} ч', { 0: saved.moves, 1: plural(saved.moves, t('ход'), t('хода'), t('ходов')), 2: hoursLeft })}
         </small>
         <span className="m3-resume-actions">
           <button className="primary" onClick={onResume}>
-            Продолжить этаж {saved.floor}
+            {t('Продолжить этаж {0}', { 0: saved.floor })}
           </button>
           <button className="secondary" onClick={onGiveUp}>
-            Сдаться
+            {t('Сдаться')}
           </button>
         </span>
       </span>
@@ -581,8 +578,8 @@ function CountUp({ value, delay, instant }: { value: number; delay: number; inst
     if (instant || value <= 0) return setN(value);
     let raf = 0;
     const t0 = performance.now() + delay;
-    const tick = (t: number) => {
-      const k = Math.min(1, Math.max(0, (t - t0) / 900));
+    const tick = (tm: number) => {
+      const k = Math.min(1, Math.max(0, (tm - t0) / 900));
       setN(Math.round(value * (1 - Math.pow(1 - k, 3))));
       if (k < 1) raf = requestAnimationFrame(tick);
     };
@@ -597,7 +594,7 @@ const STAR_PATH = 'M12 1.8l3.1 6.4 7 1-5.1 4.9 1.2 7-6.2-3.3-6.2 3.3 1.2-7L1.9 9
 /** Звёзды итога: заработанные «впечатываются» по одной, остальные — тёмные гнёзда. */
 function StarStamps({ n }: { n: number }) {
   return (
-    <div className="m3-stamps" aria-label={`${n} из 3 звёзд`}>
+    <div className="m3-stamps" aria-label={t('{0} из 3 звёзд', { 0: n })}>
       {[1, 2, 3].map((i) => (
         <span key={i} className={`m3-stamp ${i <= n ? 'on' : ''} ${i === 2 ? 'mid' : ''}`} style={{ animationDelay: `${0.35 + i * 0.3}s` }}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -699,8 +696,8 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
 
   useEffect(() => {
     if (!intro) return;
-    const t = setTimeout(() => setIntro(false), 2600);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setIntro(false), 2600);
+    return () => clearTimeout(tm);
   }, [intro]);
 
   useEffect(() => {
@@ -715,11 +712,11 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
   useEffect(() => {
     if (busy || run.status !== 'play') return;
     setHint(null);
-    const t = setTimeout(() => {
+    const tm = setTimeout(() => {
       const mv = findHint(run.board);
       if (mv) setHint([mv.a, mv.b]);
     }, HINT_AFTER_MS);
-    return () => clearTimeout(t);
+    return () => clearTimeout(tm);
   }, [busy, run]);
 
   const later = (ms: number, fn: () => void) => setTimeout(() => alive.current && fn(), ms);
@@ -832,10 +829,10 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
     }
     for (const h of s.blocksHit) fx.push({ key: fxKey++, type: 'break', x: h.x, y: h.y, block: h.kind });
     for (const h of s.iceHit) fx.push({ key: fxKey++, type: 'break', x: h.x, y: h.y, block: 'ice' });
-    if (mega) fx.push({ key: fxKey++, type: 'combo', text: 'Сокрушительно!', big: true });
+    if (mega) fx.push({ key: fxKey++, type: 'combo', text: t('Сокрушительно!'), big: true });
     // Номер волны показывает счётчик ×N у доски, надпись — только похвала.
-    else if (s.combo >= 2) fx.push({ key: fxKey++, type: 'combo', text: s.combo >= 5 ? 'Невероятно!' : s.combo >= 3 ? 'Супер!' : 'Комбо!', big: s.combo >= 3 });
-    else if (s.longest >= 5) fx.push({ key: fxKey++, type: 'combo', text: 'Радуга!', big: true });
+    else if (s.combo >= 2) fx.push({ key: fxKey++, type: 'combo', text: s.combo >= 5 ? t('Невероятно!') : s.combo >= 3 ? t('Супер!') : t('Комбо!'), big: s.combo >= 3 });
+    else if (s.longest >= 5) fx.push({ key: fxKey++, type: 'combo', text: t('Радуга!'), big: true });
     addFx(fx);
     if (s.combo >= 2) setCombo(s.combo);
     for (const c of s.created) born.current.add(c.gem.id);
@@ -886,7 +883,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
   const playFinale = async (won: Run, fin: NonNullable<ReturnType<typeof finaleRun>>) => {
     setFinale(true);
     skipRef.current = false;
-    addFx([{ key: fxKey++, type: 'combo', text: 'Финальный салют!', big: true }]);
+    addFx([{ key: fxKey++, type: 'combo', text: t('Финальный салют!'), big: true }]);
     sfx('levelup');
     setMovesView(won.moves);
     await pause(750);
@@ -964,7 +961,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
       if (!alive.current) return;
     }
     if (o.result.reshuffled) {
-      addFx([{ key: fxKey++, type: 'combo', text: 'Ходов нет — перемешиваем', big: false }]);
+      addFx([{ key: fxKey++, type: 'combo', text: t('Ходов нет — перемешиваем'), big: false }]);
       await wait(500);
       setShown(o.run.board);
     }
@@ -1040,14 +1037,14 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
       {flash > 0 && !lite && <div key={flash} className="m3-screenflash" aria-hidden="true" />}
       {hurt > 0 && <div key={`h${hurt}`} className="m3-hurtflash" aria-hidden="true" />}
       <div className="m3-top">
-        <button className="pill btn icon-only" onClick={() => setQuit(true)} aria-label="Выйти">
+        <button className="pill btn icon-only" onClick={() => setQuit(true)} aria-label={t('Выйти')}>
           ×
         </button>
         <div className="m3-top-title">
           <small>{L.name}</small>
           <b>
-            Этаж {f.id}
-            {f.boss ? ' · хранитель' : ''}
+            {t('Этаж {0}', { 0: f.id })}
+            {f.boss ? t(' · хранитель') : ''}
           </b>
         </div>
         <ChargePill charge={charge} />
@@ -1066,7 +1063,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
               {f.goal === 'collect' && f.collect && <ResIcon res={f.collect.res} size={18} />}
               {f.goal === 'ice' && <span className="m3-ice-glyph small" />}
               {f.goal === 'crates' && <span className="m3-crate-glyph small" />}
-              <b>{f.goal === 'collect' ? `${run.gems[f.collect!.res]} / ${f.collect!.n}` : f.goal === 'ice' ? `осталось ${iceLeft(shown)}` : `осталось ${blocksLeft(shown)}`}</b>
+              <b>{f.goal === 'collect' ? `${run.gems[f.collect!.res]} / ${f.collect!.n}` : f.goal === 'ice' ? t('осталось {0}', { 0: iceLeft(shown) }) : t('осталось {0}', { 0: blocksLeft(shown) })}</b>
             </div>
           )}
           {m && (
@@ -1085,7 +1082,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
         </div>
         <div ref={movesRef} className={`m3-moves ${moves <= 3 && !finale ? 'low' : ''} ${finale ? 'finale' : ''}`}>
           <b>{f.goal === 'survive' ? left : moves}</b>
-          <span>{f.goal === 'survive' ? 'продержись' : 'ходов'}</span>
+          <span>{f.goal === 'survive' ? t('продержись') : t('ходов')}</span>
         </div>
       </div>
 
@@ -1115,7 +1112,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
         </div>
         {m && run.monsterHp > 0 && !dead && (
           <span className={`m3-attack ${telegraph ? 'soon' : ''}`}>
-            <Swords size={13} /> {telegraph ? 'Сейчас ударит!' : `Удар через ${run.attackIn} ${plural(run.attackIn, 'ход', 'хода', 'ходов')} · −${m.atk}`}
+            <Swords size={13} /> {telegraph ? t('Сейчас ударит!') : t('Удар через {0} {1} · −{2}', { 0: run.attackIn, 1: plural(run.attackIn, t('ход'), t('хода'), t('ходов')), 2: m.atk })}
           </span>
         )}
       </div>
@@ -1140,7 +1137,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
       </div>
 
       <div ref={lootRef} className="m3-bottom">
-        <span className="m3-res-label">Добыча</span>
+        <span className="m3-res-label">{t('Добыча')}</span>
         <ResRow res={{ wood: Math.round(lootShown.wood), stone: Math.round(lootShown.stone), gold: Math.round(lootShown.gold) }} />
       </div>
 
@@ -1148,7 +1145,7 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
 
       {finale && busy && (
         <button className="m3-finale-skip" onClick={() => (skipRef.current = true)}>
-          нажми, чтобы пропустить
+          {t('нажми, чтобы пропустить')}
         </button>
       )}
 
@@ -1159,23 +1156,23 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
               <MonsterFace shape={m.shape} color={m.color} boss size={120} angry />
             </div>
             <div className="m3-boss-text">
-              <small>Хранитель земли · этаж {f.id}</small>
+              <small>{t('Хранитель земли · этаж {0}', { 0: f.id })}</small>
               <b>{m.name}</b>
               <span>
-                <Heart size={12} /> {m.hp} · бьёт на {m.atk} раз в {m.every} {plural(m.every, 'ход', 'хода', 'ходов')}
+                <Heart size={12} /> {m.hp} · {t('бьёт на {0} раз в {1} {2}', { 0: m.atk, 1: m.every, 2: plural(m.every, t('ход'), t('хода'), t('ходов')) })}
               </span>
             </div>
           </div>
-          <div className="m3-boss-tap">нажми, чтобы начать</div>
+          <div className="m3-boss-tap">{t('нажми, чтобы начать')}</div>
         </div>
       )}
       {!intro && howto && <HowTo targets={{ board: wrap, hud: hudRef, loot: lootRef }} onDone={() => setHowto(false)} />}
 
       {quit && (
         <Sheet onClose={() => setQuit(false)}>
-          <div className="level-title">Покинуть этаж?</div>
+          <div className="level-title">{t('Покинуть этаж?')}</div>
           <LeaveText loot={run.loot} />
-          <div className="muted m3-leave">Можно и просто закрыть приложение: этаж сохранится, доиграешь в течение суток.</div>
+          <div className="muted m3-leave">{t('Можно и просто закрыть приложение: этаж сохранится, доиграешь в течение суток.')}</div>
           <button
             className="primary"
             onClick={() => {
@@ -1184,10 +1181,10 @@ function Play({ initial, charge, onMove, onFinish }: { initial: Run; charge: num
               onFinish({ ...run, status: 'lost' });
             }}
           >
-            Уйти с добычей
+            {t('Уйти с добычей')}
           </button>
           <button className="secondary" onClick={() => setQuit(false)}>
-            Играть дальше
+            {t('Играть дальше')}
           </button>
         </Sheet>
       )}

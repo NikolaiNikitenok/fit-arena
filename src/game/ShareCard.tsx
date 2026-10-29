@@ -13,6 +13,7 @@ import { heroHands } from './power';
 import { heroLevel, heroTitle, heroXp, Progress, streakOf } from './progress';
 import './ShareCard.css';
 import { Sheet } from '../Sheet';
+import { forms, locale, t } from '../i18n';
 
 // Открытка «Я победил босса»: герой в победной позе рядом с поверженным боссом, статистика и ссылка на бота.
 // 3D-сцену рисуем на невидимом холсте, потом поверх неё на 2D-холсте — фон, надписи и приглашение.
@@ -20,7 +21,7 @@ import { Sheet } from '../Sheet';
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 export const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
-const INVITE = 'Сможешь так же? Тренируйся со мной в Telegram';
+const INVITE = t('Сможешь так же? Тренируйся со мной в Telegram');
 const FONT = 'Nunito, system-ui, -apple-system, sans-serif';
 
 export interface CardStat {
@@ -49,11 +50,7 @@ const bossFace = (land: number): string => {
   return `boss-${L.world === 'zombie' ? 2 : 0}${land % 3 === 2 ? 'm' : ''}`;
 };
 
-const plural = (n: number, one: string, few: string, many: string) => {
-  const d = n % 10;
-  const h = n % 100;
-  return d === 1 && h !== 11 ? one : d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many;
-};
+const plural = (n: number, one: string, few: string, many: string) => forms(n, [one, few, many]);
 
 function heroBits(p: Progress) {
   const item = itemById(p.equipped);
@@ -64,11 +61,11 @@ function heroBits(p: Progress) {
     hero: { model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(p) },
     level,
     days,
-    heroLine: `${name === 'Гость' ? 'Герой' : name} · ${heroTitle(level)}`,
+    heroLine: `${name === t('Гость') ? t('Герой') : name} · ${heroTitle(level)}`,
   };
 }
 
-const streakStat = (days: number): CardStat => ({ label: 'Серия', value: `${days} ${plural(days, 'день', 'дня', 'дней')}` });
+const streakStat = (days: number): CardStat => ({ label: t('Серия'), value: `${days} ${plural(days, t('день'), t('дня'), t('дней'))}` });
 
 /** Открытка после босса миссии (и финального Князя Дивана). */
 export function bossCard(level: LevelDef, p: Progress, reps: number, stars: number): CardData {
@@ -81,9 +78,9 @@ export function bossCard(level: LevelDef, p: Progress, reps: number, stars: numb
     boss: { name: land.boss.name, model, tint: world === 2 ? 'mul:0.75,1.15,0.6' : land.boss.color, color: land.boss.color, glow: land.boss.color, face: bossFace(level.land) },
     hero: b.hero,
     world,
-    place: world === 3 ? 'Финал · Замок Князя' : `${WORLD_NAMES[land.world]} · ${land.name}`,
+    place: world === 3 ? t('Финал · Замок Князя') : `${WORLD_NAMES[land.world]} · ${land.name}`,
     heroLine: b.heroLine,
-    stats: [{ label: 'Повторов', value: String(reps) }, { label: 'Звёзды', value: '', stars }, { label: 'Уровень', value: String(b.level) }, streakStat(b.days)],
+    stats: [{ label: t('Повторов'), value: String(reps) }, { label: t('Звёзды'), value: '', stars }, { label: t('Уровень'), value: String(b.level) }, streakStat(b.days)],
     accent: land.accent,
   };
 }
@@ -103,9 +100,9 @@ export function raidCard(raidKey: string, p: Progress, reps: number, dealt: numb
     },
     hero: b.hero,
     world: 4,
-    place: 'Рейд клана',
+    place: t('Рейд клана'),
     heroLine: b.heroLine,
-    stats: [{ label: 'Повторов', value: String(reps) }, { label: 'Урон', value: dealt.toLocaleString('ru') }, { label: 'Уровень', value: String(b.level) }, streakStat(b.days)],
+    stats: [{ label: t('Повторов'), value: String(reps) }, { label: t('Урон'), value: dealt.toLocaleString(locale()) }, { label: t('Уровень'), value: String(b.level) }, streakStat(b.days)],
     accent: boss.glow,
   };
 }
@@ -196,7 +193,7 @@ function CardStage({ data, onShot }: { data: CardData; onShot: (c: HTMLCanvasEle
 
 /** Нарисовать 3D-сцену открытки на невидимом холсте и вернуть кадр (с прозрачным фоном). */
 export function renderCardScene(data: CardData): Promise<HTMLCanvasElement> {
-  if (!hasWebGL()) return Promise.reject(new Error('нет WebGL'));
+  if (!hasWebGL()) return Promise.reject(new Error(t('нет WebGL')));
   return new Promise((resolve, reject) => {
     const host = document.createElement('div');
     host.style.cssText = `position:fixed;left:-${CARD_W * 3}px;top:0;width:${CARD_W}px;height:${CARD_H}px;pointer-events:none;`;
@@ -213,7 +210,7 @@ export function renderCardScene(data: CardData): Promise<HTMLCanvasElement> {
         host.remove();
       }, 0);
     };
-    const timer = setTimeout(() => finish(() => reject(new Error('сцена не загрузилась'))), 20000);
+    const timer = setTimeout(() => finish(() => reject(new Error(t('сцена не загрузилась')))), 20000);
     root.render(
       <Canvas
         dpr={1}
@@ -424,7 +421,7 @@ export async function drawCard(data: CardData, scene: HTMLCanvasElement | null):
   g.font = `900 46px ${FONT}`;
   g.letterSpacing = '6px';
   g.fillStyle = '#ffd27a';
-  g.fillText('ПОВЕРЖЕН', cx + 3, 246);
+  g.fillText(t('ПОВЕРЖЕН'), cx + 3, 246);
   g.letterSpacing = '0px';
   const lines = splitName(g, data.boss.name, W - 110);
   const size = Math.min(...lines.map((l) => fitFont(g, l, 900, lines.length > 1 ? 92 : 104, 54, W - 110)));
@@ -504,12 +501,12 @@ export async function drawCard(data: CardData, scene: HTMLCanvasElement | null):
 export async function makeShareCard(data: CardData): Promise<Blob> {
   const scene = await renderCardScene(data).catch(() => null);
   const card = await drawCard(data, scene);
-  return new Promise((resolve, reject) => card.toBlob((b) => (b ? resolve(b) : reject(new Error('не удалось сохранить картинку'))), 'image/png'));
+  return new Promise((resolve, reject) => card.toBlob((b) => (b ? resolve(b) : reject(new Error(t('не удалось сохранить картинку')))), 'image/png'));
 }
 
 /* ---------- Отправка ---------- */
 
-export const shareText = (boss: string) => `Я победил босса «${boss}» в NikitenokArena! ${INVITE}`;
+export const shareText = (boss: string) => t('Я победил босса «{0}» в NikitenokArena! {1}', { 0: boss, 1: INVITE });
 
 /** Поделиться картинкой: системное меню с файлом, загрузка через Telegram (нужна https-ссылка) или скачивание. */
 export async function shareImage(blob: Blob, text: string, url?: string): Promise<'shared' | 'saved' | 'cancelled'> {
@@ -563,7 +560,7 @@ export function ShareVictory({ card }: { card: () => CardData }) {
       const blob = await makeShareCard(data);
       setImg({ blob, url: URL.createObjectURL(blob), boss: data.boss.name });
     } catch {
-      setNote('Не получилось нарисовать открытку');
+      setNote(t('Не получилось нарисовать открытку'));
     } finally {
       setBusy(false);
     }
@@ -572,28 +569,28 @@ export function ShareVictory({ card }: { card: () => CardData }) {
   const shareCard = async () => {
     if (!img) return;
     const r = await shareImage(img.blob, `${shareText(img.boss)} ${BOT_LINK}`);
-    if (r === 'saved') setNote('Картинка сохранена. Если не скачалась — зажми её и выбери «Сохранить».');
+    if (r === 'saved') setNote(t('Картинка сохранена. Если не скачалась — зажми её и выбери «Сохранить».'));
   };
 
   const sendFriend = async () => {
     const r = await share(BOT_LINK, shareText(img?.boss ?? card().boss.name)).catch(() => null);
-    if (r === 'copied') setNote('Ссылка скопирована');
+    if (r === 'copied') setNote(t('Ссылка скопирована'));
   };
 
   return (
     <>
       <button className="secondary" onClick={make}>
-        Поделиться победой
+        {t('Поделиться победой')}
       </button>
       {open && (
         <Sheet onClose={() => setOpen(false)} bodyClassName="share-card">
-          <div className="share-card-preview">{img ? <img src={img.url} alt="Открытка победы" /> : <div className="share-card-wait">{busy ? 'Рисую открытку…' : ''}</div>}</div>
+          <div className="share-card-preview">{img ? <img src={img.url} alt={t('Открытка победы')} /> : <div className="share-card-wait">{busy ? t('Рисую открытку…') : ''}</div>}</div>
           {note && <div className="muted share-card-note">{note}</div>}
           <button className="primary" disabled={!img} onClick={shareCard}>
-            Поделиться
+            {t('Поделиться')}
           </button>
           <button className="secondary" onClick={sendFriend}>
-            Отправить другу
+            {t('Отправить другу')}
           </button>
         </Sheet>
       )}

@@ -2,29 +2,30 @@
 // Считается на телефоне из дней тренировок (days) и журнала по упражнениям (log); место среди игроков даёт сервер.
 import { EXERCISE_LABELS, type Exercise, repsEquivalent } from '../repCounter';
 import type { Progress } from './progress';
+import { EN_MONTHS, forms, isEn, locale, t } from '../i18n';
 
-export const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+export const MONTHS = isEn() ? EN_MONTHS : [t('январь'), t('февраль'), t('март'), t('апрель'), t('май'), t('июнь'), t('июль'), t('август'), t('сентябрь'), t('октябрь'), t('ноябрь'), t('декабрь')];
 // «Итоги октября», «в октябре».
-export const MONTHS_OF = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-export const MONTHS_IN = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
-const WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+export const MONTHS_OF = isEn() ? EN_MONTHS : [t('января'), t('февраля'), t('марта'), t('апреля'), t('мая'), t('июня'), t('июля'), t('августа'), t('сентября'), t('октября'), t('ноября'), t('декабря')];
+export const MONTHS_IN = isEn() ? EN_MONTHS : [t('январе'), t('феврале'), t('марте'), t('апреле'), t('мае'), t('июне'), t('июле'), t('августе'), t('сентябре'), t('октябре'), t('ноябре'), t('декабре')];
+const WEEKDAYS = [t('воскресенье'), t('понедельник'), t('вторник'), t('среда'), t('четверг'), t('пятница'), t('суббота')];
 // «По пятницам».
-const WEEKDAYS_ON = ['по воскресеньям', 'по понедельникам', 'по вторникам', 'по средам', 'по четвергам', 'по пятницам', 'по субботам'];
+const WEEKDAYS_ON = [t('по воскресеньям'), t('по понедельникам'), t('по вторникам'), t('по средам'), t('по четвергам'), t('по пятницам'), t('по субботам')];
 // Итоги прошлого месяца видны первую неделю нового.
 export const RECAP_DAYS = 7;
 
 export type RecapType = 'unstoppable' | 'squat' | 'pushup' | 'situp' | 'plank' | 'weekend' | 'burst' | 'steady' | 'starter';
 
 export const RECAP_TYPES: Record<RecapType, { name: string; emoji: string; text: string }> = {
-  unstoppable: { name: 'Неудержимый', emoji: '🔥', text: 'Тренировался почти каждый день. Такую силу воли не остановить.' },
-  squat: { name: 'Машина приседаний', emoji: '🦵', text: 'Ноги — твоё оружие. Враги дрожат, когда ты встаёшь.' },
-  pushup: { name: 'Железные руки', emoji: '💪', text: 'Отжимания — твоя стихия. Каждый удар отдаётся по всей арене.' },
-  situp: { name: 'Стальной пресс', emoji: '🛡️', text: 'Центр силы — пресс. Тебя не согнуть.' },
-  plank: { name: 'Несгибаемый', emoji: '🧱', text: 'Планка — это терпение. Ты стоишь, когда другие падают.' },
-  weekend: { name: 'Воин выходных', emoji: '⚔️', text: 'Главные битвы — в субботу и воскресенье.' },
-  burst: { name: 'Взрывной', emoji: '⚡', text: 'Редко, но мощно: твои дни силы запоминаются надолго.' },
-  steady: { name: 'Стабильный', emoji: '🎯', text: 'Ровный темп без провалов — так и куются чемпионы.' },
-  starter: { name: 'Новичок с огоньком', emoji: '🌱', text: 'Первые шаги сделаны. Дальше будет только интереснее.' },
+  unstoppable: { name: t('Неудержимый'), emoji: '🔥', text: t('Тренировался почти каждый день. Такую силу воли не остановить.') },
+  squat: { name: t('Машина приседаний'), emoji: '🦵', text: t('Ноги — твоё оружие. Враги дрожат, когда ты встаёшь.') },
+  pushup: { name: t('Железные руки'), emoji: '💪', text: t('Отжимания — твоя стихия. Каждый удар отдаётся по всей арене.') },
+  situp: { name: t('Стальной пресс'), emoji: '🛡️', text: t('Центр силы — пресс. Тебя не согнуть.') },
+  plank: { name: t('Несгибаемый'), emoji: '🧱', text: t('Планка — это терпение. Ты стоишь, когда другие падают.') },
+  weekend: { name: t('Воин выходных'), emoji: '⚔️', text: t('Главные битвы — в субботу и воскресенье.') },
+  burst: { name: t('Взрывной'), emoji: '⚡', text: t('Редко, но мощно: твои дни силы запоминаются надолго.') },
+  steady: { name: t('Стабильный'), emoji: '🎯', text: t('Ровный темп без провалов — так и куются чемпионы.') },
+  starter: { name: t('Новичок с огоньком'), emoji: '🌱', text: t('Первые шаги сделаны. Дальше будет только интереснее.') },
 };
 
 export interface Recap {
@@ -63,8 +64,8 @@ const shift = (month: string, by: number) => {
 };
 
 /** Местная дата YYYY-MM-DD. */
-const localDate = (t: number) => {
-  const d = new Date(t);
+const localDate = (tm: number) => {
+  const d = new Date(tm);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
@@ -88,31 +89,27 @@ export function recapMonths(p: Pick<Progress, 'days'>, now: number): string[] {
   return [...set].sort().reverse();
 }
 
-const word = (n: number, forms: [string, string, string]) => {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  return forms[m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2];
-};
-const num = (n: number) => n.toLocaleString('ru');
-const times = (x: number) => (x >= 10 ? num(Math.round(x)) : x.toLocaleString('ru', { maximumFractionDigits: 1 }));
+const word = forms;
+const num = (n: number) => n.toLocaleString(locale());
+const times = (x: number) => (x >= 10 ? num(Math.round(x)) : x.toLocaleString(locale(), { maximumFractionDigits: 1 }));
 
 // Приседание поднимает тело примерно на 45 см; отжимание — около 45 кг (две трети веса) на 30 см.
 const SQUAT_M = 0.45;
 const PUSHUP_KG = 45;
 const HEIGHTS: [number, string][] = [
-  [27, 'девятиэтажку'],
-  [330, 'Эйфелеву башню'],
-  [462, 'Лахта-центр'],
-  [540, 'Останкинскую башню'],
-  [5642, 'Эльбрус'],
-  [8849, 'Эверест'],
+  [27, t('девятиэтажку')],
+  [330, t('Эйфелеву башню')],
+  [462, t('Лахта-центр')],
+  [540, t('Останкинскую башню')],
+  [5642, t('Эльбрус')],
+  [8849, t('Эверест')],
 ];
 const WEIGHTS: [number, string, [string, string, string]][] = [
-  [1.4, 'легковушку', ['легковушку', 'легковушки', 'легковушек']],
-  [5, 'слона', ['слона', 'слона', 'слонов']],
-  [20, 'трамвай', ['трамвай', 'трамвая', 'трамваев']],
+  [1.4, t('легковушку'), [t('легковушку'), t('легковушки'), t('легковушек')]],
+  [5, t('слона'), [t('слона'), t('слона'), t('слонов')]],
+  [20, t('трамвай'), [t('трамвай'), t('трамвая'), t('трамваев')]],
   [41, 'Boeing 737', ['Boeing 737', 'Boeing 737', 'Boeing 737']],
-  [150, 'синего кита', ['синего кита', 'синих кита', 'синих китов']],
+  [150, t('синего кита'), [t('синего кита'), t('синих кита'), t('синих китов')]],
 ];
 
 /** Забавные сравнения: на какую высоту поднялся приседаниями, сколько тонн выжал отжиманиями. */
@@ -123,17 +120,17 @@ export function funFacts(amount: Partial<Record<Exercise, number>>): string[] {
     const m = squats * SQUAT_M;
     const [h, what] = [...HEIGHTS].reverse().find(([x]) => m >= x) ?? HEIGHTS[0];
     const k = m / h;
-    out.push(k >= 1.5 ? `Приседаниями ты поднялся на ${num(Math.round(m))} м — это ${times(k)} раза на ${what}` : `Приседаниями ты поднялся на ${num(Math.round(m))} м — выше, чем на ${what}`);
+    out.push(k >= 1.5 ? t('Приседаниями ты поднялся на {0} м — это {1} раза на {2}', { 0: num(Math.round(m)), 1: times(k), 2: what }) : t('Приседаниями ты поднялся на {0} м — выше, чем на {1}', { 0: num(Math.round(m)), 1: what }));
   }
   const pushups = amount.pushup ?? 0;
   if (pushups >= 40) {
-    const t = (pushups * PUSHUP_KG) / 1000;
-    const [w, what, forms] = [...WEIGHTS].reverse().find(([x]) => t >= x) ?? WEIGHTS[0];
-    const k = Math.floor(t / w);
-    out.push(k >= 2 ? `Отжиманиями ты выжал ${times(t)} т — как ${k} ${word(k, forms)}` : `Отжиманиями ты выжал ${times(t)} т — больше, чем весит ${what}`);
+    const tm = (pushups * PUSHUP_KG) / 1000;
+    const [w, what, forms] = [...WEIGHTS].reverse().find(([x]) => tm >= x) ?? WEIGHTS[0];
+    const k = Math.floor(tm / w);
+    out.push(k >= 2 ? t('Отжиманиями ты выжал {0} т — как {1} {2}', { 0: times(tm), 1: k, 2: word(k, forms) }) : t('Отжиманиями ты выжал {0} т — больше, чем весит {1}', { 0: times(tm), 1: what }));
   }
   const plank = amount.plank ?? 0;
-  if (plank >= 180) out.push(`В планке ты простоял ${num(Math.round(plank / 60))} мин — это ${num(Math.max(1, Math.round(plank / 210)))} ${word(Math.max(1, Math.round(plank / 210)), ['песня', 'песни', 'песен'])} подряд`);
+  if (plank >= 180) out.push(t('В планке ты простоял {0} мин — это {1} {2} подряд', { 0: num(Math.round(plank / 60)), 1: num(Math.max(1, Math.round(plank / 210))), 2: word(Math.max(1, Math.round(plank / 210)), [t('песня'), t('песни'), t('песен')]) }));
   return out;
 }
 
@@ -206,11 +203,11 @@ export function monthRecap(p: Pick<Progress, 'days' | 'log'>, month: string): Re
 
 /** Подпись упражнения с количеством: «412 приседаний», «6 мин планки». */
 export function amountLabel(ex: Exercise, n: number): string {
-  if (ex === 'plank') return n >= 120 ? `${num(Math.round(n / 60))} мин планки` : `${num(n)} с планки`;
+  if (ex === 'plank') return n >= 120 ? t('{0} мин планки', { 0: num(Math.round(n / 60)) }) : t('{0} с планки', { 0: num(n) });
   const forms: Record<Exclude<Exercise, 'plank'>, [string, string, string]> = {
-    squat: ['приседание', 'приседания', 'приседаний'],
-    pushup: ['отжимание', 'отжимания', 'отжиманий'],
-    situp: ['скручивание', 'скручивания', 'скручиваний'],
+    squat: [t('приседание'), t('приседания'), t('приседаний')],
+    pushup: [t('отжимание'), t('отжимания'), t('отжиманий')],
+    situp: [t('скручивание'), t('скручивания'), t('скручиваний')],
   };
   return `${num(n)} ${word(n, forms[ex])}`;
 }

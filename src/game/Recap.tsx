@@ -7,6 +7,8 @@ import { drawRecapCard, recapJpeg } from './recapCard';
 import type { Progress } from './progress';
 import { EX_COLOR } from './Stats';
 import './recap.css';
+import { locale, t } from '../i18n';
+import { cityName } from '../city/cityName';
 
 // Итоги месяца, как Spotify Wrapped: слайды листаются касанием (слева — назад) и сами через несколько секунд.
 // Последний слайд — картинка для сторис: в Telegram она уходит в сторис, в остальных местах — в «Поделиться».
@@ -27,8 +29,8 @@ function useCount(target: number, on: boolean, ms = 1400): number {
     if (!on) return setV(0);
     let raf = 0;
     const t0 = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / ms);
+    const tick = (tm: number) => {
+      const p = Math.min(1, (tm - t0) / ms);
       setV(Math.round(target * (1 - (1 - p) ** 3)));
       if (p < 1) raf = requestAnimationFrame(tick);
     };
@@ -41,7 +43,7 @@ function useCount(target: number, on: boolean, ms = 1400): number {
 const fmtDate = (d: string) => `${Number(d.slice(8))} ${MONTHS_OF[Number(d.slice(5, 7)) - 1]}`;
 
 function Big({ n, on }: { n: number; on: boolean }) {
-  return <div className="rc-big">{useCount(n, on).toLocaleString('ru')}</div>;
+  return <div className="rc-big">{useCount(n, on).toLocaleString(locale())}</div>;
 }
 
 const blobBase64 = (b: Blob) =>
@@ -62,7 +64,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const storyUrl = useRef<string | null>(null);
-  const name = userName() === 'Гость' ? 'Герой' : userName();
+  const name = userName() === t('Гость') ? t('Герой') : userName();
 
   useEffect(() => {
     track('recap_open', month);
@@ -80,11 +82,11 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
         <>
           <div className="rc-kicker">NikitenokArena · {r.year}</div>
           <div className="rc-title rc-pop">
-            Твой
+            {t('Твой')}
             <br />
             {MONTHS[r.m]}
           </div>
-          <div className="rc-text rc-late">Посмотрим, каким он был? Касайся экрана, чтобы листать.</div>
+          <div className="rc-text rc-late">{t('Посмотрим, каким он был? Касайся экрана, чтобы листать.')}</div>
         </>
       ),
     },
@@ -93,12 +95,12 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
       tone: 'fire',
       body: (on) => (
         <>
-          <div className="rc-kicker">За {MONTHS[r.m]} ты сделал</div>
+          <div className="rc-kicker">{t('За {0} ты сделал', { 0: MONTHS[r.m] })}</div>
           <Big n={r.total} on={on} />
-          <div className="rc-sub">{recapWord(r.total, ['повтор', 'повтора', 'повторов'])}</div>
+          <div className="rc-sub">{recapWord(r.total, [t('повтор'), t('повтора'), t('повторов')])}</div>
           {r.growth != null && r.growth !== 0 && (
             <div className={`rc-chip ${r.growth > 0 ? 'up' : 'down'} rc-late`}>
-              {r.growth > 0 ? `▲ на ${r.growth}% больше` : `▼ на ${-r.growth}% меньше`}, чем в {MONTHS_IN[(r.m + 11) % 12]}
+              {r.growth > 0 ? t('▲ на {0}% больше', { 0: r.growth }) : t('▼ на {0}% меньше', { 0: -r.growth })}{t(', чем в {0}', { 0: MONTHS_IN[(r.m + 11) % 12] })}
             </div>
           )}
           {r.facts[0] && <div className="rc-text rc-late">{r.facts[0]}</div>}
@@ -110,12 +112,12 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
       tone: 'night',
       body: () => (
         <>
-          <div className="rc-kicker">Дни силы</div>
+          <div className="rc-kicker">{t('Дни силы')}</div>
           <div className="rc-title">
-            {r.days} {recapWord(r.days, ['день', 'дня', 'дней'])} из {r.daysInMonth}
+            {t('{0} {1} из {2}', { 0: r.days, 1: recapWord(r.days, [t('день'), t('дня'), t('дней')]), 2: r.daysInMonth })}
           </div>
           <div className="rc-cal">
-            {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map((d) => (
+            {[t('пн'), t('вт'), t('ср'), t('чт'), t('пт'), t('сб'), t('вс')].map((d) => (
               <span key={d} className="wd">
                 {d}
               </span>
@@ -130,8 +132,8 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
             ))}
           </div>
           <div className="rc-text rc-late">
-            {r.streak > 1 ? `Лучшая серия — ${r.streak} ${recapWord(r.streak, ['день', 'дня', 'дней'])} подряд.` : 'Следующая цель — серия из нескольких дней подряд.'}
-            {r.favWeekday ? ` Чаще всего ты тренировался ${r.favWeekday}.` : ''}
+            {r.streak > 1 ? t('Лучшая серия — {0} {1} подряд.', { 0: r.streak, 1: recapWord(r.streak, [t('день'), t('дня'), t('дней')]) }) : t('Следующая цель — серия из нескольких дней подряд.')}
+            {r.favWeekday ? t(' Чаще всего ты тренировался {0}.', { 0: r.favWeekday }) : ''}
           </div>
         </>
       ),
@@ -143,7 +145,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
             tone: 'ocean',
             body: () => (
               <>
-                <div className="rc-kicker">Твоё главное упражнение</div>
+                <div className="rc-kicker">{t('Твоё главное упражнение')}</div>
                 <div className="rc-title">{exerciseLabel(r.byEx[0].ex)}</div>
                 <div className="rc-bars">
                   {r.byEx.map((e, k) => (
@@ -175,15 +177,15 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
             tone: 'gold',
             body: (on: boolean) => (
               <>
-                <div className="rc-kicker">Твой день силы</div>
+                <div className="rc-kicker">{t('Твой день силы')}</div>
                 <div className="rc-title">
                   {r.bestDay!.weekday[0].toUpperCase() + r.bestDay!.weekday.slice(1)}, {fmtDate(r.bestDay!.date)}
                 </div>
                 <Big n={r.bestDay!.reps} on={on} />
-                <div className="rc-sub">{recapWord(r.bestDay!.reps, ['повтор', 'повтора', 'повторов'])} за день</div>
+                <div className="rc-sub">{t('{0} за день', { 0: recapWord(r.bestDay!.reps, [t('повтор'), t('повтора'), t('повторов')]) })}</div>
                 {Object.keys(r.best).length > 0 && (
                   <div className="rc-text rc-late">
-                    Лучшие подходы:{' '}
+                    {t('Лучшие подходы:{0}', { 0: ' ' })}
                     {r.byEx
                       .filter((e) => r.best[e.ex])
                       .map((e) => amountLabel(e.ex, r.best[e.ex]!))
@@ -211,7 +213,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
       tone: 'sunset',
       body: () => (
         <>
-          <div className="rc-kicker">Твой тип героя {MONTHS_OF[r.m]}</div>
+          <div className="rc-kicker">{t('Твой тип героя {0}', { 0: MONTHS_OF[r.m] })}</div>
           <div className="rc-emoji rc-pop">{type.emoji}</div>
           <div className="rc-title">{type.name}</div>
           <div className="rc-text rc-late">{type.text}</div>
@@ -223,19 +225,19 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
       tone: 'night',
       body: () => (
         <>
-          <div className="rc-preview">{card ? <img src={card.url} alt={`Итоги ${MONTHS_OF[r.m]}`} /> : <div className="rc-wait">Рисую картинку…</div>}</div>
+          <div className="rc-preview">{card ? <img src={card.url} alt={t('Итоги {0}', { 0: MONTHS_OF[r.m] })} /> : <div className="rc-wait">{t('Рисую картинку…')}</div>}</div>
           {note && <div className="rc-note">{note}</div>}
           <div className="rc-actions" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
             {platform === 'tg' && tg?.shareToStory && (
               <button className="primary" disabled={!card || busy} onClick={toStory}>
-                В сторис Telegram
+                {t('В сторис Telegram')}
               </button>
             )}
             <button className={platform === 'tg' && tg?.shareToStory ? 'secondary' : 'primary'} disabled={!card || busy} onClick={shareFile}>
-              Поделиться картинкой
+              {t('Поделиться картинкой')}
             </button>
             <button className="secondary" onClick={sendFriend}>
-              Позвать друга
+              {t('Позвать друга')}
             </button>
           </div>
         </>
@@ -249,7 +251,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
   // Картинку рисуем заранее, как только узнали место (или поняли, что сервер не ответит).
   useEffect(() => {
     let url = '';
-    const t = setTimeout(
+    const tm = setTimeout(
       () => {
         drawRecapCard(r, { name, percent: standing?.percent ?? null, city: standing?.city ?? null })
           .then(recapJpeg)
@@ -258,12 +260,12 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
             storyUrl.current = null;
             setCard({ blob, url });
           })
-          .catch(() => setNote('Не получилось нарисовать картинку'));
+          .catch(() => setNote(t('Не получилось нарисовать картинку')));
       },
       standing ? 0 : 2500,
     );
     return () => {
-      clearTimeout(t);
+      clearTimeout(tm);
       if (url) URL.revokeObjectURL(url);
     };
   }, [r, standing, name]);
@@ -271,13 +273,13 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
   // Слайды листаются сами; на последнем — стоим.
   useEffect(() => {
     if (paused || at >= last) return;
-    const t = setTimeout(() => go(at + 1), SLIDE_MS);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => go(at + 1), SLIDE_MS);
+    return () => clearTimeout(tm);
     // go читает свежий список слайдов.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur, paused, last]);
 
-  const text = `Мои итоги ${MONTHS_OF[r.m]} в NikitenokArena: ${r.total.toLocaleString('ru')} ${recapWord(r.total, ['повтор', 'повтора', 'повторов'])}, тип героя — «${type.name}» ${type.emoji}`;
+  const text = t('Мои итоги {0} в NikitenokArena: {1} {2}, тип героя — «{3}» {4}', { 0: MONTHS_OF[r.m], 1: r.total.toLocaleString(locale()), 2: recapWord(r.total, [t('повтор'), t('повтора'), t('повторов')]), 3: type.name, 4: type.emoji });
 
   const upload = async (): Promise<string> => {
     if (storyUrl.current) return storyUrl.current;
@@ -291,10 +293,10 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
     setNote(null);
     try {
       const url = await upload();
-      tg!.shareToStory!(url, { text: text.slice(0, 200), widget_link: { url: LINK, name: 'Играть' } });
+      tg!.shareToStory!(url, { text: text.slice(0, 200), widget_link: { url: LINK, name: t('Играть') } });
       track('recap_share', 'story');
     } catch {
-      setNote('Не получилось открыть сторис. Попробуй «Поделиться картинкой».');
+      setNote(t('Не получилось открыть сторис. Попробуй «Поделиться картинкой».'));
     } finally {
       setBusy(false);
     }
@@ -327,13 +329,13 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setNote('Картинка сохранена. Если не скачалась — зажми её и выбери «Сохранить».');
+    setNote(t('Картинка сохранена. Если не скачалась — зажми её и выбери «Сохранить».'));
   }
 
   async function sendFriend() {
     track('recap_share', 'friend');
-    const res = await share(LINK, `${text}. Сможешь больше?`).catch(() => null);
-    if (res === 'copied') setNote('Ссылка скопирована');
+    const res = await share(LINK, t('{0}. Сможешь больше?', { 0: text })).catch(() => null);
+    if (res === 'copied') setNote(t('Ссылка скопирована'));
   }
 
   const tap = (e: React.MouseEvent) => {
@@ -353,7 +355,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
       </div>
       <button
         className="rc-x"
-        aria-label="Закрыть"
+        aria-label={t('Закрыть')}
         onClick={(e) => {
           e.stopPropagation();
           onClose();
@@ -369,7 +371,7 @@ export function RecapScreen({ progress, month, onClose }: { progress: Progress; 
             go(0);
           }}
         >
-          ↺ Сначала
+          {t('↺ Сначала')}
         </button>
       )}
       <div className="rc-slide" key={slides[at].id}>
@@ -385,23 +387,23 @@ function RankSlide({ s, on }: { s: Standing; on: boolean }) {
     <>
       {s.percent != null && (
         <>
-          <div className="rc-kicker">Среди {s.players.toLocaleString('ru')} героев месяца</div>
-          <div className="rc-title">ты сильнее</div>
+          <div className="rc-kicker">{t('Среди {0} героев месяца', { 0: s.players.toLocaleString(locale()) })}</div>
+          <div className="rc-title">{t('ты сильнее')}</div>
           <div className="rc-big">{p}%</div>
         </>
       )}
       {s.city ? (
         <div className="rc-city rc-late">
-          <b>{s.city.name}</b> — {s.city.place}-е место из {s.city.cities} {recapWord(s.city.cities, ['города', 'городов', 'городов'])}
+          <b>{cityName(s.city.name)}</b> {t('— {0}-е место из {1} {2}', { 0: s.city.place, 1: s.city.cities, 2: recapWord(s.city.cities, [t('города'), t('городов'), t('городов')]) })}
           {s.city.me > 0 && (
             <>
               <br />
-              ты — {s.city.me}-й из {s.city.members} в своём городе
+              {t('ты — {0}-й из {1} в своём городе', { 0: s.city.me, 1: s.city.members })}
             </>
           )}
         </div>
       ) : (
-        <div className="rc-text rc-late">Выбери свой город в «Битве городов» — в следующий раз увидишь его место.</div>
+        <div className="rc-text rc-late">{t('Выбери свой город в «Битве городов» — в следующий раз увидишь его место.')}</div>
       )}
     </>
   );

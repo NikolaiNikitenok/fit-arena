@@ -44,7 +44,7 @@ export function deletePlayer(d: DeleteDeps, id: string, now: number) {
   if (clan) {
     // Системная строка «X покинул клан» тоже без имени.
     const last = left?.chat[left.chat.length - 1];
-    if (last?.system) last.text = `${DELETED_NAME} покинул клан`;
+    if (last?.system) Object.assign(last, { text: `${DELETED_NAME} покинул клан`, key: '{0} покинул клан', vars: { 0: DELETED_NAME } });
     d.clans.save();
   }
   d.store.forget(id);

@@ -8,12 +8,13 @@ import { sfx } from '../audio';
 import { useProOffer } from '../cloud';
 import { payStars } from '../payments';
 import { openPassInTelegram, platform } from '../telegram';
+import { t, locale } from '../i18n';
 
 // Пропуск сезона: два щита — серый бесплатный и золотой Pro, ступени наград и задания.
 
 const fmtLeft = (ms: number) => {
   const h = Math.max(0, Math.floor(ms / 3600_000));
-  return h >= 24 ? `${Math.floor(h / 24)} д ${h % 24} ч` : h >= 1 ? `${h} ч ${Math.floor((ms % 3600_000) / 60000)} мин` : `${Math.max(1, Math.ceil(ms / 60000))} мин`;
+  return h >= 24 ? t('{0} д {1} ч', { 0: Math.floor(h / 24), 1: h % 24 }) : h >= 1 ? t('{0} ч {1} мин', { 0: h, 1: Math.floor((ms % 3600_000) / 60000) }) : t('{0} мин', { 0: Math.max(1, Math.ceil(ms / 60000)) });
 };
 const untilMidnight = (now: number) => {
   const d = new Date(now);
@@ -32,7 +33,7 @@ interface Props {
 export function PassScreen({ progress, setProgress, pro, land, onClose }: Props) {
   const now = Date.now();
   const pass = passOf(progress, now);
-  const t = passTier(pass.xp);
+  const tm = passTier(pass.xp);
   const quests = passQuests(progress, now);
   const readyQuests = quests.filter((q) => !pass.quests.includes(q.id) && questValue(progress, q, now) >= q.target).length;
   const [tab, setTab] = useState<'rewards' | 'quests'>(readyQuests ? 'quests' : 'rewards');
@@ -51,51 +52,51 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
     if (!r) return;
     setProgress(r.progress);
     sfx(r.gear ? 'chest' : 'coin');
-    show(`Ступень ${tier}: ${r.label}!`);
+    show(t('Ступень {0}: {1}!', { 0: tier, 1: r.label }));
   };
   const claim = (q: Quest) => {
     const next = claimQuest(progress, q, Date.now(), pro);
     if (!next) return;
-    const before = t.tier;
+    const before = tm.tier;
     setProgress(next);
     const after = passTier(passOf(next, Date.now()).xp).tier;
     sfx(after > before ? 'levelup' : 'coin');
-    show(after > before ? `Новая ступень щита: ${after}!` : `+${questXp(q, pro)} опыта пропуска${pro ? ' (с бонусом Pro)' : ''}`);
+    show(after > before ? t('Новая ступень щита: {0}!', { 0: after }) : t('+{0} опыта пропуска{1}', { 0: questXp(q, pro), 1: pro ? t(' (с бонусом Pro)') : '' }));
   };
 
   return (
     <div className="pass-screen">
       <div className="pass-top">
-        <button className="pill btn icon-only" onClick={onClose} aria-label="Назад">
+        <button className="pill btn icon-only" onClick={onClose} aria-label={t('Назад')}>
           ‹
         </button>
         <div className="pass-heading">
-          <div className="pass-name">Пропуск сезона {pass.season}</div>
-          <div className="pass-left">до конца сезона {fmtLeft(passEndsAt(now) - now)}</div>
+          <div className="pass-name">{t('Пропуск сезона {0}', { 0: pass.season })}</div>
+          <div className="pass-left">{t('до конца сезона {0}', { 0: fmtLeft(passEndsAt(now) - now) })}</div>
         </div>
       </div>
 
       <div className="pass-hero">
         <div className="pass-shields">
           <div className="pass-badge">
-            <PassShield size={64} label={t.tier} />
-            <span>Бесплатный</span>
+            <PassShield size={64} label={tm.tier} />
+            <span>{t('Бесплатный')}</span>
           </div>
           <div className={`pass-badge gold ${pro ? 'on' : ''}`}>
             <span className="pass-glow" />
-            <PassShield size={78} gold star={!pro} label={pro ? t.tier : undefined} />
+            <PassShield size={78} gold star={!pro} label={pro ? tm.tier : undefined} />
             <span className={pro ? 'pro-name' : ''}>Pro Pass</span>
           </div>
         </div>
         <div className="pass-xp">
           <div className="pass-xp-row">
-            <b>{t.tier >= PASS_TIERS ? 'Все ступени открыты' : `Ступень ${t.tier} → ${t.tier + 1}`}</b>
+            <b>{tm.tier >= PASS_TIERS ? t('Все ступени открыты') : t('Ступень {0} → {1}', { 0: tm.tier, 1: tm.tier + 1 })}</b>
             <span>
-              {t.into} / {t.need} опыта
+              {t('{0} / {1} опыта', { 0: tm.into, 1: tm.need })}
             </span>
           </div>
           <div className="pass-bar">
-            <div style={{ width: `${(t.into / t.need) * 100}%` }} />
+            <div style={{ width: `${(tm.into / tm.need) * 100}%` }} />
           </div>
         </div>
         <ProBuy pro={pro} now={now} onPaid={(text) => (sfx('chest'), show(text))} />
@@ -103,25 +104,25 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
 
       <div className="tabs">
         <button className={tab === 'rewards' ? 'active' : ''} onClick={() => setTab('rewards')}>
-          Награды
+          {t('Награды')}
         </button>
         <button className={tab === 'quests' ? 'active' : ''} onClick={() => setTab('quests')}>
-          Задания{readyQuests > 0 && <span className="tab-dot">{readyQuests}</span>}
+          {t('Задания')}{readyQuests > 0 && <span className="tab-dot">{readyQuests}</span>}
         </button>
       </div>
 
       {tab === 'rewards' ? (
         <div className="pass-track">
           <div className="pass-track-head">
-            <span>Серый щит</span>
+            <span>{t('Серый щит')}</span>
             <span />
-            <span className="gold-text">Золотой щит</span>
+            <span className="gold-text">{t('Золотой щит')}</span>
           </div>
           {Array.from({ length: PASS_TIERS }, (_, i) => i + 1).map((tier) => {
             const r = passRewards(tier);
-            const open = tier <= t.tier;
+            const open = tier <= tm.tier;
             return (
-              <div key={tier} ref={tier === Math.min(PASS_TIERS, t.tier + 1) ? current : undefined} className={`pass-row ${open ? 'open' : ''} ${tier === t.tier + 1 ? 'next' : ''}`}>
+              <div key={tier} ref={tier === Math.min(PASS_TIERS, tm.tier + 1) ? current : undefined} className={`pass-row ${open ? 'open' : ''} ${tier === tm.tier + 1 ? 'next' : ''}`}>
                 <RewardCard reward={r.free} state={pass.free.includes(tier) ? 'got' : open ? 'ready' : 'locked'} onClaim={() => claimTier('free', tier)} />
                 <div className="pass-node">
                   <PassShield size={30} gold={open} dim={!open} label={tier} />
@@ -133,9 +134,9 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
         </div>
       ) : (
         <div className="pass-quests">
-          <QuestGroup title="Задания дня" note={`обновятся через ${fmtLeft(untilMidnight(now))}`} quests={quests.filter((q) => q.kind === 'daily')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
-          <QuestGroup title="Задания недели" note={`обновятся через ${fmtLeft(passWeekEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
-          <QuestGroup title="Задания сезона" note={`до конца сезона ${fmtLeft(passEndsAt(now) - now)}`} quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
+          <QuestGroup title={t('Задания дня')} note={t('обновятся через {0}', { 0: fmtLeft(untilMidnight(now)) })} quests={quests.filter((q) => q.kind === 'daily')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
+          <QuestGroup title={t('Задания недели')} note={t('обновятся через {0}', { 0: fmtLeft(passWeekEndsAt(now) - now) })} quests={quests.filter((q) => q.kind === 'weekly')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
+          <QuestGroup title={t('Задания сезона')} note={t('до конца сезона {0}', { 0: fmtLeft(passEndsAt(now) - now) })} quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
         </div>
       )}
       {toast && <div className="toast global">{toast}</div>}
@@ -167,17 +168,17 @@ function RewardIcon({ reward }: { reward: PassReward }) {
 }
 
 const DAY = 86_400_000;
-const fmtDay = (t: number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+const fmtDay = (tm: number) => new Date(tm).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 
 /** Pro Pass за звёзды Telegram: покупка в Telegram, в Max и браузере — ссылка в бота. Pro действует по аккаунту везде. */
 // Что даёт Pro: кратко — под активным Pro, списком — у кнопки покупки.
-const PRO_PERKS = 'золотые награды, заморозка серии, +25% опыта пропуска';
+const PRO_PERKS = t('золотые награды, заморозка серии, +25% опыта пропуска');
 const PRO_PERK_LIST = [
-  '❄️ Заморозка серии раз в неделю: пропуск не обнулит серию',
-  '⚡ +25% опыта за задания пропуска',
-  '🏆 Золотая дорожка наград и облик «Страж Золотого щита»',
-  '✨ Золотое имя в клане, чате и рейтинге',
-  '🎁 3 дня Pro в подарок другу — раз в сезон',
+  t('❄️ Заморозка серии раз в неделю: пропуск не обнулит серию'),
+  t('⚡ +25% опыта за задания пропуска'),
+  t('🏆 Золотая дорожка наград и облик «Страж Золотого щита»'),
+  t('✨ Золотое имя в клане, чате и рейтинге'),
+  t('🎁 3 дня Pro в подарок другу — раз в сезон'),
 ];
 
 function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text: string) => void }) {
@@ -194,8 +195,8 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
     let until = 0;
     const r = await payStars('pro', (s) => s.pro && (until = s.proOffer?.until ?? 0) > before);
     setBusy(false);
-    if (r === 'done') onPaid(`Pro Pass активен до ${fmtDay(until)}!`);
-    else if (r === 'late') setNote('Оплата прошла, Pro включится через минуту. Если нет — напиши боту /paysupport.');
+    if (r === 'done') onPaid(t('Pro Pass активен до {0}!', { 0: fmtDay(until) }));
+    else if (r === 'late') setNote(t('Оплата прошла, Pro включится через минуту. Если нет — напиши боту /paysupport.'));
     else if (r !== 'cancelled') setNote(r.error);
   };
   const cost = price ? (
@@ -209,13 +210,13 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
     return (
       <div className="pass-pro-box">
         <div className="pass-pro-note">
-          <span className="pro-name">Pro Pass активен</span>
-          {offer?.until ? ` до ${fmtDay(offer.until)}` : ''} · {PRO_PERKS}
+          <span className="pro-name">{t('Pro Pass активен')}</span>
+          {offer?.until ? t(' до {0}', { 0: fmtDay(offer.until) }) : ''} · {PRO_PERKS}
         </div>
-        {offer?.trial?.canGive && <div className="pass-buy-note">🎁 Подари другу 3 дня Pro бесплатно: «Друзья» → нажми на друга. Один подарок в сезон.</div>}
+        {offer?.trial?.canGive && <div className="pass-buy-note">{t('🎁 Подари другу 3 дня Pro бесплатно: «Друзья» → нажми на друга. Один подарок в сезон.')}</div>}
         {offer?.until && offer.canBuy && late && (
           <button className="pass-buy ghost" disabled={busy} onClick={buy}>
-            Продлить на следующий сезон {cost}
+            {t('Продлить на следующий сезон')} {cost}
           </button>
         )}
         {note && <div className="pass-buy-note">{note}</div>}
@@ -226,28 +227,28 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
       <div className="pass-pro-note">
         {trialOnly ? (
           <>
-            <span className="pro-name">Пробный Pro</span> до {fmtDay(offer!.trial!.until!)}. Понравилось? Оставь Pro на весь сезон.
+            <span className="pro-name">{t('Пробный Pro')}</span> {t('до {0}. Понравилось? Оставь Pro на весь сезон.', { 0: fmtDay(offer!.trial!.until!) })}
           </>
         ) : (
-          <b>Pro Pass на сезон</b>
+          <b>{t('Pro Pass на сезон')}</b>
         )}
         <ul className="pass-perks">
           {PRO_PERK_LIST.map((x) => (
             <li key={x}>{x}</li>
           ))}
         </ul>
-        Силы в дуэлях не прибавляет: там решают только твои повторы.
+        {t('Силы в дуэлях не прибавляет: там решают только твои повторы.')}
       </div>
       <button className="pass-buy primary" disabled={busy} onClick={buy}>
-        {platform === 'tg' ? 'Купить Pro' : 'Купить в Telegram'} {cost}
+        {platform === 'tg' ? t('Купить Pro') : t('Купить в Telegram')} {cost}
       </button>
       <div className="pass-buy-note">
         {note ??
           (platform === 'tg'
             ? late
-              ? 'До конца сезона меньше недели: покупка сразу включает и следующий сезон.'
-              : 'Награды всех уже пройденных ступеней можно забрать сразу.'
-            : 'Оплата звёздами в Telegram. Pro будет работать и здесь, если этот вход привязан к тому же герою.')}
+              ? t('До конца сезона меньше недели: покупка сразу включает и следующий сезон.')
+              : t('Награды всех уже пройденных ступеней можно забрать сразу.')
+            : t('Оплата звёздами в Telegram. Pro будет работать и здесь, если этот вход привязан к тому же герою.'))}
       </div>
     </div>
   );
@@ -263,10 +264,10 @@ function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassRewa
       <span className="pass-reward-state">
         {state === 'got' ? (
           <>
-            <Check size={12} /> получено
+            <Check size={12} /> {t('получено')}
           </>
         ) : state === 'ready' ? (
-          'Забрать'
+          t('Забрать')
         ) : state === 'pro' ? (
           <>
             <Lock size={11} /> Pro

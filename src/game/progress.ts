@@ -14,6 +14,7 @@ import type { DungeonState } from './match3/dungeon';
 import { villageBonus } from '../../shared/village';
 import { boostLab } from '../village/state';
 import { feedPet, petBonus, PetFind, PetState, rollPetFind } from './pets';
+import { t } from '../i18n';
 
 export interface Progress {
   // «Начать игру заново»: пустой прогресс с этой отметкой сервер принимает поверх героя.
@@ -355,12 +356,12 @@ export function heroLevel(xp: number): { level: number; into: number; need: numb
 }
 
 const TITLES: [number, string][] = [
-  [50, 'Легенда Атлетии'],
-  [35, 'Чемпион'],
-  [20, 'Ветеран'],
-  [10, 'Боец'],
-  [5, 'Ученик Грома'],
-  [1, 'Новичок'],
+  [50, t('Легенда Атлетии')],
+  [35, t('Чемпион')],
+  [20, t('Ветеран')],
+  [10, t('Боец')],
+  [5, t('Ученик Грома')],
+  [1, t('Новичок')],
 ];
 export const heroTitle = (level: number) => TITLES.find(([l]) => level >= l)![1];
 
@@ -396,8 +397,8 @@ export function spendLife(p: Progress, now: number): Progress {
   return save({ ...p, lives: lives - 1, livesAt });
 }
 
-export const dayKey = (t: number): string => {
-  const d = new Date(t);
+export const dayKey = (tm: number): string => {
+  const d = new Date(tm);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 

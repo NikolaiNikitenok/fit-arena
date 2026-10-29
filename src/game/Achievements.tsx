@@ -3,6 +3,7 @@ import { Coin } from '../icons';
 import { type AchIcon, type AchTier, achDone, type Achievement, visibleAchievements } from './achievements';
 import type { Progress } from './progress';
 import { Sheet } from '../Sheet';
+import { locale, t } from '../i18n';
 
 const GLYPH: Record<AchIcon, string> = {
   flame: 'M12 22c4.2 0 7-2.8 7-6.8 0-3.2-1.8-5.6-3.6-7.6-.4 1.9-1.4 3.2-2.6 3.8.3-3.4-1-6.6-3.8-9.4-.2 3.4-1.8 5.4-3.4 7.4C4.3 11.1 5 13.4 5 15.2 5 19.2 7.8 22 12 22z',
@@ -19,20 +20,20 @@ const GLYPH: Record<AchIcon, string> = {
   scroll: 'M6 3h11a3 3 0 0 1 3 3v1h-3v11a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-1h3zm3 5v2h6V8zm0 4v2h6v-2z',
 };
 const TIER: Record<AchTier, { ring: string; fill: string; name: string }> = {
-  bronze: { ring: '#d08a52', fill: '#5a3a24', name: 'бронза' },
-  silver: { ring: '#dfe6ef', fill: '#4a5262', name: 'серебро' },
-  gold: { ring: '#ffd36b', fill: '#6e5113', name: 'золото' },
-  legend: { ring: '#c9a6ff', fill: '#3d2470', name: 'легенда' },
+  bronze: { ring: '#d08a52', fill: '#5a3a24', name: t('бронза') },
+  silver: { ring: '#dfe6ef', fill: '#4a5262', name: t('серебро') },
+  gold: { ring: '#ffd36b', fill: '#6e5113', name: t('золото') },
+  legend: { ring: '#c9a6ff', fill: '#3d2470', name: t('легенда') },
 };
 
 /** Медаль достижения: цвет рамки — редкость, внутри знак. Невыполненные — серые. */
 export function AchBadge({ ach, done, size = 48 }: { ach: Achievement; done: boolean; size?: number }) {
-  const t = TIER[ach.tier];
+  const tm = TIER[ach.tier];
   return (
     <svg className={`ach-badge ${done ? ach.tier : 'locked'}`} width={size} height={size} viewBox="0 0 48 48" aria-hidden>
-      <path d="M24 2l18 10v24L24 46 6 36V12z" fill={done ? t.fill : '#232634'} stroke={done ? t.ring : '#3a3e50'} strokeWidth={3} strokeLinejoin="round" />
-      <path d="M24 7l14 8v18L24 41 10 33V15z" fill="none" stroke={done ? t.ring : '#2e3242'} strokeOpacity={0.45} strokeWidth={1.2} />
-      <path d={GLYPH[ach.icon]} transform="translate(12 12)" fill={done ? t.ring : '#4a4f63'} fillRule="evenodd" stroke={ach.icon === 'core' ? (done ? t.fill : '#232634') : 'none'} strokeWidth={1.4} />
+      <path d="M24 2l18 10v24L24 46 6 36V12z" fill={done ? tm.fill : '#232634'} stroke={done ? tm.ring : '#3a3e50'} strokeWidth={3} strokeLinejoin="round" />
+      <path d="M24 7l14 8v18L24 41 10 33V15z" fill="none" stroke={done ? tm.ring : '#2e3242'} strokeOpacity={0.45} strokeWidth={1.2} />
+      <path d={GLYPH[ach.icon]} transform="translate(12 12)" fill={done ? tm.ring : '#4a4f63'} fillRule="evenodd" stroke={ach.icon === 'core' ? (done ? tm.fill : '#232634') : 'none'} strokeWidth={1.4} />
     </svg>
   );
 }
@@ -50,15 +51,15 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
   return (
     <Sheet onClose={onClose}>
       <div className="level-title">
-        Достижения <span className="muted">{done.length} из {all.length}</span>
+        {t('Достижения')} <span className="muted">{t('{0} из {1}', { 0: done.length, 1: all.length })}</span>
       </div>
-      <div className="muted ach-hint">За каждое — монеты и титул. Титул виден под именем героя; нажми на полученный, чтобы надеть.</div>
+      <div className="muted ach-hint">{t('За каждое — монеты и титул. Титул виден под именем героя; нажми на полученный, чтобы надеть.')}</div>
       <div className="tabs">
         <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
-          Все
+          {t('Все')}
         </button>
         <button className={tab === 'done' ? 'active' : ''} onClick={() => setTab('done')}>
-          Полученные
+          {t('Полученные')}
         </button>
       </div>
       <div className="ach-list">
@@ -81,7 +82,7 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
                       <div className="bar-fill" style={{ width: `${(v / x.goal) * 100}%`, background: TIER[x.tier].ring }} />
                     </div>
                     <span>
-                      {v.toLocaleString('ru')} / {x.goal.toLocaleString('ru')}
+                      {v.toLocaleString(locale())} / {x.goal.toLocaleString(locale())}
                     </span>
                   </div>
                 )}
@@ -97,7 +98,7 @@ export function AchievementsSheet({ progress, now, onClaim, onTitle, onClose }: 
                   <Coin size={13} /> {x.coins}
                 </button>
               ) : (
-                worn && <span className="ach-worn">титул</span>
+                worn && <span className="ach-worn">{t('титул')}</span>
               )}
             </div>
           );

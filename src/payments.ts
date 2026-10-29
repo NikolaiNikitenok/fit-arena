@@ -1,6 +1,7 @@
 // Оплата звёздами Telegram: счёт с сервера, окно оплаты, потом ждём, пока сервер узнает об оплате (server/proSales.ts).
 import { proInvoice, refreshPro } from './cloud';
 import { openInvoice } from './telegram';
+import { t } from './i18n';
 
 export type StarKind = 'pro' | 'gift' | 'starter';
 type Status = Awaited<ReturnType<typeof refreshPro>>;
@@ -15,7 +16,7 @@ export async function payStars(kind: StarKind, done: ((s: Status) => boolean) | 
   try {
     const status = await openInvoice(await proInvoice(kind, forId));
     if (status === 'cancelled') return 'cancelled';
-    if (status === 'failed') return { error: 'Оплата не прошла. Попробуй ещё раз.' };
+    if (status === 'failed') return { error: t('Оплата не прошла. Попробуй ещё раз.') };
     if (!done) return 'done';
     // Сообщение об оплате приходит серверу чуть позже, чем закрывается окно оплаты.
     for (let i = 0; i < 12; i++) {
@@ -25,6 +26,6 @@ export async function payStars(kind: StarKind, done: ((s: Status) => boolean) | 
     }
     return 'late';
   } catch (e) {
-    return { error: (e as { body?: { error?: string } }).body?.error ?? 'Не получилось открыть оплату. Попробуй ещё раз.' };
+    return { error: (e as { body?: { error?: string } }).body?.error ?? t('Не получилось открыть оплату. Попробуй ещё раз.') };
   }
 }

@@ -4,6 +4,7 @@ import { availability, programById, programsOf, type SetPlan } from './programs'
 import type { Progress } from './progress';
 import type { QuickWorkout } from './Programs';
 import './Programs.css';
+import { t } from '../i18n';
 
 // Вход в программы на главном экране. Лёгкий модуль: сам экран программ с камерой грузится по нажатию.
 
@@ -18,21 +19,21 @@ export function ProgramsEntry({ progress, onOpen }: { progress: Progress; onOpen
         <Plan size={24} />
       </span>
       <span className="prog-card-text">
-        <b>Программы Грома</b>
+        <b>{t('Программы Грома')}</b>
         {def && run ? (
           <>
             <small>
-              {def.title} · день {run.day} из {def.days}
+              {t('{0} · день {1} из {2}', { 0: def.title, 1: run.day, 2: def.days })}
             </small>
             <span className="pass-bar">
               <span style={{ display: 'block', width: `${((run.day - 1) / def.days) * 100}%`, background: def.color }} />
             </span>
           </>
         ) : (
-          <small>От новичка до 5 минут планки: план на 2–4 недели</small>
+          <small>{t('От новичка до 5 минут планки: план на 2–4 недели')}</small>
         )}
       </span>
-      {av === 'ready' && <span className="ach-entry-new">сегодня</span>}
+      {av === 'ready' && <span className="ach-entry-new">{t('сегодня')}</span>}
       <span className="chev">›</span>
     </button>
   );
@@ -44,6 +45,6 @@ export function plankDailyWorkout(left: number, baseline: number, ask: string): 
   const n = Math.max(1, Math.ceil(left / hold));
   const per = Math.max(10, Math.round(left / n / 5) * 5);
   const sets: SetPlan[] = Array.from({ length: n }, (_, i) => ({ exercise: 'plank' as Exercise, target: per, rest: i === n - 1 ? 0 : 45 }));
-  return { kind: 'daily', tag: 'Задание дня', title: ask, sets };
+  return { kind: 'daily', tag: t('Задание дня'), title: ask, sets };
 }
 

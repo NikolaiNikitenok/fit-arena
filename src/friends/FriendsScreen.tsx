@@ -13,12 +13,13 @@ import { Sheet } from '../Sheet';
 import { itemById } from '../game/items';
 import { loadProgress, saveProgress } from '../game/progress';
 import { claimRef, INVITED_COINS, REF_COINS, REF_LEADER_AT, refCount, type RefReward, refPending } from '../game/referral';
+import { t } from '../i18n';
 
 const NOTE_TEXT = {
-  app: 'Друг в игре — ему пришло приглашение. Ждём его на арене!',
-  bot: 'Бот написал другу. Вызов действует 10 минут.',
-  quiet: 'Ночью бот не пишет. Друг увидит вызов, если сам откроет игру.',
-  off: 'У друга выключены сообщения бота. Напиши ему сам или жди на арене.',
+  app: t('Друг в игре — ему пришло приглашение. Ждём его на арене!'),
+  bot: t('Бот написал другу. Вызов действует 10 минут.'),
+  quiet: t('Ночью бот не пишет. Друг увидит вызов, если сам откроет игру.'),
+  off: t('У друга выключены сообщения бота. Напиши ему сам или жди на арене.'),
 };
 
 // Приглашение из ссылки принимаем один раз за запуск, даже если экран открыли снова.
@@ -36,8 +37,8 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
     setData(r);
     setStatus('ready');
     if (r.error) setNote(r.error);
-    else if (r.added) setNote(`${r.added} теперь твой друг`);
-    else if (r.requested) setNote(`Заявка отправлена: ${r.requested}`);
+    else if (r.added) setNote(t('{0} теперь твой друг', { 0: r.added }));
+    else if (r.requested) setNote(t('Заявка отправлена: {0}', { 0: r.requested }));
     return r;
   };
   const run = (key: string, p: Promise<FriendsReply>) => {
@@ -46,7 +47,7 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
       .then(apply)
       .catch((e) => {
         if (e instanceof NotTelegram) setStatus('guest');
-        else setNote('Нет связи с сервером. Попробуй ещё раз');
+        else setNote(t('Нет связи с сервером. Попробуй ещё раз'));
         return null;
       })
       .finally(() => setBusy(null));
@@ -70,14 +71,14 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
   const head = (
     <div className="friends-head">
       <button className="link back" onClick={onBack}>
-        ‹ Дуэль
+        {t('‹ Дуэль')}
       </button>
       <h2>
-        <Users size={20} /> Друзья
+        <Users size={20} /> {t('Друзья')}
       </h2>
       {status === 'ready' && (
         <button className="small-btn ghost" onClick={() => setAdding(true)}>
-          <UserPlus size={16} /> Добавить
+          <UserPlus size={16} /> {t('Добавить')}
         </button>
       )}
     </div>
@@ -89,8 +90,8 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
         {head}
         <div className="friends-empty">
           <Users size={34} />
-          <b>Друзья — только в Telegram</b>
-          <div className="muted">Открой NikitenokArena через бота @ArenaNikitenokBot: там видно друзей, их серии и можно вызывать их на дуэль в один тап.</div>
+          <b>{t('Друзья — только в Telegram')}</b>
+          <div className="muted">{t('Открой NikitenokArena через бота @ArenaNikitenokBot: там видно друзей, их серии и можно вызывать их на дуэль в один тап.')}</div>
         </div>
       </>
     );
@@ -98,7 +99,7 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
     return (
       <>
         {head}
-        <div className="muted center">{status === 'offline' ? 'Нет связи с сервером' : 'Загружаю друзей…'}</div>
+        <div className="muted center">{status === 'offline' ? t('Нет связи с сервером') : t('Загружаю друзей…')}</div>
       </>
     );
 
@@ -116,18 +117,18 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
 
       {data.incoming.length > 0 && (
         <>
-          <div className="section-title">Заявки в друзья</div>
+          <div className="section-title">{t('Заявки в друзья')}</div>
           <div className="friend-list">
             {data.incoming.map((r) => (
               <div key={r.id} className="friend request">
                 <div className="friend-main">
                   <span className={`friend-name ${r.pro ? 'pro-name' : ''}`}>{r.name}</span>
-                  <span className="muted">{r.level} ур. героя · хочет дружить</span>
+                  <span className="muted">{t('{0} ур. героя · хочет дружить', { 0: r.level })}</span>
                 </div>
                 <button className="small-btn" disabled={!!busy} onClick={() => run(r.id, friendsApi.answer(r.id, true))}>
-                  <Check size={15} /> Принять
+                  <Check size={15} /> {t('Принять')}
                 </button>
-                <button className="small-btn ghost icon-only" aria-label="Отклонить" disabled={!!busy} onClick={() => run(r.id, friendsApi.answer(r.id, false))}>
+                <button className="small-btn ghost icon-only" aria-label={t('Отклонить')} disabled={!!busy} onClick={() => run(r.id, friendsApi.answer(r.id, false))}>
                   <Cross size={15} />
                 </button>
               </div>
@@ -138,17 +139,17 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
 
       <div className="section-title">
         <span>
-          Друзья <span className="muted">{data.friends.length}/100</span>
+          {t('Друзья')} <span className="muted">{data.friends.length}/100</span>
         </span>
-        {data.friends.length > 0 && <span className="muted">{online} в сети</span>}
+        {data.friends.length > 0 && <span className="muted">{t('{0} в сети', { 0: online })}</span>}
       </div>
       {data.friends.length === 0 ? (
         <div className="friends-empty">
           <Users size={34} />
-          <b>Пока никого</b>
-          <div className="muted">Позови друга по ссылке: увидите серии друг друга, а на дуэль сможете вызывать в один тап.</div>
+          <b>{t('Пока никого')}</b>
+          <div className="muted">{t('Позови друга по ссылке: увидите серии друг друга, а на дуэль сможете вызывать в один тап.')}</div>
           <button className="primary" onClick={() => setAdding(true)}>
-            Пригласить друга
+            {t('Пригласить друга')}
           </button>
         </div>
       ) : (
@@ -161,13 +162,13 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
 
       {data.outgoing.length > 0 && (
         <div className="friends-outgoing muted">
-          Ждут ответа:{' '}
+          {t('Ждут ответа:{0}', { 0: ' ' })}
           {data.outgoing.map((r, i) => (
             <span key={r.id}>
               {i > 0 && ', '}
               {r.name}{' '}
               <button className="link inline" onClick={() => run(`rm${r.id}`, friendsApi.remove(r.id))}>
-                отменить
+                {t('отменить')}
               </button>
             </span>
           ))}
@@ -176,8 +177,8 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
 
       <label className="toggle-row">
         <div>
-          <div className="toggle-title">Бот пишет о друзьях</div>
-          <div className="muted">Вызовы на дуэль, заявки и «вы теперь друзья». С 22:00 до 9:00 по Москве бот молчит.</div>
+          <div className="toggle-title">{t('Бот пишет о друзьях')}</div>
+          <div className="muted">{t('Вызовы на дуэль, заявки и «вы теперь друзья». С 22:00 до 9:00 по Москве бот молчит.')}</div>
         </div>
         <input type="checkbox" className="switch" checked={data.notify} disabled={busy === 'notify'} onChange={(e) => run('notify', friendsApi.notify(e.target.checked))} />
       </label>
@@ -204,36 +205,36 @@ function RefCard({ refs, onInvite }: { refs: FriendsState['referrals']; onInvite
   const claim = (r: RefReward) => {
     const res = claimRef(loadProgress(), r);
     setP(saveProgress(res.progress));
-    const outfits = res.outfits.map((id) => `«${itemById(id).name}»`).join(' и ');
-    setGot([res.coins ? `+${res.coins} монет` : '', outfits ? `облик ${outfits}` : ''].filter(Boolean).join(' и ') || 'Засчитано!');
+    const outfits = res.outfits.map((id) => `«${itemById(id).name}»`).join(t(' и '));
+    setGot([res.coins ? t('+{0} монет', { 0: res.coins }) : '', outfits ? t('облик {0}', { 0: outfits }) : ''].filter(Boolean).join(t(' и ')) || t('Засчитано!'));
   };
   return (
     <div className="ref-card">
       <div className="ref-head">
         <span className="ref-emoji">🤝</span>
         <span>
-          <b>Приведи друга</b>
+          <b>{t('Приведи друга')}</b>
           <small>
-            Друг пришёл по твоей ссылке и провёл первый бой — тебе {REF_COINS} монет, ему {INVITED_COINS}, обоим облик «Побратим». За {REF_LEADER_AT} друзей — легендарный «Вожак стаи».
+            {t('Друг пришёл по твоей ссылке и провёл первый бой — тебе {0} монет, ему {1}, обоим облик «Побратим». За {2} друзей — легендарный «Вожак стаи».', { 0: REF_COINS, 1: INVITED_COINS, 2: REF_LEADER_AT })}
           </small>
         </span>
       </div>
       <div className="ref-bar">
         <div style={{ width: `${Math.min(100, (count / REF_LEADER_AT) * 100)}%` }} />
         <span>
-          {Math.min(count, REF_LEADER_AT)} из {REF_LEADER_AT}
+          {t('{0} из {1}', { 0: Math.min(count, REF_LEADER_AT), 1: REF_LEADER_AT })}
         </span>
       </div>
       {pending.map((r) => (
         <button key={r.key} className="small-btn ref-claim" onClick={() => claim(r)}>
-          🎁 {r.self ? `Награда за приглашение от ${r.name}` : `${r.name} в деле — забрать награду`}
+          🎁 {r.self ? t('Награда за приглашение от {0}', { 0: r.name }) : t('{0} в деле — забрать награду', { 0: r.name })}
         </button>
       ))}
       {got && <div className="ref-got">{got}</div>}
-      {refs.by && !refs.me && <div className="muted">Тебя позвал {refs.by.name}: проведи первый бой — и вы оба получите награду.</div>}
-      {waiting.length > 0 && <div className="muted">Ждём первый бой: {waiting.map((r) => r.name).join(', ')}</div>}
+      {refs.by && !refs.me && <div className="muted">{t('Тебя позвал {0}: проведи первый бой — и вы оба получите награду.', { 0: refs.by.name })}</div>}
+      {waiting.length > 0 && <div className="muted">{t('Ждём первый бой: {0}', { 0: waiting.map((r) => r.name).join(', ') })}</div>}
       <button className="secondary" onClick={onInvite}>
-        Позвать друга по ссылке
+        {t('Позвать друга по ссылке')}
       </button>
     </div>
   );
@@ -250,7 +251,7 @@ function GiftTrial({ id, name }: { id: string; name: string }) {
     setNote(null);
     try {
       await giftTrial(id);
-      setNote(`Готово! У ${name} три дня Pro — бот напишет ${name}, от кого подарок.`);
+      setNote(t('Готово! У {0} три дня Pro — бот напишет {1}, от кого подарок.', { 0: name, 1: name }));
     } catch (e) {
       setNote((e as Error).message);
     } finally {
@@ -261,10 +262,10 @@ function GiftTrial({ id, name }: { id: string; name: string }) {
     <>
       {offer?.trial?.canGive && (
         <button className="pass-buy ghost" disabled={busy} onClick={give}>
-          🎁 Подарить 3 дня Pro бесплатно
+          {t('🎁 Подарить 3 дня Pro бесплатно')}
         </button>
       )}
-      <div className="pass-buy-note">{note ?? 'Подарок от твоего Pro: один раз в сезон. Друг попробует золотые награды, заморозку серии и бонус опыта.'}</div>
+      <div className="pass-buy-note">{note ?? t('Подарок от твоего Pro: один раз в сезон. Друг попробует золотые награды, заморозку серии и бонус опыта.')}</div>
     </>
   );
 }
@@ -283,19 +284,19 @@ function GiftPro({ id, name, onDone }: { id: string; name: string; onDone: () =>
     const r = await payStars('gift', null, id);
     setBusy(false);
     if (r === 'done' || r === 'late') {
-      setNote(`Подарок отправлен! Бот напишет ${name}, от кого он.`);
+      setNote(t('Подарок отправлен! Бот напишет {0}, от кого он.', { 0: name }));
       setTimeout(onDone, 3000);
     } else if (r !== 'cancelled') setNote(r.error);
   };
   return (
     <>
       <button className="pass-buy primary" disabled={busy} onClick={gift}>
-        {platform === 'tg' ? 'Подарить Pro Pass' : 'Подарить Pro в Telegram'}
+        {platform === 'tg' ? t('Подарить Pro Pass') : t('Подарить Pro в Telegram')}
         <span className="btn-cost">
           {offer.price} <Star size={13} />
         </span>
       </button>
-      <div className="pass-buy-note">{note ?? 'Pro на сезон: золотая дорожка пропуска и золотое имя. Если у друга Pro уже есть, подарок продлит его на следующий сезон.'}</div>
+      <div className="pass-buy-note">{note ?? t('Pro на сезон: золотая дорожка пропуска и золотое имя. Если у друга Pro уже есть, подарок продлит его на следующий сезон.')}</div>
     </>
   );
 }
@@ -312,10 +313,10 @@ function FriendRow({ f, exercise, busy, onChallenge, onRemove, onMenu }: { f: Fr
           <span className={`dot ${f.online ? 'on' : ''}`} />
           <span className={`friend-name ${f.pro ? 'pro-name' : ''}`}>{f.name}</span>
           {f.clanTag && <span className="friend-tag">[{f.clanTag}]</span>}
-          <span className="friend-level">{f.level} ур.</span>
+          <span className="friend-level">{t('{0} ур.', { 0: f.level })}</span>
         </span>
         <span className="friend-meta">
-          <span style={{ color: league.color }}>{league.name}</span> · {f.cups} куб.
+          <span style={{ color: league.color }}>{league.name}</span> {t('· {0} куб.', { 0: f.cups })}
           {f.streak > 0 && (
             <span className="friend-streak">
               {' '}
@@ -323,27 +324,27 @@ function FriendRow({ f, exercise, busy, onChallenge, onRemove, onMenu }: { f: Fr
             </span>
           )}
         </span>
-        <span className="friend-meta">{f.online ? 'в игре сейчас' : lastDayText(f.lastDay)}</span>
+        <span className="friend-meta">{f.online ? t('в игре сейчас') : lastDayText(f.lastDay)}</span>
       </button>
-      <button className={`small-btn friend-call ${f.room ? 'ghost' : ''}`} disabled={busy || (!f.room && wait > 0)} onClick={onChallenge} aria-label={`Вызвать ${f.name}: ${EXERCISE_LABELS[exercise]}`}>
+      <button className={`small-btn friend-call ${f.room ? 'ghost' : ''}`} disabled={busy || (!f.room && wait > 0)} onClick={onChallenge} aria-label={t('Вызвать {0}: {1}', { 0: f.name, 1: EXERCISE_LABELS[exercise] })}>
         {f.room ? (
-          'В комнату'
+          t('В комнату')
         ) : wait > 0 ? (
-          `через ${wait} мин`
+          t('через {0} мин', { 0: wait })
         ) : (
           <>
-            <Swords size={15} /> Вызвать
+            <Swords size={15} /> {t('Вызвать')}
           </>
         )}
       </button>
       {open && (
         <div className="friend-actions">
-          <span className="muted">Вызов: {EXERCISE_LABELS[exercise].toLowerCase()} — упражнение выбирается вверху</span>
+          <span className="muted">{t('Вызов: {0} — упражнение выбирается вверху', { 0: EXERCISE_LABELS[exercise].toLowerCase() })}</span>
           <button className="small-btn danger" onClick={() => (sure ? onRemove() : setSure(true))}>
-            {sure ? 'Точно удалить?' : 'Удалить из друзей'}
+            {sure ? t('Точно удалить?') : t('Удалить из друзей')}
           </button>
           <button className="small-btn ghost" onClick={onMenu}>
-            Пожаловаться или заблокировать
+            {t('Пожаловаться или заблокировать')}
           </button>
         </div>
       )}
@@ -356,36 +357,36 @@ function AddFriendSheet({ data, busy, onAdd, onClose }: { data: FriendsReply; bu
   const [shared, setShared] = useState<string | null>(null);
   const link = friendInviteLink(data.invite, data.bot);
   const invite = async () => {
-    const how = await share(link, 'Давай дружить в NikitenokArena: будем вызывать друг друга на дуэль — кто больше отожмётся за минуту!').catch(() => null);
-    setShared(how === 'copied' ? 'Ссылка скопирована' : null);
+    const how = await share(link, t('Давай дружить в NikitenokArena: будем вызывать друг друга на дуэль — кто больше отожмётся за минуту!')).catch(() => null);
+    setShared(how === 'copied' ? t('Ссылка скопирована') : null);
   };
   const copyCode = () =>
     navigator.clipboard
       ?.writeText(data.code)
-      .then(() => setShared('Код скопирован'))
+      .then(() => setShared(t('Код скопирован')))
       .catch(() => null);
   return (
     <Sheet onClose={onClose} bodyClassName="add-friend">
-      <h3>Добавить друга</h3>
-      <div className="muted">Отправь другу ссылку: он откроет игру и сразу окажется у тебя в друзьях.</div>
+      <h3>{t('Добавить друга')}</h3>
+      <div className="muted">{t('Отправь другу ссылку: он откроет игру и сразу окажется у тебя в друзьях.')}</div>
       <button className="primary" onClick={invite}>
-        <UserPlus size={18} /> Поделиться ссылкой
+        <UserPlus size={18} /> {t('Поделиться ссылкой')}
       </button>
       {shared && <div className="muted center">{shared}</div>}
       <div className="my-code">
         <div>
-          <div className="muted">Мой код</div>
+          <div className="muted">{t('Мой код')}</div>
           <b>{data.code}</b>
         </div>
         <button className="small-btn ghost" onClick={copyCode}>
-          Скопировать
+          {t('Скопировать')}
         </button>
       </div>
-      <div className="muted">Есть код друга? Введи его — друг получит заявку и примет её.</div>
+      <div className="muted">{t('Есть код друга? Введи его — друг получит заявку и примет её.')}</div>
       <div className="join">
-        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Код друга" maxLength={6} autoCapitalize="characters" />
+        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder={t('Код друга')} maxLength={6} autoCapitalize="characters" />
         <button disabled={code.length !== 6 || busy} onClick={() => onAdd(code)}>
-          Добавить
+          {t('Добавить')}
         </button>
       </div>
       {data.error && <div className="muted center warn">{data.error}</div>}

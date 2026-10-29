@@ -7,6 +7,7 @@
 import { clanLevel, clanPerks } from '../shared/clanLevel';
 import { dayOf, raidBoss, raidHp, raidReward, raidWindow } from '../shared/raid';
 import type { Clan } from './clans';
+import { forms, type Lang, tl } from '../src/i18n';
 
 export type RaidNoticeKind = 'start' | 'remind' | 'kill' | 'summary';
 
@@ -67,7 +68,11 @@ const sent = (c: Clan, key: string, kind: RaidNoticeKind) => !!c.notices?.[key]?
 const QUIET_FROM = 22;
 const QUIET_UNTIL = 9;
 
-export function raidNotices(clans: Clan[], now: number, skip: (playerId: string) => boolean = () => false): RaidNotice[] {
+/** Слово при числе на языке игрока: ru — по трём формам, en — по двум. */
+export const wordL = (l: Lang, n: number, f: [string, string, string]) => forms(n, [tl(l, f[0]), tl(l, f[1]), tl(l, f[2])], l);
+
+// langOf — на каком языке писать каждому (выбран в игре).
+export function raidNotices(clans: Clan[], now: number, skip: (playerId: string) => boolean = () => false, langOf: (playerId: string) => Lang = () => 'ru'): RaidNotice[] {
   const out: RaidNotice[] = [];
   // Ночью не пишем: всё накопленное уйдёт утром (итоги ждут до 24 часов).
   const hourMsk = new Date(now + MSK).getUTCHours();
@@ -89,10 +94,13 @@ export function raidNotices(clans: Clan[], now: number, skip: (playerId: string)
       const dealt = r ? Object.values(r.damage).reduce((x, y) => x + y, 0) : 0;
       const remindAt = w.end - RAID_REMIND_BEFORE;
       if (!r?.killedAt && now >= raidStartNoticeAt(w.start) && now < remindAt && !sent(c, w.key, 'start')) {
-        const text =
-          `🐉 ${boss.name}, рейд ${level} уровня\n${boss.title}.\n\n` +
-          `Босс проснулся, клан «${c.name}» ждёт! У тебя ${perks.attacks} ${plural(perks.attacks, 'атака', 'атаки', 'атак')} в день до конца воскресенья: минута повторов — и каждый повтор бьёт по боссу.`;
-        for (const m of members) push(m, w.key, 'start', text, 'В бой');
+        for (const m of members) {
+          const l = langOf(m.id);
+          const text =
+            tl(l, '🐉 {0}, рейд {1} уровня\n{2}.\n\n', { 0: tl(l, boss.name), 1: level, 2: tl(l, boss.title) }) +
+            tl(l, 'Босс проснулся, клан «{0}» ждёт! У тебя {1} {2} в день до конца воскресенья: минута повторов — и каждый повтор бьёт по боссу.', { 0: c.name, 1: perks.attacks, 2: wordL(l, perks.attacks, ['атака', 'атаки', 'атак']) });
+          push(m, w.key, 'start', text, tl(l, 'В бой'));
+        }
       }
       if (!r?.killedAt && now >= remindAt && now < w.end - REMIND_LATEST && !sent(c, w.key, 'remind')) {
         const hours = Math.ceil((w.end - now) / HOUR);
@@ -100,12 +108,13 @@ export function raidNotices(clans: Clan[], now: number, skip: (playerId: string)
         for (const m of members) {
           const left = Math.max(0, perks.attacks - (r?.attacks[m.id]?.[dayOf(now)] ?? 0));
           if (!left) continue;
+          const l = langOf(m.id);
           push(
             m,
             w.key,
             'remind',
-            `⏳ До конца рейда ${hours} ${plural(hours, 'час', 'часа', 'часов')}, у тебя ещё ${left} ${plural(left, 'атака', 'атаки', 'атак')}.\n\n${boss.name} держится: у него ${hpLeft}% здоровья. Клан «${c.name}» рассчитывает на тебя!`,
-            'В бой',
+            tl(l, '⏳ До конца рейда {0} {1}, у тебя ещё {2} {3}.\n\n{4} держится: у него {5}% здоровья. Клан «{6}» рассчитывает на тебя!', { 0: hours, 1: wordL(l, hours, ['час', 'часа', 'часов']), 2: left, 3: wordL(l, left, ['атака', 'атаки', 'атак']), 4: tl(l, boss.name), 5: hpLeft, 6: c.name }),
+            tl(l, 'В бой'),
           );
         }
       }
@@ -121,24 +130,25 @@ export function raidNotices(clans: Clan[], now: number, skip: (playerId: string)
     if (total <= 0) continue;
     const boss = raidBoss(r.key);
     const names = new Map(c.members.map((m) => [m.id, m.name]));
-    const top = Object.entries(r.damage)
+    const best = Object.entries(r.damage)
       .filter(([, d]) => d > 0)
       .sort((x, y) => y[1] - x[1])
-      .slice(0, 3)
-      .map(([id, d], i) => `${MEDALS[i]} ${names.get(id) ?? 'Бывший участник'} — ${num(d)}`)
-      .join('\n');
+      .slice(0, 3);
+    const top = (l: Lang) => best.map(([id, d], i) => `${MEDALS[i]} ${names.get(id) ?? tl(l, 'Бывший участник')} — ${num(d)}`).join('\n');
     const killed = !!r.killedAt;
-    const head = killed
-      ? `🏆 ${boss.name} повержен! Клан «${c.name}» победил босса ${r.level} уровня.${r.recent.length ? ` Последний удар — ${r.recent[r.recent.length - 1].name}.` : ''}`
-      : `🛡 Рейд закончился. ${boss.name} устоял: клан «${c.name}» снял ${Math.min(99, Math.floor((100 * total) / r.hpMax))}% здоровья. В следующие выходные — новая попытка!`;
+    const head = (l: Lang) =>
+      killed
+        ? tl(l, '🏆 {0} повержен! Клан «{1}» победил босса {2} уровня.', { 0: tl(l, boss.name), 1: c.name, 2: r.level }) + (r.recent.length ? tl(l, ' Последний удар — {0}.', { 0: r.recent[r.recent.length - 1].name }) : '')
+        : tl(l, '🛡 Рейд закончился. {0} устоял: клан «{1}» снял {2}% здоровья. В следующие выходные — новая попытка!', { 0: tl(l, boss.name), 1: c.name, 2: Math.min(99, Math.floor((100 * total) / r.hpMax)) });
     for (const m of members) {
+      const l = langOf(m.id);
       const mine = r.damage[m.id] ?? 0;
       const reward = raidReward(mine, r.hpMax, r.members, killed, perks.raidCoins);
       const me =
         mine > 0
-          ? `Твой урон: ${num(mine)} — ${reward.tier.name}.\n🎁 Награда ждёт в приложении: ${num(reward.coins)} ${plural(reward.coins, 'монета', 'монеты', 'монет')}${reward.chest ? ' и сундук' : ''}. Открой клан и забери её.`
-          : 'Ты в этот раз не бил босса. В субботу — новый рейд, приходи!';
-      push(m, r.key, kind, `${head}\n\nВесь урон: ${num(total)} из ${num(r.hpMax)}\nЛучшие:\n${top}\n\n${me}`, mine > 0 ? 'Забрать награду' : 'Открыть клан');
+          ? tl(l, 'Твой урон: {0} — {1}.\n🎁 Награда ждёт в приложении: {2} {3}{4}. Открой клан и забери её.', { 0: num(mine), 1: tl(l, reward.tier.name), 2: num(reward.coins), 3: wordL(l, reward.coins, ['монета', 'монеты', 'монет']), 4: reward.chest ? tl(l, ' и сундук') : '' })
+          : tl(l, 'Ты в этот раз не бил босса. В субботу — новый рейд, приходи!');
+      push(m, r.key, kind, `${head(l)}\n\n${tl(l, 'Весь урон: {0} из {1}\nЛучшие:', { 0: num(total), 1: num(r.hpMax) })}\n${top(l)}\n\n${me}`, mine > 0 ? tl(l, 'Забрать награду') : tl(l, 'Открыть клан'));
     }
   }
   return out;

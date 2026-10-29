@@ -15,6 +15,7 @@
 import { BUILDINGS, BUILDING_TYPES, canPlace, maxCount, levelCap, type Res, RES_KEYS, type Town, TH_MAX, thLevel, type Bld } from './village';
 import { labLevel, maxTroopLevel, troopLevel } from './villageLab';
 import { armyCap, barracksLevel, type BattleArmy, type BattleBase, type BattleResult, type Deploy, housingOf, TROOP_IDS, TROOPS, type TroopId, BATTLE_TICKS, validateDeploys } from './villageBattle';
+import { t } from '../src/i18n';
 
 const H = 3_600_000;
 export const LOCK_MS = 4 * 60_000;
@@ -34,14 +35,14 @@ export interface VillageLeague {
   color: string;
 }
 export const VILLAGE_LEAGUES: VillageLeague[] = [
-  { name: 'Бронза', from: 0, color: '#cd7f32' },
-  { name: 'Серебро', from: 400, color: '#c0c0c0' },
-  { name: 'Золото', from: 800, color: '#ffc107' },
-  { name: 'Кристалл', from: 1200, color: '#b388ff' },
-  { name: 'Мастер', from: 1600, color: '#4fc3f7' },
-  { name: 'Чемпион', from: 2000, color: '#ff7043' },
-  { name: 'Титан', from: 2500, color: '#90a4ae' },
-  { name: 'Легенда', from: 3000, color: '#e040fb' },
+  { name: t('Бронза'), from: 0, color: '#cd7f32' },
+  { name: t('Серебро'), from: 400, color: '#c0c0c0' },
+  { name: t('Золото'), from: 800, color: '#ffc107' },
+  { name: t('Кристалл'), from: 1200, color: '#b388ff' },
+  { name: t('Мастер'), from: 1600, color: '#4fc3f7' },
+  { name: t('Чемпион'), from: 2000, color: '#ff7043' },
+  { name: t('Титан'), from: 2500, color: '#90a4ae' },
+  { name: t('Легенда'), from: 3000, color: '#e040fb' },
 ];
 export const villageLeague = (trophies: number): VillageLeague => [...VILLAGE_LEAGUES].reverse().find((l) => trophies >= l.from) ?? VILLAGE_LEAGUES[0];
 
@@ -180,76 +181,76 @@ const fin = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
  * Правдоподобна ли деревня из сохранения: одна ратуша, постройки и уровни не больше, чем позволяет ратуша,
  * всё на сетке без наложений, войско помещается в лагерь и уже открыто казармами. null — всё в порядке.
  */
-export function checkTown(t: unknown): string | null {
-  const town = t as Partial<Town> | null;
-  if (!town || typeof town !== 'object' || !Array.isArray(town.b)) return 'нет построек';
-  if (town.b.length > 250) return 'слишком много построек';
+export function checkTown(tm: unknown): string | null {
+  const town = tm as Partial<Town> | null;
+  if (!town || typeof town !== 'object' || !Array.isArray(town.b)) return t('нет построек');
+  if (town.b.length > 250) return t('слишком много построек');
   const res = town.res as Res | undefined;
-  if (!res || RES_KEYS.some((k) => !fin(res[k]) || res[k] < 0 || res[k] > RES_MAX)) return 'ресурсы';
+  if (!res || RES_KEYS.some((k) => !fin(res[k]) || res[k] < 0 || res[k] > RES_MAX)) return t('ресурсы');
   const ths = town.b.filter((b) => b?.t === 'townhall');
-  if (ths.length !== 1 || !int(ths[0].l, 1, TH_MAX)) return 'ратуша';
+  if (ths.length !== 1 || !int(ths[0].l, 1, TH_MAX)) return t('ратуша');
   const th = thLevel(town as Town);
   const ids = new Set<number>();
   const placed: Bld[] = [];
   for (const b of town.b) {
-    if (!b || typeof b !== 'object' || !BUILDING_TYPES.includes(b.t)) return 'неизвестная постройка';
-    if (!int(b.i, 0, 1e6) || ids.has(b.i)) return 'номер постройки';
+    if (!b || typeof b !== 'object' || !BUILDING_TYPES.includes(b.t)) return t('неизвестная постройка');
+    if (!int(b.i, 0, 1e6) || ids.has(b.i)) return t('номер постройки');
     ids.add(b.i);
-    if (!int(b.l, 0, b.t === 'townhall' ? TH_MAX : levelCap(b.t, th))) return `уровень ${b.t} ${b.l} при ратуше ${th}`;
-    if (b.u != null && !fin(b.u)) return 'стройка';
-    if (b.c != null && !fin(b.c)) return 'сборщик';
-    if (!canPlace({ b: placed }, b.t, b.x, b.y)) return `место ${b.t} ${b.x},${b.y}`;
+    if (!int(b.l, 0, b.t === 'townhall' ? TH_MAX : levelCap(b.t, th))) return t('уровень {0} {1} при ратуше {2}', { 0: b.t, 1: b.l, 2: th });
+    if (b.u != null && !fin(b.u)) return t('стройка');
+    if (b.c != null && !fin(b.c)) return t('сборщик');
+    if (!canPlace({ b: placed }, b.t, b.x, b.y)) return t('место {0} {1},{2}', { 0: b.t, 1: b.x, 2: b.y });
     placed.push(b);
   }
-  for (const type of BUILDING_TYPES) if (type !== 'townhall' && placed.filter((b) => b.t === type).length > maxCount(type, th)) return `больше ${type}, чем можно`;
+  for (const type of BUILDING_TYPES) if (type !== 'townhall' && placed.filter((b) => b.t === type).length > maxCount(type, th)) return t('больше {0}, чем можно', { 0: type });
   const army = (town.army ?? {}) as Partial<Record<TroopId, number>>;
-  if (typeof army !== 'object' || Object.keys(army).some((k) => !TROOP_IDS.includes(k as TroopId) || !int(army[k as TroopId], 0, 500))) return 'войско';
+  if (typeof army !== 'object' || Object.keys(army).some((k) => !TROOP_IDS.includes(k as TroopId) || !int(army[k as TroopId], 0, 500))) return t('войско');
   const q = town.q ?? [];
-  if (!Array.isArray(q) || q.length > 200 || q.some((e) => !e || !TROOP_IDS.includes(e.t) || !fin(e.end))) return 'очередь';
+  if (!Array.isArray(q) || q.length > 200 || q.some((e) => !e || !TROOP_IDS.includes(e.t) || !fin(e.end))) return t('очередь');
   const barracks = barracksLevel(town as Town);
   const queued = q.reduce((s, e) => s + TROOPS[e.t].housing, 0);
-  if (housingOf(army) + queued > armyCap(town as Town)) return 'войско больше лагеря';
-  if ([...TROOP_IDS.filter((id) => (army[id] ?? 0) > 0), ...q.map((e) => e.t)].some((id) => TROOPS[id].unlock > barracks)) return 'отряд не открыт';
+  if (housingOf(army) + queued > armyCap(town as Town)) return t('войско больше лагеря');
+  if ([...TROOP_IDS.filter((id) => (army[id] ?? 0) > 0), ...q.map((e) => e.t)].some((id) => TROOPS[id].unlock > barracks)) return t('отряд не открыт');
   const tl = town.tl ?? {};
   const maxLv = maxTroopLevel(labLevel(town as Town));
-  if (typeof tl !== 'object' || Object.keys(tl).some((k) => !TROOP_IDS.includes(k as TroopId) || !int(tl[k as TroopId], 1, maxLv))) return 'уровни отрядов';
+  if (typeof tl !== 'object' || Object.keys(tl).some((k) => !TROOP_IDS.includes(k as TroopId) || !int(tl[k as TroopId], 1, maxLv))) return t('уровни отрядов');
   const r = town.r;
-  if (r != null && (typeof r !== 'object' || !TROOP_IDS.includes(r.t) || !fin(r.end) || troopLevel(town as Town, r.t) + 1 > maxLv)) return 'исследование';
+  if (r != null && (typeof r !== 'object' || !TROOP_IDS.includes(r.t) || !fin(r.end) || troopLevel(town as Town, r.t) + 1 > maxLv)) return t('исследование');
   return null;
 }
 
 /** Можно ли идти в бой с таким войском: не больше, чем есть в лагере, и столько, сколько дают казармы. */
 export function checkArmy(army: unknown, town: Town, heroMax: number): string | null {
   const a = army as BattleArmy | null;
-  if (!a || typeof a !== 'object' || !a.troops || typeof a.troops !== 'object') return 'нет войска';
+  if (!a || typeof a !== 'object' || !a.troops || typeof a.troops !== 'object') return t('нет войска');
   for (const k of Object.keys(a.troops)) {
-    if (!TROOP_IDS.includes(k as TroopId)) return 'неизвестный отряд';
+    if (!TROOP_IDS.includes(k as TroopId)) return t('неизвестный отряд');
     const n = a.troops[k as TroopId];
-    if (!int(n, 0, 500)) return 'число отрядов';
+    if (!int(n, 0, 500)) return t('число отрядов');
     if (n! > (town.army[k as TroopId] ?? 0)) return `${k}: ${n} > ${town.army[k as TroopId] ?? 0}`;
-    if (n! > 0 && TROOPS[k as TroopId].unlock > barracksLevel(town)) return `${k} не открыт`;
+    if (n! > 0 && TROOPS[k as TroopId].unlock > barracksLevel(town)) return t('{0} не открыт', { 0: k });
   }
-  if (housingOf(a.troops) > armyCap(town)) return 'больше мест в лагере';
-  if (a.level !== Math.max(1, barracksLevel(town))) return 'уровень казарм';
+  if (housingOf(a.troops) > armyCap(town)) return t('больше мест в лагере');
+  if (a.level !== Math.max(1, barracksLevel(town))) return t('уровень казарм');
   if (a.lv != null) {
-    if (typeof a.lv !== 'object') return 'уровни отрядов';
+    if (typeof a.lv !== 'object') return t('уровни отрядов');
     for (const k of Object.keys(a.lv)) {
-      if (!TROOP_IDS.includes(k as TroopId) || !int(a.lv[k as TroopId], 1, troopLevel(town, k as TroopId))) return `уровень ${k}`;
+      if (!TROOP_IDS.includes(k as TroopId) || !int(a.lv[k as TroopId], 1, troopLevel(town, k as TroopId))) return t('уровень {0}', { 0: k });
     }
   }
-  if (a.hero != null && !int(a.hero, 1, Math.max(1, heroMax))) return 'уровень героя';
+  if (a.hero != null && !int(a.hero, 1, Math.max(1, heroMax))) return t('уровень героя');
   return null;
 }
 
 /** Полная проверка набега до боя: высадки по порядку, в зоне, не больше войска; сдача — в пределах боя. */
 export function checkDeploys(base: BattleBase, army: BattleArmy, deploys: unknown, endTick: unknown, loot: Res, seed: number): string | null {
-  if (!Array.isArray(deploys)) return 'нет высадок';
-  if (endTick != null && !int(endTick, 0, BATTLE_TICKS)) return 'конец боя';
+  if (!Array.isArray(deploys)) return t('нет высадок');
+  if (endTick != null && !int(endTick, 0, BATTLE_TICKS)) return t('конец боя');
   let last = 0;
   for (const d of deploys as Deploy[]) {
-    if (!d || typeof d !== 'object') return 'высадка';
-    if (typeof d.t !== 'number' || d.t < last) return 'высадки не по порядку';
-    if (endTick != null && d.t > (endTick as number)) return 'высадка после конца боя';
+    if (!d || typeof d !== 'object') return t('высадка');
+    if (typeof d.t !== 'number' || d.t < last) return t('высадки не по порядку');
+    if (endTick != null && d.t > (endTick as number)) return t('высадка после конца боя');
     last = d.t;
   }
   return validateDeploys({ base, army, deploys: deploys as Deploy[], loot, seed, endTick: endTick as number | undefined });

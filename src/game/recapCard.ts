@@ -3,6 +3,8 @@
 import { BOT_USERNAME } from '../telegram';
 import { EX_COLOR } from './Stats';
 import { amountLabel, MONTHS_OF, RECAP_TYPES, type Recap, recapWord } from './recap';
+import { locale, t } from '../i18n';
+import { cityName } from '../city/cityName';
 
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -69,13 +71,13 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
 
   g.fillStyle = '#f5f2ec';
   g.font = `900 ${fit(g, `Итоги ${MONTHS_OF[r.m]}`, 900, 92, W - 2 * M)}px ${FONT}`;
-  g.fillText(`Итоги ${MONTHS_OF[r.m]}`, M, 250);
+  g.fillText(t('Итоги {0}', { 0: MONTHS_OF[r.m] }), M, 250);
   g.fillStyle = 'rgba(245,242,236,.7)';
   g.font = `800 40px ${FONT}`;
   g.fillText(extra.name, M, 312, W - 2 * M);
 
   // Главное число.
-  const total = r.total.toLocaleString('ru');
+  const total = r.total.toLocaleString(locale());
   const tg = g.createLinearGradient(M, 360, M, 600);
   tg.addColorStop(0, '#ffd27a');
   tg.addColorStop(1, '#ff7a59');
@@ -84,24 +86,24 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   g.fillText(total, M - 6, 590);
   g.fillStyle = '#f5f2ec';
   g.font = `900 52px ${FONT}`;
-  g.fillText(recapWord(r.total, ['повтор', 'повтора', 'повторов']), M, 660);
+  g.fillText(recapWord(r.total, [t('повтор'), t('повтора'), t('повторов')]), M, 660);
   if (r.growth != null && r.growth !== 0) {
     const up = r.growth > 0;
-    const t = `${up ? '▲ +' : '▼ '}${r.growth}% к прошлому месяцу`;
+    const tm = t('{0}{1}% к прошлому месяцу', { 0: up ? '▲ +' : '▼ ', 1: r.growth });
     g.font = `900 34px ${FONT}`;
-    const w = g.measureText(t).width + 40;
+    const w = g.measureText(tm).width + 40;
     roundRect(g, M, 690, w, 58, 29);
     g.fillStyle = up ? 'rgba(110,231,183,.16)' : 'rgba(255,107,129,.16)';
     g.fill();
     g.fillStyle = up ? '#6ee7b7' : '#ff6b81';
-    g.fillText(t, M + 20, 731);
+    g.fillText(tm, M + 20, 731);
   }
 
   // Три плитки: дни, серия, день силы.
   const tiles: [string, string][] = [
-    [`${r.days}`, `${recapWord(r.days, ['день', 'дня', 'дней'])} с тренировкой`],
-    [`${r.streak}`, `${recapWord(r.streak, ['день', 'дня', 'дней'])} подряд`],
-    [r.bestDay ? r.bestDay.reps.toLocaleString('ru') : '—', 'в лучший день'],
+    [`${r.days}`, t('{0} с тренировкой', { 0: recapWord(r.days, [t('день'), t('дня'), t('дней')]) })],
+    [`${r.streak}`, t('{0} подряд', { 0: recapWord(r.streak, [t('день'), t('дня'), t('дней')]) })],
+    [r.bestDay ? r.bestDay.reps.toLocaleString(locale()) : '—', t('в лучший день')],
   ];
   const tw = (W - 2 * M - 2 * 24) / 3;
   tiles.forEach(([v, l], i) => {
@@ -144,7 +146,7 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   }
 
   // Тип героя.
-  const t = RECAP_TYPES[r.type];
+  const tm = RECAP_TYPES[r.type];
   const ty = Math.max(y + 10, 1400);
   roundRect(g, M, ty, W - 2 * M, 190, 40);
   const tb = g.createLinearGradient(M, ty, W - M, ty + 190);
@@ -153,18 +155,18 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   g.fillStyle = tb;
   g.fill();
   g.font = `100px ${FONT}`;
-  g.fillText(t.emoji, M + 34, ty + 132);
+  g.fillText(tm.emoji, M + 34, ty + 132);
   g.fillStyle = 'rgba(245,242,236,.7)';
   g.font = `800 30px ${FONT}`;
-  g.fillText('Мой тип героя', M + 180, ty + 72);
+  g.fillText(t('Мой тип героя'), M + 180, ty + 72);
   g.fillStyle = '#f5f2ec';
-  g.font = `900 ${fit(g, t.name, 900, 60, W - 2 * M - 220)}px ${FONT}`;
-  g.fillText(t.name, M + 180, ty + 140);
+  g.font = `900 ${fit(g, tm.name, 900, 60, W - 2 * M - 220)}px ${FONT}`;
+  g.fillText(tm.name, M + 180, ty + 140);
 
   // Место среди игроков и города.
   const lines: string[] = [];
-  if (extra.percent != null) lines.push(`Сильнее ${extra.percent}% героев`);
-  if (extra.city) lines.push(`${extra.city.name}: ${extra.city.place}-е место из ${extra.city.cities}`);
+  if (extra.percent != null) lines.push(t('Сильнее {0}% героев', { 0: extra.percent }));
+  if (extra.city) lines.push(t('{0}: {1}-е место из {2}', { 0: cityName(extra.city.name), 1: extra.city.place, 2: extra.city.cities }));
   g.fillStyle = '#ffd27a';
   g.font = `900 40px ${FONT}`;
   lines.slice(0, 2).forEach((l, i) => g.fillText(l, M, ty + 250 + i * 54, W - 2 * M));
@@ -172,7 +174,7 @@ export async function drawRecapCard(r: Recap, extra: RecapExtra): Promise<HTMLCa
   // Приглашение.
   g.fillStyle = 'rgba(245,242,236,.55)';
   g.font = `800 32px ${FONT}`;
-  g.fillText('Тренируйся со мной в Telegram', M, STORY_H - 96);
+  g.fillText(t('Тренируйся со мной в Telegram'), M, STORY_H - 96);
   g.fillStyle = '#ff8a5c';
   g.font = `900 40px ${FONT}`;
   g.fillText(`@${BOT_USERNAME}`, M, STORY_H - 44);
@@ -185,5 +187,5 @@ export async function recapJpeg(c: HTMLCanvasElement): Promise<Blob> {
     const b = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/jpeg', q));
     if (b && b.size <= 840_000) return b;
   }
-  throw new Error('не удалось сохранить картинку');
+  throw new Error(t('не удалось сохранить картинку'));
 }

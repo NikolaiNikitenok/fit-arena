@@ -5,6 +5,7 @@ import { sfx } from '../audio';
 import { ResIcon } from './BattleScreen';
 import { Star } from './icons';
 import { fmtNum } from './state';
+import { t } from '../i18n';
 
 // Итог набега как в больших стратегиях: звёзды падают по одной, процент бежит, сундук
 // подпрыгивает и открывается, добыча досчитывается до конца.
@@ -13,13 +14,13 @@ const STAR_AT = 450;
 const STAR_GAP = 420;
 
 /** Число, которое бежит от 0 до to за dur мс, начиная с момента from. */
-function countUp(to: number, from: number, dur: number, t: number): number {
-  const k = Math.max(0, Math.min(1, (t - from) / dur));
+function countUp(to: number, from: number, dur: number, tm: number): number {
+  const k = Math.max(0, Math.min(1, (tm - from) / dur));
   return Math.round(to * (1 - (1 - k) ** 3));
 }
 
 export function ResultCard({ title, result, mode, note, onClose }: { title: string; result: BattleResult; mode: 'attack' | 'replay'; note?: ReactNode; onClose: () => void }) {
-  const [t, setT] = useState(0);
+  const [tm, setT] = useState(0);
   const mine = mode === 'attack';
   const stars = result.stars;
   const hasLoot = RES_KEYS.some((k) => result.loot[k] > 0);
@@ -44,21 +45,21 @@ export function ResultCard({ title, result, mode, note, onClose }: { title: stri
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const pct = countUp(result.destruction, 200, Math.max(400, STAR_AT + stars * STAR_GAP - 200), t);
+  const pct = countUp(result.destruction, 200, Math.max(400, STAR_AT + stars * STAR_GAP - 200), tm);
   const loot: Res = { wood: 0, stone: 0, gold: 0 };
-  for (const k of RES_KEYS) loot[k] = countUp(result.loot[k], lootAt, 1000, t);
-  const open = t >= chestAt + 200;
+  for (const k of RES_KEYS) loot[k] = countUp(result.loot[k], lootAt, 1000, tm);
+  const open = tm >= chestAt + 200;
   const good = mine ? stars > 0 : stars === 0;
 
   return (
     <div className={`result vil-result vr ${good ? 'good' : 'bad'}`}>
       {good && <div className="vr-rays" />}
       <div className="level-tag">{title}</div>
-      <div className="result-title vr-title">{stars ? (stars === 3 ? 'Полный разгром!' : 'Победа!') : mode === 'replay' ? 'Набег отбит!' : 'Не вышло'}</div>
+      <div className="result-title vr-title">{stars ? (stars === 3 ? t('Полный разгром!') : t('Победа!')) : mode === 'replay' ? t('Набег отбит!') : t('Не вышло')}</div>
       <div className="vr-stars">
         {[0, 1, 2].map((k) => {
           const at = STAR_AT + k * STAR_GAP;
-          const on = k < stars && t >= at;
+          const on = k < stars && tm >= at;
           return (
             <span key={k} className={`vr-star s${k} ${on ? 'on' : ''} ${k < stars ? 'earned' : ''}`}>
               <Star size={k === 1 ? 64 : 52} />
@@ -67,14 +68,14 @@ export function ResultCard({ title, result, mode, note, onClose }: { title: stri
         })}
       </div>
       <div className="vr-pct">
-        Разрушено <b className="num-outline">{pct}%</b>
-        {result.townhall ? ', ратуша пала' : ''}
+        {t('Разрушено')} <b className="num-outline">{pct}%</b>
+        {result.townhall ? t(', ратуша пала') : ''}
       </div>
       {hasLoot && (
-        <div className={`vr-loot ${t >= chestAt ? 'in' : ''}`}>
+        <div className={`vr-loot ${tm >= chestAt ? 'in' : ''}`}>
           {mine && <Chest open={open} />}
           <div className="vr-loot-list">
-            <span className="vr-loot-title">{mode === 'replay' ? 'Унесли' : 'Добыча'}</span>
+            <span className="vr-loot-title">{mode === 'replay' ? t('Унесли') : t('Добыча')}</span>
             {RES_KEYS.filter((k) => result.loot[k] > 0).map((k) => (
               <span key={k} className="vr-loot-cell">
                 <ResIcon r={k} size={24} />
@@ -87,9 +88,9 @@ export function ResultCard({ title, result, mode, note, onClose }: { title: stri
           </div>
         </div>
       )}
-      {note && <div className={`vil-result-note vr-note ${t >= (hasLoot ? lootAt : chestAt) ? 'in' : ''}`}>{note}</div>}
-      <button className={`primary vr-btn ${t >= Math.min(end, 1600) ? 'in' : ''}`} onClick={onClose}>
-        В деревню
+      {note && <div className={`vil-result-note vr-note ${tm >= (hasLoot ? lootAt : chestAt) ? 'in' : ''}`}>{note}</div>}
+      <button className={`primary vr-btn ${tm >= Math.min(end, 1600) ? 'in' : ''}`} onClick={onClose}>
+        {t('В деревню')}
       </button>
     </div>
   );

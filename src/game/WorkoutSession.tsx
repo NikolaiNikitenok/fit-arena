@@ -12,6 +12,7 @@ import type { CharName } from '../three/kit';
 import { Check, Moon, Timer } from '../icons';
 import type { SetPlan } from './programs';
 import './Programs.css';
+import { t } from '../i18n';
 
 // Тренировка из подходов: камера считает повторы (у планки — секунды), между подходами отдых с отсчётом.
 // Камера работает всю тренировку, на каждый подход счётчик начинается заново.
@@ -61,18 +62,18 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
   const value = done[idx];
   useVoiceCoach(phase === 'work' && !calibrating, value, 0, camera.hint, 0, set.max ? undefined : set.target, timed);
 
-  const startSet = (i: number, t: number) => {
+  const startSet = (i: number, at: number) => {
     const st = s.current;
     st.idx = i;
-    st.setStart = t;
-    st.lastRepAt = t;
+    st.setStart = at;
+    st.lastRepAt = at;
     st.warned = false;
     setIdx(i);
     camera.switchExercise(sets[i].exercise);
     setPhase('work');
   };
 
-  const endSet = (t: number) => {
+  const endSet = (at: number) => {
     const st = s.current;
     if (st.phase !== 'work') return;
     const i = st.idx;
@@ -85,23 +86,23 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     }
     sfx('coin');
     const rest = sets[i].rest || PREP_S;
-    st.until = t + rest * 1000;
+    st.until = at + rest * 1000;
     st.idx = i + 1;
     st.warned = false;
     setIdx(i + 1);
     setPhase('rest');
-    say(`Отдых ${rest} секунд`);
+    say(t('Отдых {0} секунд', { 0: rest }));
   };
 
   const onRep = () => {
     const st = s.current;
     if (st.phase !== 'work') return;
-    const t = performance.now();
+    const at = performance.now();
     st.done[st.idx] += 1;
-    st.lastRepAt = t;
+    st.lastRepAt = at;
     setDone([...st.done]);
     const cur = sets[st.idx];
-    if (!cur.max && st.done[st.idx] >= cur.target) endSet(t);
+    if (!cur.max && st.done[st.idx] >= cur.target) endSet(at);
   };
 
   // DEV: повтор без камеры для проверки тренировки в браузере. В сборку для игроков не попадает.
@@ -119,30 +120,30 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     if (phase === 'ready' || phase === 'loading' || phase === 'error') return;
     const id = setInterval(() => {
       const st = s.current;
-      const t = performance.now();
-      setNow(t);
+      const at = performance.now();
+      setNow(at);
       // Пока идёт калибровка, время не идёт.
       if (calibRef.current) {
-        st.until = Math.max(st.until, t + PREP_S * 1000);
+        st.until = Math.max(st.until, at + PREP_S * 1000);
         return;
       }
-      if (st.phase === 'prep' && t >= st.until) startSet(st.idx, t);
+      if (st.phase === 'prep' && at >= st.until) startSet(st.idx, at);
       if (st.phase === 'rest') {
-        const left = (st.until - t) / 1000;
+        const left = (st.until - at) / 1000;
         if (left <= 3 && !st.warned) {
           st.warned = true;
           const next = sets[st.idx];
-          say(`Приготовься: ${next.max ? `${EXERCISE_LABELS[next.exercise].toLowerCase()}, сколько сможешь` : goalText(next.exercise, next.target)}`);
+          say(t('Приготовься: {0}', { 0: next.max ? t('{0}, сколько сможешь', { 0: EXERCISE_LABELS[next.exercise].toLowerCase() }) : goalText(next.exercise, next.target) }));
         }
         if (left <= 0) {
           sfx('go');
-          startSet(st.idx, t);
+          startSet(st.idx, at);
         }
       }
       if (st.phase === 'work') {
         const cur = sets[st.idx];
         const idle = isTimed(cur.exercise) ? MAX_PLANK_IDLE_MS : MAX_IDLE_MS;
-        if (cur.max && st.done[st.idx] > (isTimed(cur.exercise) ? 2 : 0) && t - st.lastRepAt > idle) endSet(t);
+        if (cur.max && st.done[st.idx] > (isTimed(cur.exercise) ? 2 : 0) && at - st.lastRepAt > idle) endSet(at);
       }
     }, 200);
     return () => clearInterval(id);
@@ -161,7 +162,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
       // В DEV можно тренироваться и без камеры: повторы приходят из __workoutRep.
       if (!import.meta.env.DEV) {
         camera.stop();
-        setError(e instanceof Error ? e.message : 'не загрузилась модель распознавания');
+        setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
         setPhase('error');
         return;
       }
@@ -193,12 +194,12 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
           <SetList sets={sets} done={done} current={-1} />
           {settings.guide && <CameraGuide exercise={sets[0].exercise} model={model} />}
         </div>
-        <div className="hint-line">{phase === 'error' ? `Не удалось запустить камеру: ${error}` : `Поставь телефон так, чтобы было видно всё тело.${sets.length > 1 ? ' Между подходами будет отдых.' : ''}`}</div>
+        <div className="hint-line">{phase === 'error' ? t('Не удалось запустить камеру: {0}', { 0: error }) : t('Поставь телефон так, чтобы было видно всё тело.{0}', { 0: sets.length > 1 ? t(' Между подходами будет отдых.') : '' })}</div>
         <button className="primary" onClick={begin}>
-          {phase === 'error' ? 'Ещё раз' : 'Начать тренировку'}
+          {phase === 'error' ? t('Ещё раз') : t('Начать тренировку')}
         </button>
         <button className="link" onClick={onExit}>
-          Назад
+          {t('Назад')}
         </button>
       </>
     );
@@ -212,7 +213,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
           <div className="mhud-row">
             <span className="mhud-ex">{EXERCISE_LABELS[set.exercise]}</span>
             <span className="ws-setno">
-              Подход {idx + 1} из {sets.length}
+              {t('Подход {0} из {1}', { 0: idx + 1, 1: sets.length })}
             </span>
           </div>
           {phase === 'work' && !set.max && (
@@ -226,54 +227,54 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
           <div className={`ws-count ${paused ? 'paused' : ''}`}>
             <div className="ws-num">{shown}</div>
             <div className="ws-goal">
-              {paused ? 'Пауза: поправь позу' : set.max ? (timed ? 'держи, сколько сможешь' : 'сколько сможешь') : `из ${amountText(set.exercise, set.target)}`}
+              {paused ? t('Пауза: поправь позу') : set.max ? (timed ? t('держи, сколько сможешь') : t('сколько сможешь')) : t('из {0}', { 0: amountText(set.exercise, set.target) })}
             </div>
           </div>
         )}
         {phase === 'prep' && !calibrating && (
           <div className="countdown">
             <div className="countdown-num">{restLeft}</div>
-            <div>Займи позицию</div>
+            <div>{t('Займи позицию')}</div>
           </div>
         )}
         {phase === 'rest' && (
           <div className="ws-rest">
             <Moon size={22} />
             <div className="ws-rest-num">{restLeft}</div>
-            <div className="ws-rest-label">Отдых</div>
+            <div className="ws-rest-label">{t('Отдых')}</div>
             <div className="ws-next">
-              Дальше: {set.max ? `${EXERCISE_LABELS[set.exercise]}, сколько сможешь` : goalText(set.exercise, set.target).replace(/^./, (c) => c.toUpperCase())}
+              {t('Дальше:')} {set.max ? t('{0}, сколько сможешь', { 0: EXERCISE_LABELS[set.exercise] }) : goalText(set.exercise, set.target).replace(/^./, (c) => c.toUpperCase())}
             </div>
           </div>
         )}
         {calibrating && <CalibrationOverlay exercise={set.exercise as RepExercise} view={camera.calib!} onSkip={camera.skipCalib} />}
         {phase === 'loading' && (
           <div className="countdown">
-            <div>Загружаю камеру…</div>
+            <div>{t('Загружаю камеру…')}</div>
           </div>
         )}
       </div>
 
       <SetList sets={sets} done={done} current={idx} resting={phase === 'rest'} />
-      <div className="hint-line">{phase === 'work' ? (camera.hint ?? (timed ? 'Держи ровно: таз не поднимай и не опускай' : 'Отлично, продолжай!')) : phase === 'rest' ? 'Подыши, попей воды' : ''}</div>
+      <div className="hint-line">{phase === 'work' ? (camera.hint ?? (timed ? t('Держи ровно: таз не поднимай и не опускай') : t('Отлично, продолжай!'))) : phase === 'rest' ? t('Подыши, попей воды') : ''}</div>
 
       {phase === 'rest' && (
         <div className="ws-actions">
           <button className="secondary" onClick={() => (s.current.until += REST_ADD_S * 1000)}>
-            +{REST_ADD_S} с
+            {t('+{0} с', { 0: REST_ADD_S })}
           </button>
           <button className="primary" onClick={() => startSet(s.current.idx, performance.now())}>
-            Пропустить отдых
+            {t('Пропустить отдых')}
           </button>
         </div>
       )}
       {phase === 'work' && (
         <button className="secondary" onClick={() => endSet(performance.now())}>
-          {set.max ? 'Хватит, записать' : value > 0 ? 'Закончить подход' : 'Пропустить подход'}
+          {set.max ? t('Хватит, записать') : value > 0 ? t('Закончить подход') : t('Пропустить подход')}
         </button>
       )}
       <button className="link" onClick={stop}>
-        Остановиться
+        {t('Остановиться')}
       </button>
     </>
   );
@@ -290,7 +291,7 @@ export function SetList({ sets, done, current, resting }: { sets: SetPlan[]; don
             {state === 'done' && <Check size={12} />}
             {isTimed(x.exercise) && state !== 'done' && <Timer size={12} />}
             <b>{EXERCISE_LABELS[x.exercise]}</b>
-            {state === 'done' ? amountText(x.exercise, done[i]) : x.max ? 'макс.' : amountText(x.exercise, x.target)}
+            {state === 'done' ? amountText(x.exercise, done[i]) : x.max ? t('макс.') : amountText(x.exercise, x.target)}
           </span>
         );
       })}

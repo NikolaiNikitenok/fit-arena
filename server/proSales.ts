@@ -10,6 +10,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { seasonAt, seasonEndsAt } from '../shared/rating';
+import { type Lang, tl } from '../src/i18n';
 
 export const PRO_PRICE = Math.max(1, Math.floor(Number(process.env.PRO_PRICE) || 199));
 export const STARTER_PRICE = Math.max(1, Math.floor(Number(process.env.STARTER_PRICE) || 49));
@@ -186,29 +187,26 @@ export class ProSales {
   }
 }
 
-const fmtDate = (t: number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' });
+const fmtDate = (at: number, l: Lang = 'ru') => new Date(at).toLocaleDateString(l === 'en' ? 'en-US' : 'ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' });
 
 /** Сообщение тому, кто платил. */
-export const paidText = (p: ProPurchase, friendName?: string) =>
+export const paidText = (p: ProPurchase, friendName?: string, l: Lang = 'ru') =>
   kindOf(p) === 'starter'
-    ? `🎁 Набор «Новичок» твой!\n\nОблик «Искатель приключений» уже в гардеробе, а сундук новичка открыт: 1000 монет, 3 зелья бодрости и 2 свитка замены. Если игра была открыта, перезапусти её.\n\nСпасибо, что поддерживаешь NikitenokArena!`
+    ? tl(l, '🎁 Набор «Новичок» твой!\n\nОблик «Искатель приключений» уже в гардеробе, а сундук новичка открыт: 1000 монет, 3 зелья бодрости и 2 свитка замены. Если игра была открыта, перезапусти её.\n\nСпасибо, что поддерживаешь NikitenokArena!')
     : kindOf(p) === 'gift'
-      ? `🎁 Ты подарил Pro Pass${friendName ? ` другу ${friendName}` : ' другу'}! Он действует до ${fmtDate(p.until)}. Мы уже написали другу, от кого подарок.`
-      : selfPaidText(p);
+      ? tl(l, '🎁 Ты подарил Pro Pass другу{0}! Он действует до {1}. Мы уже написали другу, от кого подарок.', { 0: friendName ? ` ${friendName}` : '', 1: fmtDate(p.until, l) })
+      : selfPaidText(p, l);
 
 /** Другу пришёл подарок. */
-export const giftText = (p: ProPurchase, fromName?: string) =>
-  `🎁 ${fromName ?? 'Друг'} подарил тебе Pro Pass до ${fmtDate(p.until)}!\n\nЗолотая дорожка пропуска открыта, имя светится золотом в клане, чате и рейтинге. Загляни в пропуск и забери награды.`;
+export const giftText = (p: ProPurchase, fromName?: string, l: Lang = 'ru') =>
+  tl(l, '🎁 {0} подарил тебе Pro Pass до {1}!\n\nЗолотая дорожка пропуска открыта, имя светится золотом в клане, чате и рейтинге. Загляни в пропуск и забери награды.', { 0: fromName ?? tl(l, 'Друг'), 1: fmtDate(p.until, l) });
 
-const selfPaidText = (p: ProPurchase) =>
-  `⭐ Pro Pass активен до ${fmtDate(p.until)}!\n\nЗолотая дорожка пропуска открыта: забирай награды всех пройденных ступеней. Имя светится золотом в клане, чате и рейтинге, за героем золотой щит.\n\nPro действует везде, где ты входишь в NikitenokArena: в Telegram, Max и браузере. Спасибо, что поддерживаешь игру!`;
+const selfPaidText = (p: ProPurchase, l: Lang) =>
+  tl(l, '⭐ Pro Pass активен до {0}!\n\nЗолотая дорожка пропуска открыта: забирай награды всех пройденных ступеней. Имя светится золотом в клане, чате и рейтинге, за героем золотой щит.\n\nPro действует везде, где ты входишь в NikitenokArena: в Telegram, Max и браузере. Спасибо, что поддерживаешь игру!', { 0: fmtDate(p.until, l) });
 
 /** Ответ на /paysupport: Telegram требует его у ботов с оплатой. */
-export const PAY_SUPPORT_TEXT = `Оплата в NikitenokArena — только звёздами Telegram: Pro Pass на сезон (себе или в подарок другу) и набор «Новичок».
-
-Если что-то пошло не так (звёзды списались, а покупка не появилась, или купил по ошибке) — напиши сюда одним сообщением, что случилось. Разработчик ответит и, если нужно, вернёт звёзды.
-
-Pro не даёт преимущества над соперниками: дуэли и рейтинг решают только твои повторы.`;
+export const paySupportText = (l: Lang = 'ru') =>
+  tl(l, 'Оплата в NikitenokArena — только звёздами Telegram: Pro Pass на сезон (себе или в подарок другу) и набор «Новичок».\n\nЕсли что-то пошло не так (звёзды списались, а покупка не появилась, или купил по ошибке) — напиши сюда одним сообщением, что случилось. Разработчик ответит и, если нужно, вернёт звёзды.\n\nPro не даёт преимущества над соперниками: дуэли и рейтинг решают только твои повторы.');
 
 /** Сообщение админам о покупке. */
 const WHAT: Record<SaleKind, string> = { pro: 'Pro Pass куплен', gift: 'Pro Pass подарен', starter: 'Набор «Новичок» куплен' };

@@ -6,6 +6,7 @@
 import type { PotionId } from './items';
 import { LEVELS, WORLD_SIZE } from './levels';
 import type { Progress } from './progress';
+import { t } from '../i18n';
 
 export type PetId = 'dragon' | 'cat' | 'owl' | 'wolf' | 'bug' | 'hedgehog';
 
@@ -38,12 +39,12 @@ export interface PetDef {
 }
 
 export const PETS: PetDef[] = [
-  { id: 'dragon', kind: 'Дракончик', name: 'Искра', color: '#5fd39a', accent: '#ffd36b', max: { damage: 0.05 }, unlock: { kind: 'egg' }, text: 'Вылупился из яйца Мастера Грома. Дышит искрами, когда ты бьёшь.' },
-  { id: 'cat', kind: 'Котик', name: 'Пирожок', color: '#ffad5c', accent: '#fff1dc', max: { coins: 0.1 }, unlock: { kind: 'hero', level: 5 }, text: 'Живёт у бабушки Марфы. Находит монетки там, где ты их не заметил.' },
-  { id: 'owl', kind: 'Совёнок', name: 'Ночка', color: '#a98a6d', accent: '#ffcf70', max: { chest: 0.15 }, unlock: { kind: 'days', days: 7 }, text: 'Видит с высоты, где спрятаны сундучки.' },
-  { id: 'wolf', kind: 'Волчонок', name: 'Серый', color: '#9aa7bd', accent: '#e9eef7', max: { damage: 0.03, coins: 0.04 }, unlock: { kind: 'boss' }, text: 'Прибился после первого хранителя. Рычит на врагов и тащит добычу.' },
-  { id: 'bug', kind: 'Робо-жук', name: 'Винтик', color: '#6fb8ff', accent: '#7dffea', max: { damage: 0.02, chest: 0.08 }, unlock: { kind: 'space' }, text: 'Собран БИП-7 на станции. Сканирует сундучки и подсказывает слабые места.' },
-  { id: 'hedgehog', kind: 'Ёжик', name: 'Колючка', color: '#b07a52', accent: '#f6dcc0', max: { coins: 0.06, chest: 0.08 }, unlock: { kind: 'shop', price: 450 }, text: 'Купец Фёдор возит его в корзинке. Носит на иголках монетки и яблоки.' },
+  { id: 'dragon', kind: t('Дракончик'), name: t('Искра'), color: '#5fd39a', accent: '#ffd36b', max: { damage: 0.05 }, unlock: { kind: 'egg' }, text: t('Вылупился из яйца Мастера Грома. Дышит искрами, когда ты бьёшь.') },
+  { id: 'cat', kind: t('Котик'), name: t('Пирожок'), color: '#ffad5c', accent: '#fff1dc', max: { coins: 0.1 }, unlock: { kind: 'hero', level: 5 }, text: t('Живёт у бабушки Марфы. Находит монетки там, где ты их не заметил.') },
+  { id: 'owl', kind: t('Совёнок'), name: t('Ночка'), color: '#a98a6d', accent: '#ffcf70', max: { chest: 0.15 }, unlock: { kind: 'days', days: 7 }, text: t('Видит с высоты, где спрятаны сундучки.') },
+  { id: 'wolf', kind: t('Волчонок'), name: t('Серый'), color: '#9aa7bd', accent: '#e9eef7', max: { damage: 0.03, coins: 0.04 }, unlock: { kind: 'boss' }, text: t('Прибился после первого хранителя. Рычит на врагов и тащит добычу.') },
+  { id: 'bug', kind: t('Робо-жук'), name: t('Винтик'), color: '#6fb8ff', accent: '#7dffea', max: { damage: 0.02, chest: 0.08 }, unlock: { kind: 'space' }, text: t('Собран БИП-7 на станции. Сканирует сундучки и подсказывает слабые места.') },
+  { id: 'hedgehog', kind: t('Ёжик'), name: t('Колючка'), color: '#b07a52', accent: '#f6dcc0', max: { coins: 0.06, chest: 0.08 }, unlock: { kind: 'shop', price: 450 }, text: t('Купец Фёдор возит его в корзинке. Носит на иголках монетки и яблоки.') },
 ];
 
 export const petById = (id: PetId | undefined): PetDef | undefined => PETS.find((p) => p.id === id);
@@ -75,7 +76,7 @@ export function petLevel(xp: number): { level: number; into: number; need: numbe
 }
 
 // Три облика: малыш, подросток, взрослый — размер и новые детали.
-export const STAGE_NAMES = ['малыш', 'подросток', 'взрослый'] as const;
+export const STAGE_NAMES = [t('малыш'), t('подросток'), t('взрослый')] as const;
 export const petStage = (level: number): 0 | 1 | 2 => (level >= 14 ? 2 : level >= 7 ? 1 : 0);
 
 /** Бонус питомца на этом уровне: от пятой части до полного к 20-му. */
@@ -87,8 +88,8 @@ export function petBonusAt(def: PetDef, level: number): PetBonus {
 
 const NO_BONUS: PetBonus = { damage: 0, coins: 0, chest: 0 };
 
-const dayKey = (t: number): string => {
-  const d = new Date(t);
+const dayKey = (tm: number): string => {
+  const d = new Date(tm);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
@@ -137,17 +138,17 @@ export function unlockText(p: Progress, def: PetDef, heroLvl: number): string {
   const u = def.unlock;
   switch (u.kind) {
     case 'egg':
-      return 'Яйцо подарит Мастер Гром после первой победы';
+      return t('Яйцо подарит Мастер Гром после первой победы');
     case 'hero':
-      return `Уровень героя ${u.level} (сейчас ${heroLvl})`;
+      return t('Уровень героя {0} (сейчас {1})', { 0: u.level, 1: heroLvl });
     case 'days':
-      return `Тренируйся ${u.days} разных дней (уже ${Math.min(u.days, trainedDays(p))})`;
+      return t('Тренируйся {0} разных дней (уже {1})', { 0: u.days, 1: Math.min(u.days, trainedDays(p)) });
     case 'boss':
-      return 'Победи первого хранителя земли';
+      return t('Победи первого хранителя земли');
     case 'space':
-      return 'Открой космос: победи хранителя последней земли королевства';
+      return t('Открой космос: победи хранителя последней земли королевства');
     case 'shop':
-      return `Купец Фёдор отдаст за ${u.price} монет`;
+      return t('Купец Фёдор отдаст за {0} монет', { 0: u.price });
   }
 }
 
@@ -169,9 +170,9 @@ export function petBonus(p: Progress, now: number): PetBonus {
 export function bonusText(b: PetBonus): string {
   const pct = (x: number) => `${Math.round(x * 1000) / 10}`.replace('.', ',');
   const parts: string[] = [];
-  if (b.damage) parts.push(`+${pct(b.damage)}% урона`);
-  if (b.coins) parts.push(`+${pct(b.coins)}% монет`);
-  if (b.chest) parts.push(`${pct(b.chest)}% шанс сундучка`);
+  if (b.damage) parts.push(t('+{0}% урона', { 0: pct(b.damage) }));
+  if (b.coins) parts.push(t('+{0}% монет', { 0: pct(b.coins) }));
+  if (b.chest) parts.push(t('{0}% шанс сундучка', { 0: pct(b.chest) }));
   return parts.join(' · ');
 }
 

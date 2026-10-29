@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { flush, reportError } from './telemetry';
+import { t } from './i18n';
 
 /** Падение интерфейса: вместо чёрного экрана — понятное сообщение и перезапуск. Ошибка уходит в отчёт. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -19,10 +20,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
     return (
       <div className="onboarding crash">
         <div className="onb-card">
-          <div className="onb-title">Что-то сломалось</div>
-          <div className="onb-text">Игра споткнулась, но прогресс сохранён. Мы уже получили отчёт об ошибке и починим её. Перезапусти, чтобы продолжить.</div>
+          <div className="onb-title">{t('Что-то сломалось')}</div>
+          <div className="onb-text">{t('Игра споткнулась, но прогресс сохранён. Мы уже получили отчёт об ошибке и починим её. Перезапусти, чтобы продолжить.')}</div>
           <button className="primary" onClick={() => location.reload()}>
-            Перезапустить
+            {t('Перезапустить')}
           </button>
         </div>
       </div>

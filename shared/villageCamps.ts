@@ -4,6 +4,7 @@
  */
 import { sizeOf, type BuildingType, type Res } from './village';
 import type { BaseBuilding, BattleBase, TroopId } from './villageBattle';
+import { t } from '../src/i18n';
 
 export interface FortSpec {
   th: number;
@@ -52,9 +53,9 @@ export function fortress(f: FortSpec): BattleBase {
   const outer: [number, number][] = [[5, 10], [17, 10], [10, 5], [10, 17], [5, 5], [17, 5], [5, 17], [17, 17]];
   const outside: [number, number][] = [[1, 1], [21, 1], [1, 21], [21, 21], [1, 11], [21, 11], [11, 1], [11, 21]];
   const slots = [...inner, ...outer];
-  const put = (t: BuildingType, l: number, list: [number, number][]) => {
+  const put = (tm: BuildingType, l: number, list: [number, number][]) => {
     const s = list.shift();
-    if (s) b.push({ i: 0, t, x: s[0], y: s[1], l });
+    if (s) b.push({ i: 0, t: tm, x: s[0], y: s[1], l });
   };
   for (let k = 0; k < f.towers; k++) put('tower', f.towerL, slots);
   for (let k = 0; k < f.catapults; k++) put('catapult', f.catL, slots);
@@ -87,14 +88,14 @@ export interface Camp {
 }
 
 export const CAMPS: Camp[] = [
-  { id: 1, name: 'Застава лентяев', th: 1, loot: { wood: 150, stone: 150, gold: 80 }, hint: 'Одна башня — высаживай воинов с другой стороны.', spec: { th: 1, towers: 1, towerL: 1, catapults: 0, catL: 1, rings: 0, wallL: 1, storages: 0, collectors: 2, l: 1 } },
-  { id: 2, name: 'Диванный хутор', th: 1, loot: { wood: 300, stone: 300, gold: 150 }, hint: 'Две башни прикрывают друг друга. Бей с угла.', spec: { th: 1, towers: 2, towerL: 1, catapults: 0, catL: 1, rings: 0, wallL: 1, storages: 1, collectors: 3, l: 1 } },
-  { id: 3, name: 'Подушечный острог', th: 2, loot: { wood: 500, stone: 500, gold: 250 }, hint: 'Ратуша за стеной: воины её проломят, лучники стреляют поверх.', spec: { th: 2, towers: 2, towerL: 2, catapults: 0, catL: 1, rings: 1, wallL: 1, storages: 1, collectors: 3, l: 2 } },
-  { id: 4, name: 'Крепость Зевоты', th: 2, loot: { wood: 800, stone: 800, gold: 400 }, hint: 'Катапульта бьёт по толпе — не высаживай всех в одно место. И берегись спрятанной бомбы.', spec: { th: 3, towers: 3, towerL: 2, catapults: 1, catL: 1, rings: 1, wallL: 2, storages: 2, collectors: 4, l: 2, bombs: 1, trapL: 1 } },
-  { id: 5, name: 'Сонная цитадель', th: 3, loot: { wood: 1200, stone: 1200, gold: 600 }, hint: 'Великаны примут удар башен на себя.', spec: { th: 3, towers: 4, towerL: 3, catapults: 1, catL: 2, rings: 2, wallL: 2, storages: 2, collectors: 5, l: 3, gap: true, bombs: 2, snares: 1, trapL: 2 } },
-  { id: 6, name: 'Бастион Пледа', th: 4, loot: { wood: 2000, stone: 2000, gold: 1000 }, hint: 'Подрывники откроют путь к ратуше.', spec: { th: 4, towers: 4, towerL: 4, catapults: 2, catL: 3, rings: 2, wallL: 3, storages: 2, collectors: 6, l: 4, bombs: 3, snares: 2, trapL: 3 } },
-  { id: 7, name: 'Твердыня Прокрастинации', th: 5, loot: { wood: 3000, stone: 3000, gold: 1500 }, hint: 'Целитель за великанами — и стены не помеха. У ратуши дежурит страж Князя.', spec: { th: 5, towers: 4, towerL: 5, catapults: 3, catL: 4, rings: 2, wallL: 4, storages: 3, collectors: 6, l: 5, bombs: 4, snares: 3, trapL: 4, hero: 8 } },
-  { id: 8, name: 'Диванный дворец', th: 6, loot: { wood: 5000, stone: 5000, gold: 2500 }, hint: 'Логово самого Князя: он сам охраняет ратушу. Приходи с полным лагерем.', spec: { th: 6, towers: 4, towerL: 6, catapults: 4, catL: 5, rings: 2, wallL: 5, storages: 4, collectors: 8, l: 6, bombs: 5, snares: 4, trapL: 5, hero: 15 } },
+  { id: 1, name: t('Застава лентяев'), th: 1, loot: { wood: 150, stone: 150, gold: 80 }, hint: t('Одна башня — высаживай воинов с другой стороны.'), spec: { th: 1, towers: 1, towerL: 1, catapults: 0, catL: 1, rings: 0, wallL: 1, storages: 0, collectors: 2, l: 1 } },
+  { id: 2, name: t('Диванный хутор'), th: 1, loot: { wood: 300, stone: 300, gold: 150 }, hint: t('Две башни прикрывают друг друга. Бей с угла.'), spec: { th: 1, towers: 2, towerL: 1, catapults: 0, catL: 1, rings: 0, wallL: 1, storages: 1, collectors: 3, l: 1 } },
+  { id: 3, name: t('Подушечный острог'), th: 2, loot: { wood: 500, stone: 500, gold: 250 }, hint: t('Ратуша за стеной: воины её проломят, лучники стреляют поверх.'), spec: { th: 2, towers: 2, towerL: 2, catapults: 0, catL: 1, rings: 1, wallL: 1, storages: 1, collectors: 3, l: 2 } },
+  { id: 4, name: t('Крепость Зевоты'), th: 2, loot: { wood: 800, stone: 800, gold: 400 }, hint: t('Катапульта бьёт по толпе — не высаживай всех в одно место. И берегись спрятанной бомбы.'), spec: { th: 3, towers: 3, towerL: 2, catapults: 1, catL: 1, rings: 1, wallL: 2, storages: 2, collectors: 4, l: 2, bombs: 1, trapL: 1 } },
+  { id: 5, name: t('Сонная цитадель'), th: 3, loot: { wood: 1200, stone: 1200, gold: 600 }, hint: t('Великаны примут удар башен на себя.'), spec: { th: 3, towers: 4, towerL: 3, catapults: 1, catL: 2, rings: 2, wallL: 2, storages: 2, collectors: 5, l: 3, gap: true, bombs: 2, snares: 1, trapL: 2 } },
+  { id: 6, name: t('Бастион Пледа'), th: 4, loot: { wood: 2000, stone: 2000, gold: 1000 }, hint: t('Подрывники откроют путь к ратуше.'), spec: { th: 4, towers: 4, towerL: 4, catapults: 2, catL: 3, rings: 2, wallL: 3, storages: 2, collectors: 6, l: 4, bombs: 3, snares: 2, trapL: 3 } },
+  { id: 7, name: t('Твердыня Прокрастинации'), th: 5, loot: { wood: 3000, stone: 3000, gold: 1500 }, hint: t('Целитель за великанами — и стены не помеха. У ратуши дежурит страж Князя.'), spec: { th: 5, towers: 4, towerL: 5, catapults: 3, catL: 4, rings: 2, wallL: 4, storages: 3, collectors: 6, l: 5, bombs: 4, snares: 3, trapL: 4, hero: 8 } },
+  { id: 8, name: t('Диванный дворец'), th: 6, loot: { wood: 5000, stone: 5000, gold: 2500 }, hint: t('Логово самого Князя: он сам охраняет ратушу. Приходи с полным лагерем.'), spec: { th: 6, towers: 4, towerL: 6, catapults: 4, catL: 5, rings: 2, wallL: 5, storages: 4, collectors: 8, l: 6, bombs: 5, snares: 4, trapL: 5, hero: 15 } },
 ];
 export const campById = (id: number) => CAMPS.find((c) => c.id === id);
 export const campBase = (c: Camp) => fortress(c.spec);

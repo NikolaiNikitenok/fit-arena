@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { dayKey, type Progress } from './progress';
+import { locale, t, pl } from '../i18n';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 export const EX_COLOR: Record<Exercise, string> = { squat: '#ffb46b', pushup: '#ff7a59', situp: '#7dd3fc', plank: '#6ee7b7' };
-const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const MONTHS = [t('Январь'), t('Февраль'), t('Март'), t('Апрель'), t('Май'), t('Июнь'), t('Июль'), t('Август'), t('Сентябрь'), t('Октябрь'), t('Ноябрь'), t('Декабрь')];
 const DAY = 86_400_000;
 
 /** Календарь месяца: чем больше повторов, тем ярче день. */
@@ -26,21 +27,21 @@ export function Calendar({ progress, now }: { progress: Progress; now: number })
   return (
     <div className="calendar">
       <div className="cal-head">
-        <button className="cal-nav" disabled={!canBack} onClick={() => setShift(shift - 1)} aria-label="Раньше">
+        <button className="cal-nav" disabled={!canBack} onClick={() => setShift(shift - 1)} aria-label={t('Раньше')}>
           ‹
         </button>
         <div className="cal-title">
           {MONTHS[first.getMonth()]} {first.getFullYear() !== base.getFullYear() ? first.getFullYear() : ''}
           <div className="muted">
-            {active} {active === 1 ? 'день' : active > 1 && active < 5 ? 'дня' : 'дней'} с тренировкой · {total.toLocaleString('ru')} повторов
+            {t('{0} {1} с тренировкой · {2} повторов', { 0: active, 1: pl(active, ['день', 'дня', 'дней'], ['day', 'days']), 2: total.toLocaleString(locale()) })}
           </div>
         </div>
-        <button className="cal-nav" disabled={shift >= 0} onClick={() => setShift(shift + 1)} aria-label="Позже">
+        <button className="cal-nav" disabled={shift >= 0} onClick={() => setShift(shift + 1)} aria-label={t('Позже')}>
           ›
         </button>
       </div>
       <div className="cal-grid">
-        {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map((d) => (
+        {[t('пн'), t('вт'), t('ср'), t('чт'), t('пт'), t('сб'), t('вс')].map((d) => (
           <span key={d} className="cal-wd">
             {d}
           </span>
@@ -52,7 +53,7 @@ export function Calendar({ progress, now }: { progress: Progress; now: number })
           const key = dayKey(new Date(first.getFullYear(), first.getMonth(), i + 1).getTime());
           const level = r ? Math.min(4, 1 + Math.floor((r / max) * 4)) : 0;
           return (
-            <span key={i} className={`cal-day l${level} ${key === today ? 'today' : ''} ${key > today ? 'future' : ''}`} title={`${r} повторов`}>
+            <span key={i} className={`cal-day l${level} ${key === today ? 'today' : ''} ${key > today ? 'future' : ''}`} title={t('{0} повторов', { 0: r })}>
               {i + 1}
             </span>
           );
@@ -88,7 +89,7 @@ export function RepsChart({ progress, now }: { progress: Progress; now: number }
   const bestMax = Math.max(10, ...lines.flatMap((l) => l.pts));
   return (
     <div className="chart">
-      <div className="chart-title">Повторы за 30 дней</div>
+      <div className="chart-title">{t('Повторы за 30 дней')}</div>
       <svg viewBox={`0 0 ${W} ${H + 14}`} className="chart-svg" aria-hidden>
         {[0.5, 1].map((f) => (
           <line key={f} x1={0} x2={W} y1={H - H * f} y2={H - H * f} className="chart-grid" />
@@ -126,7 +127,7 @@ export function RepsChart({ progress, now }: { progress: Progress; now: number }
       </div>
       {lines.some((l) => l.pts.length > 1) && (
         <>
-          <div className="chart-title">Лучший подход: как растёт сила</div>
+          <div className="chart-title">{t('Лучший подход: как растёт сила')}</div>
           <svg viewBox={`0 0 ${W} 90`} className="chart-svg" aria-hidden>
             {lines.map(
               (l) =>

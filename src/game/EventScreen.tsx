@@ -35,6 +35,7 @@ import {
   fmtWeekend,
   triesLeft,
 } from './event';
+import { locale, t } from '../i18n';
 
 // Экран события выходных: рассказ жителя, общий запас здоровья босса, попытки на сегодня и награда.
 
@@ -92,8 +93,8 @@ type Phase = 'intro' | 'lobby' | 'fight' | 'done';
 export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 15000);
-    return () => clearInterval(t);
+    const tm = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(tm);
   }, []);
   const w = eventWindow(now);
   const boss = eventBoss(w.key);
@@ -129,7 +130,7 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
 
   const won = state.won;
   const share = state.hpMax ? hpLeft / state.hpMax : 1;
-  const tag = w.live ? `Событие выходных · до конца ${fmtLeft(w.end - now)}` : `Событие выходных · ${fmtWeekend(w)}`;
+  const tag = w.live ? t('Событие выходных · до конца {0}', { 0: fmtLeft(w.end - now) }) : t('Событие выходных · {0}', { 0: fmtWeekend(w) });
   const canFight = w.live && !won && tries > 0;
 
   return (
@@ -142,24 +143,24 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
             <div className="level-tag" style={{ color: boss.glow }}>
               {tag}
             </div>
-            <div className="result-title small">{phase === 'done' && last?.killed ? 'Босс повержен!' : boss.name}</div>
+            <div className="result-title small">{phase === 'done' && last?.killed ? t('Босс повержен!') : boss.name}</div>
             <div className="muted light">{boss.title}</div>
             {phase === 'done' && last && (
               <div className="event-last">
-                {last.reps ? `${last.reps} повторов · ${last.dealt.toLocaleString('ru')} урона` : 'Попытка не засчитана: ни одного повтора'}
+                {last.reps ? t('{0} повторов · {1} урона', { 0: last.reps, 1: last.dealt.toLocaleString(locale()) }) : t('Попытка не засчитана: ни одного повтора')}
               </div>
             )}
             <div className="event-hp">
               <div className="event-hp-row">
                 <span>
-                  <Heart size={13} className="heart" /> {won ? 'Повержен' : `${hpLeft.toLocaleString('ru')} / ${state.hpMax.toLocaleString('ru')} HP`}
+                  <Heart size={13} className="heart" /> {won ? t('Повержен') : `${hpLeft.toLocaleString(locale())} / ${state.hpMax.toLocaleString(locale())} HP`}
                 </span>
-                <span>{Math.round((1 - share) * 100)}% урона</span>
+                <span>{t('{0}% урона', { 0: Math.round((1 - share) * 100) })}</span>
               </div>
               <div className="bar">
                 <div className="bar-fill" style={{ width: `${share * 100}%`, background: boss.glow }} />
               </div>
-              <div className="event-hp-note">Урон копится за все попытки этих выходных</div>
+              <div className="event-hp-note">{t('Урон копится за все попытки этих выходных')}</div>
             </div>
             {phase === 'done' && last?.killed && last.reward ? (
               <EventRewardCard reward={last.reward} />
@@ -171,10 +172,10 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
                     {outfit.name}
                   </div>
                   <div className="muted">
-                    {RARITY_NAMES[outfit.rarity]} облик · только из события
+                    {t('{0} облик · только из события', { 0: RARITY_NAMES[outfit.rarity] })}
                   </div>
                   <div className="event-reward-more">
-                    <Coin size={13} className="coin" /> {EVENT_COINS} · <Chest size={16} /> сундук
+                    <Coin size={13} className="coin" /> {EVENT_COINS} · <Chest size={16} /> {t('сундук')}
                   </div>
                 </div>
               </div>
@@ -182,13 +183,13 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
             {phase === 'done' && last?.killed ? (
               <Remark line={eventBossSay(boss, boss.defeat)} />
             ) : !w.live ? (
-              <Remark line={say(boss.npc, `${boss.story[0]} Жду тебя ${fmtDays(daysUntil(w, now))}, в выходные ${fmtWeekend(w)}.`)} />
+              <Remark line={say(boss.npc, t('{0} Жду тебя {1}, в выходные {2}.', { 0: boss.story[0], 1: fmtDays(daysUntil(w, now)), 2: fmtWeekend(w) }))} />
             ) : won ? (
-              <Remark line={say(boss.npc, 'Ты его одолел! Облик уже в инвентаре. В следующем месяце придёт новый гость.')} />
+              <Remark line={say(boss.npc, t('Ты его одолел! Облик уже в инвентаре. В следующем месяце придёт новый гость.'))} />
             ) : (
               <>
                 <div className="event-tries">
-                  Попытки сегодня: <b>{tries}</b> из {EVENT_TRIES_PER_DAY} · жизни не тратятся · {EVENT_ATTEMPT_S} с
+                  {t('Попытки сегодня:')} <b>{tries}</b> {t('из {0} · жизни не тратятся · {1} с', { 0: EVENT_TRIES_PER_DAY, 1: EVENT_ATTEMPT_S })}
                 </div>
                 {tries > 0 && (
                   <div className="swap-row">
@@ -205,7 +206,7 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
         )}
       </div>
       <div className="hint-line">
-        <Swords size={13} /> урон за повтор {power.damage} · <Heart size={12} className="heart" /> {power.hearts} сердца: стоишь дольше {EVENT_IDLE_MS / 1000} с — босс бьёт
+        <Swords size={13} /> {t('урон за повтор {0} ·', { 0: power.damage })} <Heart size={12} className="heart" /> {t('{0} сердца: стоишь дольше {1} с — босс бьёт', { 0: power.hearts, 1: EVENT_IDLE_MS / 1000 })}
       </div>
       {canFight ? (
         <button
@@ -216,16 +217,16 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
             setPhase('fight');
           }}
         >
-          {phase === 'done' ? 'Ещё попытка' : 'В бой'}
+          {phase === 'done' ? t('Ещё попытка') : t('В бой')}
           <span className="btn-cost">{tries}/{EVENT_TRIES_PER_DAY}</span>
         </button>
       ) : (
         <button className="primary" disabled>
-          {!w.live ? `Начнётся ${fmtDays(daysUntil(w, now))}` : won ? 'Босс повержен' : 'Попытки кончились: завтра ещё три'}
+          {!w.live ? t('Начнётся {0}', { 0: fmtDays(daysUntil(w, now)) }) : won ? t('Босс повержен') : t('Попытки кончились: завтра ещё три')}
         </button>
       )}
       <button className="link" onClick={onClose}>
-        Назад
+        {t('Назад')}
       </button>
     </>
   );
@@ -236,10 +237,10 @@ function EventRewardCard({ reward }: { reward: EventReward }) {
     <div className="drop event-drop">
       <OutfitFace id={reward.outfit.id} size={44} />
       <div>
-        <div className="drop-title">Облик: {reward.outfit.name}</div>
+        <div className="drop-title">{t('Облик: {0}', { 0: reward.outfit.name })}</div>
         <div className="muted">
-          +{reward.coins + reward.chestCoins} монет
-          {reward.gear ? ` · в сундуке: ${reward.gear.name} (${gearText(reward.gear)})` : ' · сундук с монетами'}
+          {t('+{0} монет', { 0: reward.coins + reward.chestCoins })}
+          {reward.gear ? t(' · в сундуке: {0} ({1})', { 0: reward.gear.name, 1: gearText(reward.gear) }) : t(' · сундук с монетами')}
         </div>
       </div>
     </div>
@@ -317,7 +318,7 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
         },
       )
       .catch((e) => {
-        setError(e instanceof Error ? e.message : 'не загрузилась модель распознавания');
+        setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
         setPhase('error');
       });
     return () => camera.stop();
@@ -348,7 +349,7 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
             <div className="bar-fill" style={{ width: `${(hpNow / hpMax) * 100}%`, background: boss.glow }} />
           </div>
           <div className="mhud-label">
-            {hpNow.toLocaleString('ru')} / {hpMax.toLocaleString('ru')} HP · {EXERCISE_LABELS[exercise]} · урон за попытку {dealt}
+            {hpNow.toLocaleString(locale())} / {hpMax.toLocaleString(locale())} HP · {EXERCISE_LABELS[exercise]} · {t('урон за попытку {0}', { 0: dealt })}
           </div>
         </div>
         {phase === 'fight' && reps > 0 && (
@@ -359,13 +360,13 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
         {(phase === 'prep' || phase === 'loading') && (
           <div className="countdown">
             <div className="countdown-num">{phase === 'loading' ? '…' : left}</div>
-            <div>{phase === 'loading' ? 'Включаю камеру' : 'Займи позицию'}</div>
+            <div>{phase === 'loading' ? t('Включаю камеру') : t('Займи позицию')}</div>
           </div>
         )}
         {phase === 'error' && (
           <div className="result">
-            <div className="result-title">Камера не включилась</div>
-            <div className="muted light">{error} · попытка не потрачена</div>
+            <div className="result-title">{t('Камера не включилась')}</div>
+            <div className="muted light">{t('{0} · попытка не потрачена', { 0: error })}</div>
           </div>
         )}
         <div className={`pip ${camera.active ? '' : 'hidden'}`}>
@@ -374,14 +375,14 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
           <div className="pip-count">{reps}</div>
         </div>
       </div>
-      <div className="hint-line">{phase === 'fight' ? (camera.hint ?? 'Каждый повтор — удар по боссу!') : `Урон за повтор ${power.damage}`}</div>
+      <div className="hint-line">{phase === 'fight' ? (camera.hint ?? t('Каждый повтор — удар по боссу!')) : t('Урон за повтор {0}', { 0: power.damage })}</div>
       {phase === 'error' ? (
         <button className="primary" onClick={() => onDone(0, 0)}>
-          Назад
+          {t('Назад')}
         </button>
       ) : (
         <button className="secondary" onClick={finish}>
-          Закончить попытку
+          {t('Закончить попытку')}
         </button>
       )}
     </>

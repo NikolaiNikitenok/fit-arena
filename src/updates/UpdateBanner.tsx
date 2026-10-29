@@ -5,6 +5,7 @@ import { useIsBusy } from './busy';
 import { ChangeEntry } from './changelog';
 import { applyUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate } from './updates';
 import './updates.css';
+import { t, locale } from '../i18n';
 
 const SNOOZE = 10 * 60_000;
 
@@ -25,8 +26,8 @@ export function UpdateBanner() {
   useEffect(() => {
     initUpdates();
     // Что нового в этой сборке: чуть позже первого кадра, чтобы не мешать заставке.
-    const t = setTimeout(() => setFresh(unseenEntries()), 1800);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setFresh(unseenEntries()), 1800);
+    return () => clearTimeout(tm);
   }, []);
 
   // Закончил бой — снова можно предложить обновление.
@@ -39,8 +40,8 @@ export function UpdateBanner() {
   }, [busy, wasBusy]);
   useEffect(() => {
     if (!snoozed) return;
-    const t = setTimeout(() => setSnoozed(false), SNOOZE);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setSnoozed(false), SNOOZE);
+    return () => clearTimeout(tm);
   }, [snoozed]);
 
   const mode = busy ? null : remote && !snoozed ? 'update' : fresh.length ? 'fresh' : null;
@@ -69,11 +70,11 @@ export function UpdateBanner() {
             <UpdateIcon done={mode === 'fresh'} />
           </div>
           <div className="upd-titles">
-            <div className="upd-kicker">{mode === 'update' ? 'Вышло обновление' : 'Игра обновилась'}</div>
-            <div className="upd-title">{entries.length === 1 ? entries[0].title : entries.length ? 'Что нового' : 'Улучшения и исправления'}</div>
+            <div className="upd-kicker">{mode === 'update' ? t('Вышло обновление') : t('Игра обновилась')}</div>
+            <div className="upd-title">{entries.length === 1 ? t(entries[0].title) : entries.length ? t('Что нового') : t('Улучшения и исправления')}</div>
           </div>
           {mode === 'fresh' && (
-            <button className="upd-x" aria-label="Закрыть" onClick={() => close(() => setFresh([]))}>
+            <button className="upd-x" aria-label={t('Закрыть')} onClick={() => close(() => setFresh([]))}>
               <Cross size={16} />
             </button>
           )}
@@ -82,23 +83,23 @@ export function UpdateBanner() {
           <div className="upd-list">
             {entries.map((e) => (
               <div key={e.n} className="upd-entry">
-                {entries.length > 1 && <div className="upd-entry-title">{e.title}</div>}
+                {entries.length > 1 && <div className="upd-entry-title">{t(e.title)}</div>}
                 {e.items.map((it, i) => (
                   <div key={i} className="upd-item">
                     <Check size={14} />
-                    <span>{it}</span>
+                    <span>{t(it)}</span>
                   </div>
                 ))}
               </div>
             ))}
           </div>
         ) : (
-          <div className="upd-plain">Игра стала стабильнее и быстрее. Обновление займёт пару секунд, прогресс сохранится.</div>
+          <div className="upd-plain">{t('Игра стала стабильнее и быстрее. Обновление займёт пару секунд, прогресс сохранится.')}</div>
         )}
         {mode === 'update' ? (
           <div className="upd-actions">
             <button className="upd-later" onClick={() => close(() => setSnoozed(true))}>
-              Позже
+              {t('Позже')}
             </button>
             <button
               className="upd-go"
@@ -108,13 +109,13 @@ export function UpdateBanner() {
                 void applyUpdate(remote!.version);
               }}
             >
-              {updating ? 'Сохраняем…' : 'Обновить'}
+              {updating ? t('Сохраняем…') : t('Обновить')}
             </button>
           </div>
         ) : (
           <div className="upd-actions">
             <button className="upd-go" onClick={() => close(() => setFresh([]))}>
-              Отлично
+              {t('Отлично')}
             </button>
           </div>
         )}
@@ -138,12 +139,12 @@ export function ChangesList({ entries }: { entries: ChangeEntry[] }) {
     <div className="upd-history">
       {entries.map((e) => (
         <div key={e.n} className="upd-history-entry">
-          <div className="upd-history-date">{new Date(e.date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-          <div className="upd-history-title">{e.title}</div>
+          <div className="upd-history-date">{new Date(e.date + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          <div className="upd-history-title">{t(e.title)}</div>
           {e.items.map((it, i) => (
             <div key={i} className="upd-item">
               <Check size={14} />
-              <span>{it}</span>
+              <span>{t(it)}</span>
             </div>
           ))}
         </div>

@@ -36,6 +36,7 @@ import './pets.css';
 import { PetEntry, PetFace } from './PetEntry';
 import { Canvas3D } from '../three/Canvas3D';
 import { Sheet } from '../Sheet';
+import { t } from '../i18n';
 
 // Кнопка и мордочка — в лёгком модуле главного экрана; отсюда тоже доступны.
 export { PetEntry, PetFace };
@@ -47,10 +48,10 @@ const heroLvl = (p: Progress) => heroLevel(heroXp(p)).level;
 const MOOD_TEXT = (p: Progress, now: number, name: string): { cls: string; title: string; text: string } => {
   const mood = petMood(p, now);
   if (mood === 'happy')
-    return { cls: 'happy', title: 'Сыт и доволен', text: `Сегодня ${name} получил лакомство за тренировку (+${TREAT_XP} опыта). Бонус действует.` };
+    return { cls: 'happy', title: t('Сыт и доволен'), text: t('Сегодня {0} получил лакомство за тренировку (+{1} опыта). Бонус действует.', { 0: name, 1: TREAT_XP }) };
   if (mood === 'sad')
-    return { cls: 'sad', title: 'Скучает', text: `${SAD_AFTER_DAYS - 1} дня без тренировок, и бонус пока не действует. Одна тренировка — и ${name} снова рядом в бою.` };
-  return { cls: 'hungry', title: 'Ждёт лакомства', text: `Первая тренировка дня — это лакомство: +${TREAT_XP} опыта. День отдыха ${name} понимает.` };
+    return { cls: 'sad', title: t('Скучает'), text: t('{0} дня без тренировок, и бонус пока не действует. Одна тренировка — и {1} снова рядом в бою.', { 0: SAD_AFTER_DAYS - 1, 1: name }) };
+  return { cls: 'hungry', title: t('Ждёт лакомства'), text: t('Первая тренировка дня — это лакомство: +{0} опыта. День отдыха {1} понимает.', { 0: TREAT_XP, 1: name }) };
 };
 
 /** Питомец на подставке: тап — прыжок. */
@@ -102,15 +103,15 @@ export function PetScreen({ progress, setProgress, onClose }: { progress: Progre
   };
   const buy = (d: PetDef) => {
     const next = buyPet(progress, d.id);
-    if (!next) return setMsg('Не хватает монет.');
+    if (!next) return setMsg(t('Не хватает монет.'));
     setProgress(save(next));
-    setMsg(`${d.kind} теперь твой!`);
+    setMsg(t('{0} теперь твой!', { 0: d.kind }));
     sfx('chest');
   };
 
   return (
     <Sheet onClose={onClose} bodyClassName="pet-sheet">
-      <div className="level-title">Питомцы</div>
+      <div className="level-title">{t('Питомцы')}</div>
       {def && id ? (
         <ActivePet progress={progress} def={def} hop={hop} onHop={() => setHop((h) => h + 1)} editing={editing} draft={draft} setDraft={setDraft}
           onEdit={() => {
@@ -128,11 +129,11 @@ export function PetScreen({ progress, setProgress, onClose }: { progress: Progre
       ) : (
         <div className="pet-empty">
           <span className="pet-entry-egg big" />
-          <div className="muted">Мастер Гром нашёл яйцо и отдаст его после твоей первой победы. Пройди первый уровень на карте.</div>
+          <div className="muted">{t('Мастер Гром нашёл яйцо и отдаст его после твоей первой победы. Пройди первый уровень на карте.')}</div>
         </div>
       )}
       {msg && <div className="pet-msg">{msg}</div>}
-      <div className="section-title">Все питомцы</div>
+      <div className="section-title">{t('Все питомцы')}</div>
       <div className="pet-list">
         {PETS.map((d) => {
           const open = petOpen(progress, d, lvl);
@@ -144,21 +145,21 @@ export function PetScreen({ progress, setProgress, onClose }: { progress: Progre
               <div className="pet-row-meta">
                 <div className="pet-row-name">
                   {open ? petName(progress, d.id) : d.kind}
-                  {fresh.includes(d.id) && !on && <span className="pet-new">новый</span>}
+                  {fresh.includes(d.id) && !on && <span className="pet-new">{t('новый')}</span>}
                 </div>
                 {open && (
                   <div className="pet-row-kind">
-                    {d.kind} · ур. {pl}, {STAGE_NAMES[petStage(pl)]}
+                    {t('{0} · ур. {1}, {2}', { 0: d.kind, 1: pl, 2: STAGE_NAMES[petStage(pl)] })}
                   </div>
                 )}
-                <div className="pet-row-bonus">{open ? bonusText(petBonusAt(d, pl)) : `до ${bonusText(petBonusAt(d, 20))}`}</div>
+                <div className="pet-row-bonus">{open ? bonusText(petBonusAt(d, pl)) : t('до {0}', { 0: bonusText(petBonusAt(d, 20)) })}</div>
                 <div className="muted">{open ? d.text : unlockText(progress, d, lvl)}</div>
               </div>
               {on ? (
-                <span className="pet-on">рядом</span>
+                <span className="pet-on">{t('рядом')}</span>
               ) : open ? (
                 <button className="small-btn" onClick={() => pick(d)}>
-                  Взять
+                  {t('Взять')}
                 </button>
               ) : d.unlock.kind === 'shop' ? (
                 <button className="small-btn" disabled={progress.coins < d.unlock.price} onClick={() => buy(d)}>
@@ -170,7 +171,7 @@ export function PetScreen({ progress, setProgress, onClose }: { progress: Progre
         })}
       </div>
       <div className="muted pet-help">
-        Опыт получает тот, кто рядом: 1 повтор = 1 опыт в любом режиме. Облик меняется на 7-м и 14-м уровне, бонус растёт до 20-го.
+        {t('Опыт получает тот, кто рядом: 1 повтор = 1 опыт в любом режиме. Облик меняется на 7-м и 14-м уровне, бонус растёт до 20-го.')}
       </div>
     </Sheet>
   );
@@ -199,13 +200,13 @@ function ActivePet({ progress, def, hop, onHop, editing, draft, setDraft, onEdit
           <>
             <input className="pet-name-input" value={draft} maxLength={14} autoFocus onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onSave()} />
             <button className="small-btn" onClick={onSave}>
-              Готово
+              {t('Готово')}
             </button>
           </>
         ) : (
           <>
             <div className="pet-name">{name}</div>
-            <button className="pet-rename" onClick={onEdit} aria-label="Переименовать">
+            <button className="pet-rename" onClick={onEdit} aria-label={t('Переименовать')}>
               <svg width={16} height={16} viewBox="0 0 24 24" aria-hidden>
                 <path d="M4 20h4l10-10-4-4L4 16zM15 5l4 4 1.5-1.5a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0z" fill="currentColor" />
               </svg>
@@ -214,25 +215,25 @@ function ActivePet({ progress, def, hop, onHop, editing, draft, setDraft, onEdit
         )}
       </div>
       <div className="muted pet-kind">
-        {def.kind} · уровень {L.level}
-        {L.level >= 20 ? ' · максимальный' : ''}
+        {t('{0} · уровень {1}', { 0: def.kind, 1: L.level })}
+        {L.level >= 20 ? t(' · максимальный') : ''}
       </div>
       <div className="pet-xp">
         <div className="bar big">
           <div className="bar-fill" style={{ width: `${(L.into / L.need) * 100}%`, background: def.color }} />
         </div>
-        <span>{L.level >= 20 ? 'Вырос!' : `${L.into} / ${L.need} опыта`}</span>
+        <span>{L.level >= 20 ? t('Вырос!') : t('{0} / {1} опыта', { 0: L.into, 1: L.need })}</span>
       </div>
       <div className="pet-stages">
         {STAGE_NAMES.map((s, i) => (
           <span key={s} className={i <= stage ? 'on' : ''}>
-            {s} <small>ур. {[1, 7, 14][i]}</small>
+            {s} <small>{t('ур. {0}', { 0: [1, 7, 14][i] })}</small>
           </span>
         ))}
       </div>
       <div className={`pet-bonus ${sad ? 'off' : ''}`}>
-        <b>Бонус:</b> {bonusText(bonus)}
-        {L.level < 20 && <small> · на 20-м: {bonusText(petBonusAt(def, 20))}</small>}
+        <b>{t('Бонус:')}</b> {bonusText(bonus)}
+        {L.level < 20 && <small> {t('· на 20-м: {0}', { 0: bonusText(petBonusAt(def, 20)) })}</small>}
       </div>
       <div className={`pet-mood ${mood.cls}`}>
         <b>{mood.title}</b>
@@ -388,8 +389,8 @@ export function PetHatch({ onDone, onLater }: { onDone: (name: string) => void; 
   const [name, setName] = useState(petById('dragon')!.name);
   const lines = useMemo(
     () => [
-      say('grom', 'Погоди, ученик. Пока ты сражался, под старым дубом я нашёл вот это. Яйцо тёплое и шевелится.'),
-      say('grom', 'Драконы вылупляются, только когда рядом кто-то тренируется. Похоже, оно выбрало тебя. Постучи по скорлупе.'),
+      say('grom', t('Погоди, ученик. Пока ты сражался, под старым дубом я нашёл вот это. Яйцо тёплое и шевелится.')),
+      say('grom', t('Драконы вылупляются, только когда рядом кто-то тренируется. Похоже, оно выбрало тебя. Постучи по скорлупе.')),
     ],
     [],
   );
@@ -405,7 +406,7 @@ export function PetHatch({ onDone, onLater }: { onDone: (name: string) => void; 
     <div className="pet-hatch">
       {step === 'talk' ? (
         <>
-          <div className="pet-hatch-title">Подарок Мастера Грома</div>
+          <div className="pet-hatch-title">{t('Подарок Мастера Грома')}</div>
           <div className="pet-hatch-scene dim">
             <Canvas3D camera={{ position: [0, 1.0, 3.1], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 0.35, 0)}>
               <EggScene taps={0} hatched={false} />
@@ -415,7 +416,7 @@ export function PetHatch({ onDone, onLater }: { onDone: (name: string) => void; 
         </>
       ) : (
         <>
-          <div className="pet-hatch-title">{hatched ? 'Это дракончик!' : 'Постучи по яйцу'}</div>
+          <div className="pet-hatch-title">{hatched ? t('Это дракончик!') : t('Постучи по яйцу')}</div>
           <div className="pet-hatch-scene" onClick={tap}>
             <Canvas3D camera={{ position: [0, 1.0, 3.1], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 0.35, 0)}>
               <EggScene taps={taps} hatched={hatched} />
@@ -430,20 +431,20 @@ export function PetHatch({ onDone, onLater }: { onDone: (name: string) => void; 
           </div>
           {step === 'name' ? (
             <div className="pet-hatch-card">
-              <Remark line={say('grom', 'Корми его тренировками: каждый твой повтор — опыт ему, а первая тренировка дня — лакомство. Как назовёшь малыша?')} />
+              <Remark line={say('grom', t('Корми его тренировками: каждый твой повтор — опыт ему, а первая тренировка дня — лакомство. Как назовёшь малыша?'))} />
               <input className="pet-name-input" value={name} maxLength={14} onChange={(e) => setName(e.target.value)} />
               {badName(name) && <div className="muted warn">{BAD_NAME}</div>}
-              <div className="muted">Бонус дракончика: {bonusText(petBonusAt(petById('dragon')!, 1))}, к 20-му уровню до {bonusText(petBonusAt(petById('dragon')!, 20))}.</div>
+              <div className="muted">{t('Бонус дракончика: {0}, к 20-му уровню до {1}.', { 0: bonusText(petBonusAt(petById('dragon')!, 1)), 1: bonusText(petBonusAt(petById('dragon')!, 20)) })}</div>
               <button className="primary" disabled={badName(name)} onClick={() => onDone(name)}>
-                Забрать домой
+                {t('Забрать домой')}
               </button>
             </div>
           ) : (
             <div className="pet-hatch-card">
-              <div className="muted">{hatched ? 'Скорлупа разлетелась!' : `Ещё ${EGG_TAPS - taps} ${EGG_TAPS - taps === 1 ? 'стук' : 'стука'}`}</div>
+              <div className="muted">{hatched ? t('Скорлупа разлетелась!') : t('Ещё {0} {1}', { 0: EGG_TAPS - taps, 1: EGG_TAPS - taps === 1 ? t('стук') : t('стука') })}</div>
               {!hatched && (
                 <button className="link" onClick={onLater}>
-                  Позже
+                  {t('Позже')}
                 </button>
               )}
             </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onPowerToast } from './devicePerf';
+import { t } from './i18n';
 
 /** Короткое сообщение, что игра сама включила экономный режим на слабом телефоне. */
 export function PowerToast() {
@@ -19,8 +20,8 @@ export function PowerToast() {
   if (!shown) return null;
   return (
     <div className="toast global power-toast">
-      Включили экономный режим — так игра идёт плавнее
-      <small>Выключить можно в настройках</small>
+      {t('Включили экономный режим — так игра идёт плавнее')}
+      <small>{t('Выключить можно в настройках')}</small>
     </div>
   );
 }

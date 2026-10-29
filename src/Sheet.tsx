@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { t } from './i18n';
 
 /**
  * Нижняя шторка: затемнение + лист снизу.
@@ -66,14 +67,14 @@ export function Sheet({
       body.style.transform = `translateY(${d}px)`;
       root.style.backgroundColor = `rgba(5,6,10,${0.6 * Math.max(0.2, 1 - d / body.offsetHeight)})`;
     };
-    const begin = (x: number, y: number, t: EventTarget | null) => {
+    const begin = (x: number, y: number, tm: EventTarget | null) => {
       if (closing.current) return;
       startX = x;
       startY = lastY = y;
       lastT = performance.now();
       speed = 0;
-      target = t;
-      fromGrip = !!(t as HTMLElement | null)?.closest?.('.sheet-top');
+      target = tm;
+      fromGrip = !!(tm as HTMLElement | null)?.closest?.('.sheet-top');
       drag = fromGrip ? true : null;
       if (drag) body.style.transition = 'none';
     };
@@ -127,8 +128,8 @@ export function Sheet({
     const onTouchMove = (e: TouchEvent) => step(e.touches[0].clientX, e.touches[0].clientY, e);
     // Мышью (компьютер, Telegram Desktop) лист тянется только за верхнюю полоску.
     const onMouseDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (e.button !== 0 || !t.closest('.sheet-top') || t.closest('.sheet-x')) return;
+      const tm = e.target as HTMLElement;
+      if (e.button !== 0 || !tm.closest('.sheet-top') || tm.closest('.sheet-x')) return;
       begin(e.clientX, e.clientY, e.target);
       const mm = (ev: MouseEvent) => step(ev.clientX, ev.clientY, ev);
       const mu = () => {
@@ -159,7 +160,7 @@ export function Sheet({
       <div ref={bodyRef} className={bodyClassName ? `sheet-body ${bodyClassName}` : 'sheet-body'} style={bodyStyle} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-top">
           <div className="sheet-grip" />
-          <button className="sheet-x" onClick={dismiss} aria-label="Закрыть">
+          <button className="sheet-x" onClick={dismiss} aria-label={t('Закрыть')}>
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
             </svg>

@@ -11,6 +11,7 @@ import { ModelThumb } from './Preview';
 import { troopInfo } from './troopInfo';
 import { bombGroup, type HeroLook, levelLook, paintTroop, TROOP_RIGS } from './troops3d';
 import { Sheet } from '../Sheet';
+import { t } from '../i18n';
 
 // Карточка отряда в казармах: живая мини-модель, роль, все цифры из боя (troopInfo.ts) и кнопка обучения.
 
@@ -50,14 +51,14 @@ function Live({ id, size, level, still }: { id: TroopId; size: number; level?: n
     // Рамка по росту персонажа (KayKit ~2,5 единицы), с запасом на шапку и полёт.
     g.userData.frame = { h: rig.fly ? 2.7 : 2.5, half: 1.55 };
     g.userData.poseT = POSE_T[id];
-    g.userData.tick = (t: number) => {
-      mixer.setTime(t);
+    g.userData.tick = (tm: number) => {
+      mixer.setTime(tm);
       // Целитель парит.
-      if (rig.fly) root.position.y = 0.1 + 0.08 * Math.sin(t * 3);
+      if (rig.fly) root.position.y = 0.1 + 0.08 * Math.sin(tm * 3);
     };
     return g;
   };
-  return <ModelThumb id={`troop:${id}:${levelLook(level).tint ?? ''}${levelLook(level).glow ?? ''}`} make={make} size={size} label={`Модель: ${troopInfo(id, 1).name}`} still={still} />;
+  return <ModelThumb id={`troop:${id}:${levelLook(level).tint ?? ''}${levelLook(level).glow ?? ''}`} make={make} size={size} label={t('Модель: {0}', { 0: troopInfo(id, 1).name })} still={still} />;
 }
 
 /** Живая мини-модель отряда; still — неподвижный портрет (карточки в бою). */
@@ -94,10 +95,10 @@ function HeroLive({ look, size }: { look: HeroLook; size: number }) {
     g.add(root);
     g.userData.frame = { h: 2.5, half: 1.55 };
     g.userData.poseT = 0.3;
-    g.userData.tick = (t: number) => mixer.setTime(t);
+    g.userData.tick = (tm: number) => mixer.setTime(tm);
     return g;
   };
-  return <ModelThumb id={`hero:${look.model}:${look.tint ?? ''}:${look.glow ?? ''}`} make={make} size={size} label="Модель: герой" still />;
+  return <ModelThumb id={`hero:${look.model}:${look.tint ?? ''}:${look.glow ?? ''}`} make={make} size={size} label={t('Модель: герой')} still />;
 }
 
 /** Портрет героя в его облике (без оружия из рук — только набор модели). */
@@ -131,16 +132,16 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
         </div>
         <div className="vil-ti-title">
           <b>
-            {info.name} <span className="level-tag">ур. {info.level}</span>
+            {info.name} <span className="level-tag">{t('ур. {0}', { 0: info.level })}</span>
           </b>
           <span className="muted">
-            в лагере ×{have}
-            {queued ? ` · учатся ${queued}` : ''}
+            {t('в лагере ×{0}', { 0: have })}
+            {queued ? t(' · учатся {0}', { 0: queued }) : ''}
           </span>
           <div className="vil-ti-tags">
-            {info.tags.map((t) => (
-              <span key={t} className={t === 'Летающий' ? 'air' : t === 'Наземный' ? 'ground' : ''}>
-                {t}
+            {info.tags.map((tm) => (
+              <span key={tm} className={tm === t('Летающий') ? 'air' : tm === t('Наземный') ? 'ground' : ''}>
+                {tm}
               </span>
             ))}
           </div>
@@ -149,7 +150,7 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
       <p className="vil-ti-role">{info.role}</p>
       <div className="vil-ti-grid">
         {info.stats.map((s) => (
-          <div key={s.label} className={s.label === 'Цель' ? 'wide' : ''}>
+          <div key={s.label} className={s.label === t('Цель') ? 'wide' : ''}>
             <small>{s.label}</small>
             <b>{s.value}</b>
             {s.note && <em>{s.note}</em>}
@@ -157,7 +158,7 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
         ))}
       </div>
       <div className="vil-ti-hit">
-        <small>По нему бьют</small>
+        <small>{t('По нему бьют')}</small>
         <div>
           {info.hitBy.map((n) => (
             <span key={n} className="bad">
@@ -166,7 +167,7 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
           ))}
           {info.safeFrom.map((n) => (
             <span key={n} className="ok">
-              {n} не достаёт
+              {t('{0} не достаёт', { 0: n })}
             </span>
           ))}
         </div>
@@ -174,17 +175,17 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
       <div className="vil-ti-bonus">
         {info.bonus > 0 ? (
           <>
-            Казармы {barracks} ур.: <b>+{info.bonus}%</b> {info.bonusWhat} (уже в цифрах). Каждый следующий уровень — ещё +{info.perLevel}%.
+            {t('Казармы {0} ур.:', { 0: barracks })} <b>+{info.bonus}%</b> {t('{0} (уже в цифрах). Каждый следующий уровень — ещё +{1}%.', { 0: info.bonusWhat, 1: info.perLevel })}
           </>
         ) : (
-          <>Каждый уровень казарм выше первого: +{info.perLevel}% {info.bonusWhat}.</>
+          <>{t('Каждый уровень казарм выше первого: +{0}% {1}.', { 0: info.perLevel, 1: info.bonusWhat })}</>
         )}{' '}
         {info.levelBonus > 0 ? (
           <>
-            Лаборатория, {info.level} ур. отряда: <b>+{info.levelBonus}%</b> (тоже в цифрах).
+            {t('Лаборатория, {0} ур. отряда:', { 0: info.level })} <b>+{info.levelBonus}%</b> {t('(тоже в цифрах).')}
           </>
         ) : (
-          <>В лаборатории каждый уровень отряда даёт ещё +{info.perTroopLevel}%.</>
+          <>{t('В лаборатории каждый уровень отряда даёт ещё +{0}%.', { 0: info.perTroopLevel })}</>
         )}
       </div>
       <div className="vil-actions">
@@ -193,11 +194,11 @@ export function TroopSheet({ id, barracks, level = 1, have, queued, onTrain, onC
         </span>
         {locked ? (
           <button className="secondary" disabled>
-            <Lock /> Казармы {info.unlock} уровня
+            <Lock /> {t('Казармы {0} уровня', { 0: info.unlock })}
           </button>
         ) : (
           <button className="primary" onClick={onTrain}>
-            Обучить
+            {t('Обучить')}
           </button>
         )}
       </div>

@@ -7,6 +7,7 @@ import { Bolt } from './icons';
 import { fmtTime } from './state';
 import { TroopThumb } from './TroopInfo';
 import { Sheet } from '../Sheet';
+import { t } from '../i18n';
 
 // Лаборатория: одно исследование за раз, каждый уровень отряда — +15% здоровья и урона.
 // Правила и цены — shared/villageLab.ts.
@@ -31,14 +32,14 @@ export function LabSheet({ town, now, charge, onResearch, onCancel, onSpeed, onC
   return (
     <Sheet onClose={onClose}>
       <div className="section-title">
-        Лаборатория{lab ? ` · ур. ${lab}` : ''}
-        {lab > 0 && <span className="muted">отряды до {cap} ур.</span>}
+        {t('Лаборатория')}{lab ? t(' · ур. {0}', { 0: lab }) : ''}
+        {lab > 0 && <span className="muted">{t('отряды до {0} ур.', { 0: cap })}</span>}
       </div>
       {lab === 0 ? (
         <>
-          <div className="vil-note">Лаборатория прокачивает отряды: каждый уровень — +15% здоровья и урона. Строится с ратуши 2.</div>
+          <div className="vil-note">{t('Лаборатория прокачивает отряды: каждый уровень — +15% здоровья и урона. Строится с ратуши 2.')}</div>
           <button className="primary" onClick={onBuild}>
-            Строить
+            {t('Строить')}
           </button>
         </>
       ) : (
@@ -50,24 +51,24 @@ export function LabSheet({ town, now, charge, onResearch, onCancel, onSpeed, onC
               </span>
               <div className="vil-shop-info">
                 <b>
-                  {TROOPS[r.t].name}: ур. {troopLevel(town, r.t)} → {troopLevel(town, r.t) + 1}
+                  {t('{0}: ур. {1} → {2}', { 0: TROOPS[r.t].name, 1: troopLevel(town, r.t), 2: troopLevel(town, r.t) + 1 })}
                 </b>
                 <span className="vil-timer">
                   <Timer size={15} /> {fmtTime((r.end - now) / 1000)}
                 </span>
-                <span className="muted">Каждый повтор на тренировке — минус {REP_BOOST_MIN} мин.</span>
+                <span className="muted">{t('Каждый повтор на тренировке — минус {0} мин.', { 0: REP_BOOST_MIN })}</span>
               </div>
               <div className="vil-lab-btns">
                 <button className="primary" disabled={charge < sp} onClick={() => onSpeed(sp)}>
                   <Bolt size={15} /> {sp}
                 </button>
-                <button className="small-btn ghost" onClick={onCancel} aria-label="Отменить исследование">
+                <button className="small-btn ghost" onClick={onCancel} aria-label={t('Отменить исследование')}>
                   ×
                 </button>
               </div>
             </div>
           ) : (
-            <div className="vil-note">Выбери отряд для исследования. Каждый повтор на тренировке ускоряет его на {REP_BOOST_MIN} мин.</div>
+            <div className="vil-note">{t('Выбери отряд для исследования. Каждый повтор на тренировке ускоряет его на {0} мин.', { 0: REP_BOOST_MIN })}</div>
           )}
           {TROOP_IDS.map((id) => {
             const d = TROOPS[id];
@@ -84,16 +85,16 @@ export function LabSheet({ town, now, charge, onResearch, onCancel, onSpeed, onC
                 </span>
                 <div className="vil-shop-info">
                   <b>
-                    {d.name} <span className="level-tag">ур. {lv}</span>
+                    {d.name} <span className="level-tag">{t('ур. {0}', { 0: lv })}</span>
                   </b>
                   <span className="muted">
                     {locked
-                      ? `Казармы ${d.unlock} уровня`
+                      ? t('Казармы {0} уровня', { 0: d.unlock })
                       : maxed
-                        ? 'Самый высокий уровень'
+                        ? t('Самый высокий уровень')
                         : next > cap
-                          ? `Уровень ${next} — с лаборатории ${next - 1}`
-                          : `Уровень ${next}: +${gain}% здоровья и ${id === 'healer' ? 'лечения' : 'урона'}`}
+                          ? t('Уровень {0} — с лаборатории {1}', { 0: next, 1: next - 1 })
+                          : t('Уровень {0}: +{1}% здоровья и {2}', { 0: next, 1: gain, 2: id === 'healer' ? t('лечения') : t('урона') })}
                   </span>
                   {!locked && !maxed && next <= cap && (
                     <span className="vil-shop-meta">
@@ -104,7 +105,7 @@ export function LabSheet({ town, now, charge, onResearch, onCancel, onSpeed, onC
                     </span>
                   )}
                 </div>
-                <button className="small-btn" disabled={locked || maxed || next > cap || going || !!r} onClick={() => onResearch(id)} aria-label="Исследовать">
+                <button className="small-btn" disabled={locked || maxed || next > cap || going || !!r} onClick={() => onResearch(id)} aria-label={t('Исследовать')}>
                   {locked || next > cap ? <Lock /> : going ? <Timer size={15} /> : '↑'}
                 </button>
               </div>

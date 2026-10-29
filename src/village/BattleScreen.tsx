@@ -12,6 +12,7 @@ import { useHostedView } from './Viewport';
 import { DEFAULT_HERO, type HeroLook } from './troops3d';
 import { HeroThumb, TroopThumb } from './TroopInfo';
 import { ResultCard } from './ResultCard';
+import { t } from '../i18n';
 
 export const ResIcon = ({ r, size = 15 }: { r: keyof Res; size?: number }) => (
   <span style={{ color: RES_COLORS[r], display: 'inline-flex' }}>
@@ -166,12 +167,12 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
 
   const s = view.current.s;
   const dead = s.buildings.filter((b) => !b.alive).length;
-  const sprung = s.traps.filter((t) => t.fired >= 0).length;
+  const sprung = s.traps.filter((tm) => tm.fired >= 0).length;
   // Ловушки у чужой деревни не видны, пока не сработают; в повторе набега на тебя видны все свои.
   const buildings = useMemo<ViewBld[]>(
     () => [
       ...s.buildings.map((b): ViewBld => ({ i: b.i, t: b.t, x: b.x, y: b.y, l: b.l, state: b.alive ? 'ok' : 'ruin' })),
-      ...s.traps.filter((t) => !enemy || t.fired >= 0).map((t): ViewBld => ({ i: t.i, t: t.t, x: t.x, y: t.y, l: t.l, state: t.fired >= 0 ? 'ruin' : 'ok' })),
+      ...s.traps.filter((tm) => !enemy || tm.fired >= 0).map((tm): ViewBld => ({ i: tm.i, t: tm.t, x: tm.x, y: tm.y, l: tm.l, state: tm.fired >= 0 ? 'ruin' : 'ok' })),
     ],
     [dead, sprung, s, enemy],
   );
@@ -188,26 +189,26 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
     const d = addDeploy(s, unit, x, y);
     if (!d) {
       setShowZone(true);
-      setWarn((s.left[unit] ?? 0) <= 0 ? 'Эти отряды уже в бою.' : 'Слишком близко к постройкам — высаживай в зелёной зоне.');
+      setWarn((s.left[unit] ?? 0) <= 0 ? t('Эти отряды уже в бою.') : t('Слишком близко к постройкам — высаживай в зелёной зоне.'));
       setTimeout(() => setWarn(null), 1800);
       return;
     }
     started.current = true;
     sfx('tap');
     if ((s.left[unit] ?? 0) <= 0) setUnit(ORDER.find((u) => (s.left[u] ?? 0) > 0) ?? null);
-    setTick((t) => t + 1);
+    setTick((tm) => tm + 1);
   };
 
   // Умение героя: срабатывает сразу вокруг героя, один раз за бой.
   const cast = (a: SkillId) => {
     if (mode !== 'attack' || finished.current) return;
     if (!addDeploy(s, a, 0, 0)) {
-      setWarn(heroUnit(s) ? 'Это умение уже было.' : 'Сначала высади героя — умение срабатывает вокруг него.');
+      setWarn(heroUnit(s) ? t('Это умение уже было.') : t('Сначала высади героя — умение срабатывает вокруг него.'));
       setTimeout(() => setWarn(null), 1800);
       return;
     }
     started.current = true;
-    setTick((t) => t + 1);
+    setTick((tm) => tm + 1);
   };
   const skills = skillsFor(army.hero);
   const locked = army.hero ? nextSkill(army.hero) : undefined;
@@ -221,7 +222,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
       <div className="vil-top">
         <div className="vil-battle-head">
           <div>
-            <div className="level-tag">{mode === 'replay' ? 'Повтор набега' : 'Набег'}</div>
+            <div className="level-tag">{mode === 'replay' ? t('Повтор набега') : t('Набег')}</div>
             <b>{title}</b>
             {note && <div className="vil-battle-note">{note}</div>}
           </div>
@@ -231,12 +232,12 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
             ))}
           </div>
           <div className="vil-pct">
-            {live.destruction}%<small>{scouting ? `осмотр ${scoutLeft} с` : `${Math.floor(secLeft / 60)}:${String(secLeft % 60).padStart(2, '0')}`}</small>
+            {live.destruction}%<small>{scouting ? t('осмотр {0} с', { 0: scoutLeft }) : `${Math.floor(secLeft / 60)}:${String(secLeft % 60).padStart(2, '0')}`}</small>
           </div>
         </div>
         {/* Сколько всего можно унести и сколько уже взято: полоска заполняется по ходу боя. */}
         <div className="vil-loot-panel">
-          <span className="vil-loot-title">{mode === 'replay' ? 'Могли унести' : started.current ? 'Добыча' : 'Можно унести'}</span>
+          <span className="vil-loot-title">{mode === 'replay' ? t('Могли унести') : started.current ? t('Добыча') : t('Можно унести')}</span>
           {RES_KEYS.some((k) => loot[k] > 0) ? (
             RES_KEYS.filter((k) => loot[k] > 0).map((k) => (
               <span key={k} className="vil-loot-cell" style={{ '--c': RES_COLORS[k] } as React.CSSProperties}>
@@ -251,7 +252,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
               </span>
             ))
           ) : (
-            <span className="muted">добычи нет</span>
+            <span className="muted">{t('добычи нет')}</span>
           )}
         </div>
       </div>
@@ -260,21 +261,21 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
           ×{speed}
         </button>
         {!result && (
-          <button className="vil-round danger" onClick={() => (mode === 'attack' && started.current ? (s.input = { ...s.input, endTick: s.tick }, finish(s.tick)) : onClose())} aria-label="Завершить">
+          <button className="vil-round danger" onClick={() => (mode === 'attack' && started.current ? (s.input = { ...s.input, endTick: s.tick }, finish(s.tick)) : onClose())} aria-label={t('Завершить')}>
             <Cross size={18} />
           </button>
         )}
       </div>
       {warn && <div className="toast vil-warn">{warn}</div>}
-      {thFell && <div className="vil-thfell">Ратуша пала!</div>}
+      {thFell && <div className="vil-thfell">{t('Ратуша пала!')}</div>}
       {mode === 'attack' && !result && (
         <div className="vil-bottom">
-          {!started.current && <div className="vil-hint">Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки{scouting ? ` или через ${scoutLeft} с` : ''}.</div>}
+          {!started.current && <div className="vil-hint">{t('Выбери отряд и коснись земли за красной зоной. Бой начнётся с первой высадки')}{scouting ? t(' или через {0} с', { 0: scoutLeft }) : ''}.</div>}
           {!started.current && onSkip && (
             <button className="vil-next-foe" onClick={onSkip} disabled={skipBusy}>
               <span>
-                <b>{skipBusy ? 'Ищем другую деревню…' : 'Следующая деревня'}</b>
-                <small>Не нравится добыча — поищи другую</small>
+                <b>{skipBusy ? t('Ищем другую деревню…') : t('Следующая деревня')}</b>
+                <small>{t('Не нравится добыча — поищи другую')}</small>
               </span>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M5 12h13M13 6l6 6-6 6" />
@@ -306,7 +307,7 @@ export function BattleScreen({ title, base, loot, seed, army, mode, deploys, end
                 <div className="vil-skill locked" title={locked.desc}>
                   <Lock size={18} />
                   <span>
-                    {locked.name} · ур. {locked.level}
+                    {t('{0} · ур. {1}', { 0: locked.name, 1: locked.level })}
                   </span>
                 </div>
               )}

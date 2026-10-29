@@ -7,28 +7,29 @@ import type { Item } from './items';
 import type { Progress } from './progress';
 import { setAura } from './progress';
 import './holiday.css';
+import { t } from '../i18n';
 
 // Альбом коллекций обликов: что собрано, где найти остальное и сияние за полный комплект.
 
-const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const MONTHS = [t('января'), t('февраля'), t('марта'), t('апреля'), t('мая'), t('июня'), t('июля'), t('августа'), t('сентября'), t('октября'), t('ноября'), t('декабря')];
 
 /** Где взять облик: подпись под пустой клеткой. */
 export function whereToGet(i: Item, now: number): string {
-  if (i.inShop) return `в лавке за ${i.price}`;
+  if (i.inShop) return t('в лавке за {0}', { 0: i.price });
   if (i.event) {
     const m = EVENT_BOSSES.findIndex((b) => b.outfit === i.id);
-    return `босс ${MONTHS[m]}`;
+    return t('босс {0}', { 0: MONTHS[m] });
   }
-  if (i.program) return 'программа Грома';
-  if (i.ref) return i.id === 'ref-leader' ? 'приведи троих друзей' : 'приведи друга';
-  if (i.titan) return 'победа над Титаном';
-  if (i.pass) return 'пропуск сезона';
+  if (i.program) return t('программа Грома');
+  if (i.ref) return i.id === 'ref-leader' ? t('приведи троих друзей') : t('приведи друга');
+  if (i.titan) return t('победа над Титаном');
+  if (i.pass) return t('пропуск сезона');
   if (i.holiday) {
     const w = holidayByKey(i.holiday);
-    if (!w) return 'праздник';
-    return w.end <= now ? 'праздник прошёл' : w.start <= now ? 'идёт праздник!' : `${w.def.name}, ${new Date(w.start).getFullYear()}`;
+    if (!w) return t('праздник');
+    return w.end <= now ? t('праздник прошёл') : w.start <= now ? t('идёт праздник!') : `${w.def.name}, ${new Date(w.start).getFullYear()}`;
   }
-  return 'сундуки на карте';
+  return t('сундуки на карте');
 }
 
 function CollectionCard({ c, progress, now, onAura }: { c: Collection; progress: Progress; now: number; onAura: (id: string | undefined) => void }) {
@@ -63,11 +64,11 @@ function CollectionCard({ c, progress, now, onAura }: { c: Collection; progress:
       <div className="col-foot">
         <span>
           <span className="col-aura-dot" />
-          {done ? `Титул «${c.title}» в достижениях` : `За комплект: титул «${c.title}» и сияние`}
+          {done ? t('Титул «{0}» в достижениях', { 0: c.title }) : t('За комплект: титул «{0}» и сияние', { 0: c.title })}
         </span>
         {done && (
           <button className={`small-btn ${worn ? 'off' : ''}`} onClick={() => onAura(worn ? undefined : c.id)}>
-            {worn ? 'Снять сияние' : 'Сияние'}
+            {worn ? t('Снять сияние') : t('Сияние')}
           </button>
         )}
       </div>
@@ -84,12 +85,12 @@ export function CollectionsSheet({ progress, setProgress, onClose }: { progress:
   return (
     <Sheet onClose={onClose} bodyClassName="hol-sheet">
       <div className="level-title">
-        Коллекции обликов{' '}
+        {t('Коллекции обликов{0}', { 0: ' ' })}
         <span className="muted">
-          {done} из {list.length}
+          {t('{0} из {1}', { 0: done, 1: list.length })}
         </span>
       </div>
-      <div className="col-tip">Собери комплект целиком: за него титул с монетами и сияние вокруг героя. Сильнее комплект не делает, только красивее.</div>
+      <div className="col-tip">{t('Собери комплект целиком: за него титул с монетами и сияние вокруг героя. Сильнее комплект не делает, только красивее.')}</div>
       <div className="col-list">
         {sorted.map((c) => (
           <CollectionCard key={c.id} c={c} progress={progress} now={now} onAura={(id) => setProgress(setAura(progress, id))} />

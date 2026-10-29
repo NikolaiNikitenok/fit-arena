@@ -13,6 +13,7 @@ import type { Progress } from './progress';
 import { say } from './story';
 import { sfx } from '../audio';
 import './holiday.css';
+import { locale, t } from '../i18n';
 
 // Праздник Атлетии: жетоны за повторы, дорожка наград и облик этого года, который потом не получить.
 
@@ -49,32 +50,32 @@ function OutfitStage({ w }: { w: HolidayWindow }) {
   );
 }
 
-const fmtDate = (t: number) => new Date(t).toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+const fmtDate = (tm: number) => new Date(tm).toLocaleDateString(locale(), { day: 'numeric', month: 'long' });
 
 function StepPrize({ step, w }: { step: HolidayStep; w: HolidayWindow }) {
   if ('coins' in step)
     return (
       <>
-        <Coin size={18} className="coin" /> {step.coins} монет
+        <Coin size={18} className="coin" /> {t('{0} монет', { 0: step.coins })}
       </>
     );
   if ('potion' in step)
     return (
       <>
-        <Flask size={22} color={step.potion === 'vigor' ? '#ff6b81' : '#ffb46b'} /> {step.potion === 'vigor' ? 'Зелья жизни' : 'Эликсиры силы'} ×{step.n}
+        <Flask size={22} color={step.potion === 'vigor' ? '#ff6b81' : '#ffb46b'} /> {step.potion === 'vigor' ? t('Зелья жизни') : t('Эликсиры силы')} ×{step.n}
       </>
     );
   if ('chest' in step)
     return (
       <>
-        <Chest size={22} /> Праздничный сундук
+        <Chest size={22} /> {t('Праздничный сундук')}
       </>
     );
-  if ('title' in step) return <>Титул «{holidayTitleName(w)}»</>;
+  if ('title' in step) return <>{t('Титул «{0}»', { 0: holidayTitleName(w) })}</>;
   const item = holidayOutfit(w);
   return (
     <>
-      <OutfitFace id={item.id} size={30} /> Облик «{item.name}»
+      <OutfitFace id={item.id} size={30} /> {t('Облик «{0}»', { 0: item.name })}
     </>
   );
 }
@@ -96,24 +97,24 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
     setProgress(r.progress);
     sfx('chest');
     setToast(r.label);
-    setTimeout(() => setToast((t) => (t === r.label ? null : t)), 2600);
+    setTimeout(() => setToast((tm) => (tm === r.label ? null : tm)), 2600);
   };
 
   return (
     <Sheet onClose={onClose} bodyClassName="hol-sheet" bodyStyle={{ ['--ha' as string]: w.def.accent, ['--hg' as string]: w.def.glow, ['--hs1' as string]: w.def.sky[0], ['--hs2' as string]: w.def.sky[1] }}>
       <div className="hol-hero">
         <div className="hol-head">
-          <div className="hol-kicker">{w.live ? `Праздник · до ${fmtDate(w.end - 1)}` : `Скоро праздник · ${fmtDays(daysUntil({ ...w, key: w.key, live: false }, now))}`}</div>
+          <div className="hol-kicker">{w.live ? t('Праздник · до {0}', { 0: fmtDate(w.end - 1) }) : t('Скоро праздник · {0}', { 0: fmtDays(daysUntil({ ...w, key: w.key, live: false }, now)) })}</div>
           <div className="hol-name">{w.def.name}</div>
           <div className="hol-dates">
             {fmtDate(w.start)} – {fmtDate(w.end - 1)}
-            {w.live && <> · ещё {fmtLeft(w.end - now)}</>}
+            {w.live && <> {t('· ещё {0}', { 0: fmtLeft(w.end - now) })}</>}
           </div>
           <div className="hol-count">
             <HolidayToken id={w.def.id} size={30} />
-            <b>{tokens.toLocaleString('ru')}</b>
+            <b>{tokens.toLocaleString(locale())}</b>
             <span>
-              {tokenWord(w.def, tokens)} из {HOLIDAY_GOAL.toLocaleString('ru')}
+              {t('{0} из {1}', { 0: tokenWord(w.def, tokens), 1: HOLIDAY_GOAL.toLocaleString(locale()) })}
             </span>
           </div>
         </div>
@@ -132,7 +133,7 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
       </div>
 
       <div className="hol-rule">
-        <HolidayToken id={w.def.id} size={16} /> 1 повтор = 1 {w.def.token[0]}. {w.live ? 'Считаются все повторы этих дней: карта, дуэли, программы, рейды.' : 'Жетоны начнут падать с первого дня праздника.'}
+        <HolidayToken id={w.def.id} size={16} /> {t('1 повтор = 1 {0}.', { 0: w.def.token[0] })} {w.live ? t('Считаются все повторы этих дней: карта, дуэли, программы, рейды.') : t('Жетоны начнут падать с первого дня праздника.')}
       </div>
 
       <div className="hol-track">
@@ -143,7 +144,7 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
           return (
             <div key={s.at} className={`hol-step ${got ? 'got' : ready ? 'ready' : ''} ${big ? 'big' : ''}`}>
               <div className="hol-step-at">
-                <HolidayToken id={w.def.id} size={14} /> {s.at.toLocaleString('ru')}
+                <HolidayToken id={w.def.id} size={14} /> {s.at.toLocaleString(locale())}
               </div>
               <div className="hol-step-prize">
                 <StepPrize step={s} w={w} />
@@ -151,15 +152,15 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
               <div className="hol-step-act">
                 {got ? (
                   <span className="hol-got">
-                    <Check size={14} /> есть
+                    <Check size={14} /> {t('есть')}
                   </span>
                 ) : ready ? (
                   <button className="small-btn" onClick={() => claim(s.at)}>
-                    Забрать
+                    {t('Забрать')}
                   </button>
                 ) : (
                   <span className="hol-left">
-                    <Lock size={12} /> {w.live ? `ещё ${(s.at - tokens).toLocaleString('ru')}` : ''}
+                    <Lock size={12} /> {w.live ? t('ещё {0}', { 0: (s.at - tokens).toLocaleString(locale()) }) : ''}
                   </span>
                 )}
               </div>
@@ -172,12 +173,12 @@ export function HolidayScreen({ progress, setProgress, onClose }: { progress: Pr
       </div>
 
       <div className="hol-note">
-        Облик «{outfit.name}» и титул праздника выдаются только до {fmtDate(w.end - 1)}. Потом их не получить: в следующем году будет другой наряд.
+        {t('Облик «{0}» и титул праздника выдаются только до {1}. Потом их не получить: в следующем году будет другой наряд.', { 0: outfit.name, 1: fmtDate(w.end - 1) })}
       </div>
 
       {past.length > 0 && (
         <div className="hol-past">
-          <div className="section-title">Твои праздничные облики</div>
+          <div className="section-title">{t('Твои праздничные облики')}</div>
           <div className="hol-past-row">
             {past.map((h) => (
               <span key={h.key} className="hol-past-item">
