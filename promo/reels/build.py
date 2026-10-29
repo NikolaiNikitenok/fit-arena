@@ -1,60 +1,121 @@
-# Сборка рилса: тайминги по озвучке, клипы из footage.mp4 с наездом на склейках, хук-карточка, полоса титров,
-# музыка промо под голосом. Вход: script.json, subs.json, vo/N.wav, band_NN.png, hook.png. Выход: reel.mp4.
-import json, os, subprocess, wave
+# Сборка рилса. Хук звучит с первого кадра поверх самого яркого клипа, крупный текст хука «выпрыгивает»;
+# дальше склейки по 1–2 клипа на реплику с наездом и медленным зумом, вспышка и «вжух» на склейках,
+# субтитры по словам с подсветкой текущего слова, финальный экран с призывом. Без затемнения в конце,
+# чтобы рилс зацикливался. Вход: script.json, vo/N.wav, words.json, w_*.png, hook.png, end.png.
+# Выход: reel.mp4, reel-voice.mp4 (только голос) и cover.jpg (обложка с хуком).
+import array, json, os, re, subprocess, wave
 D = os.path.dirname(os.path.abspath(__file__))
 S = os.environ.get('FOOTAGE', os.path.join(D, 'footage.mp4'))
 cat = json.load(open(os.path.join(D, 'catalog.json')))
-s = json.load(open('script.json', encoding='utf8')); subs = json.load(open('subs.json', encoding='utf8'))
+s = json.load(open('script.json', encoding='utf8')); words = json.load(open('words.json', encoding='utf8'))
+L = s['lines']; n = len(L)
 
-def wdur(f):
-    with wave.open(f) as w: return w.getnframes() / w.getframerate()
-dur = [wdur(f'vo/{i}.wav') for i in range(1, len(s['lines']) + 1)]
+def speech(f):
+    """Длительность файла и где в нём начинается и кончается голос (тишину по краям не считаем)."""
+    with wave.open(f) as w:
+        sr, ch = w.getframerate(), w.getnchannels(); a = array.array('h', w.readframes(w.getnframes()))[::ch]
+    hop = sr // 100; e = [max((abs(x) for x in a[k:k + hop]), default=0) for k in range(0, len(a), hop)]
+    th = max(e, default=0) * 0.08; on = [k for k, v in enumerate(e) if v > th] or [0, len(e)]
+    return len(a) / sr, on[0] / 100, (on[-1] + 1) / 100
 
-# Тайминги: хук держим чуть дольше, между репликами короткая пауза; титры делят реплику по длине кусков.
-GAP = 0.12; t = 0.1; starts = []; bands = []; k = 0
-for i, l in enumerate(s['lines']):
-    starts.append(t)
-    if i > 0:
-        w = [len(x) + 6 for x in l['subs']]; a = t
-        for x in w:
-            d = dur[i] * x / sum(w); bands.append([k, a, a + d]); a += d; k += 1
-    t += dur[i] + GAP + (0.25 if i == 0 else 0)
-END = t + 0.8; HOOK = starts[1] - 0.05
-for j in range(len(bands) - 1): bands[j][2] = bands[j + 1][1]
-bands[-1][2] = END
-cuts = [0] + starts[1:] + [END]
+sp = [speech(f'vo/{i}.wav') for i in range(1, n + 1)]
+GAP = 0.06; t = 0.05; starts = []
+for i in range(n):
+    starts.append(t); dur, a, b = sp[i]
+    t += dur + GAP - max(0, dur - b - 0.08)  # хвост тишины не ждём
+END = t + 1.1; HOOK = starts[1]
 
-fc = ''; n = len(s['lines'])
-for i, l in enumerate(s['lines']):
-    c = cat[l['clip']]; a, b = c['from'], c['to']; T = cuts[i + 1] - cuts[i]; src = b - a
-    if src >= T: f = f'trim={a}:{a + T:.3f},setpts=PTS-STARTPTS'
-    else:
-        k2 = min(T / src, 1.5)  # замедляем не больше чем в полтора раза, остаток держим последним кадром
-        f = f'trim={a}:{b},setpts=(PTS-STARTPTS)*{k2:.4f},fps=30,tpad=stop_mode=clone:stop_duration={T - src * k2 + 0.1:.3f},trim=0:{T:.3f}'
-    z = '1+0.12*pow(max(0,1-t/0.35),2)'  # резкий наезд в начале клипа
-    f += f",scale=w='2*trunc(540*({z}))':h=-2:eval=frame,crop=1080:1920,setsar=1"
-    fc += f'[0:v]{f}[c{i}];'
-fc += ''.join(f'[c{i}]' for i in range(n)) + f'concat=n={n}:v=1:a=0[v0];'
-ins = ['-i', S]; prev = 'v0'; idx = 1
-for j, a, b in bands:
-    ins += ['-i', f'band_{j:02d}.png']; fc += f"[{prev}][{idx}:v]overlay=0:0:enable='between(t,{a:.3f},{b:.3f})'[o{j}];"; prev = f'o{j}'; idx += 1
+# Нарезка: реплика делится между её клипами поровну, финальная реплика — на экране cta до конца.
+segs = []
+for i, l in enumerate(L):
+    a = 0 if i == 0 else starts[i]; b = starts[i + 1] if i + 1 < n else END
+    ids = l.get('clips') or ['cta']
+    for k, cid in enumerate(ids):
+        segs.append((cid, a + (b - a) * k / len(ids), a + (b - a) * (k + 1) / len(ids), i))
+
+# Каждый клип — отдельный вход с перемоткой (-ss): декодируем только нужный кусок, без буфера на весь ролик.
+fc = ''; ins = []
+for j, (cid, a, b, i) in enumerate(segs):
+    c = cat[cid]; T = b - a; src = c['to'] - c['from']
+    ins += ['-ss', f"{c['from']:.3f}", '-t', f'{src:.3f}', '-i', S]
+    f = 'setpts=PTS-STARTPTS'
+    if src < T:  # короткий клип: чуть замедляем, остаток держим последним кадром
+        k = min(T / src, 1.3); f += f',setpts=PTS*{k:.4f},fps=30,tpad=stop_mode=clone:stop_duration={T - src * k + 0.1:.3f}'
+    f += f',trim=0:{T:.3f},setpts=PTS-STARTPTS'
+    zin = j % 2 == 0  # медленный зум попеременно внутрь и наружу + резкий наезд в начале склейки
+    slow = f'0.07*t/{T:.3f}' if zin else f'0.07*(1-t/{T:.3f})'
+    punch = '' if cid == 'cta' else '+0.14*pow(max(0,1-t/0.22),2)'
+    f += f",scale=w='2*trunc(540*(1.0+{slow}{punch}))':h=-2:eval=frame,crop=1080:1920,setsar=1,fps=30"
+    fc += f'[{j}:v]{f}[c{j}];'
+fc += ''.join(f'[c{j}]' for j in range(len(segs))) + f'concat=n={len(segs)}:v=1:a=0[vv0];'
+# Вспышка на смене реплики.
+flash = ','.join(f"drawbox=c=white@0.5:t=fill:enable='between(t,{starts[i]:.3f},{starts[i] + 0.07:.3f})'" for i in range(1, n))
+fc += f'[vv0]format=yuv420p,{flash}[vv1];'
+prev = 'vv1'; idx = len(segs)
+
+def over(png, x, y, a, b):
+    global prev, idx, ins, fc
+    ins += ['-i', png]; fc += f"[{prev}][{idx}:v]overlay={x}:{y}:enable='between(t,{a:.3f},{b:.3f})'[o{idx}];"; prev = f'o{idx}'; idx += 1
+
+# Субтитры по словам: время слова — по его длине внутри звучащей части реплики.
+# Все куски склеиваем в одну прозрачную дорожку (ffconcat) и накладываем один раз — так в разы быстрее.
+def weight(w):
+    v = len(re.findall(r'[аеёиоуыэюяaeiouy]', w.lower())) + 2 * len(re.findall(r'\d', w))
+    return max(1, v) + 0.6
+track = []  # (файл, начало, конец); на последней реплике титров нет — там свой финальный экран
+for i in range(1, n - 1):
+    ws = words[i - 1]
+    if not ws: continue
+    dur, a, b = sp[i]; a += starts[i]; b += starts[i]
+    W = [weight(x['w']) for x in ws]; tot = sum(W); t0 = a
+    nxt = starts[i + 1] - 0.02 if i + 1 < n else END
+    for k, x in enumerate(ws):
+        t1 = t0 + (b - a) * W[k] / tot
+        track.append((x['f'], t0, nxt if k == len(ws) - 1 else t1)); t0 = t1
+subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black@0:s=1080x420,format=rgba', '-frames:v', '1', 'blank.png'], check=True)
+with open('caps.txt', 'w') as f:
+    f.write('ffconcat version 1.0\n'); t = 0
+    for png, a, b in track:
+        if a > t + 0.001: f.write(f"file blank.png\nduration {a - t:.3f}\n")
+        f.write(f"file {png}\nduration {b - a:.3f}\n"); t = b
+    f.write(f"file blank.png\nduration {max(0.1, END - t):.3f}\nfile blank.png\n")
+ins += ['-f', 'concat', '-i', 'caps.txt']
+fc += f'[{idx}:v]fps=30,format=rgba[cap];[{prev}][cap]overlay=0:1060:eof_action=pass[ocap];'; prev = 'ocap'; idx += 1
+# Хук: текст выпрыгивает (масштаб 1.25 → 1 за 0.18 с) и исчезает к первой склейке.
 ins += ['-loop', '1', '-t', f'{HOOK:.3f}', '-i', 'hook.png']
-fc += f'[{idx}:v]format=rgba,fade=t=out:st={HOOK - 0.15:.3f}:d=0.15:alpha=1[hk];[{prev}][hk]overlay=0:0:eof_action=pass[oh];'; prev = 'oh'; idx += 1
-# Музыка из библиотеки (music/<id>.m4a), по умолчанию — бодрый бит.
+fc += (f"[{idx}:v]format=rgba,scale=w='2*trunc(540*(1+0.25*pow(max(0,1-t/0.18),2)))':h=-2:eval=frame,"
+       f"fade=t=out:st={HOOK - 0.12:.3f}:d=0.12:alpha=1[hk];[{prev}][hk]overlay=x='(W-w)/2':y='480*(1-h/1920)':eof_action=pass[oh];")
+prev = 'oh'; idx += 1
+over('end.png', 0, 560, starts[-1] + 0.15, END)
+
+# Звук: музыка с первой секунды (без раскачки) под голосом, «вжух» на склейках, удар на хуке и финале.
 music = os.path.join(D, 'music', f"{s.get('music', 'energy')}.m4a")
 if not os.path.exists(music): music = os.path.join(D, 'music', 'energy.m4a')
-ins += ['-stream_loop', '-1', '-i', music]; mi = idx; idx += 1; vo = []
+ins += ['-stream_loop', '-1', '-t', f'{END:.3f}', '-i', music]; mi = idx; idx += 1; vo = []
 for i in range(n):
     ms = int(starts[i] * 1000); ins += ['-i', f'vo/{i + 1}.wav']
-    fc += f'[{idx}:a]aresample=48000,adelay={ms}|{ms}[v{i}];'; vo.append(f'[v{i}]'); idx += 1
+    fc += f'[{idx}:a]aresample=48000,adelay={ms}|{ms}[vo{i}];'; vo.append(f'[vo{i}]'); idx += 1
+cuts = [a for (_, a, _, _) in segs[1:]]
+# Звуки отдельными файлами: генераторы lavfi прямо в общем графе с asplit/adelay вешают ffmpeg.
+subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', 'anoisesrc=d=0.34:c=pink:r=48000:a=0.7', '-af',
+                'bandpass=f=2400:width_type=h:w=3200,afade=t=in:d=0.18:curve=exp,afade=t=out:st=0.18:d=0.16,volume=0.55', '-ac', '2', 'whoosh.wav'], check=True)
+subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', 'sine=f=52:d=0.6:r=48000', '-af',
+                'volume=2.2,afade=t=out:st=0.03:d=0.55:curve=exp', '-ac', '2', 'boom.wav'], check=True)
+fx = []
+for k, (f, at) in enumerate([('whoosh.wav', c - 0.16) for c in cuts] + [('boom.wav', 0), ('boom.wav', starts[-1])]):
+    ms = max(0, int(at * 1000)); ins += ['-i', f]
+    fc += f'[{idx}:a]adelay={ms}|{ms}[fx{k}];'; fx.append(f'[fx{k}]'); idx += 1
+fc += ''.join(fx) + f'amix=inputs={len(fx)}:normalize=0,apad,atrim=0:{END:.3f}[sfx];'
 fc += ''.join(vo) + f'amix=inputs={n}:normalize=0,apad,atrim=0:{END:.3f},highpass=f=80,acompressor=threshold=-20dB:ratio=3,asplit=3[voice][sc][vonly];'
-fc += f'[{mi}:a]atrim=0:{END:.3f},volume=0.45,afade=t=out:st={END - 1.2:.3f}:d=1.2[mus];[mus][sc]sidechaincompress=threshold=0.03:ratio=5:attack=20:release=250[duck];'
-fc += '[voice][duck]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1.5[a];[vonly]loudnorm=I=-14:TP=-1.5,aresample=48000[av]'
+fc += f'[{mi}:a]atrim=0:{END:.3f},volume=0.5[mus];[mus][sc]sidechaincompress=threshold=0.03:ratio=5:attack=15:release=220[duck];'
+fc += '[voice][duck][sfx]amix=inputs=3:normalize=0,loudnorm=I=-14:TP=-1.5[a];[vonly]loudnorm=I=-14:TP=-1.5,aresample=48000[av]'
 subprocess.run(['ffmpeg', '-y', '-v', 'error', *ins, '-filter_complex', fc, '-map', f'[{prev}]', '-map', '[a]', '-t', f'{END:.3f}',
-                '-c:v', 'libx264', '-crf', '14', '-preset', 'slow', '-profile:v', 'high', '-level', '4.2', '-maxrate', '25M', '-bufsize', '50M',
+                '-c:v', 'libx264', '-crf', '15', '-preset', os.environ.get('PRESET', 'slow'), '-profile:v', 'high', '-level', '4.2', '-maxrate', '25M', '-bufsize', '50M',
                 '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', 'reel.mp4',
-                '-map', '[av]', '-c:a', 'pcm_s16le', 'voice.wav'], check=True)
+                '-map', '[av]', '-t', f'{END:.3f}', '-c:a', 'pcm_s16le', 'voice.wav'], check=True)
 # Вторая версия: тот же видеоряд, только голос — под трендовый трек из библиотеки Instagram.
 subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', 'reel.mp4', '-i', 'voice.wav', '-map', '0:v', '-map', '1:a', '-c:v', 'copy',
                 '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart', 'reel-voice.mp4'], check=True)
-print(f'reel.mp4 {END:.1f} с, музыка {os.path.basename(music)}')
+# Обложка: кадр с хуком, когда текст уже встал на место.
+subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{min(0.5, HOOK - 0.2):.2f}', '-i', 'reel.mp4', '-frames:v', '1', '-q:v', '2', 'cover.jpg'], check=True)
+print(f'reel.mp4 {END:.1f} с, {len(segs)} склеек, музыка {os.path.basename(music)}')
