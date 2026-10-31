@@ -13,7 +13,14 @@ export const STORY_FORMATS = {
     "Вопрос к персонажу: персонаж предлагает задать вопрос о тренировках. Стикер — «Вопросы».",
   motivation:
     "Мотивация: короткая фраза персонажа, которая пинает начать прямо сейчас. Стикер — реакция-слайдер или опрос «Я в деле».",
+  screen:
+    "Кадр из игры на весь экран: самый яркий момент (бой с боссом, «Ратуша пала!», победа, деревня) и подпись-интрига, что тут происходит. Стикер — ссылка на бота.",
+  boss: "Босс дня: кадр боя на весь экран и вызов — победить босса конкретным числом повторов сегодня. Стикер — опрос «Победил / Ещё бьюсь».",
+  versus:
+    "Это или то: два экрана игры рядом (shot и shot2), вопрос, что выбираешь (например, дуэль или набег на деревню). Стикер — опрос с этими двумя вариантами.",
 };
+/** Форматы со скриншотами игры вместо персонажа. */
+export const SHOT_FORMATS = new Set(["app", "screen", "boss", "versus"]);
 const KEYS = Object.keys(STORY_FORMATS);
 export const STICKERS = {
   poll: "Опрос",
@@ -37,11 +44,11 @@ ${f.map((k, i) => `${i + 1}. ${k}: ${STORY_FORMATS[k]}`).join("\n")}
 
 ${facts}
 
-Персонажи (поле npc, для всех форматов кроме app):
+Персонажи (поле npc, для форматов без скриншота):
 ${Object.entries(npcs)
   .map(([id, a]) => `- ${id}: ${a}`)
   .join("\n")}
-Скриншоты (поле shot, только для app):
+Скриншоты (поле shot для app, screen, boss и versus; у versus ещё shot2 — второй, другой экран). Для screen и boss бери вертикальные кадры игры, они встанут на весь экран:
 ${Object.entries(shots)
   .map(([id, a]) => `- ${id}: ${a}`)
   .join("\n")}
@@ -50,7 +57,7 @@ ${Object.entries(shots)
 Без эмодзи в top/accent/text (в стикерах можно). Без выдуманной статистики. Название пиши NikitenokArena, Telegram латиницей.
 
 Ответь только JSON без пояснений и без markdown:
-{"title":"тема в 3–5 словах","stories":[{"format":"...","label":"...","top":"...","accent":"...","text":"...","npc":"id","shot":"id","sticker":{"type":"...","text":"...","options":["..."],"answer":0}}]}`;
+{"title":"тема в 3–5 словах","stories":[{"format":"...","label":"...","top":"...","accent":"...","text":"...","npc":"id","shot":"id","shot2":"id","sticker":{"type":"...","text":"...","options":["..."],"answer":0}}]}`;
 }
 
 export function storyProblems(c, { npcs, shots, n }) {
@@ -67,10 +74,13 @@ export function storyProblems(c, { npcs, shots, n }) {
       out.push(`${at}: top до 30 и accent до 20 символов`);
     if (String(s.text ?? "").length > 130)
       out.push(`${at}: text длиннее 110 символов`);
-    if (s.format === "app" ? !shots[s.shot] : !npcs[s.npc])
+    const shotted = SHOT_FORMATS.has(s.format);
+    if (shotted ? !shots[s.shot] : !npcs[s.npc])
       out.push(
-        `${at}: нет ${s.format === "app" ? `скриншота ${s.shot}` : `персонажа ${s.npc}`}`,
+        `${at}: нет ${shotted ? `скриншота ${s.shot}` : `персонажа ${s.npc}`}`,
       );
+    if (s.format === "versus" && (!shots[s.shot2] || s.shot2 === s.shot))
+      out.push(`${at}: у versus нужен второй, другой скриншот shot2`);
     const t = s.sticker?.type;
     if (!STICKERS[t]) out.push(`${at}: стикер ${t} неизвестен`);
     if (

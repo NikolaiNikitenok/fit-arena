@@ -1,7 +1,7 @@
 // Слайды карусели из carousel.json: slide_01.jpg … 1080×1350 (4:5 — самый большой формат ленты Instagram),
 // а для kind=story — три сторис 1080×1920. Нужен playwright.
 import { chromium } from "playwright";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const c = JSON.parse(readFileSync("carousel.json", "utf8"));
 const root = new URL("../../", import.meta.url);
@@ -9,7 +9,12 @@ const b64 = (u) => readFileSync(new URL(u, root)).toString("base64");
 const font = (f) => b64(`promo/carousel/fonts/${f}`);
 const img = (rel) =>
   `data:image/${rel.endsWith(".png") ? "png" : "jpeg"};base64,${b64(rel)}`;
-const shot = (id) => img(`server/media/channel/${id}.jpg`);
+// Свежие кадры игры (shots/) важнее старой библиотеки постов канала.
+const shotPath = (id) =>
+  existsSync(new URL(`promo/carousel/shots/${id}.jpg`, root))
+    ? `promo/carousel/shots/${id}.jpg`
+    : `server/media/channel/${id}.jpg`;
+const shot = (id) => img(shotPath(id));
 const esc = (t) =>
   String(t ?? "").replace(
     /[&<>"]/g,
@@ -62,6 +67,16 @@ html,body{margin:0;width:1080px;height:${H}px;overflow:hidden;background:#0d0f17
 .st .who{bottom:380px}
 .st .shotbox{bottom:330px}
 .st.cat .shotbox{bottom:90px}
+.st.full .bg{position:absolute;left:0;top:700px;width:1080px;height:auto}
+.st.full .shade{position:absolute;left:0;right:0;top:640px;height:160px;background:linear-gradient(#13182f,rgba(19,24,47,0))}
+.st.full .tx,.st.full .label,.st.full .brand{z-index:2}
+.st.full .t1,.st.full .t2,.st.full p{text-shadow:0 6px 30px rgba(0,0,0,.6)}
+.st.vs .pair{position:absolute;left:40px;right:40px;bottom:300px;height:900px}
+.st.vs .phone{position:absolute;bottom:0;width:470px;height:836px}
+.st.vs .phone img{width:100%;height:100%;object-fit:cover}
+.st.vs .phone.l{left:0;transform:rotate(-4deg)}
+.st.vs .phone.r{right:0;transform:rotate(4deg)}
+.st.vs .or{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);z-index:3;width:170px;height:170px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#ffb46b,#ff7a59);font:900 54px N;color:#2b1206;box-shadow:0 14px 40px rgba(0,0,0,.5)}
 .cover .t1{font:900 112px/1.02 N;margin-top:150px;letter-spacing:-1px}
 .cover .t2{font:900 128px/1.02 N;margin-top:8px;letter-spacing:-1px;padding-bottom:10px}
 .cover .sub{display:inline-block;margin-top:44px;padding:18px 32px;border-radius:999px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.1);font:800 36px N;color:#ffd7b8}
@@ -105,7 +120,7 @@ const npcName = NPC_NAMES[c.npc] ?? "";
 
 /** Размер JPEG по заголовку SOF, чтобы выбрать вертикальные скриншоты без браузера. */
 function jpegSize(id) {
-  const d = readFileSync(new URL(`server/media/channel/${id}.jpg`, root));
+  const d = readFileSync(new URL(shotPath(id), root));
   for (let i = 2; i < d.length; ) {
     const m = d[i + 1];
     if (m >= 0xc0 && m <= 0xc3)
@@ -123,10 +138,10 @@ function fan() {
   const ids = [
     ...new Set([
       ...c.slides.map((x) => x.shot).filter(Boolean),
-      "adventure-map",
-      "village-night",
-      "raid-boss-fight",
-      "home-hero",
+      "boss-combo",
+      "village",
+      "duel-fight",
+      "home",
     ]),
   ]
     .filter(tall)
@@ -151,16 +166,19 @@ function shotHtml(id) {
 
 /** Сторис: плашка формата, крупный текст, свободное место под стикер, персонаж или скриншот внизу. */
 function storyHtml(s) {
-  const face = s.format === "app" ? "" : img(`public/portraits/${s.npc}.png`);
-  const color = NPC_COLORS[s.npc] ?? "#ff8a5c";
-  return `<div class="s st${c.catalog ? " cat" : ""}"><div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div>
+  const head = `<div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div>
     <div class="label">${esc(s.label)}</div>
-    <div class="tx"><div class="t1">${esc(s.top)}</div><div class="t2 acc">${esc(s.accent)}</div>${s.text ? `<p>${esc(s.text)}</p>` : ""}</div>
-    ${
-      s.format === "app"
-        ? shotHtml(s.shot)
-        : `<div class="npc"><div class="glow" style="background:radial-gradient(circle,${color}55,transparent 68%)"></div><img src="${face}"></div><div class="who"><b style="color:${color}">${esc(NPC_NAMES[s.npc] ?? "")}</b></div>`
-    }</div>`;
+    <div class="tx"><div class="t1">${esc(s.top)}</div><div class="t2 acc">${esc(s.accent)}</div>${s.text ? `<p>${esc(s.text)}</p>` : ""}</div>`;
+  // Кадр игры на весь экран: текст сверху на затемнении, середина и низ открыты под стикер.
+  if ((s.format === "screen" || s.format === "boss") && tall(s.shot))
+    return `<div class="s st full"><img class="bg" src="${shot(s.shot)}"><div class="shade"></div>${head}</div>`;
+  if (s.format === "versus")
+    return `<div class="s st vs">${head}<div class="pair"><div class="phone l"><img src="${shot(s.shot)}"></div><div class="or">или</div><div class="phone r"><img src="${shot(s.shot2)}"></div></div></div>`;
+  if (["app", "screen", "boss"].includes(s.format))
+    return `<div class="s st${c.catalog ? " cat" : ""}">${head}${shotHtml(s.shot)}</div>`;
+  const face = img(`public/portraits/${s.npc}.png`);
+  const color = NPC_COLORS[s.npc] ?? "#ff8a5c";
+  return `<div class="s st${c.catalog ? " cat" : ""}">${head}<div class="npc"><div class="glow" style="background:radial-gradient(circle,${color}55,transparent 68%)"></div><img src="${face}"></div><div class="who"><b style="color:${color}">${esc(NPC_NAMES[s.npc] ?? "")}</b></div></div>`;
 }
 
 function slide(s, i) {
@@ -170,7 +188,7 @@ function slide(s, i) {
       ${c.kind === "tips" ? `<div class="npc"><div class="glow"></div><img src="${npcImg}"></div><div class="who">Советы: <b>${esc(npcName)}</b></div>` : fan()}${foot(i)}</div>`;
   if (s.type === "cta")
     return `<div class="s cta">${head(i)}<h2>${esc(s.title)}</h2><p>${esc(s.text)}</p><div class="btn">Играть бесплатно в Telegram</div>
-      ${c.kind === "app" ? shotHtml(s.shot || "home-hero") : `<div class="npc" style="width:430px;height:430px;bottom:110px"><div class="glow"></div><img src="${npcImg}"></div>`}${foot(i)}</div>`;
+      ${c.kind === "app" ? shotHtml(s.shot || "home") : `<div class="npc" style="width:430px;height:430px;bottom:110px"><div class="glow"></div><img src="${npcImg}"></div>`}${foot(i)}</div>`;
   const n = String(i).padStart(2, "0");
   if (c.kind === "app")
     return `<div class="s app">${head(i)}<h2>${esc(s.title)}</h2><p>${esc(s.text)}</p>${shotHtml(s.shot)}${foot(i)}</div>`;
@@ -191,6 +209,15 @@ for (let i = 0; i < total; i++) {
     await Promise.all(
       [...document.images].map((im) => im.decode().catch(() => null)),
     );
+    // Кадр игры во всю ширину начинается сразу под текстом (сверху у кадра шапка игры — она и видна).
+    for (const bg of document.querySelectorAll(".full .bg")) {
+      const y = Math.min(
+        document.querySelector(".tx").getBoundingClientRect().bottom + 40,
+        1080,
+      );
+      bg.style.top = `${y}px`;
+      bg.nextElementSibling.style.top = `${y - 60}px`;
+    }
     // Скриншот вписываем в место под текстом: вертикальный — в рамку телефона.
     for (const box of document.querySelectorAll(".shotbox")) {
       const im = box.querySelector("img");
@@ -199,7 +226,10 @@ for (let i = 0; i < total; i++) {
         .at(-1);
       const top = text ? text.getBoundingClientRect().bottom + 50 : 300;
       const bottom = parseFloat(getComputedStyle(box).bottom);
-      const room = Math.min(H - bottom - top, H > 1500 && !document.querySelector(".cat") ? 860 : 9999); // в сторис над скриншотом остаётся место под стикер
+      const room = Math.min(
+        H - bottom - top,
+        H > 1500 && !document.querySelector(".cat") ? 860 : 9999,
+      ); // в сторис над скриншотом остаётся место под стикер
       const w = 920;
       const tall = im.naturalHeight > im.naturalWidth * 1.1;
       if (tall) {

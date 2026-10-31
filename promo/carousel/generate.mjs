@@ -11,15 +11,42 @@ const kind = ["app", "story"].includes(process.argv[3])
   : "tips";
 const topic = (process.argv[4] ?? "").trim().slice(0, 300);
 
-// Скриншоты берём из библиотеки постов канала (server/channelMedia.ts): имя → что на картинке.
-export const SHOTS = Object.fromEntries(
-  [
-    ...readFileSync(
-      new URL("../../server/channelMedia.ts", import.meta.url),
-      "utf8",
-    ).matchAll(/^ {2}'?([\w-]+)'?: '([^']+)',$/gm),
-  ].map((m) => [m[1], m[2]]),
+// Скриншоты: свежие кадры текущей игры 1080×1920 (shots/, вырезаны из видео рилсов) и из библиотеки постов
+// канала (server/channelMedia.ts) — только те, которых нет среди свежих и которые не устарели после редизайна.
+const FRESH = JSON.parse(
+  readFileSync(new URL("./shots/shots.json", import.meta.url), "utf8"),
 );
+const KEEP_OLD = new Set([
+  "cover",
+  "clan-wars",
+  "friends",
+  "stats",
+  "gym-diary",
+  "gym-workout",
+  "share-card",
+  "hero-skills",
+  "laboratory",
+  "village-day-night",
+  "village-summer",
+  "village-winter",
+  "village-night",
+  "village-halloween",
+  "village-decor",
+  "village-defense-win",
+]);
+export const SHOTS = {
+  ...FRESH,
+  ...Object.fromEntries(
+    [
+      ...readFileSync(
+        new URL("../../server/channelMedia.ts", import.meta.url),
+        "utf8",
+      ).matchAll(/^ {2}'?([\w-]+)'?: '([^']+)',$/gm),
+    ]
+      .filter((m) => KEEP_OLD.has(m[1]) && !FRESH[m[1]])
+      .map((m) => [m[1], m[2]]),
+  ),
+};
 
 // Темы по кругу, чтобы карусели подряд не повторялись.
 export const TIP_THEMES = [
@@ -100,7 +127,7 @@ ${common}
 ${Object.entries(SHOTS)
   .map(([id, a]) => `- ${id}: ${a}`)
   .join("\n")}
-Финал (cta): title — призыв, text — бесплатно в Telegram, ничего скачивать, «ссылка в профиле»; shot — подходящий скриншот (например home-hero или cover).`;
+Финал (cta): title — призыв, text — бесплатно в Telegram, ничего скачивать, «ссылка в профиле»; shot — подходящий скриншот (например home, cta или cover).`;
   return `${body}
 
 ${FACTS}
