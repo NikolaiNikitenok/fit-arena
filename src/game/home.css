@@ -164,3 +164,19 @@
   .hv-btn small { display: none; }
 }
 .hv-bottom { grid-area: bottom; padding: 0 4px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Закрытый раздел: тусклый, с замком на значке и подписью, через сколько уровней откроется. */
+.hv-btn.locked .hv-ico > :not(.hb-lock), .hb-feat.locked .hb-feat-icon > :not(.hb-lock), .hb-more-item.locked .hb-more-icon > :not(.hb-lock) { filter: grayscale(.85) brightness(.75); }
+.hv-btn.locked .hv-ico, .hb-more-item.locked .hb-more-icon { background: rgba(60, 64, 80, .7); border-color: rgba(255, 255, 255, .12); box-shadow: none; }
+.hv-btn.locked b, .hb-feat.locked b, .hb-more-item.locked b { opacity: .7; }
+.hv-ico, .hb-feat-icon, .hb-more-icon { position: relative; }
+.hb-lock {
+  position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; background: #1b1d26; color: #ffd27a; border: 1.5px solid rgba(255, 210, 122, .6);
+}
+
+/* Объявление Грома об открытых разделах. */
+.unlock { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.unlock-list { display: flex; flex-direction: column; gap: 8px; width: 100%; margin: 4px 0; }
+.unlock-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, .06); text-align: left; }
+.unlock-item span { font-size: 13px; opacity: .8; }

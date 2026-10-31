@@ -101,6 +101,11 @@ export interface Progress {
   refClaimed?: string[];
   // Месяцы (YYYY-MM), за победу над Титаном которых награда уже забрана.
   titanClaimed?: string[];
+  // Разделы, открытые ссылкой (клан, дуэль, друг), и объявления Грома об открытых разделах (src/game/unlocks.ts).
+  unlocked?: string[];
+  unlockSeen?: string[];
+  // Повторы, посчитанные самим игроком без камеры, по дням: в топ городов и войны кланов они не идут.
+  manual?: Record<string, number>;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
@@ -147,7 +152,7 @@ export function countPass(p: Progress, stat: PassStat, n: number, now: number): 
 
 export const saveProgress = (p: Progress): Progress => save(p);
 
-const fresh = (): Progress => ({
+export const fresh = (): Progress => ({
   stars: {},
   baseline: { ...DEFAULT_BASELINE },
   coins: 0,
@@ -448,6 +453,16 @@ export function recordActivity(p: Progress, exercise: Exercise | null, amount: n
   }
   // Каждый повтор заряжает подземелье «три в ряд» и ускоряет исследование в лаборатории.
   return save(boostLab(addCharge(feedPet(next, total, now), total), total));
+}
+
+/** Повторы без камеры («считаю сам»): помечаем по дням, чтобы сервер не брал их в топ городов. Клану они не идут. */
+export function recordManual(p: Progress, amount: number, now: number): Progress {
+  if (amount <= 0) return p;
+  const date = dayKey(now);
+  const manual = { ...p.manual, [date]: (p.manual?.[date] ?? 0) + amount };
+  const keys = Object.keys(manual).sort();
+  for (const k of keys.slice(0, Math.max(0, keys.length - 60))) delete manual[k];
+  return save({ ...p, manual });
 }
 
 // В неделю можно отдохнуть два дня, и серия не прервётся: мышцам нужен отдых.

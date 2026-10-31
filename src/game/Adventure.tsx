@@ -51,6 +51,7 @@ import {
   streakOf,
   swapsLeft,
   saveProgress,
+  recordManual,
   applyFreeze,
 } from './progress';
 import { Chest, Coin, Flask, Heart, Lock, Star, Swords } from '../icons';
@@ -63,6 +64,9 @@ import { useStarter } from '../cloud';
 import { payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
 import { pl, t } from '../i18n';
+import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, rememberUnlocks } from './unlocks';
+import { linkUnlocks } from './unlockLinks';
+import { lockedText, UnlockSheet } from './UnlockSheet';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
@@ -106,9 +110,13 @@ interface Props {
   onPlaying: (playing: boolean) => void;
   // Друзья с главного экрана: они живут во вкладке дуэли.
   onFriends: () => void;
+  // Вкладка дуэли — из объявления Грома об открытых дуэлях.
+  onDuel?: () => void;
+  // Сколько уровней карты осталось до вкладок нижнего меню (0 — открыта): меню рисует замки.
+  onLocks?: (locks: { village: number; clan: number; duel: number }) => void;
 }
 
-export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
+export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }: Props) {
   const [progress, setProgressState] = useState(loadProgress);
   // Последний прогресс: победа и запись подхода приходят подряд в одном кадре.
   const latest = useRef(progress);
@@ -121,6 +129,17 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const lives = livesNow(progress, now);
   const [strength, setStrength] = useState(false);
   const daily = dailyTask(dayKey(now), progress.baseline);
+  // Ступени разделов (src/game/unlocks.ts): ссылка клана или дуэли открывает свой раздел сразу.
+  const lockLeft = (f: Feature) => levelsToUnlock(progress, f, linkUnlocks());
+  const locks = { village: lockLeft('village'), clan: lockLeft('clan'), duel: lockLeft('duel') };
+  useEffect(() => onLocks?.(locks), [locks.village, locks.clan, locks.duel]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const next = rememberUnlocks(latest.current, linkUnlocks());
+    if (next !== latest.current) setProgress(saveProgress(next));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Новичок с первого экрана сразу идёт на испытание: без брифинга, камера включается сама.
+  const autoStart = useRef(false);
   // Прогресс с сервера: на новом телефоне герой подтягивается сам.
   useEffect(() => {
     void startCloud((p) => setProgress(p));
@@ -142,7 +161,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const currentDef = LEVELS[current - 1];
   const [world, setWorld] = useState(currentDef.world);
   const [playing, setPlayingState] = useState<LevelDef | null>(null);
-  const setPlaying = (l: LevelDef | null) => {
+  const setPlaying = (l: LevelDef | null, auto = false) => {
+    autoStart.current = auto;
     setPlayingState(l);
     onPlaying(!!l);
   };
@@ -288,7 +308,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
             track('mission_start', playing.daily ? 'daily' : playing.id);
             update(spendMight);
           }}
-          onActivity={(ex, reps) => update((p) => addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now()))}
+          onActivity={(ex, reps, manual) => update((p) => (manual ? recordManual(recordActivity(p, ex, reps, Date.now()), reps, Date.now()) : addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now())))}
+          autoStart={autoStart.current}
           lives={lives}
           swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
           onSwap={(count) => {
@@ -352,6 +373,21 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
 
   const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
+  // Объявление Грома о разделах, открытых пройденными уровнями.
+  const fresh = freshUnlocks(progress);
+  const openFeature = (f: Feature) => {
+    if (f === 'duel') return onDuel ? onDuel() : onFriends();
+    if (f === 'village' || f === 'clan') return onTab(f);
+    if (f === 'dungeon') return setDungeon(true);
+    if (f === 'shop') return setShop('weapon');
+    if (f === 'programs') return setPrograms({});
+    if (f === 'gym') return setGym(true);
+    if (f === 'pass') return setPassOpen(true);
+    if (f === 'events') return setEventOpen(true);
+    if (f === 'collections') return setCollectionsOpen(true);
+    if (f === 'city') return setCityOpen(true);
+    if (f === 'daily') return startDaily();
+  };
   // Листы докачиваются тихо, поверх уже видного экрана.
   const sheets = (
     <Suspense fallback={null}>
@@ -362,7 +398,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
             // Повтор из настроек только показывает знакомство: испытание уже пройдено.
             if (replayOnb) return setReplayOnb(false);
             setProgress(finishOnboarding(latest.current));
-            if (start) setPlaying(LEVELS[0]);
+            if (start) setPlaying(LEVELS[0], true);
           }}
         />
       )}
@@ -388,6 +424,16 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
       {holidayOpen && <HolidayScreen progress={progress} setProgress={setProgress} onClose={() => setHolidayOpen(false)} />}
       {collectionsOpen && <CollectionsSheet progress={progress} setProgress={setProgress} onClose={() => setCollectionsOpen(false)} />}
       {cityOpen && <CitySheet onClose={() => setCityOpen(false)} />}
+      {tab === 'hero' && !newcomer && fresh.length > 0 && !(!eggLater && canHatch(progress)) && (
+        <UnlockSheet
+          features={fresh}
+          onClose={() => setProgress(saveProgress(markUnlockSeen(latest.current, fresh)))}
+          onOpen={(f) => {
+            setProgress(saveProgress(markUnlockSeen(latest.current, fresh)));
+            openFeature(f);
+          }}
+        />
+      )}
       {tab === 'hero' && !newcomer && !eggLater && canHatch(progress) && (
         <PetHatch
           onDone={(name) => {
@@ -511,6 +557,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onCity={() => setCityOpen(true)}
           onRecap={openRecap}
           onTitan={() => setTitanOpen(true)}
+          livesLeft={lives.lives}
+          lockLeft={lockLeft}
+          onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />
         {sheets}
       </>

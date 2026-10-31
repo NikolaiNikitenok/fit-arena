@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CameraGuide } from '../CameraGuide';
-import { Banner, MapIcon, Shield, Swords } from '../icons';
 import { Portrait } from './Dialog';
 import { NPCS } from './npcs';
-import { track } from '../telemetry';
+import { markFirstOpen, track } from '../telemetry';
+import { preloadPose } from '../useRepCamera';
+import { unlockVoice } from '../voice';
 import { openPrivacy } from '../privacy';
 import { HaveHeroButton } from '../account/Account';
 import { WebLoginButtons } from '../account/WebLogin';
@@ -17,14 +18,16 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
   // Знакомство с игрой — без плашки «Игра обновилась» поверх.
   useBusy(true);
   const [step, setStep] = useState(0);
+  // Два экрана и сразу испытание: первый засчитанный повтор — меньше чем через минуту.
+  // Про разделы рассказывает Гром, когда они открываются (src/game/unlocks.ts), а не здесь.
   const steps = [
     {
       title: t('Добро пожаловать в NikitenokArena!'),
       text: t('Я Мастер Гром. Князь Диван усыпил королевство Атлетию ленью, и разбудить его можно только движением. Здесь каждый твой повтор — удар по врагу, шаг по карте и сила героя.'),
     },
     {
-      title: t('Камера считает сама'),
-      text: t('Поставь телефон сбоку на уровне пояса, чтобы в кадр попадало всё тело. Видео никуда не уходит: распознавание работает прямо на телефоне.'),
+      title: t('Первое испытание: минута приседаний'),
+      text: t('Поставь телефон на пол или стул в паре метров, чтобы в кадр попадало всё тело. Камера сама считает повторы, видео никуда не уходит.'),
       extra: (
         <>
           <CameraGuide exercise="squat" compact />
@@ -34,30 +37,13 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
         </>
       ),
     },
-    {
-      title: t('Четыре раздела'),
-      extra: (
-        <div className="onb-tabs">
-          <div>
-            <Shield size={20} /> <b>{t('Герой')}</b> {t('— твой уровень, снаряжение и задание дня от жителей.')}
-          </div>
-          <div>
-            <MapIcon size={20} /> <b>{t('Карта')}</b> {t('— 300 уровней в трёх мирах, боссы и сундуки.')}
-          </div>
-          <div>
-            <Banner size={20} /> <b>{t('Клан')}</b> {t('— друзья, чат и рейд-босс по выходным.')}
-          </div>
-          <div>
-            <Swords size={20} /> <b>{t('Дуэль')}</b> {t('— бой с живым соперником: кто больше повторов.')}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: t('Начнём с испытания'),
-      text: t('Минута приседаний, сколько сможешь. Так я пойму твою форму и подберу врагов по силе: дальше они будут расти вместе с тобой.'),
-    },
   ];
+  // Модель распознавания (≈19 МБ) качаем, пока новичок читает: к испытанию она уже готова.
+  useEffect(() => {
+    if (replay) return;
+    markFirstOpen();
+    void preloadPose().catch(() => {});
+  }, [replay]);
   // Статистика: до какого шага доходят новички (повтор из настроек не считаем).
   useEffect(() => {
     if (!replay) track('onb_step', step);
@@ -82,7 +68,15 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
         </div>
         {s.text && <div className="onb-text">{s.text}</div>}
         {s.extra}
-        <button className="primary" onClick={() => (last ? done(true) : setStep(step + 1))}>
+        <button
+          className="primary"
+          onClick={() => {
+            if (!last) return setStep(step + 1);
+            // Прямо из нажатия: иначе iOS в Telegram не даст Грому говорить на испытании.
+            if (!replay) unlockVoice();
+            done(true);
+          }}
+        >
           {last ? (replay ? t('Понятно') : t('Начать испытание')) : t('Дальше')}
         </button>
         <button className="link" onClick={() => done(false)}>

@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { Adventure, AdventureTab } from './game/Adventure';
 import type { JoinRoom } from './Duel';
 import { PowerToast } from './PowerToast';
 import { FriendInbox } from './friends/FriendInbox';
 import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './repCounter';
-import { Banner, MapIcon, Shield, Swords } from './icons';
+import { Banner, Lock, MapIcon, Shield, Swords } from './icons';
+import { lockedText } from './game/UnlockSheet';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
 import { useBusy } from './updates/busy';
@@ -33,6 +34,15 @@ export function App() {
   const [playing, setPlaying] = useState(false);
   useBusy(playing);
   const full = (tab === 'map' || tab === 'village') && !playing;
+  // Вкладки, которые ещё не открыты уровнями карты (src/game/unlocks.ts): сколько уровней осталось.
+  const [locks, setLocks] = useState<Partial<Record<Tab, number>>>({});
+  const [lockToast, setLockToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showLock = (tb: 'village' | 'clan' | 'duel') => {
+    setLockToast(lockedText(tb, locks[tb] ?? 0));
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setLockToast(null), 3500);
+  };
 
   return (
     <div className={`app ${full ? 'full' : ''} ${playing ? '' : 'with-nav'}`}>
@@ -59,6 +69,12 @@ export function App() {
           tab={tab}
           onTab={setTab}
           onPlaying={setPlaying}
+          onLocks={setLocks}
+          onDuel={() => {
+            setFriendsFirst(false);
+            setJoin(undefined);
+            setTab('duel');
+          }}
           onFriends={() => {
             setFriendsFirst(true);
             setJoin(undefined);
@@ -80,22 +96,28 @@ export function App() {
 
       <UpdateBanner />
 
+      {lockToast && !playing && <div className="toast global">{lockToast}</div>}
+
       {!playing && (
         <nav className="bottom-nav">
-          {NAV.map((n) => (
-            <button
-              key={n.tab}
-              className={tab === n.tab ? 'active' : ''}
-              onClick={() => {
-                setTab(n.tab);
-                setFriendsFirst(false);
-                setJoin(undefined);
-              }}
-            >
-              <n.Icon />
-              {n.label}
-            </button>
-          ))}
+          {NAV.map((n) => {
+            const left = locks[n.tab] ?? 0;
+            return (
+              <button
+                key={n.tab}
+                className={`${tab === n.tab ? 'active' : ''} ${left ? 'locked' : ''}`}
+                onClick={() => {
+                  if (left && n.tab !== tab && (n.tab === 'village' || n.tab === 'clan' || n.tab === 'duel')) return showLock(n.tab);
+                  setTab(n.tab);
+                  setFriendsFirst(false);
+                  setJoin(undefined);
+                }}
+              >
+                {left ? <Lock size={22} /> : <n.Icon />}
+                {n.label}
+              </button>
+            );
+          })}
         </nav>
       )}
     </div>

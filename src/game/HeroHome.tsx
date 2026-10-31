@@ -10,7 +10,9 @@ import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achieve
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streakOf } from './progress';
-import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, PassShield, Plan, Swords, Users } from '../icons';
+import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, Lock, PassShield, Plan, Swords, Users } from '../icons';
+import type { Feature } from './unlocks';
+import { pickToday, TodayKind } from './today';
 import { HOLIDAY_GOAL, holidayAt, holidayOutfit, holidayTokens, tokenWord } from './holidays';
 import { collectionDone, visibleCollections } from './collections';
 import { OutfitFace } from './EventScreen';
@@ -30,6 +32,7 @@ import { LANDS } from './lands';
 import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
+import { clearedLevels } from './unlocks';
 import './home.css';
 import { Sheet } from '../Sheet';
 import { t, locale } from '../i18n';
@@ -85,6 +88,11 @@ interface Props {
   onCity: () => void;
   onRecap: (month: string) => void;
   onTitan: () => void;
+  // Сколько жизней сейчас: от них зависит, что предложит «Тренировка дня».
+  livesLeft: number;
+  // Сколько уровней карты осталось до раздела (0 — открыт) и что сказать, если нажали закрытый.
+  lockLeft: (f: Feature) => number;
+  onLocked: (f: Feature) => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -104,50 +112,64 @@ export const GearFace = ({ g, size = 52 }: { g: Gear; size?: number }) => (
 /** Метка на плитке: точка или число. */
 const Dot = ({ n }: { n: number | boolean }) => (n ? <span className="hb-dot">{typeof n === 'number' && n > 1 ? n : ''}</span> : null);
 
+/** Закрытый раздел: замок поверх значка и сколько уровней карты осталось. */
+const LockMark = () => (
+  <span className="hb-lock" aria-hidden>
+    <Lock size={12} />
+  </span>
+);
+const lockSub = (n: number) => t('откроется через {0} ур.', { 0: n });
+
 /** Большая карточка раздела под героем: значок, название, состояние и полоска прогресса в цвете раздела. */
-function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; onClick: () => void }) {
+function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', lock = 0, onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; lock?: number; onClick: () => void }) {
   return (
-    <button className={`hb-feat ${cls}`} style={{ ['--fc' as string]: color }} onClick={onClick}>
-      <span className={`hb-feat-icon ${iconCls}`}>{icon}</span>
+    <button className={`hb-feat ${cls} ${lock ? 'locked' : ''}`} style={{ ['--fc' as string]: color }} onClick={onClick}>
+      <span className={`hb-feat-icon ${iconCls}`}>
+        {icon}
+        {lock > 0 && <LockMark />}
+      </span>
       <span className="hb-feat-text">
         <b>{title}</b>
-        <small>{sub}</small>
-        {bar !== undefined && (
+        <small>{lock ? lockSub(lock) : sub}</small>
+        {bar !== undefined && !lock && (
           <span className="hb-feat-bar">
             <span style={{ width: `${Math.max(4, Math.min(100, bar * 100))}%` }} />
           </span>
         )}
       </span>
-      <Dot n={dot ?? 0} />
+      <Dot n={lock ? 0 : (dot ?? 0)} />
     </button>
   );
 }
 
 /** Кнопка боковой колонки главной «во весь экран»: значок-плитка, подпись и точка. */
-function Side({ title, sub, icon, color, dot, onClick }: { title: string; sub?: string; icon: ReactNode; color: string; dot?: number | boolean; onClick: () => void }) {
+function Side({ title, sub, icon, color, dot, lock = 0, onClick }: { title: string; sub?: string; icon: ReactNode; color: string; dot?: number | boolean; lock?: number; onClick: () => void }) {
   return (
-    <button className="hv-btn" style={{ ['--c' as string]: color }} onClick={onClick}>
+    <button className={`hv-btn ${lock ? 'locked' : ''}`} style={{ ['--c' as string]: color }} onClick={onClick}>
       <span className="hv-ico">
         {icon}
-        <Dot n={dot ?? 0} />
+        {lock > 0 ? <LockMark /> : <Dot n={dot ?? 0} />}
       </span>
       <b>{title}</b>
-      {sub && <small>{sub}</small>}
+      {lock ? <small>{t('через {0} ур.', { 0: lock })}</small> : sub && <small>{sub}</small>}
     </button>
   );
 }
 
 type Tone = 'accent' | 'gold' | 'mint' | 'teal' | 'blue' | 'violet' | 'rose' | 'pet';
 /** Плитка сетки «Ещё»: яркий значок-«иконка приложения» и подпись. */
-function More({ title, sub, icon, tone, dot, cls = '', style, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; onClick: () => void }) {
+function More({ title, sub, icon, tone, dot, cls = '', style, lock = 0, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; lock?: number; onClick: () => void }) {
   return (
-    <button className={`hb-more-item ${cls}`} style={style} onClick={onClick}>
-      <span className={`hb-more-icon ${tone}`}>{icon}</span>
+    <button className={`hb-more-item ${cls} ${lock ? 'locked' : ''}`} style={style} onClick={onClick}>
+      <span className={`hb-more-icon ${tone}`}>
+        {icon}
+        {lock > 0 && <LockMark />}
+      </span>
       <span className="hb-more-text">
         <b>{title}</b>
-        <small>{sub}</small>
+        <small>{lock ? lockSub(lock) : sub}</small>
       </span>
-      <Dot n={dot ?? 0} />
+      <Dot n={lock ? 0 : (dot ?? 0)} />
     </button>
   );
 }
@@ -170,7 +192,9 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft } = props;
+  // Закрытый раздел: вместо перехода — подсказка, когда он откроется.
+  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), onClick: lockLeft(f) ? () => onLocked(f) : fn });
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -230,14 +254,49 @@ export function HeroHome(props: Props) {
   // На главной — одна полоса события, самая важная сейчас: идущий Титан, идущий праздник, свежие итоги,
   // потом анонсы. Остальные события не пропадают — они плитками в начале «Ещё».
   const recapFresh = !!recapM && progress.recapSeen !== recapM;
+  // Титан и праздник — после открытия событий: в первые дни новичку хватает карты.
+  const eventsOpen = !lockLeft('events');
   const slots = [
-    titanShown?.live && 'titan',
-    hol.live && 'holiday',
+    eventsOpen && titanShown?.live && 'titan',
+    eventsOpen && hol.live && 'holiday',
     recapFresh && 'recap',
-    titanShown && !titanShown.live && 'titan',
-    holShown && !hol.live && 'holiday',
+    eventsOpen && titanShown && !titanShown.live && 'titan',
+    eventsOpen && holShown && !hol.live && 'holiday',
     recapM && !recapFresh && 'recap',
   ].filter((x): x is 'titan' | 'holiday' | 'recap' => !!x);
+  // «Тренировка дня»: одна кнопка выбирает лучшее дело на сегодня (src/game/today.ts).
+  const dailyClaimed = progress.dailyDone === daily.date;
+  const today: TodayKind = pickToday({
+    cleared: clearedLevels(progress),
+    lives: livesLeft,
+    unlocked: (f) => !lockLeft(f),
+    programReady: av === 'ready',
+    dailyDone,
+    dailyTarget: daily.target,
+    dailyClaimed,
+    eventLive: w.live,
+    eventWon: !!ev.won,
+    eventTries: triesLeft(progress, now),
+    dungeonFloors: unfinished ? 1 : floors,
+  });
+  const todayGo: Record<TodayKind, () => void> = { level: onTrain, program: onPrograms, daily: onDaily, event: onEvent, dungeon: onDungeon, programs: onPrograms };
+  const todaySub: Record<TodayKind, string> = {
+    level: t('Уровень карты {0} · {1}', { 0: current.num, 1: current.title }),
+    program: prog && run ? t('{0} · день {1}', { 0: prog.title, 1: run.day }) : t('Программа Грома'),
+    daily: t('{0}: {1} — просьба жителя', { 0: EXERCISE_LABELS[daily.exercise], 1: amountText(daily.exercise, Math.max(0, daily.target - dailyDone)) }),
+    event: t('{0}: попыток сегодня {1}', { 0: boss.name, 1: triesLeft(progress, now) }),
+    dungeon: t('Жизни копятся — потрать заряд в подземелье'),
+    programs: t('Жизни копятся — тренировка по программе'),
+  };
+  const cta = (
+    <button className="primary hb-cta" onClick={todayGo[today]}>
+      <Swords size={24} />
+      <span className="hb-cta-text">
+        {t('Тренировка дня')}
+        <small>{todaySub[today]}</small>
+      </span>
+    </button>
+  );
   const slot = slots[0];
   const extra = slots.slice(1);
 
@@ -259,12 +318,14 @@ export function HeroHome(props: Props) {
         <button className="pill btn hb-hit" onClick={onStrength} aria-label={t('Серия и сила')}>
           <Flame className="flame" /> {series.days}
         </button>
-        <button className="pill btn hb-hit" onClick={() => onShop()} aria-label={t('Монеты: лавка')}>
+        <button className="pill btn hb-hit" {...g('shop', () => onShop())} aria-label={t('Монеты: лавка')}>
           <Coin className="coin" /> {progress.coins}
         </button>
-        <button className="pill btn hb-hit" onClick={onDungeon} aria-label={t('Заряд подземелья')}>
-          <Bolt className="hb-bolt" /> {charge}
-        </button>
+        {!lockLeft('dungeon') && (
+          <button className="pill btn hb-hit" onClick={onDungeon} aria-label={t('Заряд подземелья')}>
+            <Bolt className="hb-bolt" /> {charge}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -332,20 +393,20 @@ export function HeroHome(props: Props) {
         </div>
 
         <div className="hv-col left">
-          <Side title={t('Пропуск')} sub={t('{0} из {1}', { 0: passT.tier, 1: PASS_TIERS })} color={pro ? '#ffd27a' : '#8fb3ff'} dot={badges.pass} onClick={onPass} icon={<PassShield size={34} gold={pro} label={passT.tier} />} />
-          {w.live ? (
-            <Side title={t('Событие')} sub={ev.won ? t('победа!') : fmtLeft(w.end - now)} color={boss.glow} dot={badges.event} onClick={onEvent} icon={<Portrait line={bossFace} size={44} />} />
+          <Side title={t('Пропуск')} sub={t('{0} из {1}', { 0: passT.tier, 1: PASS_TIERS })} color={pro ? '#ffd27a' : '#8fb3ff'} dot={badges.pass} {...g('pass', onPass)} icon={<PassShield size={34} gold={pro} label={passT.tier} />} />
+          {w.live && eventsOpen ? (
+            <Side title={t('Событие')} sub={ev.won ? t('победа!') : fmtLeft(w.end - now)} color={boss.glow} dot={badges.event} {...g('events', onEvent)} icon={<Portrait line={bossFace} size={44} />} />
           ) : (
             <Side title={t('Награды')} sub={t('{0} из {1}', { 0: achGot.length, 1: achAll.length })} color="#ffd27a" dot={badges.achievements} onClick={onAchievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} />
           )}
-          <Side title={t('Подземелье')} sub={unfinished ? t('не доигран') : floors ? `×${floors}` : t('{0} повт.', { 0: FLOOR_COST - charge })} color={land.accent} dot={badges.dungeon} onClick={onDungeon} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={42} />} />
-          <Side title={t('Программы')} sub={prog && run ? t('день {0}', { 0: run.day }) : t('план')} color="#ff8a5c" dot={badges.programs} onClick={onPrograms} icon={<Plan size={26} />} />
+          <Side title={t('Подземелье')} sub={unfinished ? t('не доигран') : floors ? `×${floors}` : t('{0} повт.', { 0: FLOOR_COST - charge })} color={land.accent} dot={badges.dungeon} {...g('dungeon', onDungeon)} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={42} />} />
+          <Side title={t('Программы')} sub={prog && run ? t('день {0}', { 0: run.day }) : t('план')} color="#ff8a5c" dot={badges.programs} {...g('programs', onPrograms)} icon={<Plan size={26} />} />
         </div>
 
         <div className="hv-col right">
-          <Side title={t('Лавка')} sub={t('Фёдора')} color="#ffd27a" onClick={() => onShop()} icon={<Bag size={26} />} />
+          <Side title={t('Лавка')} sub={t('Фёдора')} color="#ffd27a" {...g('shop', () => onShop())} icon={<Bag size={26} />} />
           <Side title={pet ? petName(progress, pet) : t('Питомец')} sub={pet ? t('ур. {0}', { 0: petLvl }) : t('яйцо')} color="#ffb46b" dot={badges.pets} onClick={onPets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} />
-          <Side title={t('Друзья')} sub={t('и вызовы')} color="#ff6b81" onClick={onFriends} icon={<Users size={26} />} />
+          <Side title={t('Друзья')} sub={t('и вызовы')} color="#ff6b81" {...g('duel', onFriends)} icon={<Users size={26} />} />
           <Side title={t('Ещё')} sub={t('все разделы')} color="#a78bfa" dot={moreDot} onClick={() => setMoreOpen(true)} icon={<MoreIcon />} />
         </div>
 
@@ -367,16 +428,8 @@ export function HeroHome(props: Props) {
         </button>
 
         <div className="hv-bottom">
-          <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
-          <button className="primary hb-cta" onClick={onTrain}>
-            <Swords size={24} />
-            <span className="hb-cta-text">
-              {t('В бой')}
-              <small>
-                {t('Уровень карты {0} · {1}', { 0: current.num, 1: current.title })}
-              </small>
-            </span>
-          </button>
+          {!lockLeft('daily') && <DailyChip task={daily} done={dailyDone} claimed={dailyClaimed} onPlay={onDaily} onClaim={onClaimDaily} />}
+          {cta}
         </div>
 
         </div>
@@ -391,13 +444,13 @@ export function HeroHome(props: Props) {
               {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title={t('Итоги')} sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
               <More onClick={() => setHeroOpen(true)} title={t('Вещи')} sub={t('и зелья')} icon={<Swords size={22} />} tone="accent" />
               <More onClick={onStrength} title={t('Сила')} sub={t('рекорды')} icon={<Dumbbell size={22} />} tone="mint" />
-              <More onClick={onGym} title={t('Зал')} sub={gym.run ? t('идёт') : gymToday ? t('сегодня') : t('дневник')} icon={<Kettlebell size={22} />} tone="teal" />
-              <More onClick={onCollections} title={t('Коллекции')} sub={t('{0} из {1}', { 0: colsDone, 1: cols.length })} icon={<Album size={22} />} tone="violet" />
-              <More onClick={onCity} title={t('Битва городов')} sub={t('карта России')} icon={<City size={22} />} tone="blue" />
+              <More {...g('gym', onGym)} title={t('Зал')} sub={gym.run ? t('идёт') : gymToday ? t('сегодня') : t('дневник')} icon={<Kettlebell size={22} />} tone="teal" />
+              <More {...g('collections', onCollections)} title={t('Коллекции')} sub={t('{0} из {1}', { 0: colsDone, 1: cols.length })} icon={<Album size={22} />} tone="violet" />
+              <More {...g('city', onCity)} title={t('Битва городов')} sub={t('карта России')} icon={<City size={22} />} tone="blue" />
               {w.live ? (
                 <More onClick={onAchievements} title={t('Достижения')} sub={t('{0} из {1}', { 0: achGot.length, 1: achAll.length })} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} tone="pet" />
               ) : (
-                <More onClick={onEvent} cls="hb-event-soon" style={{ ['--eg' as string]: boss.glow }} title={t('Событие')} sub={fmtDays(daysUntil(w, now))} icon={<Portrait line={bossFace} size={40} />} tone="pet" />
+                <More {...g('events', onEvent)} cls="hb-event-soon" style={{ ['--eg' as string]: boss.glow }} title={t('Событие')} sub={fmtDays(daysUntil(w, now))} icon={<Portrait line={bossFace} size={40} />} tone="pet" />
               )}
             </div>
           </Sheet>
@@ -443,26 +496,18 @@ export function HeroHome(props: Props) {
         </div>
       </div>
 
-      <button className="primary hb-cta" onClick={onTrain}>
-        <Swords size={24} />
-        <span className="hb-cta-text">
-          {t('В бой')}
-          <small>
-            {t('Уровень карты {0} · {1}', { 0: current.num, 1: current.title })}
-          </small>
-        </span>
-      </button>
+      {cta}
 
-      <DailyChip task={daily} done={dailyDone} claimed={progress.dailyDone === daily.date} onPlay={onDaily} onClaim={onClaimDaily} />
+      {!lockLeft('daily') && <DailyChip task={daily} done={dailyDone} claimed={dailyClaimed} onPlay={onDaily} onClaim={onClaimDaily} />}
 
       {eventBanner}
 
       <div className="hb-feats">
-        <Feat cls={`hb-dungeon ${unfinished || floors ? 'ready' : ''}`} color={land.accent} onClick={onDungeon} title={t('Подземелье')} sub={unfinished ? t('этаж {0} не доигран', { 0: floor.id }) : floors ? t('этаж {0} · ×{1}', { 0: floor.id, 1: floors }) : t('ещё {0} повт.', { 0: FLOOR_COST - charge })} bar={unfinished || floors ? 1 : charge / FLOOR_COST} dot={badges.dungeon} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={44} />} />
-        <Feat color="#ff8a5c" onClick={onPrograms} title={t('Программы')} sub={prog && run ? (av === 'ready' ? t('день {0} сегодня', { 0: run.day }) : t('день {0} из {1}', { 0: run.day, 1: prog.days })) : t('выбрать план')} bar={prog && run ? (run.day - 1) / prog.days : undefined} dot={badges.programs} icon={<Plan size={28} />} iconCls="hb-prog" />
-        <Feat cls={pro ? 'pro' : ''} color={pro ? '#ffd27a' : '#8fb3ff'} onClick={onPass} title={t('Пропуск')} sub={t('ступень {0} из {1}', { 0: passT.tier, 1: PASS_TIERS })} bar={passT.into / passT.need} dot={badges.pass} icon={<PassShield size={40} gold={pro} label={passT.tier} />} />
-        {w.live ? (
-          <Feat cls={`hb-event ${ev.won ? 'won' : ''}`} color={boss.glow} onClick={onEvent} title={t('Событие')} sub={ev.won ? t('босс повержен!') : t('ещё {0}', { 0: fmtLeft(w.end - now) })} dot={badges.event} icon={<Portrait line={bossFace} size={46} />} />
+        <Feat cls={`hb-dungeon ${unfinished || floors ? 'ready' : ''}`} color={land.accent} {...g('dungeon', onDungeon)} title={t('Подземелье')} sub={unfinished ? t('этаж {0} не доигран', { 0: floor.id }) : floors ? t('этаж {0} · ×{1}', { 0: floor.id, 1: floors }) : t('ещё {0} повт.', { 0: FLOOR_COST - charge })} bar={unfinished || floors ? 1 : charge / FLOOR_COST} dot={badges.dungeon} icon={<MonsterFace shape={monster.shape} color={monster.color} boss={floor.boss} size={44} />} />
+        <Feat color="#ff8a5c" {...g('programs', onPrograms)} title={t('Программы')} sub={prog && run ? (av === 'ready' ? t('день {0} сегодня', { 0: run.day }) : t('день {0} из {1}', { 0: run.day, 1: prog.days })) : t('выбрать план')} bar={prog && run ? (run.day - 1) / prog.days : undefined} dot={badges.programs} icon={<Plan size={28} />} iconCls="hb-prog" />
+        <Feat cls={pro ? 'pro' : ''} color={pro ? '#ffd27a' : '#8fb3ff'} {...g('pass', onPass)} title={t('Пропуск')} sub={t('ступень {0} из {1}', { 0: passT.tier, 1: PASS_TIERS })} bar={passT.into / passT.need} dot={badges.pass} icon={<PassShield size={40} gold={pro} label={passT.tier} />} />
+        {w.live && eventsOpen ? (
+          <Feat cls={`hb-event ${ev.won ? 'won' : ''}`} color={boss.glow} {...g('events', onEvent)} title={t('Событие')} sub={ev.won ? t('босс повержен!') : t('ещё {0}', { 0: fmtLeft(w.end - now) })} dot={badges.event} icon={<Portrait line={bossFace} size={46} />} />
         ) : (
           achFeat
         )}
@@ -475,16 +520,16 @@ export function HeroHome(props: Props) {
         {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title={t('Итоги')} sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
         <More onClick={onPets} title={pet ? petName(progress, pet) : t('Питомец')} sub={pet ? t('ур. {0}', { 0: petLvl }) : t('яйцо ждёт')} dot={badges.pets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} tone="pet" />
         <More onClick={() => setHeroOpen(true)} title={t('Вещи')} sub={t('и зелья')} icon={<Swords size={22} />} tone="accent" />
-        <More onClick={() => onShop()} title={t('Лавка')} sub={t('Фёдора')} icon={<Bag size={22} />} tone="gold" />
+        <More {...g('shop', () => onShop())} title={t('Лавка')} sub={t('Фёдора')} icon={<Bag size={22} />} tone="gold" />
         <More onClick={onStrength} title={t('Сила')} sub={t('рекорды')} icon={<Dumbbell size={22} />} tone="mint" />
-        <More onClick={onGym} title={t('Зал')} sub={gym.run ? t('идёт') : gymToday ? t('сегодня') : t('дневник')} dot={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} icon={<Kettlebell size={22} />} tone="teal" />
-        <More onClick={onCollections} title={t('Коллекции')} sub={t('{0} из {1}', { 0: colsDone, 1: cols.length })} icon={<Album size={22} />} tone="violet" />
-        <More onClick={onCity} title={t('Битва городов')} sub={t('карта России')} icon={<City size={22} />} tone="blue" />
-        <More onClick={onFriends} title={t('Друзья')} sub={t('и вызовы')} icon={<Users size={22} />} tone="rose" />
+        <More {...g('gym', onGym)} title={t('Зал')} sub={gym.run ? t('идёт') : gymToday ? t('сегодня') : t('дневник')} dot={!!gym.run || (!!gymToday && !gym.history.some((s) => dayKey(s.start) === dayKey(now)))} icon={<Kettlebell size={22} />} tone="teal" />
+        <More {...g('collections', onCollections)} title={t('Коллекции')} sub={t('{0} из {1}', { 0: colsDone, 1: cols.length })} icon={<Album size={22} />} tone="violet" />
+        <More {...g('city', onCity)} title={t('Битва городов')} sub={t('карта России')} icon={<City size={22} />} tone="blue" />
+        <More {...g('duel', onFriends)} title={t('Друзья')} sub={t('и вызовы')} icon={<Users size={22} />} tone="rose" />
         {w.live ? (
           <More onClick={onAchievements} title={t('Достижения')} sub={t('{0} из {1}', { 0: achGot.length, 1: achAll.length })} dot={badges.achievements} icon={<AchBadge ach={lastAch ?? ACHIEVEMENTS[0]} done={!!lastAch} size={40} />} tone="pet" />
         ) : (
-          <More onClick={onEvent} cls="hb-event-soon" style={{ ['--eg' as string]: boss.glow }} title={t('Событие')} sub={fmtDays(daysUntil(w, now))} icon={<Portrait line={bossFace} size={40} />} tone="pet" />
+          <More {...g('events', onEvent)} cls="hb-event-soon" style={{ ['--eg' as string]: boss.glow }} title={t('Событие')} sub={fmtDays(daysUntil(w, now))} icon={<Portrait line={bossFace} size={40} />} tone="pet" />
         )}
       </div>
 

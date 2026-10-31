@@ -62,6 +62,14 @@ export function weekDays(now: number): string[] {
   return Array.from({ length: 7 }, (_, i) => new Date(monday + i * DAY).toISOString().slice(0, 10));
 }
 
+/** Дни для топа: повторы, посчитанные самим игроком без камеры («считаю сам»), в зачёт не идут. */
+export function cameraDays(progress: unknown): Record<string, number> {
+  const p = (progress ?? {}) as { days?: Record<string, unknown>; manual?: Record<string, unknown> };
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(p.days ?? {})) out[k] = Math.max(0, (Number(v) || 0) - (Number(p.manual?.[k]) || 0));
+  return out;
+}
+
 /** Повторы за неделю из дней тренировок: не больше предела в день. */
 export function weekReps(days: unknown, week: string[]): number {
   const d = (days ?? {}) as Record<string, unknown>;

@@ -68,7 +68,7 @@ import { AccountStore } from './accounts';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
-import { CityStore } from './cities';
+import { cameraDays, CityStore } from './cities';
 import { ProTrials } from './proTrials';
 import { isActive, Referrals } from './referrals';
 import { TitanBoard } from './titan';
@@ -702,7 +702,7 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
     const r = cities.set(me.id, body!.city, me.name, now);
     if (typeof r === 'string') return reply(400, { error: r });
   } else cities.rename(me.id, me.name);
-  reply(200, cities.board({ days: (id) => saves.get(id)?.progress?.days, level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
+  reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
 }
 
 /** Итоги месяца: POST /api/recap ({ month }) — место среди игроков и города; POST /api/story-image ({ image }) — картинка для сторис. */

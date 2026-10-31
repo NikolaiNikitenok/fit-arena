@@ -9,7 +9,7 @@ declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
 
 /** События — тот же список, что на сервере (EVENTS в server/telemetry.ts). */
-export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status';
+export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock';
 
 export type ErrorKind = 'error' | 'promise' | 'react' | 'camera' | 'model' | 'webgl';
 
@@ -50,6 +50,34 @@ export function track(n: TrackEvent, p?: number | string): void {
   events.push(p == null ? { n } : { n, p });
   if (events.length > 100) events = events.slice(-100);
   schedule();
+}
+
+// Время до первого засчитанного повтора у новичка: от первого открытия знакомства до повтора.
+const FIRST_OPEN_KEY = 'fit-arena-first-open';
+const FIRST_REP_KEY = 'fit-arena-first-rep';
+
+/** Знакомство открыто впервые: запоминаем время (только у новичков — у старых игроков отсчёта нет). */
+export function markFirstOpen(): void {
+  try {
+    if (!localStorage.getItem(FIRST_OPEN_KEY)) localStorage.setItem(FIRST_OPEN_KEY, String(Date.now()));
+  } catch {
+    // Без хранилища времени не узнаем.
+  }
+}
+
+/** Секунды до первого повтора, по корзинам: 30, 60, 120, 300 и 999 (дольше пяти минут). */
+export const firstRepBucket = (sec: number): number => [30, 60, 120, 300].find((b) => sec <= b) ?? 999;
+
+/** Первый засчитанный повтор новичка: событие один раз за всё время. */
+export function trackFirstRep(): void {
+  try {
+    const opened = Number(localStorage.getItem(FIRST_OPEN_KEY));
+    if (!opened || localStorage.getItem(FIRST_REP_KEY)) return;
+    localStorage.setItem(FIRST_REP_KEY, '1');
+    track('first_rep', firstRepBucket((Date.now() - opened) / 1000));
+  } catch {
+    // Без хранилища — без события.
+  }
 }
 
 /** То же, но не чаще раза за сессию (камера разрешена и т. п.). */
