@@ -59,9 +59,10 @@ import { adminCommand, type ModerationDeps, moderationApi } from './moderationAp
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
 import { villageApi } from './villageApi';
-import { Channel, type ChannelDeps } from './channel';
+import { agentFetch, Channel, type ChannelDeps } from './channel';
 import { PersonalChannel } from './personalChannel';
-import { mediaDir } from './channelMedia';
+import { Threads } from './threads';
+import { CHANNEL_MEDIA, mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
@@ -491,18 +492,28 @@ const personal = new PersonalChannel(process.env.PERSONAL_CHANNEL_FILE ?? join(d
   stats: () => telemetry.summaryText(),
   ignoreText: (t) => t.trim() in ADMIN_BUTTONS,
 });
+// Threads (Meta): черновик раз в день с кнопкой «Опубликовать» или авто-режим. Токен — секрет THREADS_TOKEN → .threads-token.
+const THREADS = process.env.THREADS ?? 'on';
+const threads = new Threads(process.env.THREADS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'threads.json'), {
+  ...channelDeps,
+  channel: 'Threads',
+  approvers: () => admins.ids().map(Number),
+  threadsToken: () => process.env.THREADS_TOKEN || readToken(join(__dirname, '.threads-token')),
+  // Meta, как и Telegram, с сервера может быть недоступна напрямую — тот же прокси (в нём нужен домен threads.net).
+  threadsFetch: agentFetch(currentAgent),
+  mediaUrl: (name) => `${APP_URL}/api/threads/media/${name}.jpg`,
+  ignoreText: (t) => t.trim() in ADMIN_BUTTONS,
+});
 // Рилсы для Instagram: кнопка запускает сборку в GitHub Actions (server/reels.ts), токен — секрет GH_ACTIONS_TOKEN → .gh-token.
 const reels = new Reels(process.env.REELS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'reels.json'), {
   token: () => process.env.GH_ACTIONS_TOKEN || readToken(join(__dirname, '.gh-token')),
 });
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
-const channelUpdate = (u: Update): boolean =>
-  PERSONAL_CHANNEL !== 'off' &&
-  personal.onUpdate(
-    u,
-    (chatId, text) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null),
-    (id, text) => void botApi(BOT_TOKEN)('answerCallbackQuery', { callback_query_id: id, text }, 15_000).catch(() => null),
-  );
+const channelUpdate = (u: Update): boolean => {
+  const reply = (chatId: number, text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null);
+  const answer = (id: string, text?: string) => void botApi(BOT_TOKEN)('answerCallbackQuery', { callback_query_id: id, text }, 15_000).catch(() => null);
+  return (THREADS !== 'off' && threads.onUpdate(u, reply, answer)) || (PERSONAL_CHANNEL !== 'off' && personal.onUpdate(u, reply, answer));
+};
 /** Команды канала от админа: /channel, /channel_draft, /channel_post. */
 // Клавиатура админа внизу чата: кнопка шлёт свой текст, его переводим в команду.
 const ADMIN_BUTTONS: Record<string, string> = {
@@ -516,9 +527,10 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '🖼 Карусель: приложение': '/carousel app',
   '📱 Сторис': '/story',
   '🎭 Рилс от персонажа': '/talk',
+  '🧵 Пост в Threads': '/threads',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -526,14 +538,14 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|threads)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
-  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, карусели и сторис для Instagram. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
+  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, карусели и сторис для Instagram, пост в Threads. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
-  if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}`), true;
-  return reels.command(chatId, text, reply) || personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
+  if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}\n\n${threads.status()}`), true;
+  return reels.command(chatId, text, reply) || threads.command(chatId, text, reply) || personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
 };
 const clanInfo = (code: string) => {
   const c = clans.byCode(code);
@@ -983,6 +995,16 @@ const http = createServer((req, res) => {
     return;
   }
   const path = req.url?.split('?')[0] ?? '';
+  // Картинки для постов в Threads: Meta скачивает их по публичному адресу. Только из библиотеки скриншотов.
+  const media = /^\/api\/threads\/media\/([a-z0-9-]+)\.jpg$/.exec(path);
+  if (media && req.method === 'GET') {
+    if (!(media[1] in CHANNEL_MEDIA)) return void res.writeHead(404).end();
+    try {
+      return void res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' }).end(readFileSync(join(mediaDir(__dirname), `${media[1]}.jpg`)));
+    } catch {
+      return void res.writeHead(404).end();
+    }
+  }
   if (path === '/api/tg' && req.method === 'POST') {
     if (!BOT_TOKEN || req.headers['x-telegram-bot-api-secret-token'] !== webhookSecret(BOT_TOKEN)) return void res.writeHead(403).end();
     readJson(req)
@@ -1496,6 +1518,7 @@ if (BOT_TOKEN)
 // Канал: раз в минуту проверяем, не пора ли выпустить пост (10:00 и 19:00 по Москве).
 if (BOT_TOKEN && CHANNEL_ID !== 'off') setInterval(() => channel.tick(), 60_000);
 if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 60_000);
+if (BOT_TOKEN && THREADS !== 'off') setInterval(() => threads.tick(), 60_000);
 // Меню команд канала — только в личке у админов, игроки видят обычные /start и /help.
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Начать игру' },
@@ -1511,6 +1534,7 @@ const ADMIN_COMMANDS = [
   { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
   { command: 'carousel', description: 'Карусель для Instagram: /carousel tips|app [тема]' },
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
+  { command: 'threads', description: 'Пост для Threads: /threads [тема], /threads_auto on|off' },
   { command: 'talk', description: 'Рилс, где рассказывает персонаж игры: /talk [тема]' },
   { command: 'emoji_setup', description: 'Набор значков для emoji-статуса игроков' },
   { command: 'titan_gifts', description: 'Подарки Telegram лучшим героям за Титана' },
