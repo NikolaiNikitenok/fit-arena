@@ -71,8 +71,9 @@ describe('Threads', () => {
     const posts = (n: number) => ({ posts: Array.from({ length: n }, () => ({ at: 0, slot: '', rubric: 'x', topic: 't', mentionsApp: false })) });
     expect(planThreads(posts(0), [], now)).toBe('question');
     expect(planThreads(posts(2), [], now)).toBe('app');
-    expect(planThreads(posts(6), [], now)).toBe('question');
-    expect(planThreads(posts(6), [{ hash: 'a', at: now - 1000, subject: 'Деревня' }], now)).toBe('build');
+    expect(planThreads(posts(5), [], now)).toBe('author');
+    expect(planThreads(posts(7), [], now)).toBe('question');
+    expect(planThreads(posts(7), [{ hash: 'a', at: now - 1000, subject: 'Деревня' }], now)).toBe('build');
   });
 
   it('публикация: контейнер, проверка статуса, публикация, ссылка; если тема не принята — повтор без неё', async () => {
