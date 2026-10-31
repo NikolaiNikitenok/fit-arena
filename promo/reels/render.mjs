@@ -84,4 +84,22 @@ await p.setContent(`<html><head><style>${css}
 </style></head><body><div class="w"><div class="b">${esc(s.end)}</div></div></body></html>`);
 await p.evaluate(() => document.fonts.ready);
 await p.screenshot({ path: 'end.png', omitBackground: true });
+// Наклейки на моменты ударов и побед (fx в catalog.json): «КОМБО ×3», «−75», «ПОБЕДА!».
+const catalog = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.url), 'utf8'));
+const used = new Set(s.lines.flatMap((l) => l.clips ?? []));
+const texts = [...new Set([...used].flatMap((id) => (catalog[id]?.fx ?? []).map((e) => e[2]).filter(Boolean)))];
+const stickers = {};
+p = await b.newPage({ viewport: { width: 1080, height: 500 } });
+for (const [k, txt] of texts.entries()) {
+  const grad = /^[−-]/.test(txt) ? '#ffe3e3,#ff5d5d 55%,#c81e3a' : /ПОБЕД|КУБК|НОКАУТ/.test(txt) ? '#fff6c8,#ffd23f 50%,#ff9a1f' : '#fff3c4,#ffb03b 55%,#ff5a36';
+  await p.setContent(`<html><head><style>${css}
+.w{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.s{font:900 ${txt.length > 8 ? 130 : txt.length > 5 ? 150 : 190}px/1 N;letter-spacing:-2px;transform:rotate(-7deg);background:linear-gradient(180deg,${grad});-webkit-background-clip:text;color:transparent;-webkit-text-stroke:0;filter:drop-shadow(0 0 0 #0b0d1c) drop-shadow(6px 6px 0 #0b0d1c) drop-shadow(-6px -6px 0 #0b0d1c) drop-shadow(6px -6px 0 #0b0d1c) drop-shadow(-6px 6px 0 #0b0d1c) drop-shadow(0 18px 30px rgba(0,0,0,.6))}
+</style></head><body><div class="w"><div class="s">${esc(txt)}</div></div></body></html>`);
+  await p.evaluate(() => document.fonts.ready);
+  const f = `st_${String(k).padStart(2, '0')}.png`;
+  await p.screenshot({ path: f, omitBackground: true });
+  stickers[txt] = f;
+}
+writeFileSync('stickers.json', JSON.stringify(stickers));
 await b.close();
