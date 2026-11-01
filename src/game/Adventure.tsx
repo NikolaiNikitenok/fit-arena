@@ -293,6 +293,27 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
     setFocusLand(ls[i].land);
   };
 
+  const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
+  // Хуки — до первых ранних return (бой, событие, подземелье…): иначе React падает при смене экрана.
+  // Пора ли предложить покупку (src/game/offers.ts): только на главной, когда сервер уже ответил (знаем, есть ли Pro
+  // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
+  const cloudReady = useCloudReady();
+  const busyScreen =
+    !!playing || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
+  useEffect(() => {
+    if (tab !== 'hero' || !cloudReady || busyScreen || offer) return;
+    const now = Date.now();
+    const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
+    if (!kind) return;
+    setProgress(saveProgress(markOffer(latest.current, kind, now)));
+    track('offer_popup', kind);
+    setOffer(kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, cloudReady, busyScreen, pro, starter?.bought, Object.keys(progress.stars).length, progress.pass?.xp]);
+  // Купил (здесь или на другом устройстве) — окно предложения больше не нужно.
+  useEffect(() => {
+    if ((offer === 'pro' && pro) || (offer === 'starter' && (starter?.bought || progress.starterPack))) setOffer(null);
+  }, [offer, pro, starter?.bought, progress.starterPack]);
   if (playing)
     return (
       <Screen>
@@ -381,27 +402,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
 
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
 
-  const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
   // Объявление Грома о разделах, открытых пройденными уровнями.
-  // Пора ли предложить покупку (src/game/offers.ts): только на главной, когда сервер уже ответил (знаем, есть ли Pro
-  // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
-  const cloudReady = useCloudReady();
-  const busyScreen =
-    !!playing || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
-  useEffect(() => {
-    if (tab !== 'hero' || !cloudReady || busyScreen || offer) return;
-    const now = Date.now();
-    const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
-    if (!kind) return;
-    setProgress(saveProgress(markOffer(latest.current, kind, now)));
-    track('offer_popup', kind);
-    setOffer(kind);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, cloudReady, busyScreen, pro, starter?.bought, Object.keys(progress.stars).length, progress.pass?.xp]);
-  // Купил (здесь или на другом устройстве) — окно предложения больше не нужно.
-  useEffect(() => {
-    if ((offer === 'pro' && pro) || (offer === 'starter' && (starter?.bought || progress.starterPack))) setOffer(null);
-  }, [offer, pro, starter?.bought, progress.starterPack]);
   const fresh = freshUnlocks(progress);
   const openFeature = (f: Feature) => {
     if (f === 'duel') return onDuel ? onDuel() : onFriends();
