@@ -51,6 +51,7 @@ export function App() {
   const full = (tab === 'map' || tab === 'village') && !playing;
   // Вкладки, которые ещё не открыты уровнями карты (src/game/unlocks.ts): сколько уровней осталось.
   const [locks, setLocks] = useState<Partial<Record<Tab, number>>>({});
+  const nearestLock = (Object.entries(locks) as [Tab, number][]).filter(([, n]) => n > 0).sort((a, b) => a[1] - b[1])[0]?.[0];
   const [lockToast, setLockToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const showLock = (tb: 'village' | 'clan' | 'duel') => {
@@ -117,6 +118,8 @@ export function App() {
         <nav className="bottom-nav">
           {NAV.map((n) => {
             const left = locks[n.tab] ?? 0;
+            // Как на главной: из закрытых вкладок видна только ближайшая, остальные появятся позже.
+            if (left && n.tab !== tab && n.tab !== nearestLock) return null;
             return (
               <button
                 key={n.tab}

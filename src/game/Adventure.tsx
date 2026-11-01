@@ -44,6 +44,7 @@ import {
   addClanPending,
   recordActivity,
   recordLoss,
+  freeAttempt,
   recordWin,
   spendMight,
   REST_PER_WEEK,
@@ -305,7 +306,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onLose={() => {
             track('mission_lose', playing.daily ? 'daily' : playing.id);
             // Испытания силы жизни не стоят: это замер, а не бой.
-            if (!playing.daily && playing.type !== 'trial') update((p) => recordLoss(spendLife(p, Date.now()), playing));
+            if (!playing.daily) update((p) => recordLoss(freeAttempt(p, playing) ? p : spendLife(p, Date.now()), playing));
           }}
           onStart={() => {
             track('mission_start', playing.daily ? 'daily' : playing.id);

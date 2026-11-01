@@ -657,3 +657,6 @@ export const setTitle = (p: Progress, id: string | undefined): Progress => save(
 export const setAura = (p: Progress, id: string | undefined): Progress => save({ ...p, aura: id });
 // Знакомство пройдено новичком: разделы открываются по уровням (отметку ставим, если её ещё нет).
 export const finishOnboarding = (p: Progress): Progress => save({ ...p, onboarded: true, gates: p.gates ?? (hasHero(p) ? 'all' : 'steps') });
+
+/** Попытка без жизни: задание дня и ещё не пройденные испытания силы (повтор пройденного испытания стоит жизнь, иначе это бесплатная ферма). */
+export const freeAttempt = (p: Progress, level: { id: number; type: string; daily?: unknown }): boolean => !!level.daily || (level.type === 'trial' && !p.stars[level.id]);

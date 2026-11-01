@@ -22,7 +22,9 @@ export function plausibleXp(progress: unknown, now: number): number {
   // Самый восточный часовой пояс — UTC+14: позже этой даты дней ещё не было.
   const latest = new Date(now + 14 * 3_600_000).toISOString().slice(0, 10);
   let reps = 0;
-  for (const [d, n] of Object.entries(p.days ?? {})) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= latest) reps += Math.max(0, Math.min(DAY_REPS_MAX, Math.floor(Number(n) || 0)));
+  // Повторы «посчитал сам» (без камеры) опыта героя не дают — как и в игре (heroXp).
+  const manual = (p as { manual?: Record<string, unknown> }).manual ?? {};
+  for (const [d, n] of Object.entries(p.days ?? {})) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= latest) reps += Math.max(0, Math.min(DAY_REPS_MAX, Math.floor((Number(n) || 0) - (Number(manual[d]) || 0))));
   const stars = Object.entries(p.stars ?? {}).filter(([id, n]) => Number.isInteger(Number(id)) && Number(id) >= 1 && Number(id) <= LEVEL_COUNT && Number(n) >= 1).length;
   const programs = Math.max(0, Math.floor(Number(p.programs?.xp) || 0));
   return reps + stars * XP_PER_LEVEL_WON + programs;

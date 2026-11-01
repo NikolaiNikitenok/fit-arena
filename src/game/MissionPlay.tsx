@@ -21,7 +21,7 @@ import { Stars } from './Stars';
 import { bossCard, ShareVictory } from './ShareCard';
 import { HomeShortcutOffer } from '../HomeShortcut';
 import { Dialog, Remark } from './Dialog';
-import { Progress, SWAPS_PER_DAY, WinReward } from './progress';
+import { freeAttempt, Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
 import { type Combo, comboLive, comboShout, comboTier, nextCombo, NO_COMBO } from './combo';
 import { sfx } from '../audio';
@@ -78,6 +78,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [exercises, setExercises] = useState<RepExercise[]>(original.exercises);
   const [picking, setPicking] = useState<number | null>(null);
   const level: LevelDef = exercises === original.exercises ? original : { ...original, exercises };
+  // Попытка бесплатна (задание дня, первое прохождение испытания силы); решаем по началу боя, а не по ходу.
+  const [free] = useState(() => freeAttempt(progress, original));
   const swapCount = exercises.filter((e, i) => e !== original.exercises[i]).length;
   const canSwap = original.type !== 'trial' && !original.daily;
   const land = LANDS[level.land];
@@ -175,7 +177,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   /** Общее начало попытки (с камерой и без): жизнь, замены, сброс сцены. null — начать нельзя. */
   const begin = (): Mission | null => {
     // Задание дня и испытания силы жизней не требуют: новичок не должен упереться в «жди 20 минут».
-    if (lives.lives <= 0 && !level.daily && level.type !== 'trial') return null;
+    if (lives.lives <= 0 && !free) return null;
     if (swapCount > 0 && !onSwap(swapCount)) return null;
     // Прямо из нажатия: иначе iOS в Telegram не даст Грому говорить.
     unlockVoice();
@@ -330,7 +332,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     setStatus('lost');
   };
   // Задание дня жизнь не тратит и доступно всегда.
-  const noLives = lives.lives <= 0 && !original.daily && original.type !== 'trial';
+  const noLives = lives.lives <= 0 && !free;
   const waitMin = Math.max(1, Math.ceil(lives.nextMs / 60000));
 
   const busy = status === 'loading' || status === 'running';
@@ -468,7 +470,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           <div className="result">
             <div className="result-title">{t('Не вышло')}</div>
             <div className="muted light">{level.type === 'chase' ? t('Чудище догнало. Держи темп ровнее!') : t('Не хватило совсем чуть-чуть.')}</div>
-            {!level.daily && level.type !== 'trial' && (
+            {!free && (
               <div className="life-lost">
                 {t('−1 ♥ · осталось {0} из {1}', { 0: lives.lives, 1: lives.max })}
               </div>
@@ -521,7 +523,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         ) : (
           <button className="primary" onClick={manual && status === 'lost' ? startManual : start}>
             {status === 'ready' ? t('Начать') : t('Ещё раз')}
-            {!level.daily && level.type !== 'trial' && (
+            {!free && (
               <span className="btn-cost">
                 <Heart size={14} /> {lives.lives}
               </span>
