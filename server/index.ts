@@ -71,6 +71,7 @@ import { AccountStore } from './accounts';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
+import { StartNotices } from './startNotices';
 import { cameraDays, CityStore } from './cities';
 import { balanceCommand, BalanceFile } from './balance';
 import { GHOST_PREFIX, GHOST_WAIT_MS, GhostStore, isGhost, shadowTimes } from './ghosts';
@@ -719,7 +720,18 @@ if (BOT_TOKEN)
     groupsTick().finally(() => (groupsTicking = false));
   }, 10 * 60_000);
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
+// Новый игрок нажал «Старт» — админам приходит, откуда он (server/startNotices.ts).
+const startNotices = new StartNotices(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'starts.json'), {
+  known: (tgId) => !!saves.get(accounts.resolve(`tg:${tgId}`)),
+  isAdmin: (tgId) => admins.has(`tg:${tgId}`),
+});
 const channelUpdate = (u: Update): boolean => {
+  // Только смотрим на /start, обновление дальше обрабатывается как обычно.
+  const sm = u.message;
+  if (sm?.text && sm.chat.type === 'private') {
+    const note = startNotices.onMessage(sm.chat.id, sm.text, sm.from);
+    if (note) toAdmins(note);
+  }
   const reply = (chatId: number, text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null);
   const answer = (id: string, text?: string) => void botApi(BOT_TOKEN)('answerCallbackQuery', { callback_query_id: id, text }, 15_000).catch(() => null);
   // Админ прислал видео: свой клип для рилса-петли (подпись /loop или кнопка — сразу сборка).
@@ -749,10 +761,11 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '🔁 Рилс-петля': '/loop',
   '🧵 Пост в Threads': '/threads',
   '⚖️ Баланс': '/balance',
+  '🆕 Новые игроки': '/newusers',
   '💳 Проверить оплату': '/testpay',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🔁 Рилс-петля' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }, { text: '💳 Проверить оплату' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🔁 Рилс-петля' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }, { text: '💳 Проверить оплату' }], [{ text: '🆕 Новые игроки' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -760,12 +773,14 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|loop\b|threads)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|loop\b|newusers\b|threads)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
   if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, рилс-петля (8–10 с; пришли боту видео, как отжимаешься, и петля начнётся с тебя), карусели и сторис для Instagram, пост в Threads. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
+  const nu = startNotices.command(text);
+  if (nu) return reply(nu), true;
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}\n\n${threads.status()}`), true;
   return reels.command(chatId, text, reply) || threads.command(chatId, text, reply) || personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
 };
@@ -1888,6 +1903,7 @@ const ADMIN_COMMANDS = [
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
   { command: 'threads', description: 'Пост для Threads: /threads [тема], /threads_auto on|off' },
   { command: 'talk', description: 'Рилс, где рассказывает персонаж игры: /talk [тема]' },
+  { command: 'newusers', description: 'Новые игроки за сегодня по источникам; /newusers off — без уведомлений' },
   { command: 'loop', description: 'Короткий закольцованный рилс 8–10 с: /loop [тема]' },
   { command: 'emoji_setup', description: 'Набор значков для emoji-статуса игроков' },
   { command: 'titan_gifts', description: 'Подарки Telegram лучшим героям за Титана' },
