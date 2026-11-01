@@ -544,9 +544,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onFriends={onFriends}
           onShop={(tm) => setShop(tm ?? 'weapon')}
           onStrength={() => setStrength(true)}
-          onWeekly={() => {
+          onWeekly={(open) => {
             update((p) => saveProgress({ ...p, weeklySeen: weekKey(dayKey(Date.now())) }));
-            setStrength(true);
+            if (open) setStrength(true);
           }}
           onEquip={(id) => setProgress(equip(progress, id))}
           onEquipGear={(id) => setProgress(equipGear(progress, id))}

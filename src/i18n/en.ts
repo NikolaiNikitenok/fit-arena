@@ -3584,5 +3584,9 @@ export const EN: Record<string, string> = {
   "Раз в неделю на главной — сколько повторов ты сделал и насколько больше, чем месяц назад.": "Once a week the home screen shows how many reps you did and how much more than a month ago.",
   "В быстрой дуэли больше не надо ждать: если за 10 секунд никого нет, бой идёт с записью игрока твоей силы.": "No more waiting in quick duels: if no one shows up in 10 seconds, you fight a recording of a player at your level.",
   "Первые 10 этажей подземелья дают вдвое больше дерева, камня и золота — деревня строится быстрее.": "The first 10 dungeon floors give double wood, stone and gold — your village grows faster.",
-  "Пропал на несколько дней — Мастер Гром напишет в бота и оставит подарок в игре.": "Away for a few days? Master Thunder will message you in the bot and leave a gift in the game.",
+  "Пропал на несколько дней — Мастер Гром напишет в бота и оставит подарок в игре. Выключить письма можно в настройках.": "Away for a few days? Master Thunder will message you in the bot and leave a gift in the game. You can turn the letters off in settings.",
+  "Письма Мастера Грома": "Letters from Master Thunder",
+  "Если пропадёшь на 3 или 7 дней, Гром напишет и оставит подарок; по понедельникам — сколько ты сделал за неделю. Не чаще одного сообщения в день.": "If you disappear for 3 or 7 days, Thunder will write and leave a gift; on Mondays, how much you did that week. No more than one message a day.",
+  "{0} · запись": "{0} · recording",
+  "Тень Грома · тренировка": "Thunder's Shadow · training",
 };

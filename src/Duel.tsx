@@ -12,7 +12,7 @@ import { preloadPose, useRepCamera } from './useRepCamera';
 import { useMusic } from './audio';
 import { useDuelSounds } from './gameSounds';
 import { useVoiceCoach } from './voice';
-import { recordDuel, recordOutsideReps } from './game/progress';
+import { recordDuel, recordOutsideReps, recordTrainerDuel } from './game/progress';
 import { TrainerDuel } from './TrainerDuel';
 import { FriendsScreen } from './friends/FriendsScreen';
 import { Users } from './icons';
@@ -98,7 +98,7 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
   const welcomed = useRef(false);
 
   // Свои повторы в бою: после боя засчитываем их в серию, задание дня и клан.
-  const fight = useRef<{ exercise: Exercise; hits: number } | null>(null);
+  const fight = useRef<{ exercise: Exercise; hits: number; ghost?: boolean } | null>(null);
 
   const send = (msg: ClientMessage) => ws.current?.readyState === WebSocket.OPEN && ws.current.send(JSON.stringify(msg));
 
@@ -127,7 +127,8 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
         }
         case 'room':
           setRoom({ code: msg.code, exercise: msg.exercise, players: msg.players });
-          fight.current = { exercise: msg.exercise, hits: fight.current?.hits ?? 0 };
+          // Соперник — запись игрока («призрак» пустой очереди, server/ghosts.ts): бой тренировочный.
+          fight.current = { exercise: msg.exercise, hits: fight.current?.hits ?? 0, ghost: msg.players.some((p) => p.id.startsWith('ghost:')) };
           setPhase((p) => (p === 'countdown' || p === 'fight' || p === 'over' ? p : 'room'));
           break;
         case 'profile':
@@ -155,7 +156,11 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
           break;
         case 'end':
           if (fight.current?.hits) recordOutsideReps(fight.current.exercise, fight.current.hits, Date.now());
-          if (fight.current) recordDuel(msg.result, Date.now());
+          // Победа над записью не идёт в «выиграй дуэль» пропуска (как бой с тренером), иначе это бесплатная ферма.
+          if (fight.current?.ghost) {
+            recordTrainerDuel(Date.now());
+            track('ghost_fight', msg.result);
+          } else if (fight.current) recordDuel(msg.result, Date.now());
           if (fight.current) fight.current.hits = 0;
           setResult(msg);
           setPhase('over');

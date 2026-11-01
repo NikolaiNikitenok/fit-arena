@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react';
 import { claimGift, freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress, saveProgress } from './game/progress';
 import { rememberUnlocks } from './game/unlocks';
 import { guestId, setMaxBot, tg } from './telegram';
-import { reportError, track } from './telemetry';
+import { reportError, track, trackVillageTh2 } from './telemetry';
+import { thLevel } from '../shared/village';
 import { getLang, t, tErr } from './i18n';
 
 // Язык — чтобы бот писал игроку на языке игры.
-const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId(), lang: getLang() });
+// tz — пояс телефона (минуты к востоку от UTC): бот пишет днём по времени игрока (server/winback.ts).
+const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId(), lang: getLang(), tz: -new Date().getTimezoneOffset() });
 
 export const post = (path: string, body: object, keepalive = false) =>
   fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth(), ...body }), keepalive }).then(async (r) => {
@@ -105,7 +107,7 @@ export interface StarterOffer {
   price: number;
   bought: boolean;
 }
-type CloudState = { inClan?: boolean; remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
+type CloudState = { inClan?: boolean; remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; letters: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -166,6 +168,8 @@ function onSaveError(e: { status?: number; body?: { account?: string } }): boole
 /** Запуск синхронизации. onRemote — пришла более свежая копия с сервера. */
 export async function startCloud(onRemote: (p: Progress) => void): Promise<void> {
   onProgressSaved((p) => {
+    // Первое улучшение ратуши: проверка экономики деревни для новичков (shared/balance.ts earlyLoot).
+    if (p.village?.b) trackVillageTh2(thLevel({ b: p.village.b }), p.days);
     pending = p;
     if (cloud && !timer) timer = setTimeout(push, 1500);
   });
@@ -180,6 +184,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       proOffer?: ProOffer | null;
       starter?: StarterOffer | null;
       raidNotify?: boolean;
+      letters?: boolean;
       emoji?: Record<string, string>;
       admin?: boolean;
       account?: string;
@@ -193,7 +198,7 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       gift?: { id: string; coins: number; vigor?: number; text: string } | null;
     };
     setMaxBot(r.maxBot);
-    cloud = { inClan: !!r.clan, remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
+    cloud = { inClan: !!r.clan, remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, letters: r.letters !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();
@@ -312,6 +317,13 @@ export async function setRemind(hour: number | null): Promise<Remind | null> {
 }
 
 /** Уведомления бота о рейде клана: начало, напоминание, итог. */
+/** Письма Мастера Грома: «возвращайся» после нескольких дней без тренировки и сводка недели по понедельникам. */
+export async function setLetters(on: boolean): Promise<boolean> {
+  const r = (await post('/api/letters', { on })) as { letters: boolean };
+  if (cloud) cloud.letters = r.letters;
+  return r.letters;
+}
+
 export async function setRaidNotify(on: boolean): Promise<boolean> {
   const r = (await post('/api/raid-notify', { on })) as { raidNotify: boolean };
   if (cloud) cloud.raidNotify = r.raidNotify;

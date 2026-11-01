@@ -10,7 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { anonSource } from '../shared/anon';
 
 /** События клиента. Новое событие — сначала сюда, иначе сервер его не примет. */
-export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status', 'manual_start', 'first_rep', 'unlock', 'letter_open', 'gift_claim', 'weekly_card'] as const;
+export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status', 'manual_start', 'first_rep', 'unlock', 'letter_open', 'gift_claim', 'weekly_card', 'ghost_fight', 'village_th2', 'balance'] as const;
 export type EventName = (typeof EVENTS)[number];
 
 /** Шаги воронки: бит в карточке игрока. */
@@ -293,6 +293,14 @@ export class Telemetry {
   }
 
   /** Пакет с телефона. Возвращает HTTP-код ответа. */
+  /** Счётчик дня с самого сервера (без игрока): например, сколько писем бота ушло. */
+  serverEvent(name: string, param?: string): void {
+    const d = this.dayRec(mskDay(this.now()));
+    this.count(d, name);
+    if (param) this.count(d, `${name}:${param}`);
+    this.save();
+  }
+
   ingest(raw: unknown, ip: string): number {
     const now = this.now();
     if (!this.limit.take(ip, now)) return 429;

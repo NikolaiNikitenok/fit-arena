@@ -64,7 +64,7 @@ interface Props {
   onShop: (tab?: ShopTab) => void;
   onStrength: () => void;
   // Карточка «Твоя неделя» просмотрена: отметить неделю и открыть «Твою силу».
-  onWeekly: () => void;
+  onWeekly: (open: boolean) => void;
   onEquip: (id: string) => void;
   onEquipGear: (id: string) => void;
   onPotion: (id: PotionId) => void;
@@ -352,7 +352,9 @@ export function HeroHome(props: Props) {
   // «Твоя неделя»: раз в неделю — повторы за 7 дней и рост к месяцу назад (shared/weekly.ts). Новичкам рано.
   const dateNow = dayKey(now);
   const week = weekSummary(progress.days, dateNow);
-  const weekFresh = progress.weeklySeen !== weekKey(dateNow) && week.week > 0 && Object.keys(progress.stars).length >= 3;
+  // Показываем с понедельника по среду: дальше «неделя» уже не про прошлую неделю.
+  const weekday = (new Date(`${dateNow}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const weekFresh = weekday <= 2 && progress.weeklySeen !== weekKey(dateNow) && week.week > 0 && Object.keys(progress.stars).length >= 3;
   useEffect(() => {
     if (weekFresh) track('weekly_card', week.pct == null ? 'none' : week.pct > 0 ? 'up' : 'down');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,14 +373,18 @@ export function HeroHome(props: Props) {
   const eventBanner = (
     <>
       {weekFresh && (
-        <button className="hb-recap hb-week" onClick={onWeekly}>
-          <span className="hb-recap-emoji">💪</span>
-          <span className="hb-recap-text">
-            <b>{t('Твоя неделя: {0} повторов', { 0: week.week })}</b>
-            <small>{weekSub}</small>
-          </span>
-          <Dot n />
-        </button>
+        <div className="hb-week-wrap">
+          <button className="hb-recap hb-week" onClick={() => onWeekly(true)}>
+            <span className="hb-recap-emoji">💪</span>
+            <span className="hb-recap-text">
+              <b>{t('Твоя неделя: {0} повторов', { 0: week.week })}</b>
+              <small>{weekSub}</small>
+            </span>
+          </button>
+          <button className="hb-week-x" aria-label={t('Закрыть')} onClick={() => onWeekly(false)}>
+            ×
+          </button>
+        </div>
       )}
       {slot === 'titan' && titanShown && (
         <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>

@@ -36,7 +36,18 @@ function rememberLinks() {
   const p = loadProgress();
   // Пришёл по кнопке письма бота (?from=wb3 / wb7 / weekly): сколько возвращается по каждому.
   const from = new URLSearchParams(location.search).get('from');
-  if (from && /^[\w-]{1,20}$/.test(from)) track('letter_open', from);
+  // Один раз в день на письмо: перезагрузка той же страницы не считается вторым возвратом.
+  if (from && /^[\w-]{1,20}$/.test(from)) {
+    const key = `fit-arena-letter-${from}-${new Date().toDateString()}`;
+    try {
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        track('letter_open', from);
+      }
+    } catch {
+      track('letter_open', from);
+    }
+  }
   // Новичок: отсчёт «до первого повтора» — с момента, когда страница начала грузиться.
   if (!hasHero(p) && !p.onboarded) markFirstOpen(Math.round(performance.timeOrigin));
   const next = rememberUnlocks(p, linkUnlocks());

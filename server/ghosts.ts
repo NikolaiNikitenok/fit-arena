@@ -50,7 +50,10 @@ export class GhostStore {
   record(exercise: Exercise, rec: Omit<Recording, 'reps'>): void {
     if (isGhost(rec.id) || rec.times.length < MIN_REPS) return;
     const times = rec.times.filter((x) => x >= 0 && x <= ROUND_MS).slice(0, 200);
-    const list = (this.data[exercise] ?? []).filter((r) => r.id !== rec.id || rec.at - r.at > 86_400_000);
+    // Не больше двух записей одного игрока: новая и одна прошлая, чтобы очередь не заполнил один активный.
+    const all = this.data[exercise] ?? [];
+    const prev = all.filter((r) => r.id === rec.id).slice(-1);
+    const list = [...all.filter((r) => r.id !== rec.id), ...prev];
     list.push({ ...rec, times, reps: times.length });
     this.data[exercise] = list.slice(-KEEP);
     this.schedule();

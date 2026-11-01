@@ -54,6 +54,12 @@ export interface Save {
   // Письма «возвращайся» за текущее отсутствие (server/winback.ts) и неделя последней сводки «сила растёт».
   winback?: { last: string; sent: number[] };
   weeklyOn?: string;
+  // Местная дата последнего письма бота (возврат, неделя): в этот день обычное напоминание не шлём.
+  letterOn?: string;
+  // Письма «возвращайся» и сводку недели выключили в настройках.
+  lettersOff?: boolean;
+  // Часовой пояс телефона (минуты к востоку от UTC): игра сообщает при каждом запросе.
+  tz?: number;
   // Подарок за возвращение: игра забирает его при запуске один раз (по id, Progress.gifts).
   gift?: { id: string; coins: number; vigor?: number; text: string };
 }
@@ -100,6 +106,8 @@ export class SaveStore {
     if (p && typeof p === 'object' && at > s.savedAt && !wipe && JSON.stringify(p).length <= SAVE_MAX_BYTES) {
       s.progress = p as Record<string, unknown>;
       s.savedAt = at;
+      // Подарок за возвращение игра уже забрала: на сервере он больше не нужен.
+      if (s.gift && Array.isArray((p as { gifts?: unknown }).gifts) && ((p as { gifts: unknown[] }).gifts).includes(s.gift.id)) delete s.gift;
       this.publish(s, now);
       this.save();
     }
@@ -160,6 +168,23 @@ export class SaveStore {
     return s;
   }
 
+  setLetters(id: string, on: boolean): Save {
+    const s = this.touch(id);
+    if (on) delete s.lettersOff;
+    else s.lettersOff = true;
+    this.save();
+    return s;
+  }
+
+  /** Часовой пояс телефона: только у тех, чья копия уже есть, и только если изменился. */
+  setTz(id: string, tz: unknown): void {
+    const n = Math.round(Number(tz));
+    const s = this.saves.get(id);
+    if (!s || !Number.isFinite(n) || Math.abs(n) > 14 * 60 || s.tz === n) return;
+    s.tz = n;
+    this.save();
+  }
+
   setRaidNotify(id: string, on: boolean): Save {
     const s = this.touch(id);
     if (on) delete s.raidOff;
@@ -203,8 +228,9 @@ export class SaveStore {
   }
 
   /** Письмо бота отправлено (server/winback.ts): что отметить и, если есть, подарок в игре. */
-  markLetter(id: string, mark: { winback?: Save['winback']; weeklyOn?: string }, gift?: Save['gift']): void {
+  markLetter(id: string, date: string, mark: { winback?: Save['winback']; weeklyOn?: string }, gift?: Save['gift']): void {
     const s = this.touch(id);
+    s.letterOn = date;
     if (mark.winback) s.winback = mark.winback;
     if (mark.weeklyOn) s.weeklyOn = mark.weeklyOn;
     if (gift) s.gift = gift;

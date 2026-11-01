@@ -49,7 +49,7 @@ import { clanPerks } from '../shared/clanLevel';
 import { heroPower } from '../src/game/power';
 import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
-import { dueMessages, pendingStage } from './winback';
+import { dueMessages, pendingStage, weeklyDue } from './winback';
 import { petById, type PetId } from '../src/game/pets';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
@@ -332,7 +332,7 @@ function ghostFight(player: Player, exercise: Exercise): Room {
   };
   const ghost: Player = {
     id: `${GHOST_PREFIX}${r.code}`,
-    name: rec ? `${rec.name} · запись` : 'Тень Грома · тренировка',
+    name: rec ? tl(langOf(player.id), '{0} · запись', { 0: rec.name }) : tl(langOf(player.id), 'Тень Грома · тренировка'),
     send: (msg) => {
       if (msg.type === 'countdown') {
         clear();
@@ -468,6 +468,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   const who = body && identify(body);
   if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
   saves.setLang(who.id, body!.lang);
+  saves.setTz(who.id, body!.tz);
   if (path === '/api/progress/load') {
     if (who.guest) {
       saves.adopt(who.id, who.guest);
@@ -475,7 +476,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, gift: s?.gift ?? null, ...gateFlags(who.id, s?.progress), emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, letters: !s?.lettersOff, gift: s?.gift ?? null, ...gateFlags(who.id, s?.progress), emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -497,6 +498,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     const r = body!.remind as { hour: number; tz: number } | null;
     return reply(200, { remind: saves.setRemind(who.id, r && { hour: Number(r.hour), tz: Number(r.tz) }).remind ?? null });
   }
+  if (path === '/api/letters') return reply(200, { letters: !saves.setLetters(who.id, body!.on !== false).lettersOff });
   if (path === '/api/raid-notify') return reply(200, { raidNotify: !saves.setRaidNotify(who.id, body!.on !== false).raidOff });
   reply(404, { error: 'not found' });
 }
@@ -605,9 +607,10 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '📱 Сторис': '/story',
   '🎭 Рилс от персонажа': '/talk',
   '🧵 Пост в Threads': '/threads',
+  '⚖️ Баланс': '/balance',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -1114,7 +1117,7 @@ const http = createServer((req, res) => {
     onProApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
-  if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
+  if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify' || path === '/api/letters') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
@@ -1527,8 +1530,9 @@ if (ANY_BOT)
   setInterval(() => {
     for (const { save, date } of dueReminders(saves.all(), Date.now())) {
       if (!accounts.target(save.id)) continue;
-      // После трёх дней тишины вместо обычного напоминания придёт письмо «возвращайся» с подарком (ниже).
-      if (pendingStage(save, date)) continue;
+      // Сегодня уже было письмо бота — или оно вот-вот придёт (после трёх дней тишины «возвращайся» с подарком,
+      // в понедельник сводка недели): обычное напоминание не шлём, одно сообщение в день.
+      if (save.letterOn === date || (!save.lettersOff && (pendingStage(save, date) || weeklyDue(save, date)))) continue;
       saves.markReminded(save.id, date);
       const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
       const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
@@ -1559,14 +1563,21 @@ if (ANY_BOT)
       canWrite: (id) => !!accounts.target(id),
     });
     if (!list.length) return;
-    for (const m of list) saves.markLetter(m.id, m.mark, m.gift);
+    for (const m of list) saves.markLetter(m.id, m.date, m.mark, m.gift);
+    // Сколько писем ушло — знаменатель для letter_open (сколько вернулось по письму).
+    for (const m of list) telemetry.serverEvent('letter_sent', m.kind);
     lettersSending = true;
     (async () => {
       for (const m of list) {
         const started = Date.now();
         // Метка в адресе кнопки: игра считает, сколько вернулось по каждому письму (letter_open).
-        await notifyPlayer(m.id, m.text, m.button, `?from=${m.kind}`).catch(() => null);
-        await new Promise((res) => setTimeout(res, Math.max(0, 50 - (Date.now() - started))));
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const r = await notifyPlayer(m.id, m.text, m.button, `?from=${m.kind}`).catch(() => null);
+          // Мессенджер просит подождать (429): ждём, сколько сказал, и пробуем ещё раз.
+          const retry = r?.status === 429 ? (r.retryAfter ?? 1) : 0;
+          await new Promise((res) => setTimeout(res, retry ? retry * 1000 : Math.max(0, 50 - (Date.now() - started))));
+          if (!retry) break;
+        }
       }
     })().finally(() => (lettersSending = false));
   }, 10 * 60_000);

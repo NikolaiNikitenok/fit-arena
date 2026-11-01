@@ -35,6 +35,8 @@ export interface Outgoing {
   text: string;
   button: string;
   gift?: Gift;
+  // Местная дата игрока: в этот день обычное напоминание уже не шлём.
+  date: string;
   // Что отметить в копии игрока: письмо о возврате или недельная сводка.
   mark: { winback?: WinbackState; weeklyOn?: string };
 }
@@ -55,6 +57,14 @@ export interface WinbackDeps {
   canWrite: (id: string) => boolean;
 }
 
+/** Местное время игрока: пояс из напоминания, иначе пояс телефона, иначе Москва. */
+export const tzOf = (s: Save): number => s.remind?.tz ?? s.tz ?? MSK_TZ;
+
+/** Сводка недели положена: понедельник, на этой неделе ещё не писали, а на прошлой тренировался. */
+export function weeklyDue(s: Save, date: string): boolean {
+  return new Date(`${date}T00:00:00Z`).getUTCDay() === 1 && s.weeklyOn !== weekKey(date) && weekSummary((s.progress as P)?.days, date).week > 0;
+}
+
 /** Какое письмо «возвращайся» положено игроку на эту местную дату (3 или 7), если положено. */
 export function pendingStage(s: Save, date: string): number | undefined {
   const last = lastDay((s.progress as P)?.days);
@@ -64,16 +74,20 @@ export function pendingStage(s: Save, date: string): number | undefined {
   if (away > 30) return undefined;
   const sent = s.winback?.last === last ? s.winback.sent : [];
   if (sent.length >= WINBACK_DAYS.length) return undefined;
-  return [...WINBACK_DAYS].reverse().find((n) => away >= n && !sent.includes(n));
+  // Только самое позднее из положенных: после «недели без тебя» письмо «три дня тишины» уже не придёт.
+  const due = [...WINBACK_DAYS].reverse().find((n) => away >= n);
+  return due && !sent.some((n) => n >= due) ? due : undefined;
 }
 
 /** Кому и что написать сейчас. */
 export function dueMessages(saves: Save[], now: number, d: WinbackDeps): Outgoing[] {
   const out: Outgoing[] = [];
   for (const s of saves) {
-    if (s.blocked || s.id.startsWith('guest:') || !d.canWrite(s.id)) continue;
-    const { date, hour } = localTime(now, s.remind?.tz ?? MSK_TZ);
+    if (s.blocked || s.lettersOff || s.id.startsWith('guest:') || !d.canWrite(s.id)) continue;
+    const { date, hour } = localTime(now, tzOf(s));
     if (hour < FROM_HOUR || hour >= TO_HOUR) continue;
+    // Не больше одного сообщения бота в день: сегодня уже было напоминание или письмо.
+    if (s.remindedOn === date || s.letterOn === date) continue;
     const p = s.progress as P;
     const last = lastDay(p?.days);
     if (!last) continue;
@@ -81,13 +95,13 @@ export function dueMessages(saves: Save[], now: number, d: WinbackDeps): Outgoin
     const state: WinbackState = s.winback?.last === last ? s.winback : { last, sent: [] };
     const stage = pendingStage(s, date);
     if (stage) {
-      out.push({ id: s.id, kind: `wb${stage}`, ...winbackText(s.id, stage, p, l, d, date), mark: { winback: { last, sent: [...state.sent, stage] } } });
+      out.push({ id: s.id, kind: `wb${stage}`, date, ...winbackText(s.id, stage, p, l, d, date), mark: { winback: { last, sent: WINBACK_DAYS.filter((n) => n <= stage || state.sent.includes(n)) } } });
       continue;
     }
     // Понедельник: сводка за неделю тем, кто на неделе тренировался.
-    if (new Date(`${date}T00:00:00Z`).getUTCDay() === 1 && s.weeklyOn !== weekKey(date)) {
+    if (weeklyDue(s, date)) {
       const w = weekSummary(p?.days, date);
-      if (w.week > 0) out.push({ id: s.id, kind: 'weekly', text: weeklyText(w.week, w.pct, w.vs, l), button: tl(l, 'Тренироваться'), mark: { weeklyOn: weekKey(date) } });
+      out.push({ id: s.id, kind: 'weekly', date, text: weeklyText(w.week, w.pct, w.vs, l), button: tl(l, 'Тренироваться'), mark: { weeklyOn: weekKey(date) } });
     }
   }
   return out;

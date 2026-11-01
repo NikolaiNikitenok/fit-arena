@@ -16,12 +16,34 @@ describe('письма «возвращайся»', () => {
     expect(m3.gift?.coins).toBe(100);
     expect(m3.text).toContain('Князь Диван');
     s.winback = m3.mark.winback;
+    s.letterOn = m3.date;
     expect(dueMessages([s], at('2026-11-05'), deps)).toEqual([]);
     const [m7] = dueMessages([s], at('2026-11-08'), deps);
     expect(m7.kind).toBe('wb7');
     expect(m7.gift).toMatchObject({ coins: 200, vigor: 2 });
     s.winback = m7.mark.winback;
     expect(dueMessages([s], at('2026-11-12'), deps).filter((m) => m.kind.startsWith('wb'))).toEqual([]);
+  });
+
+  it('пропустил третий день — сразу недельное письмо, «три дня тишины» после него не приходит', () => {
+    const s = save({ '2026-10-25': 20 });
+    const [m] = dueMessages([s], at('2026-11-04'), deps);
+    expect(m.kind).toBe('wb7');
+    s.winback = m.mark.winback;
+    s.letterOn = m.date;
+    expect(dueMessages([s], at('2026-11-05'), deps)).toEqual([]);
+  });
+
+  it('одно сообщение в день: после напоминания или письма сегодня больше не пишем', () => {
+    expect(dueMessages([save({ '2026-11-01': 20 }, { remindedOn: '2026-11-04' })], at('2026-11-04'), deps)).toEqual([]);
+    expect(dueMessages([save({ '2026-11-01': 20 }, { letterOn: '2026-11-04' })], at('2026-11-04'), deps)).toEqual([]);
+  });
+
+  it('выключил письма — не пишем; время — по поясу телефона', () => {
+    expect(dueMessages([save({ '2026-11-01': 20 }, { lettersOff: true })], at('2026-11-04'), deps)).toEqual([]);
+    // Пояс UTC−5: 13:00 по Москве — это 05:00 у игрока, рано.
+    expect(dueMessages([save({ '2026-11-01': 20 }, { tz: -300 })], at('2026-11-04'), deps)).toEqual([]);
+    expect(dueMessages([save({ '2026-11-01': 20 }, { tz: -300 })], at('2026-11-04', 22), deps)).toHaveLength(1);
   });
 
   it('вернулся и снова пропал — счёт сначала', () => {
@@ -55,6 +77,7 @@ describe('сводка недели', () => {
     expect(m.kind).toBe('weekly');
     expect(m.text).toContain('70');
     s.weeklyOn = m.mark.weeklyOn;
+    s.letterOn = undefined;
     expect(dueMessages([s], at('2026-11-09', 15), deps)).toEqual([]);
     expect(dueMessages([s], at('2026-11-10'), deps).map((x) => x.kind)).toEqual(['wb3']);
   });
