@@ -97,7 +97,7 @@ export function ProfileSheet({ target, onClose }: { target: ProfileRef; onClose:
   return (
     <Sheet onClose={onClose} bodyClassName="profile">
       <div className={`profile-head ${p.pro ? 'pro' : ''}`}>
-        <Avatar name={p.name} pro={p.pro} size={72} />
+        <Avatar name={p.name} pro={p.pro} pid={p.pid} size={72} />
         <div className="profile-id">
           <div className="profile-name">
             <span className={p.pro ? 'pro-name' : ''}>{p.name}</span>

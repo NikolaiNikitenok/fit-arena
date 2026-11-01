@@ -193,6 +193,29 @@ export function botUploadFiles(token: string, method: string, fields: Record<str
   return tgRequest(token, method, Buffer.concat(parts), `multipart/form-data; boundary=${boundary}`, 120_000);
 }
 
+/** Скачать файл бота (путь из getFile). null — нет файла или сеть подвела. */
+export function botFile(token: string, filePath: string, maxBytes = 2_000_000, timeoutMs = 15_000): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    const req = https.get(`${TG_API}/file/bot${token}/${filePath}`, { agent, timeout: timeoutMs }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        return resolve(null);
+      }
+      const chunks: Buffer[] = [];
+      let size = 0;
+      res.on('data', (c: Buffer) => {
+        size += c.length;
+        if (size > maxBytes) req.destroy();
+        else chunks.push(c);
+      });
+      res.on('end', () => resolve(size <= maxBytes ? Buffer.concat(chunks) : null));
+      res.on('error', () => resolve(null));
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+  });
+}
+
 function tgRequest(token: string, method: string, data: Buffer, contentType: string, timeoutMs: number): Promise<TgReply> {
   return new Promise<TgReply>((resolve, reject) => {
     const req = https.request(`${TG_API}/bot${token}/${method}`, { method: 'POST', agent, headers: { 'Content-Type': contentType, 'Content-Length': data.length }, timeout: timeoutMs }, (res) => {

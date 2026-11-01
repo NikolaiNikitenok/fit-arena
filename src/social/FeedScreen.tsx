@@ -5,7 +5,7 @@ import type { FeedTab, PostView } from '../../shared/social';
 import { POST_TEXT_MAX } from '../../shared/social';
 import { Sheet } from '../Sheet';
 import { t } from '../i18n';
-import { userName } from '../telegram';
+import { tg, userName } from '../telegram';
 import { Camera, Plus, UserCircle, Users } from '../icons';
 import { NotSignedIn, socialApi } from './api';
 import { Avatar } from './Avatar';
@@ -73,7 +73,7 @@ export function FeedScreen({ onClose, onFriends, compose: composeFirst, focus }:
       </div>
 
       <button className="feed-compose" onClick={() => setCompose(true)}>
-        <Avatar name={userName() || t('Боец')} size={40} />
+        <Avatar name={userName() || t('Боец')} src={tg?.initDataUnsafe.user?.photo_url} size={40} />
         <span className="feed-compose-text">
           <b>{t('Поделись прогрессом')}</b>
           <small>{t('Фото сегодня — а через год сравнишь')}</small>

@@ -30,7 +30,7 @@ import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
-import { botApi, botStatus, botUploadFiles, currentAgent, langOfFrom, menuButton, runBot, TG_PROXY, type Update, webhookReply, webhookSecret } from './bot';
+import { botApi, botStatus, botUploadFiles, currentAgent, langOfFrom, menuButton, runBot, TG_PROXY, type Update, webhookReply, webhookSecret, botFile } from './bot';
 import { type Lang, tl } from '../src/i18n';
 import { dueReminders, plausibleXp, SAVE_MAX_BYTES, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
@@ -82,6 +82,7 @@ import { isMonth, RecapBoard } from './recap';
 import { StoryImages } from './storyImages';
 import { EmojiBadges } from './emojiBadges';
 import { TITANS } from '../shared/titan';
+import { AvatarStore } from './avatars';
 import { FeedStore } from './feed';
 import { feedCommand, Pids, type SocialDeps, socialApi } from './socialApi';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
@@ -887,6 +888,18 @@ async function onFriendsApi(path: string, req: IncomingMessage, res: ServerRespo
   reply(r.status, r.body);
 }
 
+// Аватарки ленты и профилей (server/avatars.ts): фото профиля Telegram через бота, копия в data/avatars/.
+const avatars = new AvatarStore(process.env.AVATARS_DIR ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'avatars'), async (tgId) => {
+  if (!BOT_TOKEN) return null;
+  const r = await botApi(BOT_TOKEN)('getUserProfilePhotos', { user_id: tgId, limit: 1 }, 15_000).catch(() => null);
+  const sizes = (r?.result as { photos?: { file_id: string; width: number; file_size?: number }[][] } | undefined)?.photos?.[0];
+  // Самый маленький снимок не меньше 160 px: в ленте кружок 38–72 px, на экране с плотностью ×3 хватит.
+  const size = sizes?.filter((s) => s.width >= 160).sort((a, b) => a.width - b.width)[0] ?? sizes?.at(-1);
+  if (!size) return null;
+  const f = await botApi(BOT_TOKEN)('getFile', { file_id: size.file_id }, 15_000).catch(() => null);
+  const path = (f?.result as { file_path?: string } | undefined)?.file_path;
+  return path ? botFile(BOT_TOKEN, path, 400_000) : null;
+});
 const pids = new Pids(
   (t) => telemetry.sign(t),
   () => saves.all().map((x) => x.id),
@@ -953,6 +966,15 @@ async function onSocialApi(path: string, req: IncomingMessage, res: ServerRespon
   friends.touch(me.id);
   const r = socialApi(socialDeps, path, me, body);
   reply(r.status, r.body);
+}
+
+/** GET /api/avatar/<pid>.jpg: фото профиля Telegram игрока (или 404 — тогда приложение рисует букву). */
+async function onAvatar(path: string, res: ServerResponse) {
+  const id = pids.idOf(/^\/api\/avatar\/([a-f0-9]{16})\.jpg$/.exec(path)?.[1]);
+  const tg = id ? /^tg:(\d+)$/.exec(accounts.tgLogin(id) ?? '')?.[1] : undefined;
+  const img = id ? await avatars.get(id, tg ? Number(tg) : null) : null;
+  if (!img) return res.writeHead(404, { 'Cache-Control': 'public, max-age=3600' }).end();
+  res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': img.length, 'Cache-Control': 'public, max-age=86400', 'X-Robots-Tag': 'noindex' }).end(img);
 }
 
 /** GET /api/feed/photo/<id>.jpg: фото поста. Скрытое по жалобам — только по ссылке для админа (?a=подпись). */
@@ -1123,7 +1145,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const now = Date.now();
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
-    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials, feed }, id, now);
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials, feed, avatars }, id, now);
     groups.forget(id);
     if (clan) {
       sendClan(clan);
@@ -1137,7 +1159,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 /** Убрать героя аккаунта, которого не выбрали при привязке: копия прогресса и кубки — в архив, остальное как «Удалить мои данные». */
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
-  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials, feed }, id, Date.now());
+  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials, feed, avatars }, id, Date.now());
   groups.forget(id);
   if (clan) {
     sendClan(clan);
@@ -1487,6 +1509,10 @@ const http = createServer((req, res) => {
     return;
   }
   if (path.startsWith('/api/feed/photo/') && req.method === 'GET') return onFeedPhoto(path, req, res);
+  if (path.startsWith('/api/avatar/') && req.method === 'GET') {
+    onAvatar(path, res).catch(() => res.writeHead(500).end());
+    return;
+  }
   if (path === '/api/profile' || path === '/api/feed' || path.startsWith('/api/feed/')) {
     onSocialApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
