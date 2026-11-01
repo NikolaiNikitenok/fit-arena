@@ -49,6 +49,7 @@ export interface CityRow {
   level: number | null;
   pro?: boolean;
   me?: boolean;
+  pid?: string;
 }
 
 export interface CityBoard {
@@ -116,6 +117,8 @@ export interface CityDeps {
   isPro: (id: string) => boolean;
   clanCity: (id: string) => string | undefined;
   clanCountry?: (id: string) => string | undefined;
+  // Публичный id профиля (server/socialApi.ts): строка топа открывает профиль.
+  profileId?: (id: string) => string;
 }
 
 export class CityStore {
@@ -217,7 +220,7 @@ export class CityStore {
     const top = own
       .filter((r) => r.reps > 0)
       .slice(0, CITY_TOP)
-      .map(({ id: rid, name, reps, level }) => ({ name, reps, level, pro: d.isPro(rid) || undefined, me: rid === id || undefined }));
+      .map(({ id: rid, name, reps, level }) => ({ name, reps, level, pro: d.isPro(rid) || undefined, me: rid === id || undefined, pid: d.profileId?.(rid) }));
     const myCities = cities.slice(0, CITIES_TOP);
     const mineCity = cities.find((c) => c.mine);
     if (mineCity && !myCities.includes(mineCity)) myCities.push(mineCity);

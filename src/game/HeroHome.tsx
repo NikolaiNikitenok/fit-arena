@@ -10,7 +10,8 @@ import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achieve
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streakOf } from './progress';
-import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, Lock, PassShield, Plan, Swords, Users } from '../icons';
+import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, Lock, PassShield, Plan, Swords, Users, Feed } from '../icons';
+import { useFeedBadge } from '../social/useFeedBadge';
 import type { Feature } from './unlocks';
 import { pickToday, TodayKind } from './today';
 import { HOLIDAY_GOAL, holidayAt, holidayOutfit, holidayTokens, tokenWord } from './holidays';
@@ -93,6 +94,8 @@ interface Props {
   onHoliday: () => void;
   onCollections: () => void;
   onCity: () => void;
+  // Лента постов игроков (src/social/FeedScreen.tsx).
+  onFeed: () => void;
   onRecap: (month: string) => void;
   onTitan: () => void;
   // Сколько жизней сейчас: от них зависит, что предложит «Тренировка дня».
@@ -206,11 +209,12 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan, onWeekly } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onFeed, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan, onWeekly } = props;
   // Закрытый раздел: вместо перехода — подсказка, когда он откроется.
   // Из закрытых разделов на главной виден только ближайший — как обещание; остальные не мешают новичку.
   const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), hidden: lockLeft(f) > 0 && f !== nextLock, onClick: lockLeft(f) ? () => onLocked(f) : fn });
   const inClan = useInClan();
+  const feedDot = useFeedBadge();
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -459,7 +463,7 @@ export function HeroHome(props: Props) {
         <div className="hv-col right">
           <Side title={t('Лавка')} sub={t('Фёдора')} color="#ffd27a" {...g('shop', () => onShop())} icon={<Bag size={26} />} />
           <Side title={pet ? petName(progress, pet) : t('Питомец')} sub={pet ? t('ур. {0}', { 0: petLvl }) : t('яйцо')} color="#ffb46b" dot={badges.pets} onClick={onPets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} />
-          <Side title={t('Друзья')} sub={t('и вызовы')} color="#ff6b81" {...g('duel', onFriends)} icon={<Users size={26} />} />
+          <Side title={t('Лента')} sub={feedDot ? t('новые посты') : t('и профили')} color="#ff6b81" dot={feedDot} onClick={onFeed} icon={<Feed size={26} />} />
           <Side title={t('Ещё')} sub={t('все разделы')} color="#a78bfa" dot={moreDot} onClick={() => setMoreOpen(true)} icon={<MoreIcon />} />
         </div>
 
@@ -495,6 +499,7 @@ export function HeroHome(props: Props) {
               {extra.includes('titan') && titanShown && <More onClick={onTitan} title={t('Титан')} sub={titanShown.live ? t('битва идёт') : now < titanShown.start ? fmtDays(Math.ceil((titanShown.start - now) / 86_400_000)) : t('итоги')} dot={titanShown.live} icon={<MonsterFace shape="golem" color={titanShown.def.color} boss size={40} />} tone="pet" />}
               {extra.includes('holiday') && <More onClick={onHoliday} title={hol.def.name} sub={hol.live ? t('ещё {0}', { 0: fmtLeft(hol.end - now) }) : fmtDays(daysUntil({ ...hol, live: false }, now))} dot={badges.holiday} icon={<HolidayToken id={hol.def.id} size={32} />} tone="pet" />}
               {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title={t('Итоги')} sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
+              <More {...g('duel', onFriends)} title={t('Друзья')} sub={t('и вызовы')} icon={<Users size={22} />} tone="rose" />
               <More onClick={() => setHeroOpen(true)} title={t('Вещи')} sub={t('и зелья')} icon={<Swords size={22} />} tone="accent" />
               <More onClick={onStrength} title={t('Сила')} sub={t('рекорды')} icon={<Dumbbell size={22} />} tone="mint" />
               <More {...g('gym', onGym)} title={t('Зал')} sub={gym.run ? t('идёт') : gymToday ? t('сегодня') : t('дневник')} icon={<Kettlebell size={22} />} tone="teal" />
@@ -571,6 +576,7 @@ export function HeroHome(props: Props) {
         {extra.includes('titan') && titanShown && <More onClick={onTitan} title={t('Титан')} sub={titanShown.live ? t('битва идёт') : now < titanShown.start ? fmtDays(Math.ceil((titanShown.start - now) / 86_400_000)) : t('итоги')} dot={titanShown.live} icon={<MonsterFace shape="golem" color={titanShown.def.color} boss size={40} />} tone="pet" />}
         {extra.includes('holiday') && <More onClick={onHoliday} title={hol.def.name} sub={hol.live ? t('ещё {0}', { 0: fmtLeft(hol.end - now) }) : fmtDays(daysUntil({ ...hol, live: false }, now))} dot={badges.holiday} icon={<HolidayToken id={hol.def.id} size={32} />} tone="pet" />}
         {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title={t('Итоги')} sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
+        <More onClick={onFeed} title={t('Лента')} sub={feedDot ? t('новые посты') : t('и профили')} dot={feedDot} icon={<Feed size={22} />} tone="rose" />
         <More onClick={onPets} title={pet ? petName(progress, pet) : t('Питомец')} sub={pet ? t('ур. {0}', { 0: petLvl }) : t('яйцо ждёт')} dot={badges.pets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} tone="pet" />
         <More onClick={() => setHeroOpen(true)} title={t('Вещи')} sub={t('и зелья')} icon={<Swords size={22} />} tone="accent" />
         <More {...g('shop', () => onShop())} title={t('Лавка')} sub={t('Фёдора')} icon={<Bag size={22} />} tone="gold" />

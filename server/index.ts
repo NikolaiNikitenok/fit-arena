@@ -82,6 +82,8 @@ import { isMonth, RecapBoard } from './recap';
 import { StoryImages } from './storyImages';
 import { EmojiBadges } from './emojiBadges';
 import { TITANS } from '../shared/titan';
+import { FeedStore } from './feed';
+import { feedCommand, Pids, type SocialDeps, socialApi } from './socialApi';
 import { MAX_TOKEN, maxSend, maxStatus, maxUsername, maxWebhookSecret, type MaxUpdate, onMaxUpdate, startMaxBot } from './maxBot';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -113,12 +115,18 @@ const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env
 const recap = new RecapBoard({ saves: () => saves.all(), cities: () => cities.all() });
 // Титан: общий босс страны раз в месяц. Имена героев для топа — из города, друзей или последнего запроса.
 const titanNames = new Map<string, string>();
+// Лента и профили (server/feed.ts, server/socialApi.ts): посты в feed.json, фото — в папке feed/ рядом.
+const feed = new FeedStore(
+  process.env.FEED_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'feed.json'),
+  process.env.FEED_PHOTOS ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'feed'),
+);
 const titan = new TitanBoard(process.env.TITANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'titans.json'), {
   saves: () => saves.all(),
   cities: () => cities.all(),
   nameOf: (id) => cities.get(id)?.name ?? friends.get(id)?.name ?? titanNames.get(id),
   isPro: (id) => isPro(id),
   giftTop: () => TITAN_GIFT_TOP,
+  profileId: (id) => pids.of(id),
 });
 // Подарки Telegram лучшим героям за победу над Титаном: сколько героев (по умолчанию — лучший один; 0 — выключено).
 // Отправляет админ командой /titan_gifts.
@@ -475,6 +483,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     if (who.guest) {
       saves.adopt(who.id, who.guest);
       villages.adopt(who.id, who.guest);
+      feed.adopt(who.id, who.guest);
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
@@ -871,9 +880,85 @@ async function onFriendsApi(path: string, req: IncomingMessage, res: ServerRespo
   const guest = !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
   const me = signed ? { id: signed.id, name: signed.name } : guest ? { id: guest, name: cleanName(body.name) } : null;
   if (!me) return reply(401, { error: 'Друзья — только в Telegram', telegram: false });
+  // Жалоба и блок из профиля: вместо id игрока приходит его публичный pid.
+  if (typeof body.id === 'string' && body.id.startsWith('pid:')) body.id = pids.idOf(body.id.slice(4)) ?? '';
   // Модерация пускает так же, как друзья.
   const r = path.startsWith('/api/moderation') ? moderationApi(moderationDeps, path, me, body) : friendsApi(friendsDeps, path, me, body);
   reply(r.status, r.body);
+}
+
+const pids = new Pids(
+  (t) => telemetry.sign(t),
+  () => saves.all().map((x) => x.id),
+);
+const nameOfPlayer = (id: string): string | undefined => friends.get(id)?.name ?? clans.clanOf(id)?.members.find((m) => m.id === id)?.name ?? store.nameOf(id) ?? titanNames.get(id) ?? cities.get(id)?.name;
+const photoSign = (photoId: string) => telemetry.sign(`feed-photo:${photoId}`).slice(0, 20);
+const socialDeps: SocialDeps = {
+  feed,
+  pids,
+  now: Date.now,
+  nameOf: nameOfPlayer,
+  heroLevel: (id) => saves.heroLevel(id),
+  isPro,
+  progress: (id) => (saves.get(id)?.progress as Partial<Progress> | null | undefined) ?? null,
+  lastSeen: (id) => saves.get(id)?.savedAt ?? null,
+  online: (id) => isOnline(id) || friends.seenRecently(id),
+  cups: (id) => store.cupsOf(id),
+  clan: (id) => {
+    const c = clans.clanOf(id);
+    return c && { name: c.name, tag: c.tag };
+  },
+  city: (id) => cities.get(id)?.city,
+  exists: (id) => !!saves.get(id) || store.played(id) || !!friends.get(id),
+  blocked: (a, b) => mod.either(a, b),
+  blockedByMe: (me, other) => mod.hasBlocked(me, other),
+  mutedUntil: (id) => mod.mutedUntil(id),
+  knows: (me, other) => friends.areFriends(me, other) || (!!clans.clanOf(me) && clans.clanOf(me) === clans.clanOf(other)),
+  friendStatus: (me, other) => {
+    if (friends.areFriends(me, other)) return 'friends';
+    if (friends.get(other)?.requests.some((r) => r.from === me)) return 'requested';
+    if (friends.get(me)?.requests.some((r) => r.from === other)) return 'incoming';
+    return 'none';
+  },
+  addFriend: (me, other, otherName) => {
+    // Профиль друзей у того, кого зовут, мог ещё не появиться: заводим (код и приглашение — его собственные).
+    const to = friends.get(other) ?? friends.me(other, otherName);
+    // Он уже звал меня: принимаем заявку, иначе — заявка по его коду (как вручную).
+    const incoming = friends.get(me.id)?.requests.some((r) => r.from === other);
+    const r = friendsApi(friendsDeps, incoming ? '/api/friends/answer' : '/api/friends/add', me, incoming ? { id: other, accept: true } : { code: to.code });
+    const b = r.body as { error?: string; added?: string; requested?: string };
+    if (b.error) return { error: b.error };
+    return { note: b.added ? `${b.added} теперь у тебя в друзьях` : `Заявка ушла. Когда ${to.name} примет её, вы станете друзьями` };
+  },
+  isAdmin: isAdminAccount,
+  notifyAdmins: (text) => toAdmins(text),
+  notify: (to, text, button, query) => friends.notify(to, text, button, query),
+  adminPhotoUrl: (photoId) => `${APP_URL.replace(/\/$/, '')}/api/feed/photo/${photoId}.jpg?a=${photoSign(photoId)}`,
+  report: (from, target, targetName, text) => void reports.add({ from: from.id, fromName: from.name, target, targetName, reason: 'other', where: 'post', text }),
+};
+
+/** Лента и профили: POST /api/profile, /api/feed… Смотреть, публиковать и подписываться — только вошедшим. */
+async function onSocialApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  if (!body) return reply(400, { error: 'bad json' });
+  const signed = signedIn(body);
+  const guest = !BOT_TOKEN && typeof body.guestId === 'string' && /^[\w-]{8,40}$/.test(body.guestId) ? `guest:${body.guestId}` : null;
+  const me = signed ? { id: signed.id, name: signed.name } : guest ? { id: guest, name: cleanName(body.name) } : null;
+  if (!me) return reply(401, { error: 'Лента и профили — для тех, кто вошёл через Telegram, Max или Яндекс' });
+  friends.touch(me.id);
+  const r = socialApi(socialDeps, path, me, body);
+  reply(r.status, r.body);
+}
+
+/** GET /api/feed/photo/<id>.jpg: фото поста. Скрытое по жалобам — только по ссылке для админа (?a=подпись). */
+function onFeedPhoto(path: string, req: IncomingMessage, res: ServerResponse) {
+  const id = /^\/api\/feed\/photo\/([a-f0-9]{20})\.jpg$/.exec(path)?.[1];
+  const a = new URL(req.url ?? '/', 'http://x').searchParams.get('a');
+  const img = id ? feed.photo(id, a === photoSign(id)) : null;
+  if (!img) return res.writeHead(404).end();
+  res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': img.length, 'Cache-Control': 'private, max-age=86400', 'X-Robots-Tag': 'noindex' }).end(img);
 }
 
 /** Страница статистики: GET по подписанной ссылке (?t=…) или POST с initData. Ссылка — POST /api/admin/link. */
@@ -939,7 +1024,7 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
     const r = cities.set(me.id, body!.city, me.name, now, body!.country);
     if (typeof r === 'string') return reply(400, { error: r });
   } else cities.rename(me.id, me.name);
-  reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city, clanCountry: (id) => clans.clanOf(id)?.country }, me.id, now));
+  reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city, clanCountry: (id) => clans.clanOf(id)?.country, profileId: (id) => pids.of(id) }, me.id, now));
 }
 
 /**
@@ -1035,7 +1120,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   const now = Date.now();
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
-    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, now);
+    const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials, feed }, id, now);
     groups.forget(id);
     if (clan) {
       sendClan(clan);
@@ -1049,7 +1134,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 /** Убрать героя аккаунта, которого не выбрали при привязке: копия прогресса и кубки — в архив, остальное как «Удалить мои данные». */
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
-  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, Date.now());
+  const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials, feed }, id, Date.now());
   groups.forget(id);
   if (clan) {
     sendClan(clan);
@@ -1321,7 +1406,7 @@ const http = createServer((req, res) => {
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
-        const admin = msg?.text && chat?.type === 'private' ? (adminBalance(chat.id, msg.text) ?? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text))) : null;
+        const admin = msg?.text && chat?.type === 'private' ? (adminBalance(chat.id, msg.text) ?? feedCommand(socialDeps, chat.id, msg.text) ?? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text))) : null;
         const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && chat?.type === 'private' && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
         // Англоязычному игроку — своя кнопка меню «Play» вместо общей «Играть».
@@ -1396,6 +1481,11 @@ const http = createServer((req, res) => {
   if (path.startsWith('/api/story/') && req.method === 'GET') return onStoryImage(path, res);
   if (path === '/api/titan') {
     onTitanApi(req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path.startsWith('/api/feed/photo/') && req.method === 'GET') return onFeedPhoto(path, req, res);
+  if (path === '/api/profile' || path === '/api/feed' || path.startsWith('/api/feed/')) {
+    onSocialApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/friends' || path.startsWith('/api/friends/') || path === '/api/moderation' || path.startsWith('/api/moderation/')) {
@@ -1689,7 +1779,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         break;
       case 'top': {
         const top = publicTop(player.id);
-        send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id, pro: isPro(p.id) })) });
+        send({ type: 'top', players: top.map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, me: p.id === player!.id, pro: isPro(p.id), pid: pids.of(p.id) })) });
         break;
       }
       case 'join': {
@@ -1856,7 +1946,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
-    (chatId, text) => (proCommand(chatId, text) || testPayCommand(chatId, adminText(chatId, text)) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
+    (chatId, text) => (proCommand(chatId, text) || testPayCommand(chatId, adminText(chatId, text)) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? feedCommand(socialDeps, chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
     (u) => {
       if (groupUpdate(u)) return true;
       const pay = payUpdate(u);
@@ -1941,6 +2031,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     guard.flush();
     telemetry.flush();
     mod.flush();
+    feed.flush();
     reports.flush();
     villages.flush();
     accounts.flush();

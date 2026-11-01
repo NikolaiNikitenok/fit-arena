@@ -17,6 +17,10 @@ import { UpdateBanner } from './updates/UpdateBanner';
 import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 import { t } from './i18n';
+import { onOpenFeed } from './social/bus';
+
+// Профиль игрока — лист поверх любой вкладки, грузится при первом открытии.
+const ProfileHost = lazy(() => import('./social/ProfileSheet').then((m) => ({ default: m.ProfileHost })));
 
 // Дуэль с 3D-ареной и камерой грузится, когда её открыли.
 const Duel = lazy(() => import('./Duel').then((m) => ({ default: m.Duel })));
@@ -80,6 +84,8 @@ export function App() {
       }),
     [],
   );
+  // «Написать пост» из профиля во вкладке дуэли: лента живёт на главной.
+  useEffect(() => onOpenFeed(() => setTab('hero')), []);
   const showLock = (tb: 'village' | 'clan' | 'duel') => {
     setLockToast(lockedText(tb, locks[tb] ?? 0));
     clearTimeout(toastTimer.current);
@@ -135,6 +141,10 @@ export function App() {
       />
 
       <PowerToast />
+
+      <Suspense fallback={null}>
+        <ProfileHost />
+      </Suspense>
 
       {/* Кнопка «Участвовать» под таблицей вызова в групповом чате. */}
       <GroupJoin onTrain={() => setTab('hero')} />

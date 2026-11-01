@@ -39,6 +39,11 @@ export class Store {
     this.scheduleSave();
   }
 
+    /** Имя из профиля дуэлей (без создания профиля). */
+    nameOf(id: string): string | undefined {
+      return this.profiles.get(id)?.name;
+    }
+
     /** Играл ли дуэли (без создания профиля). */
     played(id: string): boolean {
       const p = this.profiles.get(id);

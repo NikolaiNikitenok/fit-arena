@@ -35,7 +35,7 @@ const quote = (s: string) => s.replace(/\s+/g, ' ').slice(0, 300);
 
 /** Текст жалобы для админов. */
 export function reportText(r: Report, count: number, muted: number): string {
-  const where = r.where === 'chat' ? `чат клана${r.clan ? ` «${r.clan}»` : ''}` : r.where === 'clan' ? `участник клана${r.clan ? ` «${r.clan}»` : ''}` : 'друзья';
+  const where = r.where === 'chat' ? `чат клана${r.clan ? ` «${r.clan}»` : ''}` : r.where === 'clan' ? `участник клана${r.clan ? ` «${r.clan}»` : ''}` : r.where === 'profile' ? 'профиль игрока' : r.where === 'post' ? 'пост в ленте' : 'друзья';
   const lines = [
     `🚩 Жалоба: ${REPORT_REASONS[r.reason].toLowerCase()}`,
     `На: ${r.targetName} (${r.target})${count > 1 ? ` — жалоб за неделю: ${count}` : ''}`,
@@ -72,7 +72,7 @@ export function moderationApi(d: ModerationDeps, path: string, me: { id: string;
       return ok();
     case '/api/moderation/report': {
       const reason = (String(body.reason) in REPORT_REASONS ? String(body.reason) : 'other') as ReportReason;
-      const where = (['chat', 'clan', 'friend'].includes(String(body.where)) ? String(body.where) : 'friend') as ReportWhere;
+      const where = (['chat', 'clan', 'friend', 'profile'].includes(String(body.where)) ? String(body.where) : 'friend') as ReportWhere;
       const msg = where === 'chat' ? d.chatMessage(me.id, Number(body.msg)) : undefined;
       if (where === 'chat' && (!msg || msg.from !== other)) return ok({ error: 'Сообщение не найдено' });
       const r = d.reports.add({

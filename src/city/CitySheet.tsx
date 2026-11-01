@@ -10,6 +10,7 @@ import '../game/holiday.css';
 import './city.css';
 import { forms, isEn, locale, t } from '../i18n';
 import { cityName, countryName, flag } from './cityName';
+import { openProfile } from '../social/bus';
 
 // Битва городов: глобус, где страны окрашены своими повторами за неделю (с понедельника по Москве),
 // а над городами светятся столбы; рейтинг стран и городов мира по повторам, героям или сильнейшему герою,
@@ -349,7 +350,7 @@ export function CitySheet({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="city-rows">
                 {board.top.map((r, i) => (
-                  <div key={i} className={`city-row p${i + 1} ${r.me ? 'me' : ''}`}>
+                  <div key={i} className={`city-row p${i + 1} ${r.me ? 'me' : ''} ${r.pid ? 'to-profile' : ''}`} onClick={r.pid ? () => openProfile({ pid: r.pid! }) : undefined}>
                     <span className="place">{i + 1}</span>
                     <span className="who">
                       <b className={r.pro ? 'pro-name' : ''}>{r.name}</b>

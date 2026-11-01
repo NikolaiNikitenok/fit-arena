@@ -9,6 +9,8 @@ export interface CityRow {
   level: number | null;
   pro?: boolean;
   me?: boolean;
+  // Публичный id профиля: тап по строке открывает профиль игрока.
+  pid?: string;
 }
 
 export interface CityBoard {

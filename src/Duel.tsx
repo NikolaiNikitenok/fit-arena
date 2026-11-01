@@ -17,6 +17,7 @@ import { TrainerDuel } from './TrainerDuel';
 import { FriendsScreen } from './friends/FriendsScreen';
 import { Users } from './icons';
 import { t } from './i18n';
+import { openProfile } from './social/bus';
 
 /** Войти в эту комнату боя: вызов друга. seq — чтобы тот же код можно было передать снова. */
 export type JoinRoom = { code: string; seq: number };
@@ -313,7 +314,7 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
             <div className="top">
               {top.length === 0 && <div className="muted">{t('Пока никто не сыграл в этом сезоне. Будь первым!')}</div>}
               {top.map((p, i) => (
-                <div key={i} className={`top-row ${p.me ? 'me' : ''}`}>
+                <div key={i} className={`top-row ${p.me ? 'me' : ''} ${p.pid ? 'to-profile' : ''}`} onClick={p.pid ? () => openProfile({ pid: p.pid! }) : undefined}>
                   <span className="top-place">{i + 1}</span>
                   <span className="top-name">
                     <span className={p.pro ? 'pro-name' : ''}>{p.name}</span>

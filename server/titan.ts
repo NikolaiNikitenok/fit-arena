@@ -38,7 +38,7 @@ export interface TitanState {
   players: number;
   me: { reps: number; place: number | null };
   cities: { name: string; dealt: number; players: number; mine?: boolean }[];
-  heroes: { name: string; reps: number; pro?: boolean; me?: boolean }[];
+  heroes: { name: string; reps: number; pro?: boolean; me?: boolean; pid?: string }[];
   myCity: { name: string; place: number; dealt: number } | null;
   // Сколько лучших героев получат подарок Telegram при победе (0 — подарков нет).
   giftTop: number;
@@ -51,6 +51,8 @@ export interface TitanDeps {
   isPro: (id: string) => boolean;
   // Сколько лучших героев получат подарок Telegram (TITAN_GIFT_TOP); без него — подарков нет.
   giftTop?: () => number;
+  // Публичный id профиля (server/socialApi.ts).
+  profileId?: (id: string) => string;
 }
 
 /** Месяц перед этим: 2026-01 → 2025-12. */
@@ -181,7 +183,7 @@ export class TitanBoard {
       players: t.reps.size,
       me: { reps: mine, place },
       cities: t.cities.slice(0, 10).map((c) => ({ name: c.name, dealt: c.dealt, players: c.players, mine: c.key === myKey || undefined })),
-      heroes: t.heroes.slice(0, 10).map(([pid, reps]) => ({ name: this.d.nameOf(pid) ?? 'Герой', reps, pro: this.d.isPro(pid) || undefined, me: pid === id || undefined })),
+      heroes: t.heroes.slice(0, 10).map(([pid, reps]) => ({ name: this.d.nameOf(pid) ?? 'Герой', reps, pro: this.d.isPro(pid) || undefined, me: pid === id || undefined, pid: this.d.profileId?.(pid) })),
       myCity: ci >= 0 ? { name: t.cities[ci].name, place: ci + 1, dealt: t.cities[ci].dealt } : null,
       giftTop: this.d.giftTop?.() ?? 0,
     };

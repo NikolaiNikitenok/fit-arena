@@ -47,6 +47,8 @@ export interface TopEntry {
   wins: number;
   me: boolean;
   pro?: boolean;
+  // Публичный id профиля: тап по строке рейтинга открывает профиль.
+  pid?: string;
 }
 
 export type ServerMessage =

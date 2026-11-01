@@ -63,6 +63,7 @@ import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
 import { openPassInTelegram, platform, startTab } from '../telegram';
+import { type FeedOpen, onOpenFeed, takeFeedRequest } from '../social/bus';
 import { useCloudReady, useStarter } from '../cloud';
 import { type OfferPlace, offerSeen, payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
@@ -76,6 +77,7 @@ import { lockedText, UnlockSheet } from './UnlockSheet';
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
 const EventScreen = lazy(() => import('./EventScreen').then((m) => ({ default: m.EventScreen })));
 const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m.ProgramsScreen })));
+const FeedScreen = lazy(() => import('../social/FeedScreen').then((m) => ({ default: m.FeedScreen })));
 const GymScreen = lazy(() => import('../gym/GymScreen').then((m) => ({ default: m.GymScreen })));
 const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
 const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.PassScreen })));
@@ -187,6 +189,16 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   const [holidayOpen, setHolidayOpen] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
+  // Лента (src/social): с главной, из профиля («Написать пост») и по кнопке бота ?tab=feed&post=ID.
+  const [feed, setFeed] = useState<FeedOpen | null>(() => takeFeedRequest() ?? (startTab() === 'feed' ? { post: new URLSearchParams(location.search).get('post') ?? undefined } : null));
+  useEffect(
+    () =>
+      onOpenFeed(() => {
+        const q = takeFeedRequest();
+        if (q) setFeed(q);
+      }),
+    [],
+  );
   const [recap, setRecap] = useState<string | null>(null);
   const [titanOpen, setTitanOpen] = useState(false);
   // Итоги открыты: точка на полосе главной гаснет.
@@ -398,6 +410,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
       </Screen>
     );
 
+  if (feed) return <Screen><FeedScreen compose={feed.compose} focus={feed.post} onClose={() => setFeed(null)} onFriends={() => { setFeed(null); onFriends(); }} /></Screen>;
+
   if (gym) return <Screen><GymScreen progress={progress} update={update} onClose={() => setGym(false)} /></Screen>;
 
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
@@ -603,6 +617,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onHoliday={() => setHolidayOpen(true)}
           onCollections={() => setCollectionsOpen(true)}
           onCity={() => setCityOpen(true)}
+          onFeed={() => setFeed({})}
           onRecap={openRecap}
           onTitan={() => setTitanOpen(true)}
           livesLeft={lives.lives}
