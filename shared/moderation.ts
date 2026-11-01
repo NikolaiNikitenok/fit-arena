@@ -3,8 +3,8 @@ import { t } from '../src/i18n';
 
 export type ReportReason = 'insult' | 'spam' | 'mat' | 'other';
 export const REPORT_REASONS: Record<ReportReason, string> = { insult: t('Оскорбления'), spam: t('Спам'), mat: t('Мат'), other: t('Другое') };
-// Откуда жалоба: сообщение в чате клана, участник клана или друг.
-export type ReportWhere = 'chat' | 'clan' | 'friend';
+// Откуда жалоба: сообщение в чате клана, участник клана, друг, профиль игрока или его пост в ленте.
+export type ReportWhere = 'chat' | 'clan' | 'friend' | 'profile' | 'post';
 
 export interface BlockedView {
   id: string;

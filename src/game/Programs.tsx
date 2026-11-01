@@ -44,7 +44,7 @@ const daysWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? t('день') 
 
 /** Быстрая тренировка вне программы: тест планки или задание дня на планку. */
 export interface QuickWorkout {
-  kind: 'plank' | 'daily';
+  kind: 'plank' | 'daily' | 'morning';
   tag: string;
   title: string;
   sets: SetPlan[];
@@ -133,8 +133,10 @@ export function ProgramsScreen({ progress, update, model, quick, onClose }: Prop
               ? best >= 10
                 ? t('{0} в планке! Запомнил: задания на планку теперь под тебя.', { 0: amountText('plank', best) })
                 : t('Пока совсем немного. Встань боком к камере, локти под плечи — и держи.')
-              : t('Задание сделано, забери награду на главном экране.');
-          setView({ kind: 'summary', title: q.kind === 'plank' ? t('Планка на время') : t('Готово!'), text, back: { kind: 'list' } });
+              : q.kind === 'morning'
+                ? t('Зарядка сделана: {0} повторов уже в счёт дня. Хорошего дня, боец!', { 0: done.reduce((a, b) => a + b, 0) })
+                : t('Задание сделано, забери награду на главном экране.');
+          setView({ kind: 'summary', title: q.kind === 'plank' ? t('Планка на время') : q.kind === 'morning' ? t('С добрым утром!') : t('Готово!'), text, back: { kind: 'list' } });
         }}
       />
     );

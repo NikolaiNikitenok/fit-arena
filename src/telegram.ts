@@ -212,6 +212,13 @@ export const appSource = (): string => launchSource(startParam(), location.searc
 export const friendInviteLink = (token: string, bot: { username: string | null; running: boolean }): string => maxLink(`friend-${token}`) ?? friendLink(token, bot, BOT_USERNAME, location.origin);
 
 /** Вкладка из адреса: кнопки бота о рейде открывают клан (?tab=clan), о друзьях — друзей (?tab=friends). */
+/** Ссылка на пост ленты (startapp=post-ID, src/social/postStory.ts) или ?post=ID в браузере. */
+export const startPost = (): string | null => {
+  const p = startParam();
+  const id = p?.startsWith('post-') ? p.slice(5) : new URLSearchParams(location.search).get('post');
+  return id && /^[a-f0-9]{16}$/.test(id) ? id : null;
+};
+
 export const startTab = (): string | null => {
   // В Max кнопка бота передаёт вкладку параметром запуска: tab-clan.
   const p = startParam();

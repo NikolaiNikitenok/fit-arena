@@ -78,6 +78,9 @@ export interface TgMessage {
   text?: string;
   caption?: string;
   photo?: { file_id: string; width: number; height: number }[];
+  // Видео от админа для рилса-петли (server/reels.ts addClip): обычное видео или файл с типом video/*.
+  video?: { file_id: string; duration?: number; file_size?: number };
+  document?: { file_id: string; mime_type?: string; file_size?: number };
   media_group_id?: string;
   reply_to_message?: { message_id: number };
   // Группа стала супергруппой: новый id чата (server/groupChallenges.ts).

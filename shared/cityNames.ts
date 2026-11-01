@@ -1,12 +1,14 @@
-// Названия городов: один город — один ключ, как бы его ни написали («Питер», «спб», «Санкт-Петербург»).
-// Справочник — города России с карты (shared/russiaCities.ts); город не из справочника тоже можно выбрать,
-// он попадёт в таблицу, но не на карту.
-import { RU_CITIES } from './russiaCities';
+// Названия городов: один город — один ключ, как бы его ни написали («Питер», «спб», «Санкт-Петербург», «Paris»).
+// Справочник — города мира с глобуса (shared/worldCities.ts); город не из справочника тоже можно выбрать,
+// он попадёт в таблицу своей страны, но не на глобус.
+import { type WorldCity, WORLD_CITIES } from './worldCities';
 
-/** Ключ города: регистр, ё и лишние пробелы не важны. */
+/** Латинская буква без надстрочных знаков: «São» → «sao». Кириллицу не трогаем (й остаётся й). */
+const plain = (s: string) => [...s].map((ch) => (ch.charCodeAt(0) < 0x400 ? ch.normalize('NFD')[0] : ch)).join('');
+
+/** Ключ города: регистр, ё, надстрочные знаки и лишние пробелы не важны. */
 export const cityKey = (s: string) =>
-  s
-    .toLowerCase()
+  plain(s.toLowerCase())
     .replace(/ё/g, 'е')
     .replace(/[^a-zа-я0-9 -]/g, '')
     .replace(/\s+/g, ' ')
@@ -38,6 +40,22 @@ const ALIASES: Record<string, string> = {
   камчатка: 'Петропавловск-Камчатский',
   'южно сахалинск': 'Южно-Сахалинск',
   'комсомольск на амуре': 'Комсомольск-на-Амуре',
+  // Мир.
+  алматы: 'Алма-Ата',
+  almaty: 'Алма-Ата',
+  'нур султан': 'Астана',
+  киев: 'Киев',
+  kyiv: 'Киев',
+  'нью йорк': 'Нью-Йорк',
+  nyc: 'Нью-Йорк',
+  ny: 'Нью-Йорк',
+  'лос анджелес': 'Лос-Анджелес',
+  la: 'Лос-Анджелес',
+  dubai: 'Дубай',
+  дубаи: 'Дубай',
+  бишкек: 'Бишкек',
+  стамбул: 'Стамбул',
+  istanbul: 'Стамбул',
 };
 
 // Латиницей: привычные английские названия крупных городов, остальные — транслитом.
@@ -78,19 +96,29 @@ export function cityLatin(name: string): string {
     .join('');
 }
 
-const BY_KEY = new Map<string, number>(RU_CITIES.map((c, i) => [cityKey(c[0]), i]));
-// Город, написанный латиницей (англоязычный игрок): «Kazan», «Saint Petersburg».
-const BY_LATIN = new Map<string, number>(RU_CITIES.map((c, i) => [cityKey(cityLatin(c[0])).replace(/-/g, ' '), i]));
 // Дефис и пробел — одно и то же: «Ростов на Дону» = «Ростов-на-Дону».
 const loose = (key: string) => key.replace(/-/g, ' ');
-const BY_LOOSE = new Map<string, number>(RU_CITIES.map((c, i) => [loose(cityKey(c[0])), i]));
+/** Первый (самый крупный) город с таким ключом. */
+const index = (key: (c: WorldCity) => string) => {
+  const m = new Map<string, number>();
+  WORLD_CITIES.forEach((c, i) => {
+    const k = key(c);
+    if (k && !m.has(k)) m.set(k, i);
+  });
+  return m;
+};
+const BY_KEY = index((c) => cityKey(c[0]));
+const BY_LOOSE = index((c) => loose(cityKey(c[0])));
+// Город, написанный латиницей (англоязычный игрок): «Kazan», «Saint Petersburg», «Paris».
+const BY_LATIN = index((c) => loose(cityKey(c[1])));
+const BY_TRANSLIT = index((c) => (c[2] === 'RU' ? loose(cityKey(cityLatin(c[0]))) : ''));
 
 /** Город из справочника по любому написанию или undefined. */
-export function knownCity(s: string): (typeof RU_CITIES)[number] | undefined {
+export function knownCity(s: string): WorldCity | undefined {
   const key = cityKey(s);
   const alias = ALIASES[key] ?? ALIASES[loose(key)];
-  const i = BY_KEY.get(alias ? cityKey(alias) : key) ?? BY_LOOSE.get(loose(key)) ?? BY_LATIN.get(loose(key));
-  return i == null ? undefined : RU_CITIES[i];
+  const i = BY_KEY.get(alias ? cityKey(alias) : key) ?? BY_LOOSE.get(loose(key)) ?? BY_TRANSLIT.get(loose(key)) ?? BY_LATIN.get(loose(key));
+  return i == null ? undefined : WORLD_CITIES[i];
 }
 
 /** Ключ для группировки: у городов из справочника — ключ его названия. */
@@ -106,9 +134,12 @@ export function citySuggest(s: string, limit = 6): string[] {
   const out: string[] = [];
   const alias = ALIASES[key];
   if (alias) out.push(alias);
-  for (const c of RU_CITIES) {
+  for (const c of WORLD_CITIES) {
     if (out.length >= limit) break;
-    if ((loose(cityKey(c[0])).startsWith(key) || loose(cityKey(cityLatin(c[0]))).startsWith(key)) && !out.includes(c[0])) out.push(c[0]);
+    if ((loose(cityKey(c[0])).startsWith(key) || loose(cityKey(c[1])).startsWith(key) || (c[2] === 'RU' && loose(cityKey(cityLatin(c[0]))).startsWith(key))) && !out.includes(c[0])) out.push(c[0]);
   }
   return out;
 }
+
+/** Страна города из справочника (ISO) или undefined. */
+export const cityCountry = (s: string): string | undefined => knownCity(s)?.[2];

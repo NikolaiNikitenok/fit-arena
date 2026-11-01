@@ -62,7 +62,8 @@ import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
-import { openPassInTelegram, platform, startTab } from '../telegram';
+import { openPassInTelegram, platform, startPost, startTab } from '../telegram';
+import { type FeedOpen, onOpenFeed, takeFeedRequest } from '../social/bus';
 import { useCloudReady, useStarter } from '../cloud';
 import { type OfferPlace, offerSeen, payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
@@ -71,11 +72,16 @@ import { pl, t } from '../i18n';
 import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, nextLocked, rememberUnlocks } from './unlocks';
 import { linkUnlocks } from './unlockLinks';
 import { lockedText, UnlockSheet } from './UnlockSheet';
+import { getSettings } from '../settings';
+import { MorningOffer } from '../warmup/MorningOffer';
+import { isBannerOpen, unseenEntries } from '../updates/updates';
+import { markMorning, morningDue, morningWorkout } from '../warmup/morning';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
 const EventScreen = lazy(() => import('./EventScreen').then((m) => ({ default: m.EventScreen })));
 const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m.ProgramsScreen })));
+const FeedScreen = lazy(() => import('../social/FeedScreen').then((m) => ({ default: m.FeedScreen })));
 const GymScreen = lazy(() => import('../gym/GymScreen').then((m) => ({ default: m.GymScreen })));
 const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
 const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.PassScreen })));
@@ -187,6 +193,16 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   const [holidayOpen, setHolidayOpen] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
+  // Лента (src/social): с главной, из профиля («Написать пост») и по кнопке бота ?tab=feed&post=ID.
+  const [feed, setFeed] = useState<FeedOpen | null>(() => takeFeedRequest() ?? (startTab() === 'feed' || startPost() ? { post: startPost() ?? undefined } : null));
+  useEffect(
+    () =>
+      onOpenFeed(() => {
+        const q = takeFeedRequest();
+        if (q) setFeed(q);
+      }),
+    [],
+  );
   const [recap, setRecap] = useState<string | null>(null);
   const [titanOpen, setTitanOpen] = useState(false);
   // Итоги открыты: точка на полосе главной гаснет.
@@ -298,10 +314,33 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   // Пора ли предложить покупку (src/game/offers.ts): только на главной, когда сервер уже ответил (знаем, есть ли Pro
   // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
   const cloudReady = useCloudReady();
+  // Утренняя зарядка: раньше предложения покупки, и одно окно за раз.
+  const [morning, setMorning] = useState(false);
+  const morningRef = useRef(false);
   const busyScreen =
     !!playing || !!dungeon || gym || !!programs || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
   useEffect(() => {
-    if (tab !== 'hero' || !cloudReady || busyScreen || offer) return;
+    if (tab !== 'hero' || busyScreen || offer || morningRef.current) return;
+    if (!morningDue(latest.current, Date.now(), getSettings().morning)) return;
+    morningRef.current = true;
+    // Открыта карточка «Игра обновилась» — ждём, пока её закроют: два окна сразу не показываем.
+    const show = () => {
+      if (unseenEntries().length || isBannerOpen()) return false;
+      markMorning(Date.now());
+      setMorning(true);
+      return true;
+    };
+    // Первая проверка — после заставки и карточки «Что нового» (она появляется через 1,8 с).
+    let shown = false;
+    const id = setInterval(() => (shown = show()) && clearInterval(id), 2500);
+    return () => {
+      clearInterval(id);
+      if (!shown) morningRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, busyScreen]);
+  useEffect(() => {
+    if (tab !== 'hero' || !cloudReady || busyScreen || offer || morning || morningRef.current) return;
     const now = Date.now();
     const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
     if (!kind) return;
@@ -398,6 +437,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
       </Screen>
     );
 
+  if (feed) return <Screen><FeedScreen compose={feed.compose} focus={feed.post} onClose={() => setFeed(null)} onFriends={() => { setFeed(null); onFriends(); }} /></Screen>;
+
   if (gym) return <Screen><GymScreen progress={progress} update={update} onClose={() => setGym(false)} /></Screen>;
 
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
@@ -453,6 +494,16 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
       {holidayOpen && <HolidayScreen progress={progress} setProgress={setProgress} onClose={() => setHolidayOpen(false)} />}
       {collectionsOpen && <CollectionsSheet progress={progress} setProgress={setProgress} onClose={() => setCollectionsOpen(false)} />}
       {cityOpen && <CitySheet onClose={() => setCityOpen(false)} />}
+      {morning && tab === 'hero' && (
+        <MorningOffer
+          baseline={progress.baseline}
+          onCamera={() => {
+            setMorning(false);
+            setPrograms({ quick: morningWorkout(progress.baseline) });
+          }}
+          onClose={() => setMorning(false)}
+        />
+      )}
       {offer && tab === 'hero' && (
         <OfferSheet
           kind={offer}
@@ -603,11 +654,11 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onHoliday={() => setHolidayOpen(true)}
           onCollections={() => setCollectionsOpen(true)}
           onCity={() => setCityOpen(true)}
+          onFeed={() => setFeed({})}
           onRecap={openRecap}
           onTitan={() => setTitanOpen(true)}
           livesLeft={lives.lives}
           lockLeft={lockLeft}
-          nextLock={nextLocked(progress, linkUnlocks())}
           onClan={() => onTab('clan')}
           onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />

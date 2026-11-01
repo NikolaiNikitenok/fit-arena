@@ -10,7 +10,8 @@ import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achieve
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';
 import { dayKey, heroLevel, heroTitle, heroXp, maxLives, Progress, streakOf } from './progress';
-import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, Lock, PassShield, Plan, Swords, Users } from '../icons';
+import { Album, Bag, Check, City, Coin, Cog, Dumbbell, Flame, Flask, GoldShieldArt, Heart, HolidayToken, Kettlebell, Lock, PassShield, Plan, Swords, Users, Feed } from '../icons';
+import { useFeedBadge } from '../social/useFeedBadge';
 import type { Feature } from './unlocks';
 import { pickToday, TodayKind } from './today';
 import { HOLIDAY_GOAL, holidayAt, holidayOutfit, holidayTokens, tokenWord } from './holidays';
@@ -32,7 +33,7 @@ import { LANDS } from './lands';
 import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
-import { clearedLevels } from './unlocks';
+import { clearedLevels, UNLOCK_AT } from './unlocks';
 import { weekKey, weekSummary } from '../../shared/weekly';
 import { track } from '../telemetry';
 import { useInClan } from '../cloud';
@@ -93,6 +94,8 @@ interface Props {
   onHoliday: () => void;
   onCollections: () => void;
   onCity: () => void;
+  // Лента постов игроков (src/social/FeedScreen.tsx).
+  onFeed: () => void;
   onRecap: (month: string) => void;
   onTitan: () => void;
   // Сколько жизней сейчас: от них зависит, что предложит «Тренировка дня».
@@ -101,7 +104,6 @@ interface Props {
   lockLeft: (f: Feature) => number;
   onLocked: (f: Feature) => void;
   // Ближайший закрытый раздел: только его кнопка видна с замком.
-  nextLock: Feature | null;
   // Вкладка клана: «Тренировка дня» зовёт в рейд.
   onClan: () => void;
 }
@@ -129,7 +131,8 @@ const LockMark = () => (
     <Lock size={12} />
   </span>
 );
-const lockSub = (n: number) => t('откроется через {0} ур.', { 0: n });
+// lock — номер уровня карты, после которого раздел откроется.
+const lockSub = (n: number) => t('откроется после ур. {0}', { 0: n });
 
 /** Большая карточка раздела под героем: значок, название, состояние и полоска прогресса в цвете раздела. */
 function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', lock = 0, hidden, onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; lock?: number; hidden?: boolean; onClick: () => void }) {
@@ -164,7 +167,7 @@ function Side({ title, sub, icon, color, dot, lock = 0, hidden, onClick }: { tit
         {lock > 0 ? <LockMark /> : <Dot n={dot ?? 0} />}
       </span>
       <b>{title}</b>
-      {lock ? <small>{t('через {0} ур.', { 0: lock })}</small> : sub && <small>{sub}</small>}
+      {lock ? <small>{t('после ур. {0}', { 0: lock })}</small> : sub && <small>{sub}</small>}
     </button>
   );
 }
@@ -206,11 +209,13 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan, onWeekly } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onFeed, onRecap, onTitan, lockLeft, onLocked, livesLeft, onClan, onWeekly } = props;
   // Закрытый раздел: вместо перехода — подсказка, когда он откроется.
   // Из закрытых разделов на главной виден только ближайший — как обещание; остальные не мешают новичку.
-  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), hidden: lockLeft(f) > 0 && f !== nextLock, onClick: lockLeft(f) ? () => onLocked(f) : fn });
+  // Закрытые разделы видны все: с замком и уровнем карты, после которого откроются.
+  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f) ? UNLOCK_AT[f] : 0, onClick: lockLeft(f) ? () => onLocked(f) : fn });
   const inClan = useInClan();
+  const feedDot = useFeedBadge();
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -442,7 +447,20 @@ export function HeroHome(props: Props) {
 
         <div className="hv-top">
           {head}
-          {(slot || weekFresh) && <div className="hv-event">{eventBanner}</div>}
+          {/* Лента — на виду, справа от события (или одна, если события нет). */}
+          <div className="hv-row">
+            {(slot || weekFresh) && <div className="hv-event">{eventBanner}</div>}
+            <button className="hv-feed" onClick={onFeed}>
+              <span className="hv-feed-ico">
+                <Feed size={24} />
+                {feedDot && <i className="hv-feed-dot" />}
+              </span>
+              <span className="hv-feed-text">
+                <b>{t('Лента')}</b>
+                <small>{t('и профили')}</small>
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="hv-col left">
@@ -571,6 +589,7 @@ export function HeroHome(props: Props) {
         {extra.includes('titan') && titanShown && <More onClick={onTitan} title={t('Титан')} sub={titanShown.live ? t('битва идёт') : now < titanShown.start ? fmtDays(Math.ceil((titanShown.start - now) / 86_400_000)) : t('итоги')} dot={titanShown.live} icon={<MonsterFace shape="golem" color={titanShown.def.color} boss size={40} />} tone="pet" />}
         {extra.includes('holiday') && <More onClick={onHoliday} title={hol.def.name} sub={hol.live ? t('ещё {0}', { 0: fmtLeft(hol.end - now) }) : fmtDays(daysUntil({ ...hol, live: false }, now))} dot={badges.holiday} icon={<HolidayToken id={hol.def.id} size={32} />} tone="pet" />}
         {extra.includes('recap') && recapM && <More onClick={() => onRecap(recapM)} title={t('Итоги')} sub={MONTHS[Number(recapM.slice(5)) - 1]} dot={recapFresh} icon={<span className="hb-recap-emoji">🎉</span>} tone="pet" />}
+        <More onClick={onFeed} title={t('Лента')} sub={feedDot ? t('новые посты') : t('и профили')} dot={feedDot} icon={<Feed size={22} />} tone="rose" />
         <More onClick={onPets} title={pet ? petName(progress, pet) : t('Питомец')} sub={pet ? t('ур. {0}', { 0: petLvl }) : t('яйцо ждёт')} dot={badges.pets} icon={pet ? <PetFace id={pet} size={40} /> : <span className="pet-entry-egg hb-egg" />} tone="pet" />
         <More onClick={() => setHeroOpen(true)} title={t('Вещи')} sub={t('и зелья')} icon={<Swords size={22} />} tone="accent" />
         <More {...g('shop', () => onShop())} title={t('Лавка')} sub={t('Фёдора')} icon={<Bag size={22} />} tone="gold" />

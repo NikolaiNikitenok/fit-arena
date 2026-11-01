@@ -1,0 +1,36 @@
+/* Разминка перед первым подходом дня */
+.warmup-offer { z-index: 120; }
+.warmup-offer .sheet-body { display: flex; flex-direction: column; gap: 10px; }
+.warmup-head { display: flex; gap: 12px; align-items: center; text-align: left; }
+.warmup-head img { width: 64px; height: 64px; flex: none; border-radius: 50%; background: var(--surface-2, #232a3d); object-fit: cover; }
+.warmup-head h3 { margin: 0 0 4px; }
+.warmup-head p { margin: 0; font-size: 14px; line-height: 1.35; }
+.warmup-list { margin: 2px 0 4px; padding: 0; list-style: none; counter-reset: wm; display: grid; gap: 6px; }
+.warmup-list li { counter-increment: wm; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--r-md); background: rgba(255,255,255,.05); font-weight: 800; font-size: 14px; }
+.warmup-list li span:first-child::before { content: counter(wm); display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 10px; border-radius: 50%; background: var(--accent-grad, var(--accent)); color: var(--on-accent); font-size: 12px; font-weight: 900; }
+
+.warmup-run { position: fixed; inset: 0; z-index: 120; display: flex; flex-direction: column; gap: 10px; padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); background: radial-gradient(circle at 50% 30%, #2b3248, var(--bg, #141722) 75%); overflow: hidden; }
+.warmup-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.warmup-dots { display: flex; gap: 6px; }
+.warmup-dots span { width: 22px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); }
+.warmup-dots span.on { background: var(--accent); }
+.warmup-dots span.done { background: var(--mint, #5fd4a4); }
+.warmup-skip { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(0,0,0,.25); color: #dfe3ea; font-weight: 800; font-size: 13px; }
+.warmup-stage { position: relative; flex: 1; min-height: 220px; border-radius: var(--r-lg); overflow: hidden; }
+.warmup-stage canvas { touch-action: none; }
+.warmup-timer { position: absolute; right: 10px; top: 10px; width: 78px; height: 78px; display: grid; place-items: center; border-radius: 50%; background: rgba(10,12,20,.55); }
+.warmup-timer svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.warmup-timer circle { fill: none; stroke-width: 8; }
+.warmup-timer .track { stroke: rgba(255,255,255,.12); }
+.warmup-timer .bar { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+.warmup-timer b { position: relative; font-size: 28px; font-weight: 900; }
+.warmup-total { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.warmup-total i { display: block; height: 100%; background: var(--accent-grad, var(--accent)); transition: width .2s linear; }
+.warmup-info { display: flex; flex-direction: column; gap: 6px; text-align: center; }
+.warmup-info h2 { margin: 0; font-size: 26px; }
+.warmup-info p { margin: 0 0 4px; font-size: 15px; line-height: 1.35; min-height: 2.7em; }
+.warmup-step { font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: var(--gold, #ffd166); }
+.warmup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.warmup-actions .secondary { margin: 0; }
+.morning-btn { flex-direction: column; gap: 0; line-height: 1.15; }
+.morning-btn small { font-size: 12px; font-weight: 700; opacity: .75; }

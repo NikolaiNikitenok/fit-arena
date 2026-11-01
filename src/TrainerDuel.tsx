@@ -16,6 +16,7 @@ import { NPCS } from './game/npcs';
 import { nextTrainer, pickLine, type Trainer, type TrainerId, trainerLine, trainerRate, trainerSchedule, TRAINERS } from './game/trainer';
 import { Check } from './icons';
 import { t } from './i18n';
+import { withWarmup } from './warmup/warmup';
 
 // Бой с тренером: та же минута и те же правила урона, что в живой дуэли, но соперник — бот на этом устройстве.
 // Кубки и рейтинг не меняются, повторы идут в серию, задание дня и клан.
@@ -313,7 +314,7 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
       {phase === 'talk' && (
         <>
           <CameraGuide exercise={exercise} />
-          <button className="primary" onClick={ready}>
+          <button className="primary" onClick={() => withWarmup(() => void ready())}>
             {t('Я готов')}
           </button>
           <button className="link" onClick={leave}>
@@ -330,7 +331,7 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
 
       {phase === 'over' && result && (
         <>
-          <button className="primary" onClick={ready}>
+          <button className="primary" onClick={() => withWarmup(() => void ready())}>
             {t('Реванш')}
           </button>
           {result.result === 'win' && harder && (

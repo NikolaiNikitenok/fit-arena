@@ -5,6 +5,20 @@ import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
+/**
+ * Слой «поверх сцены»: пузыри ресурсов, стрелки улучшения, таймеры, полоски здоровья, цифры урона.
+ * Их рисуем уже после прохода — иначе обводка по скачкам глубины построек проступает сквозь них.
+ * Камера сцены должна видеть этот слой всегда (useOverlayLayer), даже когда проход выключен.
+ */
+export const OVERLAY = 1;
+
+export function useOverlayLayer() {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    camera.layers.enable(OVERLAY);
+  }, [camera]);
+}
+
 const VERT = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -114,10 +128,25 @@ export function StylePass({ edge = 0.2, sat = 1.1 }: { edge?: number; sat?: numb
     quad.mat.uniforms.uNear.value = c.near;
     quad.mat.uniforms.uFar.value = c.far;
     quad.mat.uniforms.uEdge.value = edge * (14 / Math.max(4, c.zoom ?? 14));
+    const mask = camera.layers.mask;
+    camera.layers.disable(OVERLAY);
     gl.setRenderTarget(target);
     gl.render(scene, camera);
     gl.setRenderTarget(null);
     gl.render(quad.scene, cam);
+    // Поверх картинки — только слой OVERLAY, без очистки, фона и пересчёта теней.
+    camera.layers.set(OVERLAY);
+    const { autoClear } = gl;
+    const shadows = gl.shadowMap.autoUpdate;
+    const bg = scene.background;
+    gl.autoClear = false;
+    gl.shadowMap.autoUpdate = false;
+    scene.background = null;
+    gl.render(scene, camera);
+    scene.background = bg;
+    gl.shadowMap.autoUpdate = shadows;
+    gl.autoClear = autoClear;
+    camera.layers.mask = mask;
   }, 1);
   return null;
 }

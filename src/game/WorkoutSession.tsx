@@ -13,6 +13,7 @@ import { Check, Moon, Timer } from '../icons';
 import type { SetPlan } from './programs';
 import './Programs.css';
 import { t } from '../i18n';
+import { withWarmup } from '../warmup/warmup';
 
 // Тренировка из подходов: камера считает повторы (у планки — секунды), между подходами отдых с отсчётом.
 // Камера работает всю тренировку, на каждый подход счётчик начинается заново.
@@ -195,7 +196,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
           {settings.guide && <CameraGuide exercise={sets[0].exercise} model={model} />}
         </div>
         <div className="hint-line">{phase === 'error' ? t('Не удалось запустить камеру: {0}', { 0: error }) : t('Поставь телефон так, чтобы было видно всё тело.{0}', { 0: sets.length > 1 ? t(' Между подходами будет отдых.') : '' })}</div>
-        <button className="primary" onClick={begin}>
+        <button className="primary" onClick={() => withWarmup(() => void begin())}>
           {phase === 'error' ? t('Ещё раз') : t('Начать тренировку')}
         </button>
         <button className="link" onClick={onExit}>

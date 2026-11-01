@@ -7,16 +7,21 @@ import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './re
 import { Banner, Lock, MapIcon, Shield, Swords } from './icons';
 import { lockedText } from './game/UnlockSheet';
 import { hasHero, loadProgress, saveProgress } from './game/progress';
-import { rememberUnlocks } from './game/unlocks';
+import { rememberUnlocks, UNLOCK_AT } from './game/unlocks';
 import { linkUnlocks } from './game/unlockLinks';
 import { markFirstOpen, track } from './telemetry';
 import { onGift } from './cloud';
 import { GroupJoin } from './group/GroupChallenge';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
+import { WarmupHost } from './warmup/Warmup';
 import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 import { t } from './i18n';
+import { onClanJoin, onOpenFeed } from './social/bus';
+
+// Профиль игрока — лист поверх любой вкладки, грузится при первом открытии.
+const ProfileHost = lazy(() => import('./social/ProfileSheet').then((m) => ({ default: m.ProfileHost })));
 
 // Дуэль с 3D-ареной и камерой грузится, когда её открыли.
 const Duel = lazy(() => import('./Duel').then((m) => ({ default: m.Duel })));
@@ -67,7 +72,6 @@ export function App() {
   const full = (tab === 'map' || tab === 'village') && !playing;
   // Вкладки, которые ещё не открыты уровнями карты (src/game/unlocks.ts): сколько уровней осталось.
   const [locks, setLocks] = useState<Partial<Record<Tab, number>>>({});
-  const nearestLock = (Object.entries(locks) as [Tab, number][]).filter(([, n]) => n > 0).sort((a, b) => a[1] - b[1])[0]?.[0];
   const [lockToast, setLockToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Подарок бота за возвращение: короткий тост «🎁 …».
@@ -80,6 +84,10 @@ export function App() {
       }),
     [],
   );
+  // «Написать пост» из профиля во вкладке дуэли: лента живёт на главной.
+  useEffect(() => onOpenFeed(() => setTab('hero')), []);
+  // «Вступить» в клан из профиля игрока: открываем вкладку клана, там и вступаем.
+  useEffect(() => onClanJoin(() => setTab('clan')), []);
   const showLock = (tb: 'village' | 'clan' | 'duel') => {
     setLockToast(lockedText(tb, locks[tb] ?? 0));
     clearTimeout(toastTimer.current);
@@ -136,10 +144,15 @@ export function App() {
 
       <PowerToast />
 
+      <Suspense fallback={null}>
+        <ProfileHost />
+      </Suspense>
+
       {/* Кнопка «Участвовать» под таблицей вызова в групповом чате. */}
       <GroupJoin onTrain={() => setTab('hero')} />
 
       <UpdateBanner />
+      <WarmupHost />
 
       {lockToast && !playing && <div className="toast global">{lockToast}</div>}
 
@@ -147,8 +160,8 @@ export function App() {
         <nav className="bottom-nav">
           {NAV.map((n) => {
             const left = locks[n.tab] ?? 0;
-            // Как на главной: из закрытых вкладок видна только ближайшая, остальные появятся позже.
-            if (left && n.tab !== tab && n.tab !== nearestLock) return null;
+            // Закрытая вкладка видна с замком и уровнем карты, после которого откроется.
+            const at = left && (n.tab === 'village' || n.tab === 'clan' || n.tab === 'duel') ? UNLOCK_AT[n.tab] : 0;
             return (
               <button
                 key={n.tab}
@@ -162,6 +175,7 @@ export function App() {
               >
                 {left ? <Lock size={22} /> : <n.Icon />}
                 {n.label}
+                {at > 0 && <span className="nav-lock-lv">{t('ур. {0}', { 0: at })}</span>}
               </button>
             );
           })}

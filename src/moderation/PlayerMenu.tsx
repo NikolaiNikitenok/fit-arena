@@ -5,6 +5,7 @@ import { REPORT_REASONS, type ReportReason, type ReportWhere } from '../../share
 import { moderationApi } from './api';
 import { Sheet } from '../Sheet';
 import { t } from '../i18n';
+import { openProfile } from '../social/bus';
 
 export interface PlayerMenuTarget {
   id: string;
@@ -40,6 +41,18 @@ export function PlayerMenu({ target, children, onBlocked, onClose }: { target: P
       {note && <div className="settings-note">{note}</div>}
       {step === 'menu' && (
         <>
+          {/* Из клана и друзей — профиль игрока; из самого профиля (id = pid:…) кнопка не нужна. */}
+          {!target.id.startsWith('pid:') && (
+            <button
+              className="secondary"
+              onClick={() => {
+                onClose();
+                openProfile({ id: target.id });
+              }}
+            >
+              {t('Профиль игрока')}
+            </button>
+          )}
           {children}
           <button className="secondary" disabled={busy} onClick={() => setStep('report')}>
             {t('Пожаловаться')}

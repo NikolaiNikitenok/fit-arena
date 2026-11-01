@@ -76,6 +76,11 @@ export async function applyUpdate(version = remote?.version ?? String(Date.now()
 }
 
 /** Какие записи «Что нового» игрок ещё не видел в этой сборке (обновился, просто перезапустив игру). */
+// Плашка обновления на экране: другие всплывающие окна (утренняя зарядка) ждут, пока её закроют.
+let bannerOpen = false;
+export const setBannerOpen = (open: boolean) => void (bannerOpen = open);
+export const isBannerOpen = () => bannerOpen;
+
 export function unseenEntries(): ChangeEntry[] {
   let seen: number | null = null;
   try {

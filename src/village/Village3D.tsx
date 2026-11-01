@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Canvas3D } from '../three/Canvas3D';
-import { StylePass } from '../three/StylePass';
+import { OVERLAY, StylePass, useOverlayLayer } from '../three/StylePass';
 import { Instanced, Placed } from '../three/Instanced';
 import { LibName, useLib } from '../three/kit';
 import { Ground } from './Ground';
@@ -261,7 +261,7 @@ function Label({ text, x, z, h, color = '#ffffff' }: { text: string; x: number; 
   }, [text, color, canvas, tex]);
   useEffect(() => () => tex.dispose(), [tex]);
   return (
-    <sprite position={[x, h, z]} scale={[3, 1, 1]} renderOrder={5}>
+    <sprite position={[x, h, z]} scale={[3, 1, 1]} renderOrder={5} layers={OVERLAY}>
       <spriteMaterial map={tex} depthTest={false} depthWrite={false} />
     </sprite>
   );
@@ -348,7 +348,7 @@ function UpArrow({ x, z, h }: { x: number; z: number; h: number }) {
     ref.current.position.y = h + 0.18 * Math.abs(Math.sin(t * 2.4 + x));
   });
   return (
-    <sprite ref={ref} position={[x, h, z]} scale={[0.85, 0.85, 1]} renderOrder={6}>
+    <sprite ref={ref} position={[x, h, z]} scale={[0.85, 0.85, 1]} renderOrder={6} layers={OVERLAY}>
       <spriteMaterial map={upTexture()} depthTest={false} depthWrite={false} />
     </sprite>
   );
@@ -360,7 +360,7 @@ function Bubble({ res, x, z, h }: { res: ResKey; x: number; z: number; h: number
     if (ref.current) ref.current.position.y = h + 0.12 * Math.sin(performance.now() / 300 + x);
   });
   return (
-    <sprite ref={ref} position={[x, h, z]} scale={[1.5, 1.5, 1]} renderOrder={6}>
+    <sprite ref={ref} position={[x, h, z]} scale={[1.5, 1.5, 1]} renderOrder={6} layers={OVERLAY}>
       <spriteMaterial map={bubbleTex(res)} depthTest={false} depthWrite={false} />
     </sprite>
   );
@@ -646,15 +646,20 @@ function Scene(props: SceneProps) {
   );
 }
 
+function OverlayLayer() {
+  useOverlayLayer();
+  return null;
+}
+
 /** Полоска здоровья постройки. */
 function HpBar({ hp, x, y, z, scale = 1 }: { hp: number; x: number; y: number; z: number; scale?: number }) {
   return (
     <group position={[x, y, z]} rotation={[0, Math.PI / 4, 0]} scale={scale}>
-      <mesh renderOrder={4}>
+      <mesh renderOrder={4} layers={OVERLAY}>
         <planeGeometry args={[1.1, 0.16]} />
         <meshBasicMaterial color="#1b1d26" depthTest={false} />
       </mesh>
-      <mesh position={[-0.55 + 0.55 * hp, 0, 0.001]} scale={[hp, 1, 1]} renderOrder={5}>
+      <mesh position={[-0.55 + 0.55 * hp, 0, 0.001]} scale={[hp, 1, 1]} renderOrder={5} layers={OVERLAY}>
         <planeGeometry args={[1.1, 0.12]} />
         <meshBasicMaterial color={hp > 0.5 ? '#6ee7b7' : hp > 0.25 ? '#ffd27a' : '#ff6b81'} depthTest={false} />
       </mesh>
@@ -692,6 +697,7 @@ export function Village3D(props: SceneProps) {
       {live && fx && sky.lamps > 0.5 && weather === 'clear' && <Fireflies on={sky.lamps} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'clear' && <Precipitation kind={weather} ctl={props.ctl} lite={s.lowPower} />}
       {live && fx && weather !== 'snow' && season && <SeasonFall season={season} lite={s.lowPower} center={(v) => v.set(props.ctl.current.tx, 0, props.ctl.current.tz)} zoom={() => props.ctl.current.zoom} />}
+      <OverlayLayer />
       {!s.lowPower && <StylePass />}
     </Canvas3D>
   );

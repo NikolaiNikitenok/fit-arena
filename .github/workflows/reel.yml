@@ -8,6 +8,8 @@ on:
       chat_id: { description: 'Кому прислать (Telegram ID)', required: true }
       n: { description: 'Номер рилса (формула хука по кругу)', required: true, default: '1' }
       topic: { description: 'Тема (необязательно)', required: false, default: '' }
+      kind: { description: 'loop — короткий закольцованный рилс (promo/reels/loop), пусто — обычный', required: false, default: '' }
+      clip: { description: 'file_id своего видео админа в Telegram для рилса-петли', required: false, default: '' }
 
 concurrency: { group: reel, cancel-in-progress: false }
 
@@ -23,6 +25,9 @@ jobs:
       CHAT: ${{ inputs.chat_id }}
       N: ${{ inputs.n }}
       TOPIC: ${{ inputs.topic }}
+      CLIP: ${{ inputs.clip }}
+      # Обычный рилс — скрипты promo/reels, рилс-петля — promo/reels/loop.
+      DIR: ${{ inputs.kind == 'loop' && '../promo/reels/loop' || '../promo/reels' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,24 +44,29 @@ jobs:
           mkdir -p $HOME/bin && ln -sf $(python3 -c 'import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())') $HOME/bin/ffmpeg
           echo $HOME/bin >> $GITHUB_PATH
           mkdir -p out
+      - name: Own clip
+        if: inputs.kind == 'loop'
+        working-directory: out
+        run: node ../promo/reels/loop/fetch.mjs
       - name: Script
         working-directory: out
-        run: node ../promo/reels/generate.mjs "$N" "$TOPIC"
+        run: node $DIR/generate.mjs "$N" "$TOPIC"
       - name: Voiceover
+        if: inputs.kind != 'loop'
         working-directory: out
         run: python3 ../promo/reels/synth.py
       - name: Titles
         working-directory: out
-        run: node ../promo/reels/render.mjs
+        run: node $DIR/render.mjs
       - name: Build
         working-directory: out
-        run: python3 ../promo/reels/build.py
+        run: python3 $DIR/build.py
       - uses: actions/upload-artifact@v4
         with: { name: reel, path: "out/reel.mp4\nout/cover.jpg\nout/script.json", retention-days: 7 }
       - name: Send
         working-directory: out
-        run: node ../promo/reels/send.mjs "$CHAT"
+        run: node $DIR/send.mjs "$CHAT"
       - name: Report failure
         if: failure()
         working-directory: out
-        run: node ../promo/reels/send.mjs "$CHAT" "ошибка в GitHub Actions (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+        run: node $DIR/send.mjs "$CHAT" "ошибка в GitHub Actions (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"

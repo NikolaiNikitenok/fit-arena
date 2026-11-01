@@ -1,10 +1,12 @@
 // Топ по городу: игрок сам выбирает город (в приложении сразу подставляется город его клана).
 // Сервер считает повторы за неделю из копии прогресса (server/saves.ts, дни тренировок) — с тем же пределом
 // в день, что и для видимого уровня, — и строит топ города и рейтинг городов. Неделя — с понедельника по Москве.
-// Города из справочника (shared/cityNames.ts) склеиваются по любому написанию и попадают на карту.
+// Города из справочника (shared/cityNames.ts) склеиваются по любому написанию и попадают на глобус;
+// страна города — из справочника, а для города не из справочника — та, что выбрал игрок.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { canonicalKey, cityKey, knownCity } from '../shared/cityNames';
+import { canonicalKey, cityCountry, cityKey, knownCity } from '../shared/cityNames';
+import { cleanCountry } from '../shared/countryNames';
 import { badName } from '../shared/profanity';
 import { DAY_REPS_MAX } from './saves';
 
@@ -13,8 +15,32 @@ export interface CityEntry {
   // Как написал игрок (с заглавной) и ключ для сравнения.
   city: string;
   key: string;
+  // Страна (ISO) для города не из справочника; у городов из справочника берётся из него.
+  country?: string;
   name: string;
   at: number;
+}
+
+export interface CityStat {
+  city: string;
+  // Страна (ISO); null — город не из справочника, и страну не указали.
+  country: string | null;
+  reps: number;
+  players: number;
+  members: number;
+  best: number | null;
+  mine?: boolean;
+}
+
+export interface CountryStat {
+  country: string;
+  reps: number;
+  players: number;
+  members: number;
+  best: number | null;
+  // Городов, где есть хоть один герой.
+  cities: number;
+  mine?: boolean;
 }
 
 export interface CityRow {
@@ -23,6 +49,7 @@ export interface CityRow {
   level: number | null;
   pro?: boolean;
   me?: boolean;
+  pid?: string;
 }
 
 export interface CityBoard {
@@ -34,16 +61,24 @@ export interface CityBoard {
   // Моё место и повторы, если я в городе.
   me: { place: number; reps: number; players: number } | null;
   // players — тренировались на этой неделе, members — выбрали город, best — самый высокий уровень героя в городе.
-  cities: { city: string; reps: number; players: number; members: number; best: number | null; mine?: boolean }[];
-  // Город клана: предложить, если свой ещё не выбран.
+  cities: CityStat[];
+  // Все страны, где есть герои, по повторам за неделю.
+  countries: CountryStat[];
+  // Страна моего города.
+  country: string | null;
+  // Город и страна клана: предложить, если свой ещё не выбран.
   suggest?: string;
+  suggestCountry?: string;
 }
 
 const DAY = 86_400_000;
 const MSK = 3 * 3_600_000;
 export const CITY_TOP = 50;
 // Городов в ответе: хватает и на карту, и на таблицу.
-export const CITIES_TOP = 300;
+export const CITIES_TOP = 500;
+
+/** Страна записи: из справочника, иначе выбранная игроком. Старые записи без страны — Россия (до глобуса играли только там). */
+export const entryCountry = (e: Pick<CityEntry, 'city' | 'country'>): string | null => cityCountry(e.city) ?? e.country ?? (/[а-яё]/i.test(e.city) ? 'RU' : null);
 
 export { cityKey };
 
@@ -81,6 +116,9 @@ export interface CityDeps {
   level: (id: string) => number | null;
   isPro: (id: string) => boolean;
   clanCity: (id: string) => string | undefined;
+  clanCountry?: (id: string) => string | undefined;
+  // Публичный id профиля (server/socialApi.ts): строка топа открывает профиль.
+  profileId?: (id: string) => string;
 }
 
 export class CityStore {
@@ -105,7 +143,7 @@ export class CityStore {
   }
 
   /** Выбрать город (null — убрать себя из топа). Возвращает ошибку строкой. */
-  set(id: string, city: unknown, name: string, now: number): CityEntry | null | string {
+  set(id: string, city: unknown, name: string, now: number, country?: unknown): CityEntry | null | string {
     if (city === null || city === '') {
       this.forget(id);
       return null;
@@ -113,6 +151,11 @@ export class CityStore {
     const clean = cleanCity(city);
     if (!clean) return 'Напиши настоящее название города';
     const e: CityEntry = { id, city: clean, key: canonicalKey(clean), name, at: now };
+    // Страна нужна только городу не из справочника: выбранная сейчас, иначе прежняя.
+    if (!cityCountry(clean)) {
+      const c = cleanCountry(country) ?? this.entries.get(id)?.country;
+      if (c) e.country = c;
+    }
     this.entries.set(id, e);
     this.save();
     return e;
@@ -136,30 +179,48 @@ export class CityStore {
     // Ключ пересчитываем: записи до справочника могли сохранить «Питер» отдельно от «Санкт-Петербурга».
     const mineKey = mine && canonicalKey(mine.city);
     // Повторы всех за неделю, по городам. В город входят все, кто его выбрал: для карты и рекорда уровня.
-    const byCity = new Map<string, { city: string; rows: (CityRow & { id: string })[] }>();
+    // Город не из справочника — свой в каждой стране: «Нью-Васюки» в России и в Казахстане разные.
+    const groupKey = (e: CityEntry) => (knownCity(e.city) ? canonicalKey(e.city) : `${canonicalKey(e.city)}|${entryCountry(e) ?? ''}`);
+    const mineGroup = mine && groupKey(mine);
+    const byCity = new Map<string, { city: string; country: string | null; rows: (CityRow & { id: string })[] }>();
     for (const e of this.entries.values()) {
-      const key = canonicalKey(e.city);
+      const key = groupKey(e);
       let c = byCity.get(key);
       // Название города — из справочника, иначе как у того, кто выбрал его первым.
-      if (!c) byCity.set(key, (c = { city: knownCity(e.city)?.[0] ?? e.city, rows: [] }));
+      if (!c) byCity.set(key, (c = { city: knownCity(e.city)?.[0] ?? e.city, country: entryCountry(e), rows: [] }));
       c.rows.push({ id: e.id, name: e.name, reps: weekReps(d.days(e.id), week), level: d.level(e.id) });
     }
-    const cities = [...byCity.entries()]
+    const cities: CityStat[] = [...byCity.entries()]
       .map(([key, c]) => ({
         city: c.city,
+        country: c.country,
         reps: c.rows.reduce((s, r) => s + r.reps, 0),
         players: c.rows.filter((r) => r.reps > 0).length,
         members: c.rows.length,
         best: c.rows.reduce<number | null>((m, r) => (r.level != null && (m == null || r.level > m) ? r.level : m), null),
-        mine: key === mineKey || undefined,
+        mine: key === mineGroup || undefined,
       }))
       .sort((a, b) => b.reps - a.reps || b.members - a.members);
-    const own = mineKey ? (byCity.get(mineKey)?.rows ?? []).sort((a, b) => b.reps - a.reps || (a.id === id ? -1 : 1)) : [];
+    // Страны: сумма своих городов.
+    const byCountry = new Map<string, CountryStat>();
+    for (const c of cities) {
+      if (!c.country) continue;
+      let s = byCountry.get(c.country);
+      if (!s) byCountry.set(c.country, (s = { country: c.country, reps: 0, players: 0, members: 0, best: null, cities: 0 }));
+      s.reps += c.reps;
+      s.players += c.players;
+      s.members += c.members;
+      s.cities += 1;
+      if (c.best != null && (s.best == null || c.best > s.best)) s.best = c.best;
+      if (c.mine) s.mine = true;
+    }
+    const countries = [...byCountry.values()].sort((a, b) => b.reps - a.reps || b.members - a.members);
+    const own = mineKey && mineGroup ? (byCity.get(mineGroup)?.rows ?? []).sort((a, b) => b.reps - a.reps || (a.id === id ? -1 : 1)) : [];
     const place = own.findIndex((r) => r.id === id);
     const top = own
       .filter((r) => r.reps > 0)
       .slice(0, CITY_TOP)
-      .map(({ id: rid, name, reps, level }) => ({ name, reps, level, pro: d.isPro(rid) || undefined, me: rid === id || undefined }));
+      .map(({ id: rid, name, reps, level }) => ({ name, reps, level, pro: d.isPro(rid) || undefined, me: rid === id || undefined, pid: d.profileId?.(rid) }));
     const myCities = cities.slice(0, CITIES_TOP);
     const mineCity = cities.find((c) => c.mine);
     if (mineCity && !myCities.includes(mineCity)) myCities.push(mineCity);
@@ -170,7 +231,10 @@ export class CityStore {
       top,
       me: mine && place >= 0 ? { place: place + 1, reps: own[place].reps, players: own.filter((r) => r.reps > 0).length } : null,
       cities: myCities,
+      countries,
+      country: mine ? entryCountry(mine) : null,
       suggest: mine ? undefined : cleanCity(d.clanCity(id) ?? '') ?? undefined,
+      suggestCountry: mine ? undefined : cleanCountry(d.clanCountry?.(id)) ?? undefined,
     };
   }
 

@@ -21,6 +21,8 @@ import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
 import { syncClanFlag } from '../village/decor';
 import { locale, t, tMsg } from '../i18n';
+import { withWarmup } from '../warmup/warmup';
+import { onClanJoin, takeClanJoin } from '../social/bus';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: t('глава'), officer: t('заместитель'), member: '' };
@@ -53,6 +55,15 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const invite = useRef(clanInviteCode());
+  // Клан из профиля игрока: «Вступить» (src/social/ProfileSheet.tsx).
+  const [fromProfile, setFromProfile] = useState<string | null>(takeClanJoin);
+  useEffect(() => onClanJoin(() => setFromProfile(takeClanJoin())), []);
+  useEffect(() => {
+    if (status === 'online' && fromProfile && clan !== undefined) {
+      if (clan === null) send({ type: 'clanJoin', id: fromProfile });
+      setFromProfile(null);
+    }
+  }, [status, clan, fromProfile]);
 
   // Пришли по ссылке-приглашению: вступаем, как только есть связь.
   useEffect(() => {
@@ -301,7 +312,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           coinBonus={perks.raidCoins}
           exercise={exercise}
           setExercise={setExercise}
-          onAttack={startAttack}
+          onAttack={() => withWarmup(startAttack)}
           onClaim={() => send({ type: 'clanClaim', kind: 'raid' })}
         />
       )}

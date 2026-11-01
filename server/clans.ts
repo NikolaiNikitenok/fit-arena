@@ -313,7 +313,12 @@ export class ClanStore {
       .filter((c) => !s || c.name.toLowerCase().includes(s) || c.tag.toLowerCase() === s || (c.city ?? '').toLowerCase().includes(s) || (COUNTRIES[c.country ?? ''] ?? '').toLowerCase().includes(s))
       .sort((a, b) => Number(b.open) - Number(a.open) || b.raidWins - a.raidWins || b.members.length - a.members.length)
       .slice(0, 30)
-      .map((c) => ({ id: c.id, name: c.name, tag: c.tag, description: c.description, members: c.members.length, open: c.open, minLevel: c.minLevel, raidWins: c.raidWins, ...this.look(c) }));
+      .map((c) => this.listItem(c));
+  }
+
+  /** Клан как строка списка: для поиска и карточки клана в профиле игрока. */
+  listItem(c: Clan): ClanListItem {
+    return { id: c.id, name: c.name, tag: c.tag, description: c.description, members: c.members.length, open: c.open, minLevel: c.minLevel, raidWins: c.raidWins, ...this.look(c) };
   }
 
   private look(c: Clan) {

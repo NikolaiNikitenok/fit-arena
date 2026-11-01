@@ -334,3 +334,40 @@ export function CameraGuide({ exercise, compact, model = 'Knight' }: { exercise:
     </div>
   );
 }
+
+function DemoRig({ exercise, model }: { exercise: Exercise; model: CharName }) {
+  const spec = SPECS[exercise];
+  const gltf = useGltf(charUrl(model));
+  const H = useMemo(() => heightOf(gltf.scene), [gltf]);
+  const { camera } = useThree();
+  const lying = exercise !== 'squat';
+  useEffect(() => {
+    // Сбоку и чуть спереди: видно и глубину приседа, и прямую спину в отжимании.
+    if (lying) {
+      const cz = spec.ankleZ * H + 0.4 * H;
+      camera.position.set(H * 2.5, H * 0.75, cz + H * 0.15);
+      camera.lookAt(0, H * 0.1, cz);
+    } else {
+      camera.position.set(H * 2.9, H * 1.3, H * 1.7);
+      camera.lookAt(0, H * 0.4, 0);
+    }
+  }, [camera, H, spec, lying]);
+  return <Athlete exercise={exercise} model={model} />;
+}
+
+/** Герой показывает упражнение без телефона: для утренней зарядки без камеры. */
+export function ExerciseFigure({ exercise, model }: { exercise: Exercise; model: CharName }) {
+  return (
+    <Canvas3D camera={{ fov: 30, near: 0.05, far: 60 }}>
+      <hemisphereLight args={['#ffffff', '#30303c', 1.4]} />
+      <directionalLight position={[4, 8, 5]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[2.2, 48]} />
+        <meshStandardMaterial color="#2f3a52" />
+      </mesh>
+      <Suspense fallback={null}>
+        <DemoRig key={exercise} exercise={exercise} model={model} />
+      </Suspense>
+    </Canvas3D>
+  );
+}

@@ -381,3 +381,15 @@ export const Info = ({ size = 20, className }: P) =>
 export const Wrench = ({ size = 20, className }: P) => svg(size, className, <path d="M14.5 4a5 5 0 00-4.7 6.7L4 16.5 7.5 20l5.8-5.8A5 5 0 0020 9.5l-3 3-3-1-1-3 3-3a5 5 0 00-1.5-1.5z" />);
 
 export const ChevronLeft = ({ size = 18, className }: P) => svg(size, className, <path d="M14.5 5.5L8 12l6.5 6.5" />);
+
+// Лента: стопка карточек-постов с фото.
+export const Feed = ({ size = 20, className }: P) =>
+  svg(
+    size,
+    className,
+    <>
+      <rect x="4" y="3.5" width="16" height="17" rx="3" />
+      <path d="M4 13.5l4-3.5 4 3.5 3-2.5 5 4" />
+      <circle cx="15.5" cy="8" r="1.6" />
+    </>,
+  );

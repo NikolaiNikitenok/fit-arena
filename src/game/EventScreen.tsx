@@ -36,6 +36,7 @@ import {
   triesLeft,
 } from './event';
 import { locale, t } from '../i18n';
+import { withWarmup } from '../warmup/warmup';
 
 // Экран события выходных: рассказ жителя, общий запас здоровья босса, попытки на сегодня и награда.
 
@@ -211,11 +212,13 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
       {canFight ? (
         <button
           className="primary"
-          onClick={() => {
-            onStart();
-            setFight((n) => n + 1);
-            setPhase('fight');
-          }}
+          onClick={() =>
+            withWarmup(() => {
+              onStart();
+              setFight((n) => n + 1);
+              setPhase('fight');
+            })
+          }
         >
           {phase === 'done' ? t('Ещё попытка') : t('В бой')}
           <span className="btn-cost">{tries}/{EVENT_TRIES_PER_DAY}</span>
