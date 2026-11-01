@@ -299,7 +299,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
   const cloudReady = useCloudReady();
   const busyScreen =
-    !!playing || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
+    !!playing || !!dungeon || gym || !!programs || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
   useEffect(() => {
     if (tab !== 'hero' || !cloudReady || busyScreen || offer) return;
     const now = Date.now();

@@ -13,7 +13,9 @@ describe('порядок хуков в Adventure', () => {
     const firstReturn = body.indexOf('\n  if (playing)');
     expect(firstReturn).toBeGreaterThan(0);
     const after = body.slice(firstReturn).split('\n');
-    const hooks = after.filter((l) => /(^|[^.\w])use(State|Effect|Ref|Memo|Callback|LayoutEffect|CloudReady|Starter|Pro|InClan|ProOffer|Settings)\(/.test(l));
+    // Любой use…( — хук, кроме игровых функций с таким же началом (usePotion — выпить зелье).
+    const GAME_FNS = ['usePotion'];
+    const hooks = after.filter((l) => [...l.matchAll(/(?:^|[^.\w])(use[A-Z]\w*)\(/g)].some((m) => !GAME_FNS.includes(m[1])));
     expect(hooks).toEqual([]);
   });
 });
