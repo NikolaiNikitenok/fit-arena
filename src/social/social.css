@@ -43,8 +43,12 @@
 .compose-pick button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 96px; flex-direction: column; border-style: dashed; }
 .compose-photo { position: relative; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
 .compose-photo img { display: block; width: 100%; max-height: 46vh; object-fit: contain; }
+/* Клавиатура открыта: фото меньше, чтобы поле ввода и кнопка помещались над клавиатурой. */
+.compose.typing .compose-photo img { max-height: 22vh; }
+.compose.typing .compose-pick button { min-height: 52px; flex-direction: row; }
 .compose-photo-x { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .6); color: #fff; font-size: 20px; line-height: 1; }
-.compose-text { width: 100%; box-sizing: border-box; resize: none; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 15px; line-height: 1.4; }
+.compose-text { width: 100%; box-sizing: border-box; resize: none; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; line-height: 1.4; }
+/* 16px, не меньше: иначе iPhone при фокусе увеличивает всю страницу и появляются прокрутки. */
 .compose-text:focus { outline: none; border-color: rgba(255, 138, 92, .5); }
 .compose-ideas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .compose-count { margin-left: auto; font-size: 12px; color: var(--hint); font-weight: 700; }

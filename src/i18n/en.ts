@@ -3741,4 +3741,6 @@ export const EN: Record<string, string> = {
   "Шагай на месте, поднимая колени к поясу.": "March in place, lifting knees to hip height.",
   "Прыжки звёздочкой": "Jumping jacks",
   "Руки вверх, ноги врозь — и обратно. Мягко на носки.": "Arms up, feet apart, and back. Land softly on your toes.",
+  "Удобнее писать пост": "Easier posting",
+  "Когда пишешь пост в ленте, страница больше не увеличивается: поле ввода просто поднимается над клавиатурой.": "Writing a post no longer zooms the page: the text field simply moves up above the keyboard.",
 };

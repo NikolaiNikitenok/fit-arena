@@ -132,6 +132,7 @@ function ComposeSheet({ onClose, onPosted }: { onClose: () => void; onPosted: (p
   const [photo, setPhoto] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typing, setTyping] = useState(false);
   const camera = useRef<HTMLInputElement>(null);
   const gallery = useRef<HTMLInputElement>(null);
 
@@ -155,7 +156,7 @@ function ComposeSheet({ onClose, onPosted }: { onClose: () => void; onPosted: (p
   };
 
   return (
-    <Sheet onClose={onClose} bodyClassName="compose">
+    <Sheet onClose={onClose} bodyClassName={`compose ${typing ? 'typing' : ''}`}>
       <div className="level-title">{t('Новый пост')}</div>
       <input ref={camera} type="file" accept="image/*" capture="user" hidden onChange={(e) => pick(e.target.files?.[0])} />
       <input ref={gallery} type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files?.[0])} />
@@ -176,7 +177,15 @@ function ComposeSheet({ onClose, onPosted }: { onClose: () => void; onPosted: (p
           </button>
         </div>
       )}
-      <textarea className="compose-text" value={text} maxLength={POST_TEXT_MAX} rows={3} placeholder={t('Например: сегодня первый день, начинаю отжиматься. Вот так я выгляжу')} onChange={(e) => setText(e.target.value)} />
+      <textarea className="compose-text" value={text} maxLength={POST_TEXT_MAX} rows={3} placeholder={t('Например: сегодня первый день, начинаю отжиматься. Вот так я выгляжу')} onChange={(e) => setText(e.target.value)}
+        onFocus={(e) => {
+          setTyping(true);
+          // Клавиатура выезжает ~300 мс: потом аккуратно подвигаем поле, чтобы его было видно над ней.
+          const el = e.currentTarget;
+          window.setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 320);
+        }}
+        onBlur={() => window.setTimeout(() => setTyping(false), 200)}
+      />
       <div className="compose-ideas">
         {IDEAS.map((i) => (
           <button key={i} className="soc-chip" onClick={() => setText(text ? `${text} ${i}` : i)}>
