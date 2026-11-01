@@ -1,9 +1,9 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
-import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress, saveProgress } from './game/progress';
+import { claimGift, freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress, saveProgress } from './game/progress';
 import { rememberUnlocks } from './game/unlocks';
 import { guestId, setMaxBot, tg } from './telegram';
-import { reportError } from './telemetry';
+import { reportError, track } from './telemetry';
 import { getLang, t, tErr } from './i18n';
 
 // Язык — чтобы бот писал игроку на языке игры.
@@ -189,6 +189,8 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       veteran?: boolean;
       duels?: boolean;
       clan?: boolean;
+      // Подарок бота за возвращение (server/winback.ts).
+      gift?: { id: string; coins: number; vigor?: number; text: string } | null;
     };
     setMaxBot(r.maxBot);
     cloud = { inClan: !!r.clan, remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
@@ -217,12 +219,26 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
     const cur = loadProgress();
     const opened = r.veteran && cur.gates !== 'all' ? { ...cur, gates: 'all' as const } : rememberUnlocks(cur, [...(r.duels ? ['duel' as const] : []), ...(r.clan ? ['clan' as const] : [])]);
     if (opened !== cur) onRemote(saveProgress(opened));
+    // Подарок за возвращение: забираем один раз и показываем, что пришло.
+    const gifted = r.gift ? claimGift(loadProgress(), r.gift) : null;
+    if (gifted && r.gift) {
+      track('gift_claim', r.gift.id.split('-')[0]);
+      onRemote(gifted);
+      giftListeners.forEach((fn) => fn(r.gift!.text));
+    }
   } catch {
     // Сервер недоступен: играем на копии в телефоне, отправим в следующий раз.
   }
 }
 
 export const cloudState = () => cloud;
+
+const giftListeners = new Set<(text: string) => void>();
+/** Пришёл подарок за возвращение: текст для тоста. */
+export function onGift(fn: (text: string) => void): () => void {
+  giftListeners.add(fn);
+  return () => giftListeners.delete(fn);
+}
 
 /** Состоит ли игрок в клане (по ответу сервера): «Тренировка дня» зовёт в рейд. */
 export function useInClan(): boolean {

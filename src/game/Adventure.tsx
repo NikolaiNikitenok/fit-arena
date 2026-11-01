@@ -13,6 +13,7 @@ import { startCloud, usePro } from '../cloud';
 import { loadBalance } from '../balanceClient';
 import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
+import { weekKey } from '../../shared/weekly';
 import { MONTHS, recapMonths } from './recap';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
@@ -543,6 +544,10 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onFriends={onFriends}
           onShop={(tm) => setShop(tm ?? 'weapon')}
           onStrength={() => setStrength(true)}
+          onWeekly={() => {
+            update((p) => saveProgress({ ...p, weeklySeen: weekKey(dayKey(Date.now())) }));
+            setStrength(true);
+          }}
           onEquip={(id) => setProgress(equip(progress, id))}
           onEquipGear={(id) => setProgress(equipGear(progress, id))}
           onPotion={(id) => {

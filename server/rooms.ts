@@ -23,6 +23,8 @@ interface Seat {
   lastRepAt: number;
   lastCombo: boolean;
   reps: number;
+  // Когда засчитан каждый повтор, мс от начала боя: из них получается «призрак» для пустой очереди.
+  times: number[];
 }
 
 /** Итог рейтингового боя: a и b — id игроков. */
@@ -33,6 +35,8 @@ export interface MatchEnd {
   exercise: Exercise;
   /** Засчитанные повторы каждого за бой. */
   reps: { a: number; b: number };
+  /** Моменты повторов (мс от начала боя). */
+  times?: { a: number[]; b: number[] };
 }
 
 type Phase = 'lobby' | 'countdown' | 'fight' | 'over';
@@ -70,7 +74,7 @@ export class Room {
     if (this.has(player.id)) return null;
     if (this.seats.length >= 2) return 'В этом бою уже два бойца';
     const side: Side = this.seats.some((s) => s.side === 'player') ? 'bot' : 'player';
-    this.seats.push({ player, side, ready: false, lastRepAt: -Infinity, lastCombo: false, reps: 0 });
+    this.seats.push({ player, side, ready: false, lastRepAt: -Infinity, lastCombo: false, reps: 0, times: [] });
     this.broadcastRoom();
     return null;
   }
@@ -108,6 +112,7 @@ export class Room {
     if (t - seat.lastRepAt < MIN_REP_INTERVAL_MS) return;
     seat.lastRepAt = t;
     seat.reps += 1;
+    seat.times.push(t - this.startedAt);
     const result = strike(this.battle, seat.side, t);
     this.battle = result.battle;
     seat.lastCombo = result.strike.combo;
@@ -126,6 +131,7 @@ export class Room {
       s.lastRepAt = -Infinity;
       s.lastCombo = false;
       s.reps = 0;
+      s.times = [];
       s.player.send({ type: 'countdown', startsInMs: COUNTDOWN_MS, durationMs: ROUND_MS });
     }
     this.timers.push(
@@ -151,6 +157,7 @@ export class Room {
         outcome: w === 'draw' ? 'draw' : w === a.side ? 'a' : 'b',
         exercise: this.exercise,
         reps: { a: a.reps, b: b.reps },
+        times: { a: a.times, b: b.times },
       });
     }
     for (const s of this.seats) {

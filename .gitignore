@@ -5,3 +5,4 @@ public/mediapipe
 dist-server
 data/
 .claude/worktrees/
+*.tsbuildinfo

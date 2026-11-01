@@ -883,3 +883,4 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .manual-tap:active { transform: scale(.94); }
 .manual-tap:disabled { opacity: .5; }
 .bottom-nav button.locked { opacity: .45; }
+.small-note { font-size: 12px; text-align: center; margin-top: -4px; }

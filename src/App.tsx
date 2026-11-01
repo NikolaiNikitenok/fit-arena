@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Adventure, AdventureTab } from './game/Adventure';
 import type { JoinRoom } from './Duel';
 import { PowerToast } from './PowerToast';
@@ -9,7 +9,8 @@ import { lockedText } from './game/UnlockSheet';
 import { hasHero, loadProgress, saveProgress } from './game/progress';
 import { rememberUnlocks } from './game/unlocks';
 import { linkUnlocks } from './game/unlockLinks';
-import { markFirstOpen } from './telemetry';
+import { markFirstOpen, track } from './telemetry';
+import { onGift } from './cloud';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
 import { useBusy } from './updates/busy';
@@ -33,6 +34,9 @@ const NAV: { tab: Tab; Icon: typeof Shield; label: string }[] = [
 // даже если игрок не заглянет на главную (пришёл по ссылке дуэли и сразу ушёл).
 function rememberLinks() {
   const p = loadProgress();
+  // Пришёл по кнопке письма бота (?from=wb3 / wb7 / weekly): сколько возвращается по каждому.
+  const from = new URLSearchParams(location.search).get('from');
+  if (from && /^[\w-]{1,20}$/.test(from)) track('letter_open', from);
   // Новичок: отсчёт «до первого повтора» — с момента, когда страница начала грузиться.
   if (!hasHero(p) && !p.onboarded) markFirstOpen(Math.round(performance.timeOrigin));
   const next = rememberUnlocks(p, linkUnlocks());
@@ -54,6 +58,16 @@ export function App() {
   const nearestLock = (Object.entries(locks) as [Tab, number][]).filter(([, n]) => n > 0).sort((a, b) => a[1] - b[1])[0]?.[0];
   const [lockToast, setLockToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Подарок бота за возвращение: короткий тост «🎁 …».
+  useEffect(
+    () =>
+      onGift((text) => {
+        setLockToast(t('🎁 Подарок за возвращение: {0}', { 0: text }));
+        clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setLockToast(null), 5000);
+      }),
+    [],
+  );
   const showLock = (tb: 'village' | 'clan' | 'duel') => {
     setLockToast(lockedText(tb, locks[tb] ?? 0));
     clearTimeout(toastTimer.current);

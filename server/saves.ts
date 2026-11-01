@@ -51,6 +51,11 @@ export interface Save {
   lang?: 'en';
   // Видимый другим опыт героя: xp — сейчас, cap — предел на сегодня, day — дата (UTC), с которой считали предел.
   pub?: { xp: number; cap: number; day: string };
+  // Письма «возвращайся» за текущее отсутствие (server/winback.ts) и неделя последней сводки «сила растёт».
+  winback?: { last: string; sent: number[] };
+  weeklyOn?: string;
+  // Подарок за возвращение: игра забирает его при запуске один раз (по id, Progress.gifts).
+  gift?: { id: string; coins: number; vigor?: number; text: string };
 }
 
 export const SAVE_MAX_BYTES = 1_000_000;
@@ -195,6 +200,15 @@ export class SaveStore {
   /** Игрок попросил удалить свои данные: прогресс и настройки бота пропадают. */
   forget(id: string): void {
     if (this.saves.delete(id)) this.save();
+  }
+
+  /** Письмо бота отправлено (server/winback.ts): что отметить и, если есть, подарок в игре. */
+  markLetter(id: string, mark: { winback?: Save['winback']; weeklyOn?: string }, gift?: Save['gift']): void {
+    const s = this.touch(id);
+    if (mark.winback) s.winback = mark.winback;
+    if (mark.weeklyOn) s.weeklyOn = mark.weeklyOn;
+    if (gift) s.gift = gift;
+    this.save();
   }
 
   markReminded(id: string, date: string): void {

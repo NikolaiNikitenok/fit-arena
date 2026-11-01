@@ -49,6 +49,8 @@ import { clanPerks } from '../shared/clanLevel';
 import { heroPower } from '../src/game/power';
 import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
+import { dueMessages, pendingStage } from './winback';
+import { petById, type PetId } from '../src/game/pets';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
 import { deletePlayer } from './deleteMe';
@@ -70,6 +72,7 @@ import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
 import { cameraDays, CityStore } from './cities';
 import { balanceCommand, BalanceFile } from './balance';
+import { GHOST_PREFIX, GHOST_WAIT_MS, GhostStore, isGhost, shadowTimes } from './ghosts';
 import { ProTrials } from './proTrials';
 import { isActive, Referrals } from './referrals';
 import { TitanBoard } from './titan';
@@ -240,9 +243,22 @@ const profileView = (p: Profile): ProfileView => ({
 });
 
 function onMatchEnd(end: MatchEnd): void {
+  // Бой с «призраком» (записью): кубков нет, повторы идут в семейный дневник, запись игрока — в копилку.
+  if (isGhost(end.a) || isGhost(end.b)) {
+    const side = isGhost(end.a) ? 'b' : 'a';
+    const real = online.get(end[side]);
+    if (!real) return;
+    const p = store.get(real.id, real.name);
+    real.send({ type: 'profile', profile: profileView(p), delta: 0 });
+    reportDuel(p, end.reps[side], end.outcome === 'draw' ? null : end.outcome === side, end.exercise);
+    if (signedId(real.id)) ghosts.record(end.exercise, { id: real.id, name: real.name, times: end.times?.[side] ?? [], at: Date.now() });
+    return;
+  }
   const a = online.get(end.a);
   const b = online.get(end.b);
   if (!a || !b) return;
+  // Бои настоящих игроков — записи для «призраков» пустой очереди.
+  for (const [pl, side] of [[a, 'a'], [b, 'b']] as const) if (signedId(pl.id)) ghosts.record(end.exercise, { id: pl.id, name: pl.name, times: end.times?.[side] ?? [], at: Date.now() });
   const pa = store.get(a.id, a.name);
   const pb = store.get(b.id, b.name);
   // Кубки — только за бой двух игроков Telegram (гостя можно завести сколько угодно и «сливать» ему бои)
@@ -292,6 +308,56 @@ function handleActivity(req: IncomingMessage, res: ServerResponse): void {
     for (const item of items) if (item) family.report({ ...item, telegram_id: tgUser.id });
     reply(200);
   });
+}
+
+// «Призраки» для пустой очереди быстрого боя (server/ghosts.ts).
+const ghosts = new GhostStore(process.env.GHOSTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'ghosts.json'));
+const ghostWait = new Map<string, ReturnType<typeof setTimeout>>();
+const stopGhostWait = (id: string) => {
+  clearTimeout(ghostWait.get(id));
+  ghostWait.delete(id);
+};
+
+/** Бой с записью игрока похожей силы (или с «Тенью Грома», пока записей нет). */
+function ghostFight(player: Player, exercise: Exercise): Room {
+  const base = Number((saves.get(player.id)?.progress as { baseline?: Record<string, number> } | undefined)?.baseline?.[exercise]) || 20;
+  const target = Math.max(5, Math.round(base * 0.95));
+  const rec = ghosts.pick(exercise, target, player.id);
+  const times = rec?.times ?? shadowTimes(target);
+  const r = newRoom(exercise);
+  let timers: ReturnType<typeof setTimeout>[] = [];
+  const clear = () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+  };
+  const ghost: Player = {
+    id: `${GHOST_PREFIX}${r.code}`,
+    name: rec ? `${rec.name} · запись` : 'Тень Грома · тренировка',
+    send: (msg) => {
+      if (msg.type === 'countdown') {
+        clear();
+        for (const t of times) timers.push(setTimeout(() => r.rep(ghost.id), msg.startsInMs + t));
+      } else if (msg.type === 'end') clear();
+      else if (msg.type === 'room') {
+        // Игрок ушёл — «призрак» уходит следом, комната закрывается.
+        if (!msg.players.some((p) => p.id !== ghost.id)) {
+          clear();
+          return void setTimeout(() => {
+            r.leave(ghost.id);
+            if (r.empty) {
+              r.dispose();
+              rooms.delete(r.code);
+            }
+          }, 0);
+        }
+        // «Призрак» всегда готов: бой начнётся, как только готов игрок (и на реванш тоже).
+        if (msg.players.some((p) => p.id === ghost.id && !p.ready)) setTimeout(() => r.ready(ghost.id), 300);
+      }
+    },
+  };
+  r.join(ghost);
+  r.join(player);
+  return r;
 }
 
 function newRoom(exercise: Exercise): Room {
@@ -409,7 +475,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, ...gateFlags(who.id, s?.progress), emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, gift: s?.gift ?? null, ...gateFlags(who.id, s?.progress), emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -1364,8 +1430,23 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         if (!other || other.id === player.id || online.get(other.id) !== other) {
           queue.set(exercise, player);
           send({ type: 'queue', waiting: true });
+          // Никто не пришёл за 10 секунд — бой с записью игрока похожей силы.
+          const me = player;
+          stopGhostWait(me.id);
+          ghostWait.set(
+            me.id,
+            setTimeout(() => {
+              ghostWait.delete(me.id);
+              if (queue.get(exercise) !== me || online.get(me.id) !== me) return;
+              queue.delete(exercise);
+              const r = ghostFight(me, exercise);
+              me.send({ type: 'queue', waiting: false });
+              me.joinedRoom?.(r);
+            }, GHOST_WAIT_MS),
+          );
           return;
         }
+        stopGhostWait(other.id);
         queue.delete(exercise);
         const r = newRoom(exercise);
         r.join(other);
@@ -1377,6 +1458,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         break;
       }
       case 'cancelQuick':
+        stopGhostWait(player.id);
         for (const [ex, p] of queue) if (p.id === player.id) queue.delete(ex);
         send({ type: 'queue', waiting: false });
         break;
@@ -1417,6 +1499,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   ws.on('close', () => {
     leaveRoom();
     if (!player) return;
+    if (online.get(player.id) === player) stopGhostWait(player.id);
     if (clanChannel) {
       clanSockets.get(player.id)?.delete(send);
       if (!clanSockets.get(player.id)?.size) clanSockets.delete(player.id);
@@ -1444,6 +1527,8 @@ if (ANY_BOT)
   setInterval(() => {
     for (const { save, date } of dueReminders(saves.all(), Date.now())) {
       if (!accounts.target(save.id)) continue;
+      // После трёх дней тишины вместо обычного напоминания придёт письмо «возвращайся» с подарком (ниже).
+      if (pendingStage(save, date)) continue;
       saves.markReminded(save.id, date);
       const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
       const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
@@ -1458,6 +1543,33 @@ if (ANY_BOT)
       });
     }
   }, 5 * 60_000);
+// Возврат ушедших (3 и 7 дней без тренировки, с подарком в игре) и сводка недели по понедельникам: раз в 10 минут.
+// Отмечаем до отправки — после перезапуска повторов не будет. Шлём по одному, ~20 в секунду.
+let lettersSending = false;
+if (ANY_BOT)
+  setInterval(() => {
+    if (lettersSending) return;
+    const list = dueMessages(saves.all(), Date.now(), {
+      lang: langOf,
+      clanName: (id) => clans.clanOf(id)?.name,
+      petName: (id, pet) => {
+        const p = saves.get(id)?.progress as Partial<Progress> | null;
+        return p?.pets?.names?.[pet as PetId] || tl(langOf(id), petById(pet as PetId)?.name ?? '');
+      },
+      canWrite: (id) => !!accounts.target(id),
+    });
+    if (!list.length) return;
+    for (const m of list) saves.markLetter(m.id, m.mark, m.gift);
+    lettersSending = true;
+    (async () => {
+      for (const m of list) {
+        const started = Date.now();
+        // Метка в адресе кнопки: игра считает, сколько вернулось по каждому письму (letter_open).
+        await notifyPlayer(m.id, m.text, m.button, `?from=${m.kind}`).catch(() => null);
+        await new Promise((res) => setTimeout(res, Math.max(0, 50 - (Date.now() - started))));
+      }
+    })().finally(() => (lettersSending = false));
+  }, 10 * 60_000);
 // Рейд клана: раз в минуту смотрим, кому пора написать (начало, напоминание, итог).
 // Разосланное клан отмечает сразу, до отправки: после перезапуска повторов не будет.
 // Шлём по одному, не больше 20 сообщений в секунду (у Telegram предел около 30).
@@ -1586,6 +1698,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     saves.flush();
     friends.flush();
     cities.flush();
+    ghosts.flush();
     guard.flush();
     telemetry.flush();
     mod.flush();

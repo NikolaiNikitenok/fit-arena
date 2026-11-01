@@ -268,9 +268,12 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
       {phase === 'menu' && (
         <>
           {waiting ? (
-            <button className="secondary" onClick={() => send({ type: 'cancelQuick' })}>
-              {t('Ищу соперника… отменить')}
-            </button>
+            <>
+              <button className="secondary" onClick={() => send({ type: 'cancelQuick' })}>
+                {t('Ищу соперника… отменить')}
+              </button>
+              <div className="muted small-note">{t('Никого нет за 10 секунд — бой с записью игрока твоей силы, без кубков.')}</div>
+            </>
           ) : (
             <button className="primary" onClick={() => send({ type: 'quick', exercise })}>
               {t('Быстрый бой: {0}', { 0: EXERCISE_LABELS[exercise].toLowerCase() })}

@@ -109,6 +109,10 @@ export interface Progress {
   gates?: 'all' | 'steps';
   // Повторы, посчитанные самим игроком без камеры, по дням: в топ городов и войны кланов они не идут.
   manual?: Record<string, number>;
+  // Забранные подарки бота за возвращение (id из server/winback.ts): каждый — один раз.
+  gifts?: string[];
+  // Неделя (понедельник), за которую уже показали карточку «Твоя неделя».
+  weeklySeen?: string;
 }
 
 // Что считает пропуск: повторы (все и по упражнениям), победы, боссы, задания дня, дуэли, атаки рейда.
@@ -660,3 +664,11 @@ export const finishOnboarding = (p: Progress): Progress => save({ ...p, onboarde
 
 /** Попытка без жизни: задание дня и ещё не пройденные испытания силы (повтор пройденного испытания стоит жизнь, иначе это бесплатная ферма). */
 export const freeAttempt = (p: Progress, level: { id: number; type: string; daily?: unknown }): boolean => !!level.daily || (level.type === 'trial' && !p.stars[level.id]);
+
+/** Подарок бота за возвращение: монеты и зелья бодрости, один раз на id. null — уже забран. */
+export function claimGift(p: Progress, gift: { id: string; coins: number; vigor?: number }): Progress | null {
+  if (!gift?.id || (p.gifts ?? []).includes(gift.id)) return null;
+  const coins = Math.max(0, Math.min(1000, Math.floor(Number(gift.coins) || 0)));
+  const vigor = Math.max(0, Math.min(5, Math.floor(Number(gift.vigor) || 0)));
+  return save({ ...p, coins: p.coins + coins, potions: vigor ? addPotion(p.potions, 'vigor', vigor) : p.potions, gifts: [...(p.gifts ?? []).slice(-20), gift.id] });
+}

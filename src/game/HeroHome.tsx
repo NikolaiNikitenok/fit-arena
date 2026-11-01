@@ -33,6 +33,8 @@ import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
 import { clearedLevels } from './unlocks';
+import { weekKey, weekSummary } from '../../shared/weekly';
+import { track } from '../telemetry';
 import { useInClan } from '../cloud';
 import { raidWindow } from '../../shared/raid';
 import { raidAttacksLeft } from '../clan/raidHits';
@@ -61,6 +63,8 @@ interface Props {
   onTrain: () => void;
   onShop: (tab?: ShopTab) => void;
   onStrength: () => void;
+  // Карточка «Твоя неделя» просмотрена: отметить неделю и открыть «Твою силу».
+  onWeekly: () => void;
   onEquip: (id: string) => void;
   onEquipGear: (id: string) => void;
   onPotion: (id: PotionId) => void;
@@ -202,7 +206,7 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan, onWeekly } = props;
   // Закрытый раздел: вместо перехода — подсказка, когда он откроется.
   // Из закрытых разделов на главной виден только ближайший — как обещание; остальные не мешают новичку.
   const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), hidden: lockLeft(f) > 0 && f !== nextLock, onClick: lockLeft(f) ? () => onLocked(f) : fn });
@@ -345,9 +349,37 @@ export function HeroHome(props: Props) {
     </div>
   );
 
+  // «Твоя неделя»: раз в неделю — повторы за 7 дней и рост к месяцу назад (shared/weekly.ts). Новичкам рано.
+  const dateNow = dayKey(now);
+  const week = weekSummary(progress.days, dateNow);
+  const weekFresh = progress.weeklySeen !== weekKey(dateNow) && week.week > 0 && Object.keys(progress.stars).length >= 3;
+  useEffect(() => {
+    if (weekFresh) track('weekly_card', week.pct == null ? 'none' : week.pct > 0 ? 'up' : 'down');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekFresh]);
+  const weekVs = week.vs === 'month' ? t('чем месяц назад') : t('чем неделей раньше');
+  const weekSub =
+    week.pct == null
+      ? t('Через месяц покажу, насколько ты стал сильнее')
+      : week.pct > 0
+        ? t('На {0}% больше, {1}. Сила растёт!', { 0: week.pct, 1: weekVs })
+        : week.pct === 0
+          ? t('Ровно столько же, {0}. Держишь форму!', { 0: weekVs })
+          : t('На {0}% меньше, {1}. Начнём новую неделю?', { 0: -week.pct, 1: weekVs });
+
   // Полоса самого важного события сейчас (Титан, итоги, праздник).
   const eventBanner = (
     <>
+      {weekFresh && (
+        <button className="hb-recap hb-week" onClick={onWeekly}>
+          <span className="hb-recap-emoji">💪</span>
+          <span className="hb-recap-text">
+            <b>{t('Твоя неделя: {0} повторов', { 0: week.week })}</b>
+            <small>{weekSub}</small>
+          </span>
+          <Dot n />
+        </button>
+      )}
       {slot === 'titan' && titanShown && (
         <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>
           <MonsterFace shape="golem" color={titanShown.def.color} boss angry size={44} />
@@ -404,7 +436,7 @@ export function HeroHome(props: Props) {
 
         <div className="hv-top">
           {head}
-          {slot && <div className="hv-event">{eventBanner}</div>}
+          {(slot || weekFresh) && <div className="hv-event">{eventBanner}</div>}
         </div>
 
         <div className="hv-col left">
