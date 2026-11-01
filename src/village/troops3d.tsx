@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { Character, type CharacterProps, type CharAnim } from '../three/Character';
 import { parseTint } from '../three/Instanced';
+import { OVERLAY } from '../three/StylePass';
 import { ANIMS_URL, CharName, charUrl, preloadGltf, useGltf } from '../three/kit';
 import { GRID } from '../../shared/village';
 import { SKILLS } from '../../shared/heroSkills';
@@ -801,6 +802,8 @@ export function UnitBars({ view, foe }: { view: React.MutableRefObject<BattleVie
     const fill = mk(1);
     back.renderOrder = 8;
     fill.renderOrder = 9;
+    back.layers.set(OVERLAY);
+    fill.layers.set(OVERLAY);
     return { back, fill };
   }, []);
   useEffect(

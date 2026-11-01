@@ -86,6 +86,8 @@ export const EN: Record<string, string> = {
   'Коллекции': 'Collections',
   'Битва городов': 'City Battle',
   'Битва городов на всю планету': 'City Battle goes worldwide',
+  'Чистые значки в деревне': 'Clean village icons',
+  'Пузыри «собрать ресурсы» и стрелки улучшения теперь поверх построек: тёмная обводка домов через них больше не проступает.': 'Harvest bubbles and upgrade arrows now sit on top of buildings: the dark building outline no longer shows through them.',
   'Вместо карты России — 3D-глобус: крути пальцем, приближай щипком, нажимай на страну или город.': 'Instead of the map of Russia — a 3D globe: spin it with a finger, pinch to zoom, tap a country or a city.',
   'Сражаются все страны и города мира: свой рейтинг стран и общий рейтинг городов.': 'All countries and cities of the world compete: a country ranking and a global city ranking.',
   'Страна окрашивается повторами своих героев, над городами светятся столбы — чем выше, тем сильнее город.': 'Countries glow with their heroes\' reps, and light pillars rise over cities — the taller, the stronger the city.',

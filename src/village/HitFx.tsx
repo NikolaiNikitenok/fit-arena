@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { OVERLAY } from '../three/StylePass';
 import { GRID } from '../../shared/village';
 import { pulse, resetPulses, wear } from '../three/pulse';
 import { emitFx } from './Particles';
@@ -33,6 +34,7 @@ function makeNum(): Num {
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
   sprite.renderOrder = 9;
+  sprite.layers.set(OVERLAY);
   sprite.visible = false;
   return { sprite, ctx: c.getContext('2d')!, tex, born: -1e9, x: 0, y: 0, z: 0, big: false };
 }
