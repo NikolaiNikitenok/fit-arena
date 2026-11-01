@@ -221,6 +221,7 @@ export function HeroHome(props: Props) {
   const gymToday = todayTemplate(gym, now);
   const [heroOpen, setHeroOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [bannerAt, setBannerAt] = useState(0);
   // Вид главной: «сцена» — герой во весь экран, кнопки по бокам, без прокрутки; или старый список (настройки).
   const layout = useSettings().homeList ? 'feed' : 'stage';
   const badges = homeBadges(progress, daily, pro, now);
@@ -374,23 +375,33 @@ export function HeroHome(props: Props) {
           ? t('Ровно столько же, {0}. Держишь форму!', { 0: weekVs })
           : t('На {0}% меньше, {1}. Начнём новую неделю?', { 0: -week.pct, 1: weekVs });
 
+  // «Твоя неделя»: в ленте — полная карточка, на главной-сцене — компактная, высотой с баннер события.
+  const weekPct = week.pct == null ? '' : week.pct > 0 ? `+${week.pct}%` : week.pct === 0 ? '±0%' : `−${-week.pct}%`;
+  const weekCard = (compact: boolean) => (
+    <div className={`hb-week-wrap ${compact ? 'compact' : ''}`}>
+      <button className="hb-recap hb-week" onClick={() => onWeekly(true)}>
+        <span className="hb-recap-emoji">💪</span>
+        {compact ? (
+          <span className="hb-recap-text">
+            <b>{t('Твоя неделя')}</b>
+            <small>{weekPct ? t('{0} повторов · {1}', { 0: week.week, 1: weekPct }) : t('{0} повторов', { 0: week.week })}</small>
+          </span>
+        ) : (
+          <span className="hb-recap-text">
+            <b>{t('Твоя неделя: {0} повторов', { 0: week.week })}</b>
+            <small>{weekSub}</small>
+          </span>
+        )}
+      </button>
+      <button className="hb-week-x" aria-label={t('Закрыть')} onClick={() => onWeekly(false)}>
+        ×
+      </button>
+    </div>
+  );
+
   // Полоса самого важного события сейчас (Титан, итоги, праздник).
-  const eventBanner = (
+  const slotBanner = (
     <>
-      {weekFresh && (
-        <div className="hb-week-wrap">
-          <button className="hb-recap hb-week" onClick={() => onWeekly(true)}>
-            <span className="hb-recap-emoji">💪</span>
-            <span className="hb-recap-text">
-              <b>{t('Твоя неделя: {0} повторов', { 0: week.week })}</b>
-              <small>{weekSub}</small>
-            </span>
-          </button>
-          <button className="hb-week-x" aria-label={t('Закрыть')} onClick={() => onWeekly(false)}>
-            ×
-          </button>
-        </div>
-      )}
       {slot === 'titan' && titanShown && (
         <button className="hb-titan" style={{ ['--tg' as string]: titanShown.def.glow }} onClick={onTitan}>
           <MonsterFace shape="golem" color={titanShown.def.color} boss angry size={44} />
@@ -429,6 +440,16 @@ export function HeroHome(props: Props) {
       )}
     </>
   );
+  const eventBanner = (
+    <>
+      {weekFresh && weekCard(false)}
+      {slotBanner}
+    </>
+  );
+  // На главной-сцене все баннеры — в одной строке фиксированной высоты: листаются вбок, точки снизу.
+  const banners: { key: string; node: ReactNode }[] = [];
+  if (weekFresh) banners.push({ key: 'week', node: weekCard(true) });
+  if (slot) banners.push({ key: slot, node: slotBanner });
 
   // Главная «как в играх»: герой во весь экран на своём мире, главные разделы столбиками по бокам,
   // внизу задание дня и бой. Остальное — под «Ещё». Без прокрутки.
@@ -449,15 +470,31 @@ export function HeroHome(props: Props) {
           {head}
           {/* Лента — на виду, справа от события (или одна, если события нет). */}
           <div className="hv-row">
-            {(slot || weekFresh) && <div className="hv-event">{eventBanner}</div>}
+            {banners.length > 0 && (
+              <div className="hv-event">
+                <div className="hv-ev-track" onScroll={(e) => setBannerAt(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}>
+                  {banners.map((b) => (
+                    <div key={b.key} className="hv-ev-item">
+                      {b.node}
+                    </div>
+                  ))}
+                </div>
+                {banners.length > 1 && (
+                  <div className="hv-ev-dots" aria-hidden>
+                    {banners.map((b, i) => (
+                      <i key={b.key} className={i === Math.min(bannerAt, banners.length - 1) ? 'on' : ''} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button className="hv-feed" onClick={onFeed}>
               <span className="hv-feed-ico">
-                <Feed size={24} />
+                <Feed size={20} />
                 {feedDot && <i className="hv-feed-dot" />}
               </span>
               <span className="hv-feed-text">
                 <b>{t('Лента')}</b>
-                <small>{t('и профили')}</small>
               </span>
             </button>
           </div>
