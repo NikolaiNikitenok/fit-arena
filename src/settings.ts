@@ -24,6 +24,8 @@ export interface Settings {
   powerChecked: boolean;
   // По какой версии правил автоматика решала про экономный режим (devicePerf.ts, POWER_RULES).
   powerRules?: number;
+  // Разминка перед первым подходом дня (src/warmup).
+  warmup: boolean;
   // Сюжетные диалоги перед уровнями.
   story: boolean;
   // Деревня живёт по местным часам: утро, день, вечер с фонарями, ночь.
@@ -37,7 +39,7 @@ export interface Settings {
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false };
+const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, warmup: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false };
 
 let current: Settings = (() => {
   try {

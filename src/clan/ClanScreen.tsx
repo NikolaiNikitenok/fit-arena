@@ -21,6 +21,7 @@ import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { Sheet } from '../Sheet';
 import { syncClanFlag } from '../village/decor';
 import { locale, t, tMsg } from '../i18n';
+import { withWarmup } from '../warmup/warmup';
 
 const EXERCISES: Exercise[] = ['squat', 'pushup', 'situp'];
 const ROLE: Record<ClanMemberView['role'], string> = { leader: t('глава'), officer: t('заместитель'), member: '' };
@@ -301,7 +302,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
           coinBonus={perks.raidCoins}
           exercise={exercise}
           setExercise={setExercise}
-          onAttack={startAttack}
+          onAttack={() => withWarmup(startAttack)}
           onClaim={() => send({ type: 'clanClaim', kind: 'raid' })}
         />
       )}

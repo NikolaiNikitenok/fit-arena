@@ -27,6 +27,7 @@ import { type Combo, comboLive, comboShout, comboTier, nextCombo, NO_COMBO } fro
 import { sfx } from '../audio';
 import { locale, t } from '../i18n';
 import { InviteOffer, inviteOfferDue } from '../friends/InviteOffer';
+import { markWarmup, withWarmup } from '../warmup/warmup';
 
 const PREP_S = 5;
 // Без камеры: отсчёт короче (телефон уже в руке), и не чаще повтора в 0,6 с — быстрее никто не приседает.
@@ -320,6 +321,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   useEffect(() => {
     if (!autoStart || autoStarted.current) return;
     autoStarted.current = true;
+    // Первый бой новичка — без разминки, и в этот день её уже не предлагаем: сначала пусть втянется.
+    markWarmup();
     void start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -525,7 +528,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             <Heart /> {t('через {0} мин', { 0: waitMin })}
           </button>
         ) : (
-          <button className="primary" onClick={manual && status === 'lost' ? startManual : start}>
+          <button className="primary" onClick={() => withWarmup(manual && status === 'lost' ? startManual : () => void start())}>
             {status === 'ready' ? t('Начать') : t('Ещё раз')}
             {!free && (
               <span className="btn-cost">

@@ -14,6 +14,7 @@ import { onGift } from './cloud';
 import { GroupJoin } from './group/GroupChallenge';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
+import { WarmupHost } from './warmup/Warmup';
 import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 import { t } from './i18n';
@@ -150,6 +151,7 @@ export function App() {
       <GroupJoin onTrain={() => setTab('hero')} />
 
       <UpdateBanner />
+      <WarmupHost />
 
       {lockToast && !playing && <div className="toast global">{lockToast}</div>}
 

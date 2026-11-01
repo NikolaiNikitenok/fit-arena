@@ -25,6 +25,7 @@ const TOGGLES: Record<string, { key: ToggleKey; title: string; text: string }> =
   voice: { key: 'voice', title: t('Голос тренера'), text: t('Мастер Гром вслух считает повторы, подсказывает время и технику. Нужен русский голос в телефоне.') },
   haptics: { key: 'haptics', title: t('Вибрация'), text: t('Телефон коротко вибрирует на повтор.') },
   guide: { key: 'guide', title: t('Подсказка перед уровнем'), text: t('3D-схема, как поставить телефон.') },
+  warmup: { key: 'warmup', title: t('Разминка'), text: t('Перед первым подходом за день Гром предложит размяться пару минут. Можно пропустить.') },
   story: { key: 'story', title: t('Диалоги сюжета'), text: t('Разговоры с героями перед уровнями. Без них сразу к тренировке.') },
   skeleton: { key: 'skeleton', title: t('Скелет на видео'), text: t('Линии позы поверх камеры: видно, что приложение тебя распознаёт.') },
   dayNight: { key: 'dayNight', title: t('День и ночь в деревне'), text: t('Деревня живёт по твоим часам: золотой вечер, ночью горят фонари. Без этого всегда светлый день.') },
@@ -63,7 +64,7 @@ type Section = 'sound' | 'training' | 'graphics' | 'notify' | 'account' | 'about
 type Tone = 'accent' | 'mint' | 'violet' | 'gold' | 'blue' | 'grey' | 'rose';
 
 const SOUND: ToggleKey[] = ['sound', 'music', 'voice', 'haptics'];
-const TRAINING: ToggleKey[] = ['guide', 'story', 'skeleton'];
+const TRAINING: ToggleKey[] = ['guide', 'warmup', 'story', 'skeleton'];
 const GRAPHICS: ToggleKey[] = ['lowPower', 'dayNight', 'villageFx', 'flyIn', 'homeList'];
 
 /**
@@ -127,7 +128,7 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
 
   const rows: { id: Section; tone: Tone; icon: ReactNode; sub: string }[] = [
     { id: 'sound', tone: 'accent', icon: <Speaker />, sub: t('Звуки, музыка, голос тренера') },
-    { id: 'training', tone: 'mint', icon: <Camera />, sub: t('Подсказки, скелет, калибровка') },
+    { id: 'training', tone: 'mint', icon: <Camera />, sub: t('Подсказки, разминка, скелет, калибровка') },
     { id: 'graphics', tone: 'violet', icon: <Sparkles />, sub: s.lowPower ? t('Включён экономный режим') : t('Погода, день и ночь, эффекты') },
     { id: 'notify', tone: 'gold', icon: <Bell />, sub: t('Напоминания и рейды клана') },
     { id: 'account', tone: 'blue', icon: <UserCircle />, sub: t('Вход, прогресс, чёрный список') },
