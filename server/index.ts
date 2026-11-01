@@ -601,9 +601,12 @@ function onGroupError(c: GroupChallenge, r: TgResult | null): 'ok' | 'retry' | '
   if (o === 'gone') groups.update(c, { done: true, finalPending: false });
   return o;
 }
+const groupSaidAt = new Map<number, number>();
 /** Опубликовать таблицу новым сообщением (новый вызов, /top, итоги). false — не вышло (сеть, лимит): попробуем позже. */
 async function postGroupTable(c: GroupChallenge, attempt = 0): Promise<boolean> {
   const text = tableText(c, groupRows(c), Date.now());
+  // Попытку отмечаем сразу: пока Telegram держит лимит, /top не будет слать снова и снова.
+  groups.update(c, { postedAt: Date.now() });
   const r = await botApi(BOT_TOKEN)('sendMessage', { chat_id: c.chat, text, reply_markup: c.done ? undefined : groupButton(c) }, 15_000).catch(() => null);
   const o = onGroupError(c, r);
   // Группа стала супергруппой: тот же вызов, новый id чата — отправляем ещё раз.
@@ -636,7 +639,14 @@ const groupUpdate = (u: Update): boolean => {
   if (!cmd) return false;
   const chat = msg.chat as { id: number; type: string; title?: string };
   const l = langOfChat(msg.from);
-  const say = (text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chat.id, text, reply_to_message_id: msg.message_id }, 15_000).catch(() => null);
+  // Подсказки бота в чате — тоже не чаще раза в минуту на чат.
+  const say = (text: string) => {
+    const last = groupSaidAt.get(chat.id) ?? 0;
+    if (Date.now() - last < GROUP_POST_COOLDOWN_MS) return;
+    groupSaidAt.set(chat.id, Date.now());
+    sayNow(text);
+  };
+  const sayNow = (text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chat.id, text, reply_to_message_id: msg.message_id }, 15_000).catch(() => null);
   if (cmd.kind === 'unknown') {
     say(tl(l, 'Такого упражнения нет. Можно: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.'));
     return true;
@@ -680,6 +690,11 @@ let groupsTicking = false;
 async function groupsTick(): Promise<void> {
   const now = Date.now();
   for (const c of groups.pending()) {
+    // Итоги так и не дошли за три дня — больше не пытаемся.
+    if (c.finalPending && now > c.endsAt + 3 * 86_400_000) {
+      groups.update(c, { finalPending: false });
+      continue;
+    }
     if (c.finalPending || now > c.endsAt) {
       // Итоги: закрываем вызов, но помним, что их ещё надо доставить, пока Telegram не примет сообщение.
       if (!c.done) groups.update(c, { done: true, finalPending: true });

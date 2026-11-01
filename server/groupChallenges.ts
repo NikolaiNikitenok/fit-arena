@@ -28,7 +28,7 @@ export function tgOutcome(r: { ok: boolean; error_code?: number; description?: s
   if (!r) return 'retry';
   if (r.ok || /message is not modified/i.test(r.description ?? '')) return 'ok';
   if (r.parameters?.migrate_to_chat_id) return 'migrated';
-  if (r.error_code === 403 || /chat not found|bot was kicked|have no rights to send|CHAT_WRITE_FORBIDDEN/i.test(r.description ?? '')) return 'gone';
+  if (r.error_code === 403 || /chat not found|bot was kicked|have no rights to send|not enough rights|TOPIC_CLOSED|CHAT_WRITE_FORBIDDEN/i.test(r.description ?? '')) return 'gone';
   if (/message to edit not found|message can't be edited|MESSAGE_ID_INVALID/i.test(r.description ?? '')) return 'missing';
   return 'retry';
 }
