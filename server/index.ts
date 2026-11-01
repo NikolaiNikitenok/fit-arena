@@ -1039,15 +1039,6 @@ function shareProblem(text: string): void {
   for (const id of admins.ids()) botApi(BOT_TOKEN)('sendMessage', { chat_id: Number(id), text: `⚠️ Поделиться в чат: ${text}` }, 15_000).catch(() => null);
 }
 
-// Почему «Поделиться в чат» пошло запасным путём — админам в бот, не чаще раза в 10 минут.
-let shareProblemAt = 0;
-function shareProblem(text: string): void {
-  console.warn(`share: ${text}`);
-  if (!BOT_TOKEN || Date.now() - shareProblemAt < 600_000) return;
-  shareProblemAt = Date.now();
-  for (const id of admins.ids()) botApi(BOT_TOKEN)('sendMessage', { chat_id: Number(id), text: `⚠️ Поделиться в чат: ${text}` }, 15_000).catch(() => null);
-}
-
 /**
  * Загрузить картинку в Telegram и вернуть её file_id: тихо отправляем фото в личку с ботом (или первому
  * админу, если игрок не писал боту) и сразу удаляем сообщение — file_id остаётся рабочим.
