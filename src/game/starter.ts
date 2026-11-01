@@ -3,7 +3,8 @@
 import { addPotions, Progress, saveProgress } from './progress';
 
 // Без зелий бодрости: жизни (и заряд) за звёзды не продаём — «можно не тренироваться, а заплатить» ломает смысл.
-export const STARTER_PACK = { outfit: 'explorer', coins: 1000, swap: 2 };
+// Монет немного (их тратят и на зелья в лавке): главное в наборе — облик.
+export const STARTER_PACK = { outfit: 'explorer', coins: 300, swap: 2 };
 
 /** Выдать набор: облик, монеты и зелья. null — уже выдан. */
 export function claimStarter(p: Progress, now: number): Progress | null {

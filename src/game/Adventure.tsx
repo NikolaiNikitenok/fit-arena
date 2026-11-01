@@ -63,7 +63,7 @@ import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
 import { openPassInTelegram, platform, startTab } from '../telegram';
-import { useStarter } from '../cloud';
+import { useCloudReady, useStarter } from '../cloud';
 import { type OfferPlace, offerSeen, payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
 import { dueOffer, markOffer, type OfferKind } from './offers';
@@ -227,18 +227,6 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
     setPlaying({ ...currentDef, daily: true, type: 'build', title: t('Задание: {0}', { 0: NPCS[daily.npc].name }), exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
   };
   const pro = usePro();
-  // Пора ли предложить покупку: только на главной, не посреди боя и не поверх других окон.
-  useEffect(() => {
-    // Сначала объявления Грома о новых разделах — предложение подождёт.
-    if (tab !== 'hero' || playing || offer || freshUnlocks(latest.current).length) return;
-    const now = Date.now();
-    const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
-    if (!kind) return;
-    setProgress(saveProgress(markOffer(latest.current, kind, now)));
-    track('offer_popup', kind);
-    setOffer(kind);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, playing, pro, starter?.bought, Object.keys(progress.stars).length, progress.pass?.xp, progress.unlockSeen?.length]);
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const levels = levelsOf(world);
@@ -395,6 +383,25 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
 
   const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
   // Объявление Грома о разделах, открытых пройденными уровнями.
+  // Пора ли предложить покупку (src/game/offers.ts): только на главной, когда сервер уже ответил (знаем, есть ли Pro
+  // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
+  const cloudReady = useCloudReady();
+  const busyScreen =
+    !!playing || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
+  useEffect(() => {
+    if (tab !== 'hero' || !cloudReady || busyScreen || offer) return;
+    const now = Date.now();
+    const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
+    if (!kind) return;
+    setProgress(saveProgress(markOffer(latest.current, kind, now)));
+    track('offer_popup', kind);
+    setOffer(kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, cloudReady, busyScreen, pro, starter?.bought, Object.keys(progress.stars).length, progress.pass?.xp]);
+  // Купил (здесь или на другом устройстве) — окно предложения больше не нужно.
+  useEffect(() => {
+    if ((offer === 'pro' && pro) || (offer === 'starter' && (starter?.bought || progress.starterPack))) setOffer(null);
+  }, [offer, pro, starter?.bought, progress.starterPack]);
   const fresh = freshUnlocks(progress);
   const openFeature = (f: Feature) => {
     if (f === 'duel') return onDuel ? onDuel() : onFriends();
@@ -445,7 +452,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
       {holidayOpen && <HolidayScreen progress={progress} setProgress={setProgress} onClose={() => setHolidayOpen(false)} />}
       {collectionsOpen && <CollectionsSheet progress={progress} setProgress={setProgress} onClose={() => setCollectionsOpen(false)} />}
       {cityOpen && <CitySheet onClose={() => setCityOpen(false)} />}
-      {offer && tab === 'hero' && !fresh.length && (
+      {offer && tab === 'hero' && (
         <OfferSheet
           kind={offer}
           progress={progress}
@@ -727,7 +734,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
 
 /** Всплывающее предложение: набор «Новичок» от купца или Pro Pass, когда золотая награда закрыта. */
 function OfferSheet({ kind, progress, onPass, onClose }: { kind: OfferKind; progress: Progress; onPass: () => void; onClose: () => void }) {
-  useEffect(() => offerSeen(kind, 'popup'), [kind]);
+  // «Увидели» считает сама карточка покупки (набор — StarterCard, Pro — в пропуске); показ окна — offer_popup.
   return (
     <Sheet onClose={onClose}>
       <div className="offer-sheet">

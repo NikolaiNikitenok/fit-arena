@@ -201,7 +201,8 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
   if (r.kind === 'coins') coins(r.n);
   if (r.kind === 'potion') next.potions = addPotions(next.potions, r.id, r.n);
   if (r.kind === 'chest') {
-    const loot = openChest(pass.season * 101 + tier * 7 + (track === 'pro' ? 3 : 0), next.items, land);
+    // Сундук золотой дорожки (её оплачивают звёздами) не даёт зелий бодрости и силы.
+    const loot = openChest(pass.season * 101 + tier * 7 + (track === 'pro' ? 3 : 0), next.items, land, { noLives: track === 'pro' });
     const found = loot.item?.id ?? loot.gear?.id;
     coins(loot.coins);
     if (found) next.items = [...next.items, found];

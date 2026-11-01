@@ -3625,7 +3625,7 @@ export const EN: Record<string, string> = {
   "Не сейчас": "Not now",
   "Облик «{0}» и сундук: {1} монет и {2} свитка замены. Только один раз.": "The “{0}” outfit and a chest: {1} coins and {2} swap scrolls. One time only.",
   "Деньги без силы": "Fair purchases",
-  "Набор «Новичок» и золотая дорожка пропуска больше не дают зелий бодрости: жизни за звёзды не продаются.": "The Starter pack and the gold pass track no longer give vigor potions: lives are never sold for Stars.",
+  "Набор «Новичок» и золотая дорожка пропуска (и её сундуки) больше не дают зелий бодрости и силы, а монет в наборе меньше: за звёзды — облики, а не жизни.": "The Starter pack and the gold pass track (including its chests) no longer give vigor or might potions, and the pack has fewer coins: Stars buy looks, not lives.",
   "Предложение купить появляется не сразу, а после первого босса, на 3-й день серии или у закрытой золотой награды — один раз.": "Purchase offers now appear only after your first boss, on day 3 of a streak, or at a locked gold reward, and just once.",
   "Такого упражнения нет. Можно: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.": "There's no such exercise. Try: /challenge for push-ups, /challenge squat for squats, /challenge situp for sit-ups.",
 };

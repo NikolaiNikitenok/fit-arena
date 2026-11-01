@@ -1086,14 +1086,17 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
     void finishTestPay(msg.chat.id, pay.telegram_payment_charge_id, pay.total_amount);
     return null;
   }
+  const fresh = !sales.has(pay.telegram_payment_charge_id);
   const p = sales.paid(pay.invoice_payload, pay.telegram_payment_charge_id, `tg:${msg.chat.id}`, pay.total_amount, proIds, cleanName(msg.from?.first_name ?? '') || undefined);
   if (!p) {
     toAdmins(`⚠️ Оплата ${pay.total_amount} ⭐ от tg:${msg.chat.id} с непонятным счётом (${pay.invoice_payload.slice(0, 60)}). Код платежа: ${pay.telegram_payment_charge_id}`);
     return { method: 'sendMessage', chat_id: msg.chat.id, text: tl(langOfChat(msg.from), 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.') };
   }
+  // Повтор того же платежа от Telegram: всё уже сделано, второй раз не считаем и не пишем админу.
+  if (!fresh) return null;
   toAdmins(saleAdminText(p));
-  // Воронка покупки: оплачено (знаменатель — «увидели предложение» и «нажали Купить» из игры).
-  telemetry.serverEvent('paid', p.kind);
+  // Воронка покупки: оплачено (знаменатель — «увидели предложение» и «нажали Купить» из игры). Pro для себя хранится без kind.
+  telemetry.serverEvent('paid', p.kind ?? 'pro');
   // Подарок: другу пишет бот туда, где он играет (Telegram или Max).
   if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name, langOf(p.account)), tl(langOf(p.account), 'Открыть пропуск'), '?tab=pass');
   const l = langOfChat(msg.from);
@@ -1148,7 +1151,7 @@ async function sendTitanGifts(): Promise<string> {
 }
 
 /** Админ: /balance — множители баланса без релиза (server/balance.ts). */
-const adminBalance = (chatId: number, text: string): string | null => (admins.has(`tg:${chatId}`) ? balanceCommand(balanceFile, text) : null);
+const adminBalance = (chatId: number, text: string): string | null => (admins.has(`tg:${chatId}`) ? balanceCommand(balanceFile, adminText(chatId, text)) : null);
 
 // Проверка оплаты звёздами от начала до конца, без настоящей покупки: /testpay в боте (только админ).
 const TEST_PAY_STARS = 1;
@@ -1185,7 +1188,7 @@ const proCommand = (chatId: number, text: string): boolean => {
     .then((r) => {
       if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
       sales.refunded(p.n);
-      telemetry.serverEvent('refund', p.kind);
+      telemetry.serverEvent('refund', p.kind ?? 'pro');
       const l = langOf(accounts.resolve(p.payer));
       const what = p.kind === 'starter' ? tl(l, 'набор «Новичок»') : 'Pro Pass';
       say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}).${p.kind === 'starter' ? ' Вещи из набора остаются в игре.' : ' Pro по ней снят.'}`);
@@ -1267,7 +1270,7 @@ const http = createServer((req, res) => {
         const msg = (update as unknown as Update).message;
         const pay = payUpdate(update as unknown as Update);
         if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
-        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || testPayCommand(chat?.id ?? 0, msg?.text ?? '') || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || testPayCommand(chat?.id ?? 0, adminText(chat?.id ?? 0, msg?.text ?? '')) || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (groupUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
@@ -1807,7 +1810,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
-    (chatId, text) => (proCommand(chatId, text) || testPayCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
+    (chatId, text) => (proCommand(chatId, text) || testPayCommand(chatId, adminText(chatId, text)) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
     (u) => {
       if (groupUpdate(u)) return true;
       const pay = payUpdate(u);
@@ -1847,6 +1850,8 @@ const ADMIN_COMMANDS = [
   { command: 'channel_me', description: 'Черновик для личного канала с кнопками' },
   { command: 'reports', description: 'Жалобы игроков' },
   { command: 'sales', description: 'Покупки Pro Pass и возвраты' },
+  { command: 'testpay', description: 'Проверить оплату звёздами: 1 ⭐ с автоматическим возвратом' },
+  { command: 'balance', description: 'Баланс игры без релиза: /balance ключ значение' },
   { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
   { command: 'carousel', description: 'Карусель для Instagram: /carousel tips|app [тема]' },
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },

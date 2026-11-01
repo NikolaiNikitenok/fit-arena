@@ -50,6 +50,13 @@ describe('за звёзды не продаём жизни и силу', () => {
   it('в наборе «Новичок» нет зелий бодрости', () => {
     expect(STARTER_PACK).not.toHaveProperty('vigor');
   });
+  it('сундуки золотой дорожки не дают зелий бодрости и силы', async () => {
+    const { openChest } = await import('./items');
+    for (let seed = 0; seed < 500; seed++) {
+      const loot = openChest(seed, [], 20, { noLives: true });
+      if (loot.potion) expect(loot.potion).toBe('swap');
+    }
+  });
   it('на золотой дорожке пропуска — только свитки замены из зелий', () => {
     for (let tier = 1; tier <= 30; tier++) {
       const r = passRewards(tier).pro;

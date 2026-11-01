@@ -290,6 +290,13 @@ export async function giftTrial(forId: string): Promise<void> {
 }
 
 /** Набор «Новичок» (null — до ответа сервера или гость). */
+/** Сервер ответил на загрузку прогресса: знаем Pro, набор и прочее. До этого предложения покупки не показываем. */
+export function useCloudReady(): boolean {
+  const [v, setV] = useState(() => !!cloud);
+  useEffect(() => onCloud(() => setV(true)), []);
+  return v;
+}
+
 export function useStarter(): StarterOffer | null {
   const [s, setS] = useState(() => cloud?.starter ?? null);
   useEffect(() => onCloud((c) => setS(c.starter)), []);

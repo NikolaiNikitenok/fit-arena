@@ -239,7 +239,8 @@ const droppable = (g: Gear) => !g.pass && !(g.inShop && g.rarity === 'legendary'
 export type Loot = { coins: number; item?: Item; gear?: Gear; potion?: PotionId };
 
 /** Что лежит в сундуке: монеты, зелье или, реже, предмет, которого ещё нет. Чем дальше земля, тем лучше добыча. */
-export function openChest(seed: number, owned: string[], land = seed - 1): Loot {
+/** noLives — сундук куплен за звёзды (золотая дорожка пропуска): вместо зелий бодрости и силы — только свиток замены. */
+export function openChest(seed: number, owned: string[], land = seed - 1, opts: { noLives?: boolean } = {}): Loot {
   const rnd = (n: number) => {
     const x = Math.sin(seed * 9301 + n * 49297) * 233280;
     return x - Math.floor(x);
@@ -251,7 +252,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1): Loot 
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };
   }
-  if (r < 0.65) return { coins: 0, potion: POTIONS[Math.floor(rnd(4) * POTIONS.length)].id };
+  if (r < 0.65) return { coins: 0, potion: opts.noLives ? 'swap' : POTIONS[Math.floor(rnd(4) * POTIONS.length)].id };
   return { coins: 40 + land * 6 + Math.floor(rnd(3) * 80) };
 }
 

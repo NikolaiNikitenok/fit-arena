@@ -127,6 +127,11 @@ export class ProSales {
     return null;
   }
 
+  /** Этот платёж уже записан (Telegram может прислать successful_payment повторно). */
+  has(charge: string): boolean {
+    return this.purchases.some((p) => p.charge === charge);
+  }
+
   /** Оплата прошла (successful_payment). Повтор того же платежа ничего не меняет. */
   paid(payload: string, charge: string, payer: string, amount: number, ids: (account: string) => string[], name?: string): ProPurchase | null {
     const known = this.purchases.find((p) => p.charge === charge);
