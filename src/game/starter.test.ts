@@ -8,7 +8,8 @@ describe('набор «Новичок»', () => {
     const got = claimStarter(p, 1)!;
     expect(got.items).toContain(STARTER_PACK.outfit);
     expect(got.coins).toBe(50 + STARTER_PACK.coins);
-    expect(got.potions?.vigor).toBe((p.potions?.vigor ?? 0) + STARTER_PACK.vigor);
+    // Жизни за звёзды не продаём: зелий бодрости в наборе нет.
+    expect(got.potions?.vigor ?? 0).toBe(p.potions?.vigor ?? 0);
     expect(got.potions?.swap).toBe((p.potions?.swap ?? 0) + STARTER_PACK.swap);
     expect(claimStarter(got, 2)).toBeNull();
   });

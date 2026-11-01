@@ -6,7 +6,7 @@ import { claimPassTier, claimQuest, PASS_TIERS, questXp, passEndsAt, passQuests,
 import { passOf, Progress } from './progress';
 import { sfx } from '../audio';
 import { useProOffer } from '../cloud';
-import { payStars } from '../payments';
+import { offerSeen, payStars } from '../payments';
 import { openPassInTelegram, platform } from '../telegram';
 import { t, locale } from '../i18n';
 
@@ -187,13 +187,16 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
   const [note, setNote] = useState<string | null>(null);
   const price = offer?.price;
   const late = passEndsAt(now) - now < 7 * DAY;
+  useEffect(() => {
+    if (!pro && price) offerSeen('pro', 'pass');
+  }, [pro, price]);
   const buy = async () => {
     if (platform !== 'tg') return openPassInTelegram();
     setBusy(true);
     setNote(null);
     const before = offer?.until ?? 0;
     let until = 0;
-    const r = await payStars('pro', (s) => s.pro && (until = s.proOffer?.until ?? 0) > before);
+    const r = await payStars('pro', (s) => s.pro && (until = s.proOffer?.until ?? 0) > before, undefined, 'pass');
     setBusy(false);
     if (r === 'done') onPaid(t('Pro Pass активен до {0}!', { 0: fmtDay(until) }));
     else if (r === 'late') setNote(t('Оплата прошла, Pro включится через минуту. Если нет — напиши боту /paysupport.'));

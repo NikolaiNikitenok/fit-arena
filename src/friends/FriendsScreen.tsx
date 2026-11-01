@@ -6,7 +6,7 @@ import { Check, Cross, Flame, Star, Swords, UserPlus, Users } from '../icons';
 import { EXERCISE_LABELS, type Exercise } from '../repCounter';
 import { friendInviteCode, friendInviteLink, openPassInTelegram, platform, share } from '../telegram';
 import { giftTrial, useProOffer } from '../cloud';
-import { payStars } from '../payments';
+import { offerSeen, payStars } from '../payments';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
 import { GroupCard } from '../group/GroupChallenge';
@@ -278,13 +278,16 @@ function GiftPro({ id, name, onDone }: { id: string; name: string; onDone: () =>
   const offer = useProOffer();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (offer) offerSeen('gift', 'friend');
+  }, [offer]);
   if (!offer) return null;
   const gift = async () => {
     if (platform !== 'tg') return openPassInTelegram('friends');
     setBusy(true);
     setNote(null);
     // Своего Pro подарок не меняет, ждать сервер не нужно: у друга золотое имя появится, когда сервер узнает об оплате.
-    const r = await payStars('gift', null, id);
+    const r = await payStars('gift', null, id, 'friend');
     setBusy(false);
     if (r === 'done' || r === 'late') {
       setNote(t('Подарок отправлен! Бот напишет {0}, от кого он.', { 0: name }));

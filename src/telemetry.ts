@@ -9,7 +9,7 @@ declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
 
 /** События — тот же список, что на сервере (EVENTS в server/telemetry.ts). */
-export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance' | 'group_join' | 'group_create' | 'invite_card';
+export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance' | 'group_join' | 'group_create' | 'invite_card' | 'offer_seen' | 'buy_tap' | 'buy_result' | 'offer_popup';
 
 export type ErrorKind = 'error' | 'promise' | 'react' | 'camera' | 'model' | 'webgl';
 

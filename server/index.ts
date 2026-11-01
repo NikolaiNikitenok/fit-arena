@@ -676,9 +676,10 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '🎭 Рилс от персонажа': '/talk',
   '🧵 Пост в Threads': '/threads',
   '⚖️ Баланс': '/balance',
+  '💳 Проверить оплату': '/testpay',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }, { text: '💳 Проверить оплату' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -1005,6 +1006,12 @@ const onPlayerText = (msg: NonNullable<Update['message']>): Record<string, unkno
  */
 const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   const q = u.pre_checkout_query;
+  // Проверочная оплата админа (/testpay): 1 ⭐, сразу возвращается, Pro и покупки не трогает.
+  if (q && isTestPayload(q.invoice_payload)) {
+    const ok = admins.has(`tg:${q.from.id}`) && q.currency === 'XTR' && q.total_amount === TEST_PAY_STARS;
+    if (ok) void botApi(BOT_TOKEN)('sendMessage', { chat_id: q.from.id, text: '✅ Шаг 2 из 4: Telegram спросил сервер перед оплатой — сервер подтвердил.' }, 15_000).catch(() => null);
+    return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok, ...(ok ? {} : { error_message: 'Только для проверки админом.' }) };
+  }
   if (q) {
     const error = sales.checkout(q.invoice_payload, q.currency, q.total_amount, proIds);
     return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: !error, ...(error ? { error_message: tl(langOfChat(q.from), error) } : {}) };
@@ -1012,12 +1019,18 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   const msg = u.message;
   const pay = msg?.successful_payment;
   if (!msg || !pay) return undefined;
+  if (isTestPayload(pay.invoice_payload)) {
+    void finishTestPay(msg.chat.id, pay.telegram_payment_charge_id, pay.total_amount);
+    return null;
+  }
   const p = sales.paid(pay.invoice_payload, pay.telegram_payment_charge_id, `tg:${msg.chat.id}`, pay.total_amount, proIds, cleanName(msg.from?.first_name ?? '') || undefined);
   if (!p) {
     toAdmins(`⚠️ Оплата ${pay.total_amount} ⭐ от tg:${msg.chat.id} с непонятным счётом (${pay.invoice_payload.slice(0, 60)}). Код платежа: ${pay.telegram_payment_charge_id}`);
     return { method: 'sendMessage', chat_id: msg.chat.id, text: tl(langOfChat(msg.from), 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.') };
   }
   toAdmins(saleAdminText(p));
+  // Воронка покупки: оплачено (знаменатель — «увидели предложение» и «нажали Купить» из игры).
+  telemetry.serverEvent('paid', p.kind);
   // Подарок: другу пишет бот туда, где он играет (Telegram или Max).
   if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name, langOf(p.account)), tl(langOf(p.account), 'Открыть пропуск'), '?tab=pass');
   const l = langOfChat(msg.from);
@@ -1074,6 +1087,27 @@ async function sendTitanGifts(): Promise<string> {
 /** Админ: /balance — множители баланса без релиза (server/balance.ts). */
 const adminBalance = (chatId: number, text: string): string | null => (admins.has(`tg:${chatId}`) ? balanceCommand(balanceFile, text) : null);
 
+// Проверка оплаты звёздами от начала до конца, без настоящей покупки: /testpay в боте (только админ).
+const TEST_PAY_STARS = 1;
+const isTestPayload = (payload: string) => payload.startsWith('test:');
+/** Шаг 1: счёт на 1 ⭐ в чат админа. Дальше бот сам пишет, какой шаг прошёл. */
+const testPayCommand = (chatId: number, text: string): boolean => {
+  if (!/^\/testpay(?:@\w+)?$/.test(text.trim()) || !BOT_TOKEN || !admins.has(`tg:${chatId}`)) return false;
+  const api = botApi(BOT_TOKEN);
+  void api('sendInvoice', { chat_id: chatId, title: 'Проверка оплаты', description: 'Проверяем оплату звёздами и возврат. Звезда вернётся автоматически через пару секунд.', payload: `test:${chatId}:${Date.now()}`, currency: 'XTR', prices: [{ label: 'Проверка', amount: TEST_PAY_STARS }] }, 15_000)
+    .then((r) => api('sendMessage', { chat_id: chatId, text: r.ok ? '✅ Шаг 1 из 4: счёт создан. Оплати его кнопкой выше — бот проверит подтверждение, оплату и возврат.' : `❌ Шаг 1: счёт не создался — ${r.description ?? r.error_code}` }, 15_000))
+    .catch(() => null);
+  return true;
+};
+/** Шаги 3 и 4: оплата пришла — сразу возвращаем звезду и пишем итог. */
+async function finishTestPay(chatId: number, charge: string, stars: number): Promise<void> {
+  const api = botApi(BOT_TOKEN);
+  const say = (t: string) => api('sendMessage', { chat_id: chatId, text: t }, 15_000).catch(() => null);
+  await say(`✅ Шаг 3 из 4: оплата ${stars} ⭐ пришла серверу (код ${charge.slice(0, 12)}…).`);
+  const r = await api('refundStarPayment', { user_id: chatId, telegram_payment_charge_id: charge }, 15_000).catch((e: Error) => ({ ok: false, description: e.message, error_code: 0 }));
+  await say(r.ok ? '✅ Шаг 4 из 4: звезда возвращена. Оплата и возврат работают от начала до конца.' : `❌ Шаг 4: возврат не прошёл — ${r.description ?? r.error_code}. Верни вручную в @BotFather или напиши в поддержку Telegram.`);
+}
+
 /** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
 const proCommand = (chatId: number, text: string): boolean => {
   const m = /^\/(?:refund_(\d+)|sales)(?:@\w+)?$/.exec(text.trim());
@@ -1088,6 +1122,7 @@ const proCommand = (chatId: number, text: string): boolean => {
     .then((r) => {
       if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
       sales.refunded(p.n);
+      telemetry.serverEvent('refund', p.kind);
       const l = langOf(accounts.resolve(p.payer));
       const what = p.kind === 'starter' ? tl(l, 'набор «Новичок»') : 'Pro Pass';
       say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}).${p.kind === 'starter' ? ' Вещи из набора остаются в игре.' : ' Pro по ней снят.'}`);
@@ -1169,7 +1204,7 @@ const http = createServer((req, res) => {
         const msg = (update as unknown as Update).message;
         const pay = payUpdate(update as unknown as Update);
         if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
-        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || testPayCommand(chat?.id ?? 0, msg?.text ?? '') || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (groupUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
@@ -1709,7 +1744,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
-    (chatId, text) => (proCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
+    (chatId, text) => (proCommand(chatId, text) || testPayCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
     (u) => {
       if (groupUpdate(u)) return true;
       const pay = payUpdate(u);

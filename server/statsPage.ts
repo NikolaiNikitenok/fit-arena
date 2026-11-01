@@ -134,6 +134,8 @@ export function statsHtml(s: Stats, opts: { inApp?: boolean } = {}): string {
   const new7 = s.dau.slice(-7).reduce((a, d) => a + d.newUsers, 0);
   const errors7 = s.dau.slice(-7).reduce((a, d) => a + d.errors, 0);
   const sum = (k: string) => s.dau.slice(-7).reduce((a, d) => a + (d.events[k] ?? 0), 0);
+  // Сумма по всем параметрам события с приставкой (offer_seen:starter-shop, offer_seen:starter-popup…).
+  const sumP = (prefix: string) => s.dau.slice(-7).reduce((a, d) => a + Object.entries(d.events).reduce((b, [k, n]) => b + (k.startsWith(prefix) ? n : 0), 0), 0);
   const ret = s.retention.filter((r) => r.cohort > 0);
   const d1 = ret.filter((r) => r.d1 != null);
   const d1Rate = d1.length ? d1.reduce((a, r) => a + r.d1!, 0) / Math.max(1, d1.reduce((a, r) => a + r.cohort, 0)) : null;
@@ -221,6 +223,22 @@ ${s.funnel
 <div class="card scroll"><table>
 <tr><th>Источник</th><th class="n">Новых</th><th class="n">Камера</th><th class="n">1-я победа</th><th class="n">Дуэль и др.</th><th class="n">D1</th></tr>
 ${s.sources.map((x) => `<tr><td>${esc(sourceName(x.source))}</td><td class="n">${x.users}</td><td class="n">${pct(x.camera, x.users)}</td><td class="n">${pct(x.won, x.users)}</td><td class="n">${pct(x.played, x.users)}</td><td class="n">${x.d1Of ? pct(x.d1, x.d1Of) : '—'}</td></tr>`).join('\n') || '<tr><td colspan="6" class="muted">Пока нет данных</td></tr>'}
+</table></div>
+
+<h2>Воронка покупки за 7 дней</h2>
+<div class="hint">Увидели предложение (раз за запуск на место) → нажали «Купить» → оплатили. Мало «нажали» при многих «увидели» — предложение неинтересно или цена; много «нажали», мало «оплатили» — мешает окно оплаты. «Всплывающих» — сколько раз показали окно после босса, 3-го дня серии или закрытой золотой награды.</div>
+<div class="card scroll"><table>
+<tr><th>Товар</th><th class="n">Увидели</th><th class="n">Нажали</th><th class="n">Оплатили</th><th class="n">Возвратов</th></tr>
+${(
+  [
+    ['starter', 'Набор «Новичок»'],
+    ['pro', 'Pro Pass'],
+    ['gift', 'Pro в подарок'],
+  ] as const
+)
+  .map(([k, name]) => `<tr><td>${name}</td><td class="n">${sumP(`offer_seen:${k}-`)}</td><td class="n">${sumP(`buy_tap:${k}-`)} · ${pct(sumP(`buy_tap:${k}-`), sumP(`offer_seen:${k}-`))}</td><td class="n">${sum(`paid:${k}`)} · ${pct(sum(`paid:${k}`), sumP(`buy_tap:${k}-`))}</td><td class="n">${sum(`refund:${k}`)}</td></tr>`)
+  .join('\n')}
+<tr><td class="muted">Всплывающих: набор / Pro</td><td class="n" colspan="4">${sum('offer_popup:starter')} / ${sum('offer_popup:pro')}</td></tr>
 </table></div>
 
 <h2>Контент по цифрам</h2>

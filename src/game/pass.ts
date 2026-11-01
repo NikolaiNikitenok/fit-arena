@@ -158,7 +158,8 @@ export function passRewards(tier: number): { free: PassReward; pro: PassReward }
     : PASS_GEAR[tier] ? { kind: 'passGear', id: PASS_GEAR[tier] }
     : tier % 5 === 0 ? { kind: 'gear' }
     : tier % 4 === 0 ? { kind: 'chest' }
-    : tier % 3 === 0 ? { kind: 'potion', id: potion, n: 2 }
+    // Платная дорожка не даёт зелий бодрости (это жизни) и эликсиров силы: только свитки замены.
+    : tier % 3 === 0 ? { kind: 'potion', id: 'swap', n: 2 }
     : { kind: 'coins', n: 80 + tier * 8 };
   return { free, pro };
 }

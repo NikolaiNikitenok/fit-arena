@@ -64,8 +64,9 @@ import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
 import { openPassInTelegram, platform, startTab } from '../telegram';
 import { useStarter } from '../cloud';
-import { payStars } from '../payments';
+import { type OfferPlace, offerSeen, payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
+import { dueOffer, markOffer, type OfferKind } from './offers';
 import { pl, t } from '../i18n';
 import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, nextLocked, rememberUnlocks } from './unlocks';
 import { linkUnlocks } from './unlockLinks';
@@ -178,6 +179,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   const [achOpen, setAchOpen] = useState(false);
   // Кнопка бота после оплаты Pro и ссылка «Купить в Telegram» открывают игру сразу на пропуске (?tab=pass).
   const [passOpen, setPassOpen] = useState(() => startTab() === 'pass');
+  // Предложение покупки в подходящий момент (src/game/offers.ts): набор после первого босса или 3-го дня серии,
+  // Pro — когда дошёл до закрытой золотой награды. Раз за всё время на каждое и не чаще раза в день.
+  const [offer, setOffer] = useState<OfferKind | null>(null);
   const [eventOpen, setEventOpenState] = useState(false);
   const [petsOpen, setPetsOpen] = useState(false);
   const [holidayOpen, setHolidayOpen] = useState(false);
@@ -223,6 +227,18 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
     setPlaying({ ...currentDef, daily: true, type: 'build', title: t('Задание: {0}', { 0: NPCS[daily.npc].name }), exercises: [daily.exercise], load: left / progress.baseline[daily.exercise], seconds: Math.max(120, left * 5), rest: false, story: [], coins: 0 });
   };
   const pro = usePro();
+  // Пора ли предложить покупку: только на главной, не посреди боя и не поверх других окон.
+  useEffect(() => {
+    // Сначала объявления Грома о новых разделах — предложение подождёт.
+    if (tab !== 'hero' || playing || offer || freshUnlocks(latest.current).length) return;
+    const now = Date.now();
+    const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
+    if (!kind) return;
+    setProgress(saveProgress(markOffer(latest.current, kind, now)));
+    track('offer_popup', kind);
+    setOffer(kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, playing, pro, starter?.bought, Object.keys(progress.stars).length, progress.pass?.xp, progress.unlockSeen?.length]);
   const [achToast, setAchToast] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const levels = levelsOf(world);
@@ -429,6 +445,17 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
       {holidayOpen && <HolidayScreen progress={progress} setProgress={setProgress} onClose={() => setHolidayOpen(false)} />}
       {collectionsOpen && <CollectionsSheet progress={progress} setProgress={setProgress} onClose={() => setCollectionsOpen(false)} />}
       {cityOpen && <CitySheet onClose={() => setCityOpen(false)} />}
+      {offer && tab === 'hero' && !fresh.length && (
+        <OfferSheet
+          kind={offer}
+          progress={progress}
+          onPass={() => {
+            setOffer(null);
+            setPassOpen(true);
+          }}
+          onClose={() => setOffer(null)}
+        />
+      )}
       {tab === 'hero' && !newcomer && fresh.length > 0 && !(!eggLater && canHatch(progress)) && (
         <UnlockSheet
           features={fresh}
@@ -481,7 +508,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           <div className="starter-got">
             <Chest size={64} />
             <div className="level-title">{t('Набор «Новичок» твой!')}</div>
-            <div className="muted">{t('Облик «{0}» уже в гардеробе. Из сундука: {1} монет, {2} зелья бодрости и {3} свитка замены.', { 0: itemById(STARTER_PACK.outfit).name, 1: STARTER_PACK.coins, 2: STARTER_PACK.vigor, 3: STARTER_PACK.swap })}</div>
+            <div className="muted">{t('Облик «{0}» уже в гардеробе. Из сундука: {1} монет и {2} свитка замены.', { 0: itemById(STARTER_PACK.outfit).name, 1: STARTER_PACK.coins, 2: STARTER_PACK.swap })}</div>
             <button className="primary" onClick={() => setStarterGot(false)}>
               {t('Отлично')}
             </button>
@@ -698,19 +725,54 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   );
 }
 
+/** Всплывающее предложение: набор «Новичок» от купца или Pro Pass, когда золотая награда закрыта. */
+function OfferSheet({ kind, progress, onPass, onClose }: { kind: OfferKind; progress: Progress; onPass: () => void; onClose: () => void }) {
+  useEffect(() => offerSeen(kind, 'popup'), [kind]);
+  return (
+    <Sheet onClose={onClose}>
+      <div className="offer-sheet">
+        {kind === 'starter' ? (
+          <>
+            <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
+            <div className="level-title">{t('Достойно настоящего героя!')}</div>
+            <div className="muted">{t('Купец Фёдор: «Вижу, ты не бросаешь тренировки. Для таких у меня есть набор искателя приключений — один раз и только для своих.»')}</div>
+            <StarterCard progress={progress} place="popup" />
+          </>
+        ) : (
+          <>
+            <Portrait line={{ face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name }} size={52} />
+            <div className="level-title">{t('Золотая награда ждёт')}</div>
+            <div className="muted">{t('Ты дошёл до ступени пропуска, где рядом с обычной наградой лежит золотая. Её открывает Pro Pass: золотая дорожка, заморозка серии и +25% опыта пропуска. Силы в дуэлях он не прибавляет.')}</div>
+            <button className="primary" onClick={onPass}>
+              {t('Посмотреть пропуск')}
+            </button>
+          </>
+        )}
+        <button className="link" onClick={onClose}>
+          {t('Не сейчас')}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 /** Лавка купца Фёдора: облики, оружие, щиты и зелья. Новое оружие появляется по мере продвижения. */
 /** Набор «Новичок» у купца: один раз, за звёзды Telegram. Вещи кладёт Adventure, когда сервер подтвердит оплату. */
-function StarterCard({ progress }: { progress: Progress }) {
+export function StarterCard({ progress, place = 'shop' }: { progress: Progress; place?: OfferPlace }) {
   const starter = useStarter();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  if (!starter || starter.bought || progress.starterPack) return null;
+  const open = !!starter && !starter.bought && !progress.starterPack;
+  useEffect(() => {
+    if (open) offerSeen('starter', place);
+  }, [open, place]);
+  if (!open) return null;
   const outfit = itemById(STARTER_PACK.outfit);
   const buy = async () => {
     if (platform !== 'tg') return openPassInTelegram('shop');
     setBusy(true);
     setNote(null);
-    const r = await payStars('starter', (s) => s.starter.bought);
+    const r = await payStars('starter', (s) => s.starter.bought, undefined, place);
     setBusy(false);
     if (r === 'late') setNote(t('Оплата прошла, набор придёт через минуту. Если нет — напиши боту /paysupport.'));
     else if (typeof r === 'object') setNote(r.error);
@@ -723,7 +785,7 @@ function StarterCard({ progress }: { progress: Progress }) {
       <div className="starter-card-body">
         <div className="starter-card-title">{t('Набор «Новичок»')}</div>
         <div className="starter-card-text">
-          {t('Облик «{0}» и сундук: {1} монет, {2} зелья бодрости, {3} свитка замены. Только один раз.', { 0: outfit.name, 1: STARTER_PACK.coins, 2: STARTER_PACK.vigor, 3: STARTER_PACK.swap })}
+          {t('Облик «{0}» и сундук: {1} монет и {2} свитка замены. Только один раз.', { 0: outfit.name, 1: STARTER_PACK.coins, 2: STARTER_PACK.swap })}
         </div>
         {note && <div className="starter-card-note">{note}</div>}
       </div>
