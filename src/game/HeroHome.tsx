@@ -33,7 +33,7 @@ import { LANDS } from './lands';
 import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
-import { clearedLevels } from './unlocks';
+import { clearedLevels, UNLOCK_AT } from './unlocks';
 import { weekKey, weekSummary } from '../../shared/weekly';
 import { track } from '../telemetry';
 import { useInClan } from '../cloud';
@@ -104,7 +104,6 @@ interface Props {
   lockLeft: (f: Feature) => number;
   onLocked: (f: Feature) => void;
   // Ближайший закрытый раздел: только его кнопка видна с замком.
-  nextLock: Feature | null;
   // Вкладка клана: «Тренировка дня» зовёт в рейд.
   onClan: () => void;
 }
@@ -132,7 +131,8 @@ const LockMark = () => (
     <Lock size={12} />
   </span>
 );
-const lockSub = (n: number) => t('откроется через {0} ур.', { 0: n });
+// lock — номер уровня карты, после которого раздел откроется.
+const lockSub = (n: number) => t('откроется после ур. {0}', { 0: n });
 
 /** Большая карточка раздела под героем: значок, название, состояние и полоска прогресса в цвете раздела. */
 function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', lock = 0, hidden, onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; lock?: number; hidden?: boolean; onClick: () => void }) {
@@ -167,7 +167,7 @@ function Side({ title, sub, icon, color, dot, lock = 0, hidden, onClick }: { tit
         {lock > 0 ? <LockMark /> : <Dot n={dot ?? 0} />}
       </span>
       <b>{title}</b>
-      {lock ? <small>{t('через {0} ур.', { 0: lock })}</small> : sub && <small>{sub}</small>}
+      {lock ? <small>{t('после ур. {0}', { 0: lock })}</small> : sub && <small>{sub}</small>}
     </button>
   );
 }
@@ -209,10 +209,11 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onFeed, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan, onWeekly } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onFeed, onRecap, onTitan, lockLeft, onLocked, livesLeft, onClan, onWeekly } = props;
   // Закрытый раздел: вместо перехода — подсказка, когда он откроется.
   // Из закрытых разделов на главной виден только ближайший — как обещание; остальные не мешают новичку.
-  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), hidden: lockLeft(f) > 0 && f !== nextLock, onClick: lockLeft(f) ? () => onLocked(f) : fn });
+  // Закрытые разделы видны все: с замком и уровнем карты, после которого откроются.
+  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f) ? UNLOCK_AT[f] : 0, onClick: lockLeft(f) ? () => onLocked(f) : fn });
   const inClan = useInClan();
   const feedDot = useFeedBadge();
   const gym = gymOf(progress);

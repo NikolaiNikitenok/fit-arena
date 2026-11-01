@@ -659,7 +659,6 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onTitan={() => setTitanOpen(true)}
           livesLeft={lives.lives}
           lockLeft={lockLeft}
-          nextLock={nextLocked(progress, linkUnlocks())}
           onClan={() => onTab('clan')}
           onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />
