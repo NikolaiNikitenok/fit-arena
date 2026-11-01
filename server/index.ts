@@ -69,6 +69,7 @@ import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
 import { cameraDays, CityStore } from './cities';
+import { balanceCommand, BalanceFile } from './balance';
 import { ProTrials } from './proTrials';
 import { isActive, Referrals } from './referrals';
 import { TitanBoard } from './titan';
@@ -99,6 +100,8 @@ const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
+// Баланс без релиза (server/balance.ts): файл рядом с данными сервера.
+const balanceFile = new BalanceFile(process.env.BALANCE_FILE ?? '/opt/arena-server/balance.json');
 // Топ по городу (server/cities.ts).
 const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'cities.json'));
 // Итоги месяца: место среди игроков и города. Картинки для сторис Telegram — рядом с данными, живут двое суток.
@@ -921,6 +924,9 @@ async function sendTitanGifts(): Promise<string> {
   return `🎁 Подарки за Титана ${last.key}: отправлено ${sent} из ${last.top.length} по ${gift.star_count} ⭐.${fails.length ? `\nНе ушли: ${fails.join('; ')}` : ''}`;
 }
 
+/** Админ: /balance — множители баланса без релиза (server/balance.ts). */
+const adminBalance = (chatId: number, text: string): string | null => (admins.has(`tg:${chatId}`) ? balanceCommand(balanceFile, text) : null);
+
 /** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
 const proCommand = (chatId: number, text: string): boolean => {
   const m = /^\/(?:refund_(\d+)|sales)(?:@\w+)?$/.exec(text.trim());
@@ -1020,7 +1026,7 @@ const http = createServer((req, res) => {
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
-        const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text)) : null;
+        const admin = msg?.text && chat?.type === 'private' ? (adminBalance(chat.id, msg.text) ?? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text))) : null;
         const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
         // Англоязычному игроку — своя кнопка меню «Play» вместо общей «Играть».
@@ -1100,6 +1106,11 @@ const http = createServer((req, res) => {
   if (req.url?.startsWith('/api/top')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(publicTop().map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, pro: isPro(p.id) }))));
+    return;
+  }
+  if (req.url === '/api/balance') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(balanceFile.get()));
     return;
   }
   if (req.url === '/api/health') {
@@ -1492,7 +1503,7 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
-    (chatId, text) => (proCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
+    (chatId, text) => (proCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
     (u) => {
       const pay = payUpdate(u);
       if (pay === undefined) return channelUpdate(u);

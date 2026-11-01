@@ -4,6 +4,7 @@
  * Чистые функции без сохранения: сохраняет вызывающий (progress.ts).
  */
 
+import { balance } from '../../shared/balance';
 import type { VillageExtra } from '../village/types';
 import { t } from '../i18n';
 
@@ -35,7 +36,7 @@ export const villageOf = (p: WithVillage): Village => ({ ...p.village, charge: p
 export function addCharge<P extends WithVillage>(p: P, amount: number): P {
   if (amount <= 0) return p;
   const v = villageOf(p);
-  return { ...p, village: { ...p.village, ...v, charge: Math.min(CHARGE_MAX, v.charge + Math.round(amount)) } };
+  return { ...p, village: { ...p.village, ...v, charge: Math.min(CHARGE_MAX, v.charge + Math.round(amount * balance().chargePerRep)) } };
 }
 
 /** Потратить заряд; null, если не хватает. */

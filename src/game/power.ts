@@ -1,6 +1,7 @@
 // Сила героя и здоровье врагов. Урон за повтор растёт с уровнем героя и оружием, здоровье врагов —
 // с номером уровня и с реальной формой игрока. Сильный герой экономит не больше 20% повторов:
 // прокачка ощутима, но тренировка остаётся настоящей.
+import { balance } from '../../shared/balance';
 import type { HandGear } from '../three/Character';
 import { gearById } from './items';
 import { LevelDef } from './levels';
@@ -62,7 +63,7 @@ export function expectedDamage(levelId: number): number {
 const lateGame = (levelId: number) => 1 + levelId / 1500;
 
 /** Здоровье врага (или «работа» миссии) для обычной цели в повторах. */
-export const enemyHp = (level: LevelDef, baseReps: number): number => Math.round(baseReps * expectedDamage(level.id) * lateGame(level.id));
+export const enemyHp = (level: LevelDef, baseReps: number): number => Math.round(baseReps * expectedDamage(level.id) * lateGame(level.id) * balance().enemyHp);
 
 /** Сколько повторов нужно этому герою: здоровье делим на урон, но в пределах 80–130% обычной цели. */
 export function repsFor(baseReps: number, hp: number, damage: number): number {

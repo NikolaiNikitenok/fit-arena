@@ -1,4 +1,5 @@
 // Прогресс игрока хранится в браузере и копией на сервере (src/cloud.ts), чтобы не терялся при смене телефона.
+import { balance } from '../../shared/balance';
 import type { GymState } from '../gym/gym';
 import { type Exercise, type RepExercise, repsEquivalent } from '../repCounter';
 import { clanGift } from '../../shared/clanLevel';
@@ -245,7 +246,7 @@ export function recordWin(p: Progress, level: LevelDef, stars: number, record?: 
   // Рынок деревни: +2% монет за уровень.
   const bonus = itemById(p.equipped).coinBonus + petBonus(p, Date.now()).coins + villageBonus(p.village?.b).coins;
   const petFind = level.daily ? null : rollPetFind(p, level.land, Date.now());
-  const coins = Math.round((firstTime ? level.coins : Math.round(level.coins / 4)) * (1 + bonus));
+  const coins = Math.round((firstTime ? level.coins : Math.round(level.coins / 4)) * (1 + bonus) * balance().coins);
   const baseline = { ...p.baseline };
   if (level.type === 'trial' && record != null) baseline[level.exercises[0]] = Math.max(3, record);
   // Лёгкая победа: форма выросла, враги в этом упражнении становятся крепче.

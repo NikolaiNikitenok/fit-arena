@@ -10,6 +10,7 @@ import { Stars } from './Stars';
 import { NPCS } from './npcs';
 import { dailyTask } from './daily';
 import { startCloud, usePro } from '../cloud';
+import { loadBalance } from '../balanceClient';
 import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
 import { MONTHS, recapMonths } from './recap';
@@ -143,6 +144,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   // Прогресс с сервера: на новом телефоне герой подтягивается сам.
   useEffect(() => {
     void startCloud((p) => setProgress(p));
+    void loadBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Набор «Новичок» оплачен (здесь или на другом устройстве), а в прогрессе его ещё нет: кладём вещи.
