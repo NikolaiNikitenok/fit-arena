@@ -917,6 +917,23 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
   reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
 }
 
+/**
+ * Загрузить картинку в Telegram и вернуть её file_id: тихо отправляем фото в личку с ботом (или первому
+ * админу, если игрок не писал боту) и сразу удаляем сообщение — file_id остаётся рабочим.
+ */
+async function shareFileId(tgId: number, img: Buffer | null): Promise<string | null> {
+  if (!BOT_TOKEN || !img) return null;
+  for (const chat of [tgId, ...admins.ids().map(Number)].filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 2)) {
+    const r = await botUploadFiles(BOT_TOKEN, 'sendPhoto', { chat_id: chat, disable_notification: true }, [{ field: 'photo', name: 'share.jpg', type: 'image/jpeg', data: img }]).catch(() => null);
+    const sent = r?.ok ? (r.result as { message_id: number; photo?: { file_id: string }[] }) : null;
+    const id = sent?.photo?.at(-1)?.file_id;
+    if (!sent || !id) continue;
+    void botApi(BOT_TOKEN)('deleteMessage', { chat_id: chat, message_id: sent.message_id }, 15_000).catch(() => null);
+    return id;
+  }
+  return null;
+}
+
 /** Итоги месяца: POST /api/recap ({ month }) — место среди игроков и города; POST /api/story-image ({ image }) — картинка для сторис. */
 async function onRecapApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
@@ -941,11 +958,15 @@ async function onRecapApi(path: string, req: IncomingMessage, res: ServerRespons
     const l = langOf(who.id);
     const caption = typeof body!.text === 'string' ? body!.text.slice(0, 900) : '';
     const play = `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?startapp=src-share`;
+    // Telegram не всегда может сам скачать картинку с нашего сайта (сообщение повисает с «!»):
+    // загружаем её боту сами и шлём уже по file_id.
+    const fileId = await shareFileId(Number(tgId), stories.get(r.id, now));
+    const media = fileId ? { photo_file_id: fileId } : { photo_url: photo, thumbnail_url: photo };
     const res = await botApi(BOT_TOKEN)(
       'savePreparedInlineMessage',
       {
         user_id: Number(tgId),
-        result: { type: 'photo', id: r.id.slice(0, 64), photo_url: photo, thumbnail_url: photo, caption, reply_markup: { inline_keyboard: [[{ text: tl(l, 'Играть'), url: play }]] } },
+        result: { type: 'photo', id: r.id.slice(0, 64), ...media, caption, reply_markup: { inline_keyboard: [[{ text: tl(l, 'Играть'), url: play }]] } },
         allow_user_chats: true,
         allow_group_chats: true,
         allow_channel_chats: true,
