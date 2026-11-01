@@ -1,6 +1,7 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
-import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
+import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress, saveProgress } from './game/progress';
+import { rememberUnlocks } from './game/unlocks';
 import { guestId, setMaxBot, tg } from './telegram';
 import { reportError } from './telemetry';
 import { getLang, t, tErr } from './i18n';
@@ -104,7 +105,7 @@ export interface StarterOffer {
   price: number;
   bought: boolean;
 }
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
+type CloudState = { inClan?: boolean; remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -184,9 +185,13 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       account?: string;
       linkable?: boolean;
       maxBot?: string | null;
+      // Ступени разделов: играл до них (всё открыто), был в дуэлях, состоит в клане.
+      veteran?: boolean;
+      duels?: boolean;
+      clan?: boolean;
     };
     setMaxBot(r.maxBot);
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
+    cloud = { inClan: !!r.clan, remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();
@@ -208,12 +213,23 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       pending ??= { ...local, savedAt: local.savedAt || Date.now() };
       push();
     }
+    // Сервер знает игрока по прежней версии, дуэлям или клану: эти разделы не закрываем (src/game/unlocks.ts).
+    const cur = loadProgress();
+    const opened = r.veteran && cur.gates !== 'all' ? { ...cur, gates: 'all' as const } : rememberUnlocks(cur, [...(r.duels ? ['duel' as const] : []), ...(r.clan ? ['clan' as const] : [])]);
+    if (opened !== cur) onRemote(saveProgress(opened));
   } catch {
     // Сервер недоступен: играем на копии в телефоне, отправим в следующий раз.
   }
 }
 
 export const cloudState = () => cloud;
+
+/** Состоит ли игрок в клане (по ответу сервера): «Тренировка дня» зовёт в рейд. */
+export function useInClan(): boolean {
+  const [v, setV] = useState(() => !!cloud?.inClan);
+  useEffect(() => onCloud((c) => setV(!!c.inClan)), []);
+  return v;
+}
 
 /** Есть ли Pro Pass: до ответа сервера — нет. */
 export function usePro(): boolean {

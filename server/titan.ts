@@ -146,7 +146,7 @@ export class TitanBoard {
         const from = w.start - 14 * DAY;
         const dates = Array.from({ length: 14 }, (_, i) => new Date(from + i * DAY + 3 * 3_600_000).toISOString().slice(0, 10));
         let active = 0;
-        for (const s of this.d.saves()) if (titanReps(s.progress?.days, dates) > 0) active++;
+        for (const s of this.d.saves()) if (titanReps(cameraDays(s.progress), dates) > 0) active++;
         hp = active * TITAN_HP_PER_PLAYER;
       }
       r = this.records[w.key] = { hp: niceHp(Math.max(TITAN_MIN_HP, hp)) };

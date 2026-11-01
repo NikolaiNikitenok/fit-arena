@@ -105,6 +105,8 @@ export interface Progress {
   // Разделы, открытые ссылкой (клан, дуэль, друг), и объявления Грома об открытых разделах (src/game/unlocks.ts).
   unlocked?: string[];
   unlockSeen?: string[];
+  // Ступени разделов: 'steps' — открываются по уровням карты, 'all' — открыто всё (играл до ступеней).
+  gates?: 'all' | 'steps';
   // Повторы, посчитанные самим игроком без камеры, по дням: в топ городов и войны кланов они не идут.
   manual?: Record<string, number>;
 }
@@ -178,6 +180,8 @@ export function loadProgress(): Progress {
     p.weapon ??= 'sword';
     // Сохранения до планки: её база — средняя.
     p.baseline = { ...DEFAULT_BASELINE, ...p.baseline };
+    // Первый запуск версии со ступенями: у кого уже есть герой — открыто всё, у новичка — по уровням.
+    p.gates ??= hasHero(p) || p.onboarded ? 'all' : 'steps';
     return p;
   } catch {
     return fresh();
@@ -347,7 +351,9 @@ export const spendMight = (p: Progress): Progress => (p.might ? save({ ...p, mig
 export const XP_PER_LEVEL_WON = 20;
 
 export function heroXp(p: Progress): number {
-  const reps = Object.values(p.days).reduce((s, n) => s + n, 0);
+  // Повторы «считаю сам» (без камеры) опыта не дают: уровень героя виден другим и подбирает соперников.
+  const manual = Object.values(p.manual ?? {}).reduce((s, n) => s + n, 0);
+  const reps = Math.max(0, Object.values(p.days).reduce((s, n) => s + n, 0) - manual);
   return reps + Object.keys(p.stars).length * XP_PER_LEVEL_WON + (p.programs?.xp ?? 0);
 }
 
@@ -433,7 +439,7 @@ export const addPotions = addPotion;
  * Подход сделан: повторы в серию, опыт, пропуск, задание дня и журнал. Планка приходит секундами:
  * в журнал, рекорд и задание дня — секунды, в опыт и общий счёт повторов — по две секунды за повтор.
  */
-export function recordActivity(p: Progress, exercise: Exercise | null, amount: number, now: number): Progress {
+export function recordActivity(p: Progress, exercise: Exercise | null, amount: number, now: number, opts: { manual?: boolean } = {}): Progress {
   if (amount <= 0) return p;
   const reps = amount;
   const total = repsEquivalent(exercise, amount);
@@ -453,6 +459,8 @@ export function recordActivity(p: Progress, exercise: Exercise | null, amount: n
     if (reps > (p.best[exercise]?.reps ?? 0)) next.best = { ...p.best, [exercise]: { reps, date } };
   }
   // Каждый повтор заряжает подземелье «три в ряд» и ускоряет исследование в лаборатории.
+  // Повторы без камеры — нет: заряд ведёт к добыче деревни, а деревня — к набегам с кубками.
+  if (opts.manual) return save(feedPet(next, total, now));
   return save(boostLab(addCharge(feedPet(next, total, now), total), total));
 }
 
@@ -556,7 +564,7 @@ export function spendSwaps(p: Progress, levelId: number, count: number, now: num
 
 /** Начать игру заново: прогресс, предметы и монеты стираются. */
 export function resetProgress(): Progress {
-  return save({ ...fresh(), resetAt: Date.now() });
+  return save({ ...fresh(), gates: 'steps', resetAt: Date.now() });
 }
 
 /** Награда за рейд клана: монеты, зелья и, для лучших или при победе, сундук рейда со снаряжением. */
@@ -647,4 +655,5 @@ export function claimAchievement(p: Progress, id: string, coins: number): Progre
 
 export const setTitle = (p: Progress, id: string | undefined): Progress => save({ ...p, title: id });
 export const setAura = (p: Progress, id: string | undefined): Progress => save({ ...p, aura: id });
-export const finishOnboarding = (p: Progress): Progress => save({ ...p, onboarded: true });
+// Знакомство пройдено новичком: разделы открываются по уровням (отметку ставим, если её ещё нет).
+export const finishOnboarding = (p: Progress): Progress => save({ ...p, onboarded: true, gates: p.gates ?? (hasHero(p) ? 'all' : 'steps') });

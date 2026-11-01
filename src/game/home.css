@@ -180,3 +180,4 @@
 .unlock-list { display: flex; flex-direction: column; gap: 8px; width: 100%; margin: 4px 0; }
 .unlock-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, .06); text-align: left; }
 .unlock-item span { font-size: 13px; opacity: .8; }
+.unlock-next { font-size: 13px; color: #ffd27a; }

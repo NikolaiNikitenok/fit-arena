@@ -30,8 +30,11 @@ export const GATES_SINCE = '2026-11-01';
 /** Сколько уровней карты пройдено. */
 export const clearedLevels = (p: Pick<Progress, 'stars'>): number => Object.values(p.stars ?? {}).filter((n) => n > 0).length;
 
-/** Играл до ступеней: открыто всё и без объявлений. */
-export function isVeteran(p: Pick<Progress, 'days'>): boolean {
+/** Играл до ступеней: открыто всё и без объявлений. Отметку ставит loadProgress (герой уже был) или сервер
+ *  (копия прежней версии); копия без отметки с героем — тоже от прежней версии. */
+export function isVeteran(p: Pick<Progress, 'days' | 'gates' | 'stars' | 'onboarded'>): boolean {
+  if (p.gates === 'all') return true;
+  if (p.gates === undefined && (p.onboarded || Object.keys(p.stars ?? {}).length > 0 || Object.keys(p.days ?? {}).length > 0)) return true;
   return Object.keys(p.days ?? {}).some((d) => d < GATES_SINCE);
 }
 
@@ -64,6 +67,21 @@ export function isUnlocked(p: Progress, f: Feature, extra: readonly Feature[] = 
 export function levelsToUnlock(p: Progress, f: Feature, extra: readonly Feature[] = []): number {
   return isUnlocked(p, f, extra) ? 0 : UNLOCK_AT[f] - clearedLevels(p);
 }
+
+/** Ближайший закрытый раздел: его кнопка видна с замком, остальные закрытые спрятаны. */
+export function nextLocked(p: Progress, extra: readonly Feature[] = []): Feature | null {
+  const locked = FEATURES.filter((f) => !isUnlocked(p, f, extra));
+  if (!locked.length) return null;
+  const at = Math.min(...locked.map((f) => UNLOCK_AT[f]));
+  // На одной ступени несколько разделов: показываем главный из них.
+  return MAIN_ORDER.find((f) => locked.includes(f) && UNLOCK_AT[f] === at) ?? null;
+}
+
+/** Главный раздел ступени — по нему кнопка «Посмотреть» в объявлении Грома и замок на главной. */
+export const MAIN_ORDER: Feature[] = ['clan', 'dungeon', 'village', 'duel', 'daily', 'programs', 'pass', 'events', 'shop', 'gym', 'collections', 'city'];
+
+/** Главный из объявленных разделов. */
+export const mainOf = (fs: readonly Feature[]): Feature => MAIN_ORDER.find((f) => fs.includes(f)) ?? fs[0];
 
 /** Разделы, открытые уровнями карты, о которых Гром ещё не объявил. Ветеранам объявлять нечего. */
 export function freshUnlocks(p: Progress): Feature[] {

@@ -8,6 +8,7 @@ describe('«Тренировка дня»', () => {
   it('день программы важнее всего', () => expect(pickToday({ ...base, programReady: true })).toBe('program'));
   it('потом задание дня', () => expect(pickToday(base)).toBe('daily'));
   it('задание сделано — босс события', () => expect(pickToday({ ...base, dailyDone: 30, eventLive: true })).toBe('event'));
+  it('рейд клана по выходным, пока есть атаки', () => expect(pickToday({ ...base, dailyClaimed: true, raidReady: true, eventLive: true })).toBe('raid'));
   it('иначе следующий уровень', () => expect(pickToday({ ...base, dailyClaimed: true })).toBe('level'));
   it('без жизней — подземелье или программы', () => {
     expect(pickToday({ ...base, dailyClaimed: true, lives: 0, dungeonFloors: 2 })).toBe('dungeon');

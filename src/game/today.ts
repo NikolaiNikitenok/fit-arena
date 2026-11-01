@@ -3,12 +3,12 @@
 //   1. первые испытания силы — всегда следующий уровень карты;
 //   2. день программы Грома, если программа идёт и день сегодня тренировочный;
 //   3. задание дня от жителя, пока оно не сделано;
-//   4. босс события выходных, пока он жив и есть попытки;
+//   4. рейд клана по выходным, пока остались атаки; потом босс события, пока он жив и есть попытки;
 //   5. следующий уровень карты, если есть жизни;
 //   6. жизней нет: подземелье, если есть заряд, иначе программы (там жизни не нужны).
 import type { Feature } from './unlocks';
 
-export type TodayKind = 'level' | 'program' | 'daily' | 'event' | 'dungeon' | 'programs';
+export type TodayKind = 'level' | 'program' | 'daily' | 'raid' | 'event' | 'dungeon' | 'programs';
 
 export interface TodayInput {
   cleared: number;
@@ -26,12 +26,15 @@ export interface TodayInput {
   eventTries: number;
   // Сколько этажей подземелья можно сыграть на заряд (или недоигранный этаж).
   dungeonFloors: number;
+  // Идёт рейд клана, игрок в клане и атаки на сегодня остались.
+  raidReady?: boolean;
 }
 
 export function pickToday(x: TodayInput): TodayKind {
   if (x.cleared < 3) return 'level';
   if (x.programReady && x.unlocked('programs')) return 'program';
   if (x.unlocked('daily') && !x.dailyClaimed && x.dailyDone < x.dailyTarget) return 'daily';
+  if (x.unlocked('clan') && x.raidReady) return 'raid';
   if (x.unlocked('events') && x.eventLive && !x.eventWon && x.eventTries > 0) return 'event';
   if (x.lives > 0) return 'level';
   if (x.unlocked('dungeon') && x.dungeonFloors > 0) return 'dungeon';

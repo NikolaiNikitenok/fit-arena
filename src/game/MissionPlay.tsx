@@ -93,6 +93,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [manual, setManual] = useState(false);
   const manualRef = useRef(false);
   const manualTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Камера грузится дольше 8 секунд (слабый телефон, медленная сеть): предлагаем считать самому.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (status !== 'loading') return setSlow(false);
+    const tm = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(tm);
+  }, [status]);
   const lastTap = useRef(0);
   const stopManual = () => {
     if (manualTimer.current) clearInterval(manualTimer.current);
@@ -146,7 +153,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     onActivity(level.exercises.length === 1 ? level.exercises[0] : null, v.reps, manualRef.current);
     if (v.outcome === 'won') {
       const stars = m.stars(now);
-      setResult({ stars, reward: onWin(stars, v.record) });
+      // Без камеры рекорд испытания не меняет силу врагов: самоотчёт может быть любым.
+      setResult({ stars, reward: onWin(stars, manualRef.current ? undefined : v.record) });
       setEpilogue(level.type === 'boss');
       setStatus('won');
     } else {
@@ -166,7 +174,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
 
   /** Общее начало попытки (с камерой и без): жизнь, замены, сброс сцены. null — начать нельзя. */
   const begin = (): Mission | null => {
-    if (lives.lives <= 0 && !level.daily) return null;
+    // Задание дня и испытания силы жизней не требуют: новичок не должен упереться в «жди 20 минут».
+    if (lives.lives <= 0 && !level.daily && level.type !== 'trial') return null;
     if (swapCount > 0 && !onSwap(swapCount)) return null;
     // Прямо из нажатия: иначе iOS в Telegram не даст Грому говорить.
     unlockVoice();
@@ -232,7 +241,10 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
 
   /** Без камеры: игрок жмёт кнопку после каждого повтора. */
   const startManual = () => {
-    const m = begin();
+    // Камера ещё грузится: эту попытку отменяем, жизнь за неё уже списана при старте — новую не берём.
+    const loading = status === 'loading';
+    if (loading) camera.stop();
+    const m = loading ? mission.current : begin();
     if (!m) return;
     camera.stop();
     track('manual_start', level.id);
@@ -270,10 +282,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       await camera.start(
         level.exercises[0],
         () => {
+          if (manualRef.current) return;
           countRep(m, performance.now());
           paint.last = 0;
         },
         () => {
+          // Пока камера грузилась, игрок перешёл на «считаю сам»: камера больше не нужна.
+          if (manualRef.current) return false;
           const now = performance.now();
           // Несколько секунд на то, чтобы встать в позицию: время и повторы ещё не идут.
           firstFrame ||= now;
@@ -283,17 +298,23 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         // С первого экрана — без калибровки: первый повтор должен засчитаться как можно скорее.
         { calibrate: needsCalibration(level.exercises[0]) && !autoStart },
       );
+      if (manualRef.current) return camera.stop();
       setStatus('running');
     } catch (e) {
       camera.stop();
+      if (manualRef.current) return;
       setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
       setStatus('error');
     }
   };
 
   // С первого экрана камера включается сама: игрок уже видел, как поставить телефон.
+  // Один раз: в режиме разработки React вызывает эффект дважды, и второй запуск камеры обрывал первый.
+  const autoStarted = useRef(false);
   useEffect(() => {
-    if (autoStart) void start();
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,7 +330,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     setStatus('lost');
   };
   // Задание дня жизнь не тратит и доступно всегда.
-  const noLives = lives.lives <= 0 && !original.daily;
+  const noLives = lives.lives <= 0 && !original.daily && original.type !== 'trial';
   const waitMin = Math.max(1, Math.ceil(lives.nextMs / 60000));
 
   const busy = status === 'loading' || status === 'running';
@@ -447,7 +468,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           <div className="result">
             <div className="result-title">{t('Не вышло')}</div>
             <div className="muted light">{level.type === 'chase' ? t('Чудище догнало. Держи темп ровнее!') : t('Не хватило совсем чуть-чуть.')}</div>
-            {!level.daily && (
+            {!level.daily && level.type !== 'trial' && (
               <div className="life-lost">
                 {t('−1 ♥ · осталось {0} из {1}', { 0: lives.lives, 1: lives.max })}
               </div>
@@ -500,7 +521,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         ) : (
           <button className="primary" onClick={manual && status === 'lost' ? startManual : start}>
             {status === 'ready' ? t('Начать') : t('Ещё раз')}
-            {!level.daily && (
+            {!level.daily && level.type !== 'trial' && (
               <span className="btn-cost">
                 <Heart size={14} /> {lives.lives}
               </span>
@@ -510,6 +531,16 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       {status === 'error' && !noLives && (
         <button className="secondary" onClick={startManual}>
           {t('Считать самому')}
+        </button>
+      )}
+      {status === 'loading' && slow && (
+        <button className="secondary" onClick={startManual}>
+          {t('Долго грузится? Считать самому')}
+        </button>
+      )}
+      {status === 'lost' && !manual && !noLives && (
+        <button className="link" onClick={startManual}>
+          {t('Камера сбивается? Считать самому')}
         </button>
       )}
       {status === 'ready' && !noLives && (

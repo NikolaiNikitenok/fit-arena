@@ -383,6 +383,14 @@ const botReady = (id: string) => {
   return !!BOT_TOKEN && botStatus.lastOkAt != null;
 };
 
+/** Ступени разделов (src/game/unlocks.ts): кто играл до них — всё открыто; дуэли и клан — открыты тем, кто в них уже был. */
+function gateFlags(id: string, progress: unknown): { veteran: boolean; duels: boolean; clan: boolean } {
+  const p = (progress ?? null) as { gates?: string; stars?: object; days?: object; onboarded?: boolean } | null;
+  // Копия без отметки ступеней сохранена прежней версией игры: это игрок «до ступеней».
+  const old = !!p && !p.gates && (Object.keys(p.stars ?? {}).length > 0 || Object.keys(p.days ?? {}).length > 0 || !!p.onboarded);
+  return { veteran: old, duels: store.played(id), clan: !!clans.clanOf(id) };
+}
+
 /** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind, /api/raid-notify. */
 async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => {
@@ -401,7 +409,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, ...gateFlags(who.id, s?.progress), emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.

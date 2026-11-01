@@ -57,9 +57,9 @@ const FIRST_OPEN_KEY = 'fit-arena-first-open';
 const FIRST_REP_KEY = 'fit-arena-first-rep';
 
 /** Знакомство открыто впервые: запоминаем время (только у новичков — у старых игроков отсчёта нет). */
-export function markFirstOpen(): void {
+export function markFirstOpen(at = Date.now()): void {
   try {
-    if (!localStorage.getItem(FIRST_OPEN_KEY)) localStorage.setItem(FIRST_OPEN_KEY, String(Date.now()));
+    if (!localStorage.getItem(FIRST_OPEN_KEY)) localStorage.setItem(FIRST_OPEN_KEY, String(at));
   } catch {
     // Без хранилища времени не узнаем.
   }

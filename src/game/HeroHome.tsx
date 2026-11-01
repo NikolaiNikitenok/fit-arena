@@ -33,6 +33,9 @@ import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
 import { daysUntil, eventBoss, eventBossSay, eventOf, eventWindow, fmtDays, fmtLeft, triesLeft } from './event';
 import { clearedLevels } from './unlocks';
+import { useInClan } from '../cloud';
+import { raidWindow } from '../../shared/raid';
+import { raidAttacksLeft } from '../clan/raidHits';
 import './home.css';
 import { Sheet } from '../Sheet';
 import { t, locale } from '../i18n';
@@ -93,6 +96,10 @@ interface Props {
   // Сколько уровней карты осталось до раздела (0 — открыт) и что сказать, если нажали закрытый.
   lockLeft: (f: Feature) => number;
   onLocked: (f: Feature) => void;
+  // Ближайший закрытый раздел: только его кнопка видна с замком.
+  nextLock: Feature | null;
+  // Вкладка клана: «Тренировка дня» зовёт в рейд.
+  onClan: () => void;
 }
 
 export type ShopTab = 'weapon' | 'offhand' | 'outfit' | 'potion';
@@ -121,7 +128,8 @@ const LockMark = () => (
 const lockSub = (n: number) => t('откроется через {0} ур.', { 0: n });
 
 /** Большая карточка раздела под героем: значок, название, состояние и полоска прогресса в цвете раздела. */
-function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', lock = 0, onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; lock?: number; onClick: () => void }) {
+function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', lock = 0, hidden, onClick }: { title: string; sub: string; icon: ReactNode; color: string; bar?: number; dot?: number | boolean; cls?: string; iconCls?: string; lock?: number; hidden?: boolean; onClick: () => void }) {
+  if (hidden) return null;
   return (
     <button className={`hb-feat ${cls} ${lock ? 'locked' : ''}`} style={{ ['--fc' as string]: color }} onClick={onClick}>
       <span className={`hb-feat-icon ${iconCls}`}>
@@ -143,7 +151,8 @@ function Feat({ title, sub, icon, color, bar, dot, cls = '', iconCls = '', lock 
 }
 
 /** Кнопка боковой колонки главной «во весь экран»: значок-плитка, подпись и точка. */
-function Side({ title, sub, icon, color, dot, lock = 0, onClick }: { title: string; sub?: string; icon: ReactNode; color: string; dot?: number | boolean; lock?: number; onClick: () => void }) {
+function Side({ title, sub, icon, color, dot, lock = 0, hidden, onClick }: { title: string; sub?: string; icon: ReactNode; color: string; dot?: number | boolean; lock?: number; hidden?: boolean; onClick: () => void }) {
+  if (hidden) return null;
   return (
     <button className={`hv-btn ${lock ? 'locked' : ''}`} style={{ ['--c' as string]: color }} onClick={onClick}>
       <span className="hv-ico">
@@ -158,7 +167,8 @@ function Side({ title, sub, icon, color, dot, lock = 0, onClick }: { title: stri
 
 type Tone = 'accent' | 'gold' | 'mint' | 'teal' | 'blue' | 'violet' | 'rose' | 'pet';
 /** Плитка сетки «Ещё»: яркий значок-«иконка приложения» и подпись. */
-function More({ title, sub, icon, tone, dot, cls = '', style, lock = 0, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; lock?: number; onClick: () => void }) {
+function More({ title, sub, icon, tone, dot, cls = '', style, lock = 0, hidden, onClick }: { title: string; sub: string; icon: ReactNode; tone: Tone; dot?: number | boolean; cls?: string; style?: CSSProperties; lock?: number; hidden?: boolean; onClick: () => void }) {
+  if (hidden) return null;
   return (
     <button className={`hb-more-item ${cls} ${lock ? 'locked' : ''}`} style={style} onClick={onClick}>
       <span className={`hb-more-icon ${tone}`}>
@@ -192,9 +202,11 @@ function useNow(ms = 30000) {
 }
 
 export function HeroHome(props: Props) {
-  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft } = props;
+  const { progress, lives, current, onTrain, onShop, onStrength, onSettings, daily, dailyDone, onDaily, onClaimDaily, onAchievements, pro, onPass, onEvent, onPets, onPrograms, onGym, onDungeon, onFriends, onHoliday, onCollections, onCity, onRecap, onTitan, lockLeft, onLocked, livesLeft, nextLock, onClan } = props;
   // Закрытый раздел: вместо перехода — подсказка, когда он откроется.
-  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), onClick: lockLeft(f) ? () => onLocked(f) : fn });
+  // Из закрытых разделов на главной виден только ближайший — как обещание; остальные не мешают новичку.
+  const g = (f: Feature, fn: () => void) => ({ lock: lockLeft(f), hidden: lockLeft(f) > 0 && f !== nextLock, onClick: lockLeft(f) ? () => onLocked(f) : fn });
+  const inClan = useInClan();
   const gym = gymOf(progress);
   const now = useNow();
   const gymToday = todayTemplate(gym, now);
@@ -266,6 +278,7 @@ export function HeroHome(props: Props) {
   ].filter((x): x is 'titan' | 'holiday' | 'recap' => !!x);
   // «Тренировка дня»: одна кнопка выбирает лучшее дело на сегодня (src/game/today.ts).
   const dailyClaimed = progress.dailyDone === daily.date;
+  const raidReady = raidWindow(now).active && inClan && raidAttacksLeft(now) > 0;
   const today: TodayKind = pickToday({
     cleared: clearedLevels(progress),
     lives: livesLeft,
@@ -278,12 +291,14 @@ export function HeroHome(props: Props) {
     eventWon: !!ev.won,
     eventTries: triesLeft(progress, now),
     dungeonFloors: unfinished ? 1 : floors,
+    raidReady,
   });
-  const todayGo: Record<TodayKind, () => void> = { level: onTrain, program: onPrograms, daily: onDaily, event: onEvent, dungeon: onDungeon, programs: onPrograms };
+  const todayGo: Record<TodayKind, () => void> = { level: onTrain, program: onPrograms, daily: onDaily, raid: onClan, event: onEvent, dungeon: onDungeon, programs: onPrograms };
   const todaySub: Record<TodayKind, string> = {
     level: t('Уровень карты {0} · {1}', { 0: current.num, 1: current.title }),
     program: prog && run ? t('{0} · день {1}', { 0: prog.title, 1: run.day }) : t('Программа Грома'),
     daily: t('{0}: {1} — просьба жителя', { 0: EXERCISE_LABELS[daily.exercise], 1: amountText(daily.exercise, Math.max(0, daily.target - dailyDone)) }),
+    raid: t('Рейд клана: атак сегодня {0}', { 0: raidAttacksLeft(now) }),
     event: t('{0}: попыток сегодня {1}', { 0: boss.name, 1: triesLeft(progress, now) }),
     dungeon: t('Жизни копятся — потрать заряд в подземелье'),
     programs: t('Жизни копятся — тренировка по программе'),

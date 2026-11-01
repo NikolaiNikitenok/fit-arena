@@ -3554,4 +3554,9 @@ export const EN: Record<string, string> = {
   "Кнопка «Тренировка дня» на главной сама выбирает лучшее дело на сегодня: уровень, задание жителя, день программы или босса.": "The «Today's workout» button on the home screen picks the best thing for today: a level, a villager's task, a program day or a boss.",
   "Нет камеры или неудобно её ставить? Повторы можно считать самому кнопкой.": "No camera or no good spot for it? You can count reps yourself with a button.",
   "У новых игроков разделы открываются по ходу карты, и Мастер Гром рассказывает о каждом. У тех, кто уже играет, всё остаётся открытым.": "For new players, sections unlock as they progress on the map, and Master Grom introduces each one. Existing players keep everything open.",
+  "Дальше — {0}: ещё {1} ур. карты. Загляни завтра, я буду ждать.": "Next up — {0}: {1} more map levels. Come back tomorrow, I'll be waiting.",
+  "Рейд клана: атак сегодня {0}": "Clan raid: {0} attacks left today",
+  "Долго грузится? Считать самому": "Taking too long? Count myself",
+  "Камера сбивается? Считать самому": "Camera miscounting? Count myself",
+  "Испытания силы больше не тратят жизни.": "Strength trials no longer cost lives.",
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fresh } from './progress';
 import { clearedLevels, freshUnlocks, isUnlocked, levelsToUnlock, markUnlockSeen, rememberUnlocks } from './unlocks';
 
-const withLevels = (n: number, days: Record<string, number> = { '2026-11-05': 10 }) => ({ ...fresh(), days, stars: Object.fromEntries(Array.from({ length: n }, (_, i) => [i + 1, 1])) });
+const withLevels = (n: number, days: Record<string, number> = { '2026-11-05': 10 }) => ({ ...fresh(), gates: 'steps' as const, days, stars: Object.fromEntries(Array.from({ length: n }, (_, i) => [i + 1, 1])) });
 
 describe('ступени разделов', () => {
   it('новичок видит только приключение', () => {
@@ -22,6 +22,12 @@ describe('ступени разделов', () => {
     const p = withLevels(1, { '2026-10-20': 50 });
     expect(isUnlocked(p, 'clan')).toBe(true);
     expect(freshUnlocks(p)).toEqual([]);
+    // Копия прежней версии без отметки, но с героем — тоже «до ступеней».
+    expect(isUnlocked({ ...withLevels(1), gates: undefined }, 'clan')).toBe(true);
+    expect(isUnlocked({ ...withLevels(0, {}), onboarded: true, gates: undefined }, 'duel')).toBe(true);
+    expect(isUnlocked({ ...withLevels(1), gates: 'all' }, 'village')).toBe(true);
+    // Совсем новый игрок без отметки — по ступеням.
+    expect(isUnlocked({ ...withLevels(0, {}), gates: undefined }, 'duel')).toBe(false);
   });
   it('ссылка открывает раздел сразу и запоминается', () => {
     const p = withLevels(0, {});

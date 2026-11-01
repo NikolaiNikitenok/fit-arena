@@ -3,7 +3,7 @@ import { Sheet } from '../Sheet';
 import { track } from '../telemetry';
 import { Portrait } from './Dialog';
 import { NPCS } from './npcs';
-import { type Feature, UNLOCK_AT } from './unlocks';
+import { type Feature, mainOf, UNLOCK_AT } from './unlocks';
 import { t } from '../i18n';
 
 const GROM = { face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name };
@@ -28,9 +28,9 @@ export const FEATURE_INFO: Record<Feature, { title: string; text: string }> = {
 export const lockedText = (f: Feature, left: number) => t('{0} откроется после уровня карты {1}: осталось {2} ур.', { 0: FEATURE_INFO[f].title, 1: UNLOCK_AT[f], 2: left });
 
 /** Объявление Мастера Грома: открылись новые разделы. */
-export function UnlockSheet({ features, onOpen, onClose }: { features: Feature[]; onOpen: (f: Feature) => void; onClose: () => void }) {
-  // Ведём в самый «крупный» из открытых разделов: он последний в списке ступеней.
-  const main = features[features.length - 1];
+export function UnlockSheet({ features, next, onOpen, onClose }: { features: Feature[]; next: { f: Feature; left: number } | null; onOpen: (f: Feature) => void; onClose: () => void }) {
+  // Ведём в главный из открытых разделов: дуэли, подземелье, клан — а не в дневник зала.
+  const main = mainOf(features);
   // Статистика: сколько игроков доходят до каждого раздела.
   useEffect(() => {
     for (const f of features) track('unlock', f);
@@ -50,6 +50,7 @@ export function UnlockSheet({ features, onOpen, onClose }: { features: Feature[]
             </div>
           ))}
         </div>
+        {next && <div className="unlock-next">{t('Дальше — {0}: ещё {1} ур. карты. Загляни завтра, я буду ждать.', { 0: FEATURE_INFO[next.f].title, 1: next.left })}</div>}
         <button className="primary" onClick={() => onOpen(main)}>
           {t('Посмотреть: {0}', { 0: FEATURE_INFO[main].title })}
         </button>

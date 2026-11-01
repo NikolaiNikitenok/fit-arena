@@ -1,6 +1,6 @@
 import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { track } from '../telemetry';
-import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
+import { amountText, EXERCISE_LABELS, Exercise, repsEquivalent } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
@@ -65,7 +65,7 @@ import { useStarter } from '../cloud';
 import { payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
 import { pl, t } from '../i18n';
-import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, rememberUnlocks } from './unlocks';
+import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, nextLocked, rememberUnlocks } from './unlocks';
 import { linkUnlocks } from './unlockLinks';
 import { lockedText, UnlockSheet } from './UnlockSheet';
 
@@ -304,13 +304,14 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           }}
           onLose={() => {
             track('mission_lose', playing.daily ? 'daily' : playing.id);
-            if (!playing.daily) update((p) => recordLoss(spendLife(p, Date.now()), playing));
+            // Испытания силы жизни не стоят: это замер, а не бой.
+            if (!playing.daily && playing.type !== 'trial') update((p) => recordLoss(spendLife(p, Date.now()), playing));
           }}
           onStart={() => {
             track('mission_start', playing.daily ? 'daily' : playing.id);
             update(spendMight);
           }}
-          onActivity={(ex, reps, manual) => update((p) => (manual ? recordManual(recordActivity(p, ex, reps, Date.now()), reps, Date.now()) : addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now())))}
+          onActivity={(ex, reps, manual) => update((p) => (manual ? recordManual(recordActivity(p, ex, reps, Date.now(), { manual: true }), repsEquivalent(ex, reps), Date.now()) : addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now())))}
           autoStart={autoStart.current}
           lives={lives}
           swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
@@ -429,6 +430,10 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
       {tab === 'hero' && !newcomer && fresh.length > 0 && !(!eggLater && canHatch(progress)) && (
         <UnlockSheet
           features={fresh}
+          next={(() => {
+            const f = nextLocked(progress, linkUnlocks());
+            return f ? { f, left: lockLeft(f) } : null;
+          })()}
           onClose={() => setProgress(saveProgress(markUnlockSeen(latest.current, fresh)))}
           onOpen={(f) => {
             setProgress(saveProgress(markUnlockSeen(latest.current, fresh)));
@@ -561,6 +566,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onTitan={() => setTitanOpen(true)}
           livesLeft={lives.lives}
           lockLeft={lockLeft}
+          nextLock={nextLocked(progress, linkUnlocks())}
+          onClan={() => onTab('clan')}
           onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />
         {sheets}
@@ -608,7 +615,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
               focusLand={focusLand}
               openedChests={progress.chests}
               onSelect={(l) => tap(() => setSelected(l))()}
-              onMerchant={tap(() => setShop('weapon'))}
+              onMerchant={tap(() => (lockLeft('shop') ? showToast(lockedText('shop', lockLeft('shop')), 3500) : setShop('weapon')))}
               onChest={(land) =>
                 tap(() => {
                   const r = claimChest(progress, land);

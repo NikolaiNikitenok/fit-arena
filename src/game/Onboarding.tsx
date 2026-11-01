@@ -5,6 +5,7 @@ import { NPCS } from './npcs';
 import { markFirstOpen, track } from '../telemetry';
 import { preloadPose } from '../useRepCamera';
 import { unlockVoice } from '../voice';
+import { enableOrientation } from '../orientation';
 import { openPrivacy } from '../privacy';
 import { HaveHeroButton } from '../account/Account';
 import { WebLoginButtons } from '../account/WebLogin';
@@ -73,7 +74,11 @@ export function Onboarding({ onDone, replay }: { onDone: (start: boolean) => voi
           onClick={() => {
             if (!last) return setStep(step + 1);
             // Прямо из нажатия: иначе iOS в Telegram не даст Грому говорить на испытании.
-            if (!replay) unlockVoice();
+            if (!replay) {
+              unlockVoice();
+              // Датчик наклона на iPhone тоже разрешается только из нажатия, а испытание стартует само.
+              enableOrientation();
+            }
             done(true);
           }}
         >

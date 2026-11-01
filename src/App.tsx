@@ -6,6 +6,10 @@ import { FriendInbox } from './friends/FriendInbox';
 import { EXERCISE_LABELS, isRepExercise, REP_EXERCISES, RepExercise } from './repCounter';
 import { Banner, Lock, MapIcon, Shield, Swords } from './icons';
 import { lockedText } from './game/UnlockSheet';
+import { hasHero, loadProgress, saveProgress } from './game/progress';
+import { rememberUnlocks } from './game/unlocks';
+import { linkUnlocks } from './game/unlockLinks';
+import { markFirstOpen } from './telemetry';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
 import { useBusy } from './updates/busy';
@@ -25,7 +29,18 @@ const NAV: { tab: Tab; Icon: typeof Shield; label: string }[] = [
   { tab: 'duel', Icon: Swords, label: t('Дуэль') },
 ];
 
+// До первого кадра: разделы, открытые ссылкой (клан, дуэль, друг), запоминаем в прогрессе —
+// даже если игрок не заглянет на главную (пришёл по ссылке дуэли и сразу ушёл).
+function rememberLinks() {
+  const p = loadProgress();
+  // Новичок: отсчёт «до первого повтора» — с момента, когда страница начала грузиться.
+  if (!hasHero(p) && !p.onboarded) markFirstOpen(Math.round(performance.timeOrigin));
+  const next = rememberUnlocks(p, linkUnlocks());
+  if (next !== p) saveProgress(next);
+}
+
 export function App() {
+  useState(rememberLinks);
   // Ссылка друга или кнопка бота «Друзья» открывают экран друзей во вкладке дуэли.
   const [friendsFirst, setFriendsFirst] = useState(() => !!friendInviteCode() || startTab() === 'friends');
   const [join, setJoin] = useState<JoinRoom>();
