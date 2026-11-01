@@ -18,8 +18,32 @@ export interface CityBoard {
   top: CityRow[];
   me: { place: number; reps: number; players: number } | null;
   // players — тренировались на этой неделе, members — выбрали город, best — самый высокий уровень героя.
-  cities: { city: string; reps: number; players: number; members: number; best: number | null; mine?: boolean }[];
+  cities: CityStat[];
+  // Страны по повторам за неделю; country — страна моего города.
+  countries: CountryStat[];
+  country: string | null;
   suggest?: string;
+  suggestCountry?: string;
+}
+
+export interface CityStat {
+  city: string;
+  country: string | null;
+  reps: number;
+  players: number;
+  members: number;
+  best: number | null;
+  mine?: boolean;
+}
+
+export interface CountryStat {
+  country: string;
+  reps: number;
+  players: number;
+  members: number;
+  best: number | null;
+  cities: number;
+  mine?: boolean;
 }
 
 /** Сервер не пустил: топ города только для вошедших. */
@@ -37,5 +61,5 @@ async function post(path: string, body: object = {}): Promise<CityBoard> {
 
 export const cityApi = {
   board: () => post(''),
-  set: (city: string | null) => post('/set', { city }),
+  set: (city: string | null, country?: string) => post('/set', { city, country }),
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalKey, cityLatin, citySuggest, knownCity } from './cityNames';
-import { RU_CITIES } from './russiaCities';
+import { WORLD_CITIES } from './worldCities';
 
 describe('справочник городов', () => {
   it('разговорные названия и разное написание — один город', () => {
@@ -20,8 +20,9 @@ describe('справочник городов', () => {
     expect(citySuggest('н')).toEqual([]);
   });
 
-  it('на карте есть крупные города и Крым, названия не повторяются', () => {
-    const names = RU_CITIES.map((c) => c[0]);
+  it('на глобусе есть крупные города России и Крым, названия не повторяются', () => {
+    expect(WORLD_CITIES.filter((c) => c[2] === 'RU').length).toBeGreaterThan(250);
+    const names = WORLD_CITIES.map((c) => c[0]);
     for (const n of ['Москва', 'Казань', 'Владивосток', 'Калининград', 'Севастополь', 'Симферополь', 'Петропавловск-Камчатский']) expect(names).toContain(n);
     expect(new Set(names).size).toBe(names.length);
   });
@@ -41,5 +42,26 @@ describe('города латиницей', () => {
     expect(knownCity('saint petersburg')?.[0]).toBe('Санкт-Петербург');
     expect(knownCity('Krasnoyarsk')?.[0]).toBe('Красноярск');
     expect(citySuggest('Yaro')).toContain('Ярославль');
+  });
+});
+
+describe('города мира', () => {
+  it('по-русски, по-английски, с надстрочными знаками и сокращениями', () => {
+    expect(knownCity('Париж')?.[2]).toBe('FR');
+    expect(knownCity('paris')?.[0]).toBe('Париж');
+    expect(knownCity('Sao Paulo')?.[0]).toBe(knownCity('São Paulo')?.[0]);
+    expect(knownCity('Минск')?.[2]).toBe('BY');
+    expect(knownCity('Алматы')?.[2]).toBe('KZ');
+    expect(knownCity('Астана')?.[2]).toBe('KZ');
+    expect(knownCity('NYC')?.[0]).toBe('Нью-Йорк');
+  });
+  it('российский город главнее одноимённого за границей', () => {
+    expect(knownCity('Санкт-Петербург')?.[2]).toBe('RU');
+    expect(knownCity('Москва')?.[2]).toBe('RU');
+    expect(knownCity('Буйнакск')?.[2]).toBe('RU');
+  });
+  it('подсказки находят города мира', () => {
+    expect(citySuggest('Берл')).toContain('Берлин');
+    expect(citySuggest('Toky')).toContain('Токио');
   });
 });

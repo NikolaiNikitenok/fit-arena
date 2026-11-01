@@ -911,10 +911,10 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
   if (!me) return reply(401, { error: 'Топ города — для тех, кто вошёл через Telegram, Max или Яндекс' });
   const now = Date.now();
   if (path === '/api/city/set') {
-    const r = cities.set(me.id, body!.city, me.name, now);
+    const r = cities.set(me.id, body!.city, me.name, now, body!.country);
     if (typeof r === 'string') return reply(400, { error: r });
   } else cities.rename(me.id, me.name);
-  reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
+  reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city, clanCountry: (id) => clans.clanOf(id)?.country }, me.id, now));
 }
 
 /**
