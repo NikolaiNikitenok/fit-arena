@@ -55,7 +55,7 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
     <article className={`post ${post.hidden ? 'is-hidden' : ''}`}>
       <header className="post-head">
         <button className="post-author" onClick={author} disabled={noAuthorLink}>
-          <Avatar name={post.author.name} pro={post.author.pro} size={38} />
+          <Avatar name={post.author.name} pro={post.author.pro} pid={post.author.pid} size={38} />
           <span className="post-who">
             <b className={post.author.pro ? 'pro-name' : ''}>{post.author.name}</b>
             <small>

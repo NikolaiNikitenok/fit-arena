@@ -88,11 +88,22 @@ export async function drawPostStory(p: PostView): Promise<HTMLCanvasElement> {
   g.beginPath();
   g.arc(M + 55, ay + 55, 55, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = '#2b1206';
-  g.font = `900 56px ${FONT}`;
-  g.textAlign = 'center';
-  g.fillText([...p.author.name.trim()][0]?.toUpperCase() ?? '?', M + 55, ay + 75);
-  g.textAlign = 'left';
+  // Фото профиля Telegram, если есть; иначе — буква имени.
+  const face = await loadImg(`/api/avatar/${p.author.pid}.jpg`).catch(() => null);
+  if (face) {
+    g.save();
+    g.beginPath();
+    g.arc(M + 55, ay + 55, 51, 0, Math.PI * 2);
+    g.clip();
+    g.drawImage(face, M + 4, ay + 4, 102, 102);
+    g.restore();
+  } else {
+    g.fillStyle = '#2b1206';
+    g.font = `900 56px ${FONT}`;
+    g.textAlign = 'center';
+    g.fillText([...p.author.name.trim()][0]?.toUpperCase() ?? '?', M + 55, ay + 75);
+    g.textAlign = 'left';
+  }
   g.fillStyle = '#f5f2ec';
   g.font = `900 52px ${FONT}`;
   let name = p.author.name;
