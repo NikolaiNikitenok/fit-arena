@@ -1,6 +1,6 @@
 import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { track } from '../telemetry';
-import { amountText, EXERCISE_LABELS, Exercise } from '../repCounter';
+import { amountText, EXERCISE_LABELS, Exercise, repsEquivalent } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
@@ -10,8 +10,10 @@ import { Stars } from './Stars';
 import { NPCS } from './npcs';
 import { dailyTask } from './daily';
 import { startCloud, usePro } from '../cloud';
+import { loadBalance } from '../balanceClient';
 import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
+import { weekKey } from '../../shared/weekly';
 import { MONTHS, recapMonths } from './recap';
 import { AchievementsSheet } from './Achievements';
 import { newAchievements } from './achievements';
@@ -43,6 +45,7 @@ import {
   addClanPending,
   recordActivity,
   recordLoss,
+  freeAttempt,
   recordWin,
   spendMight,
   REST_PER_WEEK,
@@ -51,6 +54,7 @@ import {
   streakOf,
   swapsLeft,
   saveProgress,
+  recordManual,
   applyFreeze,
 } from './progress';
 import { Chest, Coin, Flask, Heart, Lock, Star, Swords } from '../icons';
@@ -59,10 +63,14 @@ import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
 import { openPassInTelegram, platform, startTab } from '../telegram';
-import { useStarter } from '../cloud';
-import { payStars } from '../payments';
+import { useCloudReady, useStarter } from '../cloud';
+import { type OfferPlace, offerSeen, payStars } from '../payments';
 import { claimStarter, STARTER_PACK } from './starter';
+import { dueOffer, markOffer, type OfferKind } from './offers';
 import { pl, t } from '../i18n';
+import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, nextLocked, rememberUnlocks } from './unlocks';
+import { linkUnlocks } from './unlockLinks';
+import { lockedText, UnlockSheet } from './UnlockSheet';
 
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
@@ -106,9 +114,13 @@ interface Props {
   onPlaying: (playing: boolean) => void;
   // Друзья с главного экрана: они живут во вкладке дуэли.
   onFriends: () => void;
+  // Вкладка дуэли — из объявления Грома об открытых дуэлях.
+  onDuel?: () => void;
+  // Сколько уровней карты осталось до вкладок нижнего меню (0 — открыта): меню рисует замки.
+  onLocks?: (locks: { village: number; clan: number; duel: number }) => void;
 }
 
-export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
+export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }: Props) {
   const [progress, setProgressState] = useState(loadProgress);
   // Последний прогресс: победа и запись подхода приходят подряд в одном кадре.
   const latest = useRef(progress);
@@ -121,9 +133,21 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const lives = livesNow(progress, now);
   const [strength, setStrength] = useState(false);
   const daily = dailyTask(dayKey(now), progress.baseline);
+  // Ступени разделов (src/game/unlocks.ts): ссылка клана или дуэли открывает свой раздел сразу.
+  const lockLeft = (f: Feature) => levelsToUnlock(progress, f, linkUnlocks());
+  const locks = { village: lockLeft('village'), clan: lockLeft('clan'), duel: lockLeft('duel') };
+  useEffect(() => onLocks?.(locks), [locks.village, locks.clan, locks.duel]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const next = rememberUnlocks(latest.current, linkUnlocks());
+    if (next !== latest.current) setProgress(saveProgress(next));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Новичок с первого экрана сразу идёт на испытание: без брифинга, камера включается сама.
+  const autoStart = useRef(false);
   // Прогресс с сервера: на новом телефоне герой подтягивается сам.
   useEffect(() => {
     void startCloud((p) => setProgress(p));
+    void loadBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Набор «Новичок» оплачен (здесь или на другом устройстве), а в прогрессе его ещё нет: кладём вещи.
@@ -142,7 +166,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const currentDef = LEVELS[current - 1];
   const [world, setWorld] = useState(currentDef.world);
   const [playing, setPlayingState] = useState<LevelDef | null>(null);
-  const setPlaying = (l: LevelDef | null) => {
+  const setPlaying = (l: LevelDef | null, auto = false) => {
+    autoStart.current = auto;
     setPlayingState(l);
     onPlaying(!!l);
   };
@@ -154,6 +179,9 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   const [achOpen, setAchOpen] = useState(false);
   // Кнопка бота после оплаты Pro и ссылка «Купить в Telegram» открывают игру сразу на пропуске (?tab=pass).
   const [passOpen, setPassOpen] = useState(() => startTab() === 'pass');
+  // Предложение покупки в подходящий момент (src/game/offers.ts): набор после первого босса или 3-го дня серии,
+  // Pro — когда дошёл до закрытой золотой награды. Раз за всё время на каждое и не чаще раза в день.
+  const [offer, setOffer] = useState<OfferKind | null>(null);
   const [eventOpen, setEventOpenState] = useState(false);
   const [petsOpen, setPetsOpen] = useState(false);
   const [holidayOpen, setHolidayOpen] = useState(false);
@@ -265,6 +293,27 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
     setFocusLand(ls[i].land);
   };
 
+  const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
+  // Хуки — до первых ранних return (бой, событие, подземелье…): иначе React падает при смене экрана.
+  // Пора ли предложить покупку (src/game/offers.ts): только на главной, когда сервер уже ответил (знаем, есть ли Pro
+  // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
+  const cloudReady = useCloudReady();
+  const busyScreen =
+    !!playing || !!dungeon || gym || !!programs || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
+  useEffect(() => {
+    if (tab !== 'hero' || !cloudReady || busyScreen || offer) return;
+    const now = Date.now();
+    const kind = dueOffer(latest.current, { starterOpen: !!starter && !starter.bought, pro, canPay: platform === 'tg' }, now);
+    if (!kind) return;
+    setProgress(saveProgress(markOffer(latest.current, kind, now)));
+    track('offer_popup', kind);
+    setOffer(kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, cloudReady, busyScreen, pro, starter?.bought, Object.keys(progress.stars).length, progress.pass?.xp]);
+  // Купил (здесь или на другом устройстве) — окно предложения больше не нужно.
+  useEffect(() => {
+    if ((offer === 'pro' && pro) || (offer === 'starter' && (starter?.bought || progress.starterPack))) setOffer(null);
+  }, [offer, pro, starter?.bought, progress.starterPack]);
   if (playing)
     return (
       <Screen>
@@ -282,13 +331,15 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           }}
           onLose={() => {
             track('mission_lose', playing.daily ? 'daily' : playing.id);
-            if (!playing.daily) update((p) => recordLoss(spendLife(p, Date.now()), playing));
+            // Испытания силы жизни не стоят: это замер, а не бой.
+            if (!playing.daily) update((p) => recordLoss(freeAttempt(p, playing) ? p : spendLife(p, Date.now()), playing));
           }}
           onStart={() => {
             track('mission_start', playing.daily ? 'daily' : playing.id);
             update(spendMight);
           }}
-          onActivity={(ex, reps) => update((p) => addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now()))}
+          onActivity={(ex, reps, manual) => update((p) => (manual ? recordManual(recordActivity(p, ex, reps, Date.now(), { manual: true }), repsEquivalent(ex, reps), Date.now()) : addClanPending(recordActivity(p, ex, reps, Date.now()), reps, Date.now())))}
+          autoStart={autoStart.current}
           lives={lives}
           swaps={playing.daily ? { left: 0, paid: 0 } : swapsLeft(progress, playing.id, Date.now())}
           onSwap={(count) => {
@@ -351,7 +402,21 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
 
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
 
-  const newcomer = !progress.onboarded && !Object.keys(progress.stars).length && !Object.keys(progress.days).length;
+  // Объявление Грома о разделах, открытых пройденными уровнями.
+  const fresh = freshUnlocks(progress);
+  const openFeature = (f: Feature) => {
+    if (f === 'duel') return onDuel ? onDuel() : onFriends();
+    if (f === 'village' || f === 'clan') return onTab(f);
+    if (f === 'dungeon') return setDungeon(true);
+    if (f === 'shop') return setShop('weapon');
+    if (f === 'programs') return setPrograms({});
+    if (f === 'gym') return setGym(true);
+    if (f === 'pass') return setPassOpen(true);
+    if (f === 'events') return setEventOpen(true);
+    if (f === 'collections') return setCollectionsOpen(true);
+    if (f === 'city') return setCityOpen(true);
+    if (f === 'daily') return startDaily();
+  };
   // Листы докачиваются тихо, поверх уже видного экрана.
   const sheets = (
     <Suspense fallback={null}>
@@ -362,7 +427,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
             // Повтор из настроек только показывает знакомство: испытание уже пройдено.
             if (replayOnb) return setReplayOnb(false);
             setProgress(finishOnboarding(latest.current));
-            if (start) setPlaying(LEVELS[0]);
+            if (start) setPlaying(LEVELS[0], true);
           }}
         />
       )}
@@ -388,6 +453,31 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
       {holidayOpen && <HolidayScreen progress={progress} setProgress={setProgress} onClose={() => setHolidayOpen(false)} />}
       {collectionsOpen && <CollectionsSheet progress={progress} setProgress={setProgress} onClose={() => setCollectionsOpen(false)} />}
       {cityOpen && <CitySheet onClose={() => setCityOpen(false)} />}
+      {offer && tab === 'hero' && (
+        <OfferSheet
+          kind={offer}
+          progress={progress}
+          onPass={() => {
+            setOffer(null);
+            setPassOpen(true);
+          }}
+          onClose={() => setOffer(null)}
+        />
+      )}
+      {tab === 'hero' && !newcomer && fresh.length > 0 && !(!eggLater && canHatch(progress)) && (
+        <UnlockSheet
+          features={fresh}
+          next={(() => {
+            const f = nextLocked(progress, linkUnlocks());
+            return f ? { f, left: lockLeft(f) } : null;
+          })()}
+          onClose={() => setProgress(saveProgress(markUnlockSeen(latest.current, fresh)))}
+          onOpen={(f) => {
+            setProgress(saveProgress(markUnlockSeen(latest.current, fresh)));
+            openFeature(f);
+          }}
+        />
+      )}
       {tab === 'hero' && !newcomer && !eggLater && canHatch(progress) && (
         <PetHatch
           onDone={(name) => {
@@ -426,7 +516,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           <div className="starter-got">
             <Chest size={64} />
             <div className="level-title">{t('Набор «Новичок» твой!')}</div>
-            <div className="muted">{t('Облик «{0}» уже в гардеробе. Из сундука: {1} монет, {2} зелья бодрости и {3} свитка замены.', { 0: itemById(STARTER_PACK.outfit).name, 1: STARTER_PACK.coins, 2: STARTER_PACK.vigor, 3: STARTER_PACK.swap })}</div>
+            <div className="muted">{t('Облик «{0}» уже в гардеробе. Из сундука: {1} монет и {2} свитка замены.', { 0: itemById(STARTER_PACK.outfit).name, 1: STARTER_PACK.coins, 2: STARTER_PACK.swap })}</div>
             <button className="primary" onClick={() => setStarterGot(false)}>
               {t('Отлично')}
             </button>
@@ -489,6 +579,10 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onFriends={onFriends}
           onShop={(tm) => setShop(tm ?? 'weapon')}
           onStrength={() => setStrength(true)}
+          onWeekly={(open) => {
+            update((p) => saveProgress({ ...p, weeklySeen: weekKey(dayKey(Date.now())) }));
+            if (open) setStrength(true);
+          }}
           onEquip={(id) => setProgress(equip(progress, id))}
           onEquipGear={(id) => setProgress(equipGear(progress, id))}
           onPotion={(id) => {
@@ -511,6 +605,11 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
           onCity={() => setCityOpen(true)}
           onRecap={openRecap}
           onTitan={() => setTitanOpen(true)}
+          livesLeft={lives.lives}
+          lockLeft={lockLeft}
+          nextLock={nextLocked(progress, linkUnlocks())}
+          onClan={() => onTab('clan')}
+          onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />
         {sheets}
       </>
@@ -557,7 +656,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
               focusLand={focusLand}
               openedChests={progress.chests}
               onSelect={(l) => tap(() => setSelected(l))()}
-              onMerchant={tap(() => setShop('weapon'))}
+              onMerchant={tap(() => (lockLeft('shop') ? showToast(lockedText('shop', lockLeft('shop')), 3500) : setShop('weapon')))}
               onChest={(land) =>
                 tap(() => {
                   const r = claimChest(progress, land);
@@ -634,19 +733,54 @@ export function Adventure({ tab, onTab, onPlaying, onFriends }: Props) {
   );
 }
 
+/** Всплывающее предложение: набор «Новичок» от купца или Pro Pass, когда золотая награда закрыта. */
+function OfferSheet({ kind, progress, onPass, onClose }: { kind: OfferKind; progress: Progress; onPass: () => void; onClose: () => void }) {
+  // «Увидели» считает сама карточка покупки (набор — StarterCard, Pro — в пропуске); показ окна — offer_popup.
+  return (
+    <Sheet onClose={onClose}>
+      <div className="offer-sheet">
+        {kind === 'starter' ? (
+          <>
+            <Portrait line={{ face: 'fedor', color: NPCS.fedor.color, who: NPCS.fedor.name }} size={52} />
+            <div className="level-title">{t('Достойно настоящего героя!')}</div>
+            <div className="muted">{t('Купец Фёдор: «Вижу, ты не бросаешь тренировки. Для таких у меня есть набор искателя приключений — один раз и только для своих.»')}</div>
+            <StarterCard progress={progress} place="popup" />
+          </>
+        ) : (
+          <>
+            <Portrait line={{ face: 'grom', color: NPCS.grom.color, who: NPCS.grom.name }} size={52} />
+            <div className="level-title">{t('Золотая награда ждёт')}</div>
+            <div className="muted">{t('Ты дошёл до ступени пропуска, где рядом с обычной наградой лежит золотая. Её открывает Pro Pass: золотая дорожка, заморозка серии и +25% опыта пропуска. Силы в дуэлях он не прибавляет.')}</div>
+            <button className="primary" onClick={onPass}>
+              {t('Посмотреть пропуск')}
+            </button>
+          </>
+        )}
+        <button className="link" onClick={onClose}>
+          {t('Не сейчас')}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 /** Лавка купца Фёдора: облики, оружие, щиты и зелья. Новое оружие появляется по мере продвижения. */
 /** Набор «Новичок» у купца: один раз, за звёзды Telegram. Вещи кладёт Adventure, когда сервер подтвердит оплату. */
-function StarterCard({ progress }: { progress: Progress }) {
+export function StarterCard({ progress, place = 'shop' }: { progress: Progress; place?: OfferPlace }) {
   const starter = useStarter();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  if (!starter || starter.bought || progress.starterPack) return null;
+  const open = !!starter && !starter.bought && !progress.starterPack;
+  useEffect(() => {
+    if (open) offerSeen('starter', place);
+  }, [open, place]);
+  if (!open) return null;
   const outfit = itemById(STARTER_PACK.outfit);
   const buy = async () => {
     if (platform !== 'tg') return openPassInTelegram('shop');
     setBusy(true);
     setNote(null);
-    const r = await payStars('starter', (s) => s.starter.bought);
+    const r = await payStars('starter', (s) => s.starter.bought, undefined, place);
     setBusy(false);
     if (r === 'late') setNote(t('Оплата прошла, набор придёт через минуту. Если нет — напиши боту /paysupport.'));
     else if (typeof r === 'object') setNote(r.error);
@@ -659,7 +793,7 @@ function StarterCard({ progress }: { progress: Progress }) {
       <div className="starter-card-body">
         <div className="starter-card-title">{t('Набор «Новичок»')}</div>
         <div className="starter-card-text">
-          {t('Облик «{0}» и сундук: {1} монет, {2} зелья бодрости, {3} свитка замены. Только один раз.', { 0: outfit.name, 1: STARTER_PACK.coins, 2: STARTER_PACK.vigor, 3: STARTER_PACK.swap })}
+          {t('Облик «{0}» и сундук: {1} монет и {2} свитка замены. Только один раз.', { 0: outfit.name, 1: STARTER_PACK.coins, 2: STARTER_PACK.swap })}
         </div>
         {note && <div className="starter-card-note">{note}</div>}
       </div>

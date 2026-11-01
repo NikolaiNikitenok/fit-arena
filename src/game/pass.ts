@@ -158,7 +158,8 @@ export function passRewards(tier: number): { free: PassReward; pro: PassReward }
     : PASS_GEAR[tier] ? { kind: 'passGear', id: PASS_GEAR[tier] }
     : tier % 5 === 0 ? { kind: 'gear' }
     : tier % 4 === 0 ? { kind: 'chest' }
-    : tier % 3 === 0 ? { kind: 'potion', id: potion, n: 2 }
+    // Платная дорожка не даёт зелий бодрости (это жизни) и эликсиров силы: только свитки замены.
+    : tier % 3 === 0 ? { kind: 'potion', id: 'swap', n: 2 }
     : { kind: 'coins', n: 80 + tier * 8 };
   return { free, pro };
 }
@@ -200,7 +201,8 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
   if (r.kind === 'coins') coins(r.n);
   if (r.kind === 'potion') next.potions = addPotions(next.potions, r.id, r.n);
   if (r.kind === 'chest') {
-    const loot = openChest(pass.season * 101 + tier * 7 + (track === 'pro' ? 3 : 0), next.items, land);
+    // Сундук золотой дорожки (её оплачивают звёздами) не даёт зелий бодрости и силы.
+    const loot = openChest(pass.season * 101 + tier * 7 + (track === 'pro' ? 3 : 0), next.items, land, { noLives: track === 'pro' });
     const found = loot.item?.id ?? loot.gear?.id;
     coins(loot.coins);
     if (found) next.items = [...next.items, found];

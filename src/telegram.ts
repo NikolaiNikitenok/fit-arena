@@ -192,6 +192,20 @@ export function clanInviteCode(): string | null {
 /** Приглашение в друзья: startapp=friend-ТОКЕН или ?friend=ТОКЕН (кнопка бота). */
 export const friendInviteCode = (): string | null => friendParam(startParam(), location.search);
 
+/** Вызов группового чата: startapp=gc-ID или ?gc=ID (кнопка бота «Участвовать»). */
+export function groupChallengeCode(): string | null {
+  const p = startParam();
+  const raw = p?.startsWith('gc-') ? p.slice(3) : new URLSearchParams(location.search).get('gc');
+  return raw && /^[0-9a-f]{10}$/.test(raw) ? raw : null;
+}
+
+/** Добавить бота в групповой чат с вызовом: Telegram сам предложит выбрать чат (startgroup). */
+export function openGroupChallenge(exercise: string): void {
+  const url = `https://t.me/${BOT_USERNAME}?startgroup=gc-${exercise}`;
+  if (tg?.openTelegramLink && tg.initData) tg.openTelegramLink(url);
+  else window.open(url, '_blank');
+}
+
 /** Откуда открыли приложение (метка src-, приглашение, кнопка бота…) — для статистики. */
 export const appSource = (): string => launchSource(startParam(), location.search, platform);
 

@@ -22,7 +22,9 @@ export function plausibleXp(progress: unknown, now: number): number {
   // Самый восточный часовой пояс — UTC+14: позже этой даты дней ещё не было.
   const latest = new Date(now + 14 * 3_600_000).toISOString().slice(0, 10);
   let reps = 0;
-  for (const [d, n] of Object.entries(p.days ?? {})) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= latest) reps += Math.max(0, Math.min(DAY_REPS_MAX, Math.floor(Number(n) || 0)));
+  // Повторы «посчитал сам» (без камеры) опыта героя не дают — как и в игре (heroXp).
+  const manual = (p as { manual?: Record<string, unknown> }).manual ?? {};
+  for (const [d, n] of Object.entries(p.days ?? {})) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= latest) reps += Math.max(0, Math.min(DAY_REPS_MAX, Math.floor((Number(n) || 0) - (Number(manual[d]) || 0))));
   const stars = Object.entries(p.stars ?? {}).filter(([id, n]) => Number.isInteger(Number(id)) && Number(id) >= 1 && Number(id) <= LEVEL_COUNT && Number(n) >= 1).length;
   const programs = Math.max(0, Math.floor(Number(p.programs?.xp) || 0));
   return reps + stars * XP_PER_LEVEL_WON + programs;
@@ -49,6 +51,17 @@ export interface Save {
   lang?: 'en';
   // Видимый другим опыт героя: xp — сейчас, cap — предел на сегодня, day — дата (UTC), с которой считали предел.
   pub?: { xp: number; cap: number; day: string };
+  // Письма «возвращайся» за текущее отсутствие (server/winback.ts) и неделя последней сводки «сила растёт».
+  winback?: { last: string; sent: number[] };
+  weeklyOn?: string;
+  // Местная дата последнего письма бота (возврат, неделя): в этот день обычное напоминание не шлём.
+  letterOn?: string;
+  // Письма «возвращайся» и сводку недели выключили в настройках.
+  lettersOff?: boolean;
+  // Часовой пояс телефона (минуты к востоку от UTC): игра сообщает при каждом запросе.
+  tz?: number;
+  // Подарок за возвращение: игра забирает его при запуске один раз (по id, Progress.gifts).
+  gift?: { id: string; coins: number; vigor?: number; text: string };
 }
 
 export const SAVE_MAX_BYTES = 1_000_000;
@@ -93,6 +106,8 @@ export class SaveStore {
     if (p && typeof p === 'object' && at > s.savedAt && !wipe && JSON.stringify(p).length <= SAVE_MAX_BYTES) {
       s.progress = p as Record<string, unknown>;
       s.savedAt = at;
+      // Подарок за возвращение игра уже забрала: на сервере он больше не нужен.
+      if (s.gift && Array.isArray((p as { gifts?: unknown }).gifts) && ((p as { gifts: unknown[] }).gifts).includes(s.gift.id)) delete s.gift;
       this.publish(s, now);
       this.save();
     }
@@ -153,6 +168,23 @@ export class SaveStore {
     return s;
   }
 
+  setLetters(id: string, on: boolean): Save {
+    const s = this.touch(id);
+    if (on) delete s.lettersOff;
+    else s.lettersOff = true;
+    this.save();
+    return s;
+  }
+
+  /** Часовой пояс телефона: только у тех, чья копия уже есть, и только если изменился. */
+  setTz(id: string, tz: unknown): void {
+    const n = Math.round(Number(tz));
+    const s = this.saves.get(id);
+    if (!s || !Number.isFinite(n) || Math.abs(n) > 14 * 60 || s.tz === n) return;
+    s.tz = n;
+    this.save();
+  }
+
   setRaidNotify(id: string, on: boolean): Save {
     const s = this.touch(id);
     if (on) delete s.raidOff;
@@ -193,6 +225,16 @@ export class SaveStore {
   /** Игрок попросил удалить свои данные: прогресс и настройки бота пропадают. */
   forget(id: string): void {
     if (this.saves.delete(id)) this.save();
+  }
+
+  /** Письмо бота отправлено (server/winback.ts): что отметить и, если есть, подарок в игре. */
+  markLetter(id: string, date: string, mark: { winback?: Save['winback']; weeklyOn?: string }, gift?: Save['gift']): void {
+    const s = this.touch(id);
+    s.letterOn = date;
+    if (mark.winback) s.winback = mark.winback;
+    if (mark.weeklyOn) s.weeklyOn = mark.weeklyOn;
+    if (gift) s.gift = gift;
+    this.save();
   }
 
   markReminded(id: string, date: string): void {

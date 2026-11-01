@@ -33,6 +33,7 @@
  *
  * Сердца лечат героя, мечи бьют чудовище; урон меча слегка растёт с силой героя (до +60%).
  */
+import { balance } from '../../../shared/balance';
 import { RESOURCES, addResources, spendCharge, villageOf, type Resource, type Resources } from '../resources';
 import type { Progress } from '../progress';
 import { dayKey } from '../progress';
@@ -444,7 +445,10 @@ export function finishFloor(p: WithDungeon, run: Run, now: number): { progress: 
   const bonus = won ? clearBonus(run.floor.id, stars) : { wood: 0, stone: 0, gold: 0 };
   const daily = won && d.bonusDate !== dayKey(now) ? clearBonus(run.floor.id, 3) : null;
   const total = { ...loot };
-  for (const r of RESOURCES) total[r] += bonus[r] + (daily?.[r] ?? 0);
+  // Множители с сервера (shared/balance.ts): вся добыча и усиленные первые этажи для новичков.
+  const b = balance();
+  const k = b.dungeonLoot * (run.floor.id <= b.earlyFloors ? b.earlyLoot : 1);
+  for (const r of RESOURCES) total[r] = Math.round((total[r] + bonus[r] + (daily?.[r] ?? 0)) * k);
   const id = run.floor.id;
   const firstClear = won && !d.stars[id];
   const next: DungeonState = {

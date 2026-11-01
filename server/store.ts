@@ -39,6 +39,12 @@ export class Store {
     this.scheduleSave();
   }
 
+    /** Играл ли дуэли (без создания профиля). */
+    played(id: string): boolean {
+      const p = this.profiles.get(id);
+      return !!p && p.wins + p.losses + (p.draws ?? 0) > 0;
+    }
+
     get(id: string, name: string): Profile {
     const season = seasonAt(this.now());
     let p = this.profiles.get(id);

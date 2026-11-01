@@ -2,6 +2,13 @@
 import { proInvoice, refreshPro } from './cloud';
 import { openInvoice } from './telegram';
 import { t } from './i18n';
+import { track, trackOnce } from './telemetry';
+
+/** Где показали предложение: витрина в лавке, пропуск, всплывающее окно, меню друга. */
+export type OfferPlace = 'shop' | 'pass' | 'popup' | 'friend';
+
+/** Воронка покупки, шаг 1: предложение увидели (раз за запуск на место). Шаг 3 — «оплачено» — считает сервер. */
+export const offerSeen = (kind: StarKind, place: OfferPlace) => trackOnce('offer_seen', `${kind}-${place}`);
 
 export type StarKind = 'pro' | 'gift' | 'starter';
 type Status = Awaited<ReturnType<typeof refreshPro>>;
@@ -12,7 +19,15 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Купить за звёзды. done — по ответу сервера понять, что покупка уже засчитана (null — не ждать сервер).
  * Вернёт 'done', 'late' (оплачено, сервер ещё не знает), 'cancelled' или текст ошибки.
  */
-export async function payStars(kind: StarKind, done: ((s: Status) => boolean) | null, forId?: string): Promise<'done' | 'late' | 'cancelled' | { error: string }> {
+export async function payStars(kind: StarKind, done: ((s: Status) => boolean) | null, forId?: string, place: OfferPlace = 'shop'): Promise<'done' | 'late' | 'cancelled' | { error: string }> {
+  // Воронка, шаг 2: нажали «Купить». Чем кончилось окно оплаты — buy_result.
+  track('buy_tap', `${kind}-${place}`);
+  const r = await payFlow(kind, done, forId);
+  track('buy_result', `${kind}-${typeof r === 'object' ? 'error' : r}`);
+  return r;
+}
+
+async function payFlow(kind: StarKind, done: ((s: Status) => boolean) | null, forId?: string): Promise<'done' | 'late' | 'cancelled' | { error: string }> {
   try {
     const status = await openInvoice(await proInvoice(kind, forId));
     if (status === 'cancelled') return 'cancelled';

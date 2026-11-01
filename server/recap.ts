@@ -2,6 +2,7 @@
 // и место своего города за месяц. Повторы — из копий прогресса (server/saves.ts), с тем же пределом в день.
 import { canonicalKey, knownCity } from '../shared/cityNames';
 import { DAY_REPS_MAX } from './saves';
+import { cameraDays } from './cities';
 
 export interface RecapStanding {
   // Доля игроков месяца, у которых повторов меньше, в процентах; null — сам не тренировался.
@@ -48,7 +49,7 @@ export class RecapBoard {
     if (hit && now - hit.at < CACHE_MS) return hit;
     const reps = new Map<string, number>();
     for (const s of this.d.saves()) {
-      const n = monthReps(s.progress?.days, month);
+      const n = monthReps(cameraDays(s.progress), month);
       if (n > 0) reps.set(s.id, n);
     }
     const city = new Map<string, string>();

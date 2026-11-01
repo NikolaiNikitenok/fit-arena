@@ -49,6 +49,9 @@ import { clanPerks } from '../shared/clanLevel';
 import { heroPower } from '../src/game/power';
 import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
+import { dueMessages, pendingStage, weeklyDue } from './winback';
+import { challengeScore, GROUP_POST_COOLDOWN_MS, GroupChallenges, type GroupChallenge, parseGroupCommand, tableText, tgOutcome } from './groupChallenges';
+import { petById, type PetId } from '../src/game/pets';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
 import { deletePlayer } from './deleteMe';
@@ -68,7 +71,9 @@ import { AccountStore } from './accounts';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
-import { CityStore } from './cities';
+import { cameraDays, CityStore } from './cities';
+import { balanceCommand, BalanceFile } from './balance';
+import { GHOST_PREFIX, GHOST_WAIT_MS, GhostStore, isGhost, shadowTimes } from './ghosts';
 import { ProTrials } from './proTrials';
 import { isActive, Referrals } from './referrals';
 import { TitanBoard } from './titan';
@@ -99,6 +104,8 @@ const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
+// Баланс без релиза (server/balance.ts): файл рядом с данными сервера.
+const balanceFile = new BalanceFile(process.env.BALANCE_FILE ?? '/opt/arena-server/balance.json');
 // Топ по городу (server/cities.ts).
 const cities = new CityStore(process.env.CITIES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'cities.json'));
 // Итоги месяца: место среди игроков и города. Картинки для сторис Telegram — рядом с данными, живут двое суток.
@@ -237,9 +244,22 @@ const profileView = (p: Profile): ProfileView => ({
 });
 
 function onMatchEnd(end: MatchEnd): void {
+  // Бой с «призраком» (записью): кубков нет, повторы идут в семейный дневник, запись игрока — в копилку.
+  if (isGhost(end.a) || isGhost(end.b)) {
+    const side = isGhost(end.a) ? 'b' : 'a';
+    const real = online.get(end[side]);
+    if (!real) return;
+    const p = store.get(real.id, real.name);
+    real.send({ type: 'profile', profile: profileView(p), delta: 0 });
+    reportDuel(p, end.reps[side], end.outcome === 'draw' ? null : end.outcome === side, end.exercise);
+    if (signedId(real.id)) ghosts.record(end.exercise, { id: real.id, name: real.name, times: end.times?.[side] ?? [], at: Date.now() });
+    return;
+  }
   const a = online.get(end.a);
   const b = online.get(end.b);
   if (!a || !b) return;
+  // Бои настоящих игроков — записи для «призраков» пустой очереди.
+  for (const [pl, side] of [[a, 'a'], [b, 'b']] as const) if (signedId(pl.id)) ghosts.record(end.exercise, { id: pl.id, name: pl.name, times: end.times?.[side] ?? [], at: Date.now() });
   const pa = store.get(a.id, a.name);
   const pb = store.get(b.id, b.name);
   // Кубки — только за бой двух игроков Telegram (гостя можно завести сколько угодно и «сливать» ему бои)
@@ -289,6 +309,56 @@ function handleActivity(req: IncomingMessage, res: ServerResponse): void {
     for (const item of items) if (item) family.report({ ...item, telegram_id: tgUser.id });
     reply(200);
   });
+}
+
+// «Призраки» для пустой очереди быстрого боя (server/ghosts.ts).
+const ghosts = new GhostStore(process.env.GHOSTS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'ghosts.json'));
+const ghostWait = new Map<string, ReturnType<typeof setTimeout>>();
+const stopGhostWait = (id: string) => {
+  clearTimeout(ghostWait.get(id));
+  ghostWait.delete(id);
+};
+
+/** Бой с записью игрока похожей силы (или с «Тенью Грома», пока записей нет). */
+function ghostFight(player: Player, exercise: Exercise): Room {
+  const base = Number((saves.get(player.id)?.progress as { baseline?: Record<string, number> } | undefined)?.baseline?.[exercise]) || 20;
+  const target = Math.max(5, Math.round(base * 0.95));
+  const rec = ghosts.pick(exercise, target, player.id);
+  const times = rec?.times ?? shadowTimes(target);
+  const r = newRoom(exercise);
+  let timers: ReturnType<typeof setTimeout>[] = [];
+  const clear = () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+  };
+  const ghost: Player = {
+    id: `${GHOST_PREFIX}${r.code}`,
+    name: rec ? tl(langOf(player.id), '{0} · запись', { 0: rec.name }) : tl(langOf(player.id), 'Тень Грома · тренировка'),
+    send: (msg) => {
+      if (msg.type === 'countdown') {
+        clear();
+        for (const t of times) timers.push(setTimeout(() => r.rep(ghost.id), msg.startsInMs + t));
+      } else if (msg.type === 'end') clear();
+      else if (msg.type === 'room') {
+        // Игрок ушёл — «призрак» уходит следом, комната закрывается.
+        if (!msg.players.some((p) => p.id !== ghost.id)) {
+          clear();
+          return void setTimeout(() => {
+            r.leave(ghost.id);
+            if (r.empty) {
+              r.dispose();
+              rooms.delete(r.code);
+            }
+          }, 0);
+        }
+        // «Призрак» всегда готов: бой начнётся, как только готов игрок (и на реванш тоже).
+        if (msg.players.some((p) => p.id === ghost.id && !p.ready)) setTimeout(() => r.ready(ghost.id), 300);
+      }
+    },
+  };
+  r.join(ghost);
+  r.join(player);
+  return r;
 }
 
 function newRoom(exercise: Exercise): Room {
@@ -380,6 +450,14 @@ const botReady = (id: string) => {
   return !!BOT_TOKEN && botStatus.lastOkAt != null;
 };
 
+/** Ступени разделов (src/game/unlocks.ts): кто играл до них — всё открыто; дуэли и клан — открыты тем, кто в них уже был. */
+function gateFlags(id: string, progress: unknown): { veteran: boolean; duels: boolean; clan: boolean } {
+  const p = (progress ?? null) as { gates?: string; stars?: object; days?: object; onboarded?: boolean } | null;
+  // Копия без отметки ступеней сохранена прежней версией игры: это игрок «до ступеней».
+  const old = !!p && !p.gates && (Object.keys(p.stars ?? {}).length > 0 || Object.keys(p.days ?? {}).length > 0 || !!p.onboarded);
+  return { veteran: old, duels: store.played(id), clan: !!clans.clanOf(id) };
+}
+
 /** Прогресс и напоминания: POST /api/progress/load, /api/progress/save, /api/remind, /api/raid-notify. */
 async function onProgressApi(path: string, req: IncomingMessage, res: ServerResponse) {
   const reply = (code: number, body: unknown) => {
@@ -391,6 +469,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
   const who = body && identify(body);
   if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
   saves.setLang(who.id, body!.lang);
+  saves.setTz(who.id, body!.tz);
   if (path === '/api/progress/load') {
     if (who.guest) {
       saves.adopt(who.id, who.guest);
@@ -398,7 +477,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     }
     const s = saves.get(who.id);
     if (s?.progress && !villages.get(who.id)) villages.update(who.id, s.progress, villageName(who.id, body!));
-    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
+    return reply(200, { progress: s?.progress ?? null, remind: s?.remind ?? null, bot: botReady(who.id), telegram: accounts.target(who.id) !== null, maxBot: maxUsername(), pro: isPro(who.id), proOffer: who.login ? proOfferOf(who.id) : null, starter: who.login ? sales.starter(proIds(who.id)) : null, raidNotify: !s?.raidOff, letters: !s?.lettersOff, gift: s?.gift ?? null, ...gateFlags(who.id, s?.progress), emoji: emojiBadges.ids(), admin: isAdminAccount(who.id), account: who.id, linkable: !!who.login });
   }
   if (path === '/api/progress/save') {
     // Копия от героя, которого на этом входе уже нет (вход привязали к другому аккаунту): не принимаем, телефон перезагрузит прогресс.
@@ -420,6 +499,7 @@ async function onProgressApi(path: string, req: IncomingMessage, res: ServerResp
     const r = body!.remind as { hour: number; tz: number } | null;
     return reply(200, { remind: saves.setRemind(who.id, r && { hour: Number(r.hour), tz: Number(r.tz) }).remind ?? null });
   }
+  if (path === '/api/letters') return reply(200, { letters: !saves.setLetters(who.id, body!.on !== false).lettersOff });
   if (path === '/api/raid-notify') return reply(200, { raidNotify: !saves.setRaidNotify(who.id, body!.on !== false).raidOff });
   reply(404, { error: 'not found' });
 }
@@ -479,7 +559,7 @@ const channelDeps: ChannelDeps = {
   bot: (method, body) => botApi(BOT_TOKEN)(method, body, 30_000),
   upload: (method, fields, files) => botUploadFiles(BOT_TOKEN, method, fields, files),
   mediaDir: mediaDir(__dirname),
-  appLink: () => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=src-channel`,
+  appLink: (tag = 'channel') => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=src-${tag}`,
   log: (m) => console.log(m),
 };
 const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), channelDeps);
@@ -508,6 +588,136 @@ const threads = new Threads(process.env.THREADS_FILE ?? join(dirname(process.env
 const reels = new Reels(process.env.REELS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'reels.json'), {
   token: () => process.env.GH_ACTIONS_TOKEN || readToken(join(__dirname, '.gh-token')),
 });
+// Вызовы в групповых чатах (server/groupChallenges.ts): бот ведёт таблицу «кто больше за неделю» прямо в чате.
+const groups = new GroupChallenges(process.env.GROUPS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'group-challenges.json'));
+const groupRows = (c: GroupChallenge) => Object.entries(c.members).map(([id, m]) => ({ id, name: m.name, reps: challengeScore(saves.get(id)?.progress, c.exercise, c.from, c.to) }));
+const groupButton = (c: GroupChallenge) => ({ inline_keyboard: [[{ text: tl(c.lang, 'Участвовать'), url: `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=gc-${c.id}` }]] });
+type TgResult = Awaited<ReturnType<ReturnType<typeof botApi>>>;
+/** Ответ Telegram на сообщение в группе: что делать с вызовом (server/groupChallenges.ts tgOutcome). */
+function onGroupError(c: GroupChallenge, r: TgResult | null): 'ok' | 'retry' | 'migrated' | 'missing' | 'gone' {
+  const o = tgOutcome(r);
+  if (o === 'migrated') groups.migrate(c.chat, Number(r!.parameters!.migrate_to_chat_id));
+  // Бота удалили из чата или запретили писать: вызов закрываем.
+  if (o === 'gone') groups.update(c, { done: true, finalPending: false });
+  return o;
+}
+const groupSaidAt = new Map<number, number>();
+/** Опубликовать таблицу новым сообщением (новый вызов, /top, итоги). false — не вышло (сеть, лимит): попробуем позже. */
+async function postGroupTable(c: GroupChallenge, attempt = 0): Promise<boolean> {
+  const text = tableText(c, groupRows(c), Date.now());
+  // Попытку отмечаем сразу: пока Telegram держит лимит, /top не будет слать снова и снова.
+  groups.update(c, { postedAt: Date.now() });
+  const r = await botApi(BOT_TOKEN)('sendMessage', { chat_id: c.chat, text, reply_markup: c.done ? undefined : groupButton(c) }, 15_000).catch(() => null);
+  const o = onGroupError(c, r);
+  // Группа стала супергруппой: тот же вызов, новый id чата — отправляем ещё раз.
+  if (o === 'migrated' && attempt < 1) return postGroupTable(c, attempt + 1);
+  if (o !== 'ok') return false;
+  const id = (r?.result as { message_id?: number } | undefined)?.message_id;
+  groups.update(c, { msg: id, shown: text, postedAt: Date.now() });
+  return true;
+}
+/** Сообщение в группе: /challenge [упражнение], /start gc-… (бота добавили кнопкой из игры), /top. true — разобрано. */
+const groupUpdate = (u: Update): boolean => {
+  // Бота удалили из группы: вызов в ней закрываем сразу, а не через неделю ошибок.
+  const member = u.my_chat_member;
+  if (member && (member.chat.type === 'group' || member.chat.type === 'supergroup')) {
+    if (member.new_chat_member.status === 'left' || member.new_chat_member.status === 'kicked') {
+      const live = groups.ofChat(member.chat.id);
+      if (live) groups.update(live, { done: true });
+    }
+    return true;
+  }
+  const msg = u.message;
+  if (!BOT_TOKEN || !msg || (msg.chat.type !== 'group' && msg.chat.type !== 'supergroup')) return false;
+  // Группа стала супергруппой: переносим идущий вызов на новый id чата.
+  if (msg.migrate_to_chat_id) {
+    groups.migrate(msg.chat.id, msg.migrate_to_chat_id);
+    return true;
+  }
+  if (!msg.text) return false;
+  const cmd = parseGroupCommand(msg.text, botUsername);
+  if (!cmd) return false;
+  const chat = msg.chat as { id: number; type: string; title?: string };
+  const l = langOfChat(msg.from);
+  // Подсказки бота в чате — тоже не чаще раза в минуту на чат.
+  const say = (text: string) => {
+    const last = groupSaidAt.get(chat.id) ?? 0;
+    if (Date.now() - last < GROUP_POST_COOLDOWN_MS) return;
+    groupSaidAt.set(chat.id, Date.now());
+    sayNow(text);
+  };
+  const sayNow = (text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chat.id, text, reply_to_message_id: msg.message_id }, 15_000).catch(() => null);
+  if (cmd.kind === 'unknown') {
+    say(tl(l, 'Такого упражнения нет. Можно: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.'));
+    return true;
+  }
+  const live = groups.ofChat(chat.id);
+  const now = Date.now();
+  // Таблицу новым сообщением — не чаще раза в минуту на чат: /top и /challenge подряд не зальют чат.
+  const cooling = (c: GroupChallenge) => !!c.postedAt && now - c.postedAt < GROUP_POST_COOLDOWN_MS;
+  if (cmd.kind === 'top') {
+    if (!live) say(tl(l, 'Сейчас вызова нет. Начните: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.'));
+    else if (!cooling(live)) void postGroupTable(live);
+    return true;
+  }
+  const by = msg.from?.id ? accounts.resolve(`tg:${msg.from.id}`) : '';
+  const { c, created } = groups.create(chat.id, chat.title ?? '', cmd.exercise, by, msg.from?.first_name ?? '', l, now);
+  // Сколько вызовов начато (и в скольких чатах) — рост через группы виден в статистике.
+  if (created) telemetry.serverEvent('group_start', cmd.exercise);
+  if (!cooling(c)) void postGroupTable(c);
+  return true;
+};
+/** Игра: вступить в вызов чата по кнопке «Участвовать» или посмотреть свои вызовы. */
+async function onGroupApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
+  const now = Date.now();
+  const view = (c: GroupChallenge) => ({ id: c.id, title: c.title, exercise: c.exercise, endsAt: c.endsAt, rows: groupRows(c).sort((a, b) => b.reps - a.reps).slice(0, 20), me: who.id });
+  if (path === '/api/group/join') {
+    // Вызов ведётся по повторам Telegram-игроков: гостю нечего показывать в таблице чата.
+    if (!who.login) return reply(403, { error: 'Открой приложение из Telegram' });
+    const c = groups.join(String(body!.id ?? ''), who.id, villageName(who.id, body!) ?? '?', now);
+    if (!c) return reply(404, { error: 'Вызов уже закончился' });
+    return reply(200, { challenge: view(c) });
+  }
+  return reply(200, { challenges: groups.ofPlayer(who.id).map(view) });
+}
+// Таблицы вызовов: раз в 10 минут правим сообщение в чате, если счёт изменился; через неделю — итоги новым сообщением.
+let groupsTicking = false;
+async function groupsTick(): Promise<void> {
+  const now = Date.now();
+  for (const c of groups.pending()) {
+    // Итоги так и не дошли за три дня — больше не пытаемся.
+    if (c.finalPending && now > c.endsAt + 3 * 86_400_000) {
+      groups.update(c, { finalPending: false });
+      continue;
+    }
+    if (c.finalPending || now > c.endsAt) {
+      // Итоги: закрываем вызов, но помним, что их ещё надо доставить, пока Telegram не примет сообщение.
+      if (!c.done) groups.update(c, { done: true, finalPending: true });
+      if (await postGroupTable(c)) groups.update(c, { finalPending: false });
+      continue;
+    }
+    const text = tableText(c, groupRows(c), now);
+    if (!c.msg || text === c.shown) continue;
+    const r = await botApi(BOT_TOKEN)('editMessageText', { chat_id: c.chat, message_id: c.msg, text, reply_markup: groupButton(c) }, 15_000).catch(() => null);
+    const o = onGroupError(c, r);
+    // Показанный текст запоминаем только после успеха: при лимите или обрыве сети попробуем снова.
+    if (o === 'ok') groups.update(c, { shown: text });
+    // Таблицу удалили (или её уже нельзя править, или чат переехал) — публикуем заново.
+    else if (o === 'missing' || o === 'migrated') await postGroupTable(c);
+    await new Promise((res) => setTimeout(res, 100));
+  }
+}
+if (BOT_TOKEN)
+  setInterval(() => {
+    if (groupsTicking) return;
+    groupsTicking = true;
+    groupsTick().finally(() => (groupsTicking = false));
+  }, 10 * 60_000);
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
 const channelUpdate = (u: Update): boolean => {
   const reply = (chatId: number, text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null);
@@ -528,9 +738,11 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '📱 Сторис': '/story',
   '🎭 Рилс от персонажа': '/talk',
   '🧵 Пост в Threads': '/threads',
+  '⚖️ Баланс': '/balance',
+  '💳 Проверить оплату': '/testpay',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }, { text: '💳 Проверить оплату' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -702,7 +914,7 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
     const r = cities.set(me.id, body!.city, me.name, now);
     if (typeof r === 'string') return reply(400, { error: r });
   } else cities.rename(me.id, me.name);
-  reply(200, cities.board({ days: (id) => saves.get(id)?.progress?.days, level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
+  reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city }, me.id, now));
 }
 
 /** Итоги месяца: POST /api/recap ({ month }) — место среди игроков и города; POST /api/story-image ({ image }) — картинка для сторис. */
@@ -778,6 +990,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
     const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, now);
+    groups.forget(id);
     if (clan) {
       sendClan(clan);
       toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -791,6 +1004,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
   const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, Date.now());
+  groups.forget(id);
   if (clan) {
     sendClan(clan);
     toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -855,6 +1069,12 @@ const onPlayerText = (msg: NonNullable<Update['message']>): Record<string, unkno
  */
 const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   const q = u.pre_checkout_query;
+  // Проверочная оплата админа (/testpay): 1 ⭐, сразу возвращается, Pro и покупки не трогает.
+  if (q && isTestPayload(q.invoice_payload)) {
+    const ok = admins.has(`tg:${q.from.id}`) && q.currency === 'XTR' && q.total_amount === TEST_PAY_STARS;
+    if (ok) void botApi(BOT_TOKEN)('sendMessage', { chat_id: q.from.id, text: '✅ Шаг 2 из 4: Telegram спросил сервер перед оплатой — сервер подтвердил.' }, 15_000).catch(() => null);
+    return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok, ...(ok ? {} : { error_message: 'Только для проверки админом.' }) };
+  }
   if (q) {
     const error = sales.checkout(q.invoice_payload, q.currency, q.total_amount, proIds);
     return { method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: !error, ...(error ? { error_message: tl(langOfChat(q.from), error) } : {}) };
@@ -862,12 +1082,21 @@ const payUpdate = (u: Update): Record<string, unknown> | null | undefined => {
   const msg = u.message;
   const pay = msg?.successful_payment;
   if (!msg || !pay) return undefined;
+  if (isTestPayload(pay.invoice_payload)) {
+    void finishTestPay(msg.chat.id, pay.telegram_payment_charge_id, pay.total_amount);
+    return null;
+  }
+  const fresh = !sales.has(pay.telegram_payment_charge_id);
   const p = sales.paid(pay.invoice_payload, pay.telegram_payment_charge_id, `tg:${msg.chat.id}`, pay.total_amount, proIds, cleanName(msg.from?.first_name ?? '') || undefined);
   if (!p) {
     toAdmins(`⚠️ Оплата ${pay.total_amount} ⭐ от tg:${msg.chat.id} с непонятным счётом (${pay.invoice_payload.slice(0, 60)}). Код платежа: ${pay.telegram_payment_charge_id}`);
     return { method: 'sendMessage', chat_id: msg.chat.id, text: tl(langOfChat(msg.from), 'Оплата пришла, но мы не поняли, за что. Разработчик уже знает и разберётся.') };
   }
+  // Повтор того же платежа от Telegram: всё уже сделано, второй раз не считаем и не пишем админу.
+  if (!fresh) return null;
   toAdmins(saleAdminText(p));
+  // Воронка покупки: оплачено (знаменатель — «увидели предложение» и «нажали Купить» из игры). Pro для себя хранится без kind.
+  telemetry.serverEvent('paid', p.kind ?? 'pro');
   // Подарок: другу пишет бот туда, где он играет (Telegram или Max).
   if (p.kind === 'gift') sendFriendBot(p.account, giftText(p, p.name, langOf(p.account)), tl(langOf(p.account), 'Открыть пропуск'), '?tab=pass');
   const l = langOfChat(msg.from);
@@ -921,6 +1150,30 @@ async function sendTitanGifts(): Promise<string> {
   return `🎁 Подарки за Титана ${last.key}: отправлено ${sent} из ${last.top.length} по ${gift.star_count} ⭐.${fails.length ? `\nНе ушли: ${fails.join('; ')}` : ''}`;
 }
 
+/** Админ: /balance — множители баланса без релиза (server/balance.ts). */
+const adminBalance = (chatId: number, text: string): string | null => (admins.has(`tg:${chatId}`) ? balanceCommand(balanceFile, adminText(chatId, text)) : null);
+
+// Проверка оплаты звёздами от начала до конца, без настоящей покупки: /testpay в боте (только админ).
+const TEST_PAY_STARS = 1;
+const isTestPayload = (payload: string) => payload.startsWith('test:');
+/** Шаг 1: счёт на 1 ⭐ в чат админа. Дальше бот сам пишет, какой шаг прошёл. */
+const testPayCommand = (chatId: number, text: string): boolean => {
+  if (!/^\/testpay(?:@\w+)?$/.test(text.trim()) || !BOT_TOKEN || !admins.has(`tg:${chatId}`)) return false;
+  const api = botApi(BOT_TOKEN);
+  void api('sendInvoice', { chat_id: chatId, title: 'Проверка оплаты', description: 'Проверяем оплату звёздами и возврат. Звезда вернётся автоматически через пару секунд.', payload: `test:${chatId}:${Date.now()}`, currency: 'XTR', prices: [{ label: 'Проверка', amount: TEST_PAY_STARS }] }, 15_000)
+    .then((r) => api('sendMessage', { chat_id: chatId, text: r.ok ? '✅ Шаг 1 из 4: счёт создан. Оплати его кнопкой выше — бот проверит подтверждение, оплату и возврат.' : `❌ Шаг 1: счёт не создался — ${r.description ?? r.error_code}` }, 15_000))
+    .catch(() => null);
+  return true;
+};
+/** Шаги 3 и 4: оплата пришла — сразу возвращаем звезду и пишем итог. */
+async function finishTestPay(chatId: number, charge: string, stars: number): Promise<void> {
+  const api = botApi(BOT_TOKEN);
+  const say = (t: string) => api('sendMessage', { chat_id: chatId, text: t }, 15_000).catch(() => null);
+  await say(`✅ Шаг 3 из 4: оплата ${stars} ⭐ пришла серверу (код ${charge.slice(0, 12)}…).`);
+  const r = await api('refundStarPayment', { user_id: chatId, telegram_payment_charge_id: charge }, 15_000).catch((e: Error) => ({ ok: false, description: e.message, error_code: 0 }));
+  await say(r.ok ? '✅ Шаг 4 из 4: звезда возвращена. Оплата и возврат работают от начала до конца.' : `❌ Шаг 4: возврат не прошёл — ${r.description ?? r.error_code}. Верни вручную в @BotFather или напиши в поддержку Telegram.`);
+}
+
 /** Админ: /sales — покупки Pro, /refund_N — вернуть звёзды за покупку N (Pro по ней снимается). */
 const proCommand = (chatId: number, text: string): boolean => {
   const m = /^\/(?:refund_(\d+)|sales)(?:@\w+)?$/.exec(text.trim());
@@ -935,6 +1188,7 @@ const proCommand = (chatId: number, text: string): boolean => {
     .then((r) => {
       if (!r.ok && !/ALREADY_REFUNDED/.test(r.description ?? '')) return say(`Не вышло вернуть: ${r.description ?? r.error_code}`);
       sales.refunded(p.n);
+      telemetry.serverEvent('refund', p.kind ?? 'pro');
       const l = langOf(accounts.resolve(p.payer));
       const what = p.kind === 'starter' ? tl(l, 'набор «Новичок»') : 'Pro Pass';
       say(`↩️ Вернул ${p.stars} ⭐ за покупку #${p.n} (${p.name ?? p.payer}).${p.kind === 'starter' ? ' Вещи из набора остаются в игре.' : ' Pro по ней снят.'}`);
@@ -1016,12 +1270,13 @@ const http = createServer((req, res) => {
         const msg = (update as unknown as Update).message;
         const pay = payUpdate(update as unknown as Update);
         if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
-        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        if (proCommand(chat?.id ?? 0, msg?.text ?? '') || testPayCommand(chat?.id ?? 0, adminText(chat?.id ?? 0, msg?.text ?? '')) || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        if (groupUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
-        const admin = msg?.text && chat?.type === 'private' ? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text)) : null;
-        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
+        const admin = msg?.text && chat?.type === 'private' ? (adminBalance(chat.id, msg.text) ?? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text))) : null;
+        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && chat?.type === 'private' && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
         // Англоязычному игроку — своя кнопка меню «Play» вместо общей «Играть».
         if (BOT_TOKEN && msg?.text?.startsWith('/start') && chat?.type === 'private' && langOfChat(msg.from) === 'en') botApi(BOT_TOKEN)('setChatMenuButton', { chat_id: chat.id, menu_button: menuButton(APP_URL, 'en') }, 15_000).catch(() => null);
@@ -1034,8 +1289,12 @@ const http = createServer((req, res) => {
     onProApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
-  if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify') {
+  if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify' || path === '/api/letters') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/group/join' || path === '/api/group/state') {
+    onGroupApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/telemetry') return handleTelemetry(telemetry, req, res);
@@ -1100,6 +1359,11 @@ const http = createServer((req, res) => {
   if (req.url?.startsWith('/api/top')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(publicTop().map((p) => ({ name: p.name, cups: p.cups, wins: p.wins, pro: isPro(p.id) }))));
+    return;
+  }
+  if (req.url === '/api/balance') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(balanceFile.get()));
     return;
   }
   if (req.url === '/api/health') {
@@ -1345,8 +1609,23 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         if (!other || other.id === player.id || online.get(other.id) !== other) {
           queue.set(exercise, player);
           send({ type: 'queue', waiting: true });
+          // Никто не пришёл за 10 секунд — бой с записью игрока похожей силы.
+          const me = player;
+          stopGhostWait(me.id);
+          ghostWait.set(
+            me.id,
+            setTimeout(() => {
+              ghostWait.delete(me.id);
+              if (queue.get(exercise) !== me || online.get(me.id) !== me) return;
+              queue.delete(exercise);
+              const r = ghostFight(me, exercise);
+              me.send({ type: 'queue', waiting: false });
+              me.joinedRoom?.(r);
+            }, GHOST_WAIT_MS),
+          );
           return;
         }
+        stopGhostWait(other.id);
         queue.delete(exercise);
         const r = newRoom(exercise);
         r.join(other);
@@ -1358,6 +1637,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
         break;
       }
       case 'cancelQuick':
+        stopGhostWait(player.id);
         for (const [ex, p] of queue) if (p.id === player.id) queue.delete(ex);
         send({ type: 'queue', waiting: false });
         break;
@@ -1398,6 +1678,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   ws.on('close', () => {
     leaveRoom();
     if (!player) return;
+    if (online.get(player.id) === player) stopGhostWait(player.id);
     if (clanChannel) {
       clanSockets.get(player.id)?.delete(send);
       if (!clanSockets.get(player.id)?.size) clanSockets.delete(player.id);
@@ -1425,6 +1706,9 @@ if (ANY_BOT)
   setInterval(() => {
     for (const { save, date } of dueReminders(saves.all(), Date.now())) {
       if (!accounts.target(save.id)) continue;
+      // Сегодня уже было письмо бота — или оно вот-вот придёт (после трёх дней тишины «возвращайся» с подарком,
+      // в понедельник сводка недели): обычное напоминание не шлём, одно сообщение в день.
+      if (save.letterOn === date || (!save.lettersOff && (pendingStage(save, date) || weeklyDue(save, date)))) continue;
       saves.markReminded(save.id, date);
       const p = save.progress as { baseline?: typeof DEFAULT_BASELINE; dailyDone?: string } | null;
       const task = dailyTask(date, { ...DEFAULT_BASELINE, ...p?.baseline });
@@ -1439,6 +1723,40 @@ if (ANY_BOT)
       });
     }
   }, 5 * 60_000);
+// Возврат ушедших (3 и 7 дней без тренировки, с подарком в игре) и сводка недели по понедельникам: раз в 10 минут.
+// Отмечаем до отправки — после перезапуска повторов не будет. Шлём по одному, ~20 в секунду.
+let lettersSending = false;
+if (ANY_BOT)
+  setInterval(() => {
+    if (lettersSending) return;
+    const list = dueMessages(saves.all(), Date.now(), {
+      lang: langOf,
+      clanName: (id) => clans.clanOf(id)?.name,
+      petName: (id, pet) => {
+        const p = saves.get(id)?.progress as Partial<Progress> | null;
+        return p?.pets?.names?.[pet as PetId] || tl(langOf(id), petById(pet as PetId)?.name ?? '');
+      },
+      canWrite: (id) => !!accounts.target(id),
+    });
+    if (!list.length) return;
+    for (const m of list) saves.markLetter(m.id, m.date, m.mark, m.gift);
+    // Сколько писем ушло — знаменатель для letter_open (сколько вернулось по письму).
+    for (const m of list) telemetry.serverEvent('letter_sent', m.kind);
+    lettersSending = true;
+    (async () => {
+      for (const m of list) {
+        const started = Date.now();
+        // Метка в адресе кнопки: игра считает, сколько вернулось по каждому письму (letter_open).
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const r = await notifyPlayer(m.id, m.text, m.button, `?from=${m.kind}`).catch(() => null);
+          // Мессенджер просит подождать (429): ждём, сколько сказал, и пробуем ещё раз.
+          const retry = r?.status === 429 ? (r.retryAfter ?? 1) : 0;
+          await new Promise((res) => setTimeout(res, retry ? retry * 1000 : Math.max(0, 50 - (Date.now() - started))));
+          if (!retry) break;
+        }
+      }
+    })().finally(() => (lettersSending = false));
+  }, 10 * 60_000);
 // Рейд клана: раз в минуту смотрим, кому пора написать (начало, напоминание, итог).
 // Разосланное клан отмечает сразу, до отправки: после перезапуска повторов не будет.
 // Шлём по одному, не больше 20 сообщений в секунду (у Telegram предел около 30).
@@ -1492,8 +1810,9 @@ if (BOT_TOKEN)
       const thanks = onPlayerText(msg);
       if (thanks) botApi(BOT_TOKEN)('sendMessage', { chat_id: msg.chat.id, text: tl(langOfChat(msg.from), FEEDBACK_THANKS) }, 15_000).catch(() => null);
     },
-    (chatId, text) => (proCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : adminCommand(moderationDeps, chatId, adminText(chatId, text))),
+    (chatId, text) => (proCommand(chatId, text) || testPayCommand(chatId, adminText(chatId, text)) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
     (u) => {
+      if (groupUpdate(u)) return true;
       const pay = payUpdate(u);
       if (pay === undefined) return channelUpdate(u);
       if (pay) {
@@ -1531,6 +1850,8 @@ const ADMIN_COMMANDS = [
   { command: 'channel_me', description: 'Черновик для личного канала с кнопками' },
   { command: 'reports', description: 'Жалобы игроков' },
   { command: 'sales', description: 'Покупки Pro Pass и возвраты' },
+  { command: 'testpay', description: 'Проверить оплату звёздами: 1 ⭐ с автоматическим возвратом' },
+  { command: 'balance', description: 'Баланс игры без релиза: /balance ключ значение' },
   { command: 'reel', description: 'Новый рилс для Instagram (можно с темой)' },
   { command: 'carousel', description: 'Карусель для Instagram: /carousel tips|app [тема]' },
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
@@ -1567,6 +1888,8 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     saves.flush();
     friends.flush();
     cities.flush();
+    ghosts.flush();
+    groups.flush();
     guard.flush();
     telemetry.flush();
     mod.flush();

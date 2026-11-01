@@ -9,7 +9,7 @@ declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
 
 /** События — тот же список, что на сервере (EVENTS в server/telemetry.ts). */
-export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status';
+export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance' | 'group_join' | 'group_create' | 'invite_card' | 'offer_seen' | 'buy_tap' | 'buy_result' | 'offer_popup';
 
 export type ErrorKind = 'error' | 'promise' | 'react' | 'camera' | 'model' | 'webgl';
 
@@ -50,6 +50,53 @@ export function track(n: TrackEvent, p?: number | string): void {
   events.push(p == null ? { n } : { n, p });
   if (events.length > 100) events = events.slice(-100);
   schedule();
+}
+
+// Время до первого засчитанного повтора у новичка: от первого открытия знакомства до повтора.
+const FIRST_OPEN_KEY = 'fit-arena-first-open';
+const FIRST_REP_KEY = 'fit-arena-first-rep';
+
+/** Знакомство открыто впервые: запоминаем время (только у новичков — у старых игроков отсчёта нет). */
+export function markFirstOpen(at = Date.now()): void {
+  try {
+    if (!localStorage.getItem(FIRST_OPEN_KEY)) localStorage.setItem(FIRST_OPEN_KEY, String(at));
+  } catch {
+    // Без хранилища времени не узнаем.
+  }
+}
+
+/** Секунды до первого повтора, по корзинам: 30, 60, 120, 300 и 999 (дольше пяти минут). */
+export const firstRepBucket = (sec: number): number => [30, 60, 120, 300].find((b) => sec <= b) ?? 999;
+
+/** Первый засчитанный повтор новичка: событие один раз за всё время. */
+export function trackFirstRep(): void {
+  try {
+    const opened = Number(localStorage.getItem(FIRST_OPEN_KEY));
+    if (!opened || localStorage.getItem(FIRST_REP_KEY)) return;
+    localStorage.setItem(FIRST_REP_KEY, '1');
+    track('first_rep', firstRepBucket((Date.now() - opened) / 1000));
+  } catch {
+    // Без хранилища — без события.
+  }
+}
+
+const TH2_KEY = 'fit-arena-th2';
+/** Ратуша деревни впервые стала 2-го уровня: через сколько дней от первой тренировки (цель — 1–2 дня). */
+export function trackVillageTh2(th: number, days: Record<string, number>): void {
+  try {
+    // Только настоящий переход с 1-го уровня на этом телефоне: старые игроки с ратушей 2+ цифру не портят.
+    if (th < 2) {
+      if (!localStorage.getItem(TH2_KEY)) localStorage.setItem(TH2_KEY, 'th1');
+      return;
+    }
+    if (localStorage.getItem(TH2_KEY) !== 'th1') return localStorage.setItem(TH2_KEY, '1');
+    localStorage.setItem(TH2_KEY, '1');
+    const first = Object.keys(days).sort()[0];
+    const n = first ? Math.max(0, Math.round((Date.now() - Date.parse(`${first}T12:00:00`)) / 86_400_000)) : 0;
+    track('village_th2', Math.min(n, 99));
+  } catch {
+    // Без хранилища — без события.
+  }
 }
 
 /** То же, но не чаще раза за сессию (камера разрешена и т. п.). */

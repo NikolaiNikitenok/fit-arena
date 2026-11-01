@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { calibrationStatus, CalibrationStatus, resetCalibration, useCalibration } from './calibration';
 import { RecalibrateScreen } from './RecalibrateScreen';
-import { cloudState, onCloud, setRaidNotify, setRemind } from './cloud';
+import { cloudState, onCloud, setLetters, setRaidNotify, setRemind } from './cloud';
 import { heroLevel, heroXp, Progress } from './game/progress';
 import { EXERCISE_LABELS, REP_EXERCISES, RepExercise } from './repCounter';
 import { setSetting, Settings, useSettings } from './settings';
@@ -98,7 +98,8 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         {section === 'notify' && (
           <>
             <RemindRow />
-            <RaidNotifyRow />
+            <NotifyRow field="raidNotify" set={setRaidNotify} title={t('Уведомления о рейде')} text={t('Бот напишет в субботу, когда босс клана проснётся, напомнит в воскресенье вечером о несделанных атаках и пришлёт итог рейда.')} />
+            <NotifyRow field="letters" set={setLetters} title={t('Письма Мастера Грома')} text={t('Если пропадёшь на 3 или 7 дней, Гром напишет и оставит подарок; по понедельникам — сколько ты сделал за неделю. Не чаще одного сообщения в день.')} />
           </>
         )}
         {section === 'account' && (
@@ -318,15 +319,15 @@ function TelegramIdRow() {
   );
 }
 
-/** Сообщения бота о рейде клана: босс проснулся, осталось несколько часов, итог. */
-function RaidNotifyRow() {
+/** Переключатель сообщений бота: о рейде клана или письма Мастера Грома. */
+function NotifyRow({ field, set, title, text }: { field: 'raidNotify' | 'letters'; set: (on: boolean) => Promise<boolean>; title: string; text: string }) {
   const [cloud, setCloud] = useState(cloudState);
-  const [on, setOn] = useState(cloud?.raidNotify ?? true);
+  const [on, setOn] = useState(cloud?.[field] ?? true);
   useEffect(
     () =>
       onCloud((c) => {
         setCloud(c);
-        setOn(c.raidNotify);
+        setOn(c[field]);
       }),
     [],
   );
@@ -334,18 +335,18 @@ function RaidNotifyRow() {
   const change = (v: boolean) => {
     setOn(v);
     setBusy(true);
-    setRaidNotify(v)
+    set(v)
       .then(setOn)
-      .catch(() => setOn(cloud?.raidNotify ?? true))
+      .catch(() => setOn(cloud?.[field] ?? true))
       .finally(() => setBusy(false));
   };
   return (
     <label className="toggle-row">
       <div>
-        <div className="toggle-title">{t('Уведомления о рейде')}</div>
-        <div className="muted">{t('Бот напишет в субботу, когда босс клана проснётся, напомнит в воскресенье вечером о несделанных атаках и пришлёт итог рейда.')}</div>
+        <div className="toggle-title">{title}</div>
+        <div className="muted">{text}</div>
       </div>
-      <input type="checkbox" className="switch" checked={on} disabled={busy || !cloud?.bot || !cloud.telegram} onChange={(e) => change(e.target.checked)} />
+      <input type="checkbox" className="switch" checked={on} disabled={busy || !cloud?.bot || (field === 'raidNotify' && !cloud.telegram)} onChange={(e) => change(e.target.checked)} />
     </label>
   );
 }

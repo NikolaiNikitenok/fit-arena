@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DEFAULT_BALANCE, setBalance } from '../../../shared/balance';
+
+// Расчёты ниже — без усиления первых этажей; само усиление проверяет отдельный тест.
+beforeAll(() => setBalance({ earlyLoot: 1 }));
+afterAll(() => setBalance(DEFAULT_BALANCE));
 import { addCharge, villageOf } from '../resources';
 import type { Progress } from '../progress';
 import { findRuns, hint } from './engine';
@@ -171,6 +176,13 @@ describe('заряд, награды и сохранение', () => {
     expect(floorOpen(r.progress, 2)).toBe(false);
     expect(dungeonOf(r.progress).wins).toBe(0);
     expect(r.reward.daily).toBeNull();
+  });
+  it('первые этажи приносят больше: множитель с сервера', () => {
+    const run: Run = { ...startRun(floorDef(1), 13), status: 'lost', loot: { wood: 30, stone: 20, gold: 10 } };
+    setBalance({ earlyLoot: 2, earlyFloors: 10 });
+    const r = finishFloor(beginFloor(base(), 1)!, run, NOW);
+    setBalance({ earlyLoot: 1 });
+    expect(r.reward.loot.wood).toBe(2 * Math.round(30 * FAIL_KEEP));
   });
   it('хранитель и лучшее комбо запоминаются', () => {
     const p = { ...base(), dungeon: { reached: 10, stars: {}, bestCombo: 2, wins: 9, plays: 9, bosses: [] } } as Progress;

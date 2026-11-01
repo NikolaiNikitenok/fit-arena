@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { countRaidHit } from './raidHits';
 import { track } from '../telemetry';
 import { CHAT_MAX, clanPlace, COUNTRIES, defaultFlag, parseFlag, type ClanMemberView, type ClanSettings, type ClanView } from '../../shared/clan';
 import { CLAN_MAX_LEVEL, CLAN_REPS_PER_DAY, clanGift, clanLevel, clanPerks, clanUnlocks } from '../../shared/clanLevel';
@@ -204,6 +205,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
 
   const startAttack = () => {
     track('raid_start');
+    countRaidHit();
     send({ type: 'raidStart', exercise });
   };
   const lv = cl!;

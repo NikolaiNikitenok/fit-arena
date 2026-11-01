@@ -7,6 +7,7 @@ import { dirname } from 'node:path';
 import { canonicalKey, knownCity } from '../shared/cityNames';
 import { lastTitan, titanOf, titanWindow, type TitanWindow } from '../shared/titan';
 import { DAY_REPS_MAX } from './saves';
+import { cameraDays } from './cities';
 
 export const TITAN_MIN_HP = 10_000;
 // Повторов на игрока за неделю Титана, если прошлого Титана не было.
@@ -102,7 +103,7 @@ export class TitanBoard {
     if (hit && (now - hit.at < CACHE_MS || hit.at >= w.end)) return hit;
     const reps = new Map<string, number>();
     for (const s of this.d.saves()) {
-      const n = titanReps(s.progress?.days, w.dates);
+      const n = titanReps(cameraDays(s.progress), w.dates);
       if (n > 0) reps.set(s.id, n);
     }
     const city = new Map<string, string>();
@@ -145,7 +146,7 @@ export class TitanBoard {
         const from = w.start - 14 * DAY;
         const dates = Array.from({ length: 14 }, (_, i) => new Date(from + i * DAY + 3 * 3_600_000).toISOString().slice(0, 10));
         let active = 0;
-        for (const s of this.d.saves()) if (titanReps(s.progress?.days, dates) > 0) active++;
+        for (const s of this.d.saves()) if (titanReps(cameraDays(s.progress), dates) > 0) active++;
         hp = active * TITAN_HP_PER_PLAYER;
       }
       r = this.records[w.key] = { hp: niceHp(Math.max(TITAN_MIN_HP, hp)) };

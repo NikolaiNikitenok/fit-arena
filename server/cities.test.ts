@@ -72,3 +72,11 @@ describe('топ по городу', () => {
     expect(b.me).toMatchObject({ players: 3 });
   });
 });
+
+describe('cameraDays', () => {
+  it('убирает повторы без камеры', async () => {
+    const { cameraDays } = await import('./cities');
+    expect(cameraDays({ days: { a: 100, b: 20 }, manual: { a: 30, b: 50 } })).toEqual({ a: 70, b: 0 });
+    expect(cameraDays(undefined)).toEqual({});
+  });
+});

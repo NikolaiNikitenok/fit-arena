@@ -15,7 +15,7 @@ export function friendParam(startParam: string | null | undefined, search: strin
 
 /** start_param — не код боя: у приглашений в клан и в друзья свои приставки, у вкладки из кнопки бота в Max — tab-,
  *  у меток рекламы и постов — src-. */
-export const isNamedParam = (p: string) => /^(clan|friend|tab|src)-/.test(p);
+export const isNamedParam = (p: string) => /^(clan|friend|tab|src|gc)-/.test(p);
 
 /** Откуда открыли приложение — для статистики админа. Своя метка: t.me/<бот>?start=src-МЕТКА
  *  (бот передаст ?src=МЕТКА) или ?startapp=src-МЕТКА. Иначе — по виду ссылки. */
@@ -25,6 +25,7 @@ export function launchSource(startParam: string | null | undefined, search: stri
   if (tag) return tag.toLowerCase();
   if (startParam?.startsWith('clan-') || q.get('clan')) return 'clan';
   if (startParam?.startsWith(FRIEND_PREFIX) || q.get('friend')) return 'friend';
+  if (startParam?.startsWith('gc-') || q.get('gc')) return 'group';
   if (startParam?.startsWith('tab-') || q.get('tab')) return 'bot';
   if ((startParam && !isNamedParam(startParam)) || q.get('room')) return 'duel';
   return platform === 'tg' ? 'direct' : platform;

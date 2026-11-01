@@ -1,12 +1,15 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
-import { freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress } from './game/progress';
+import { claimGift, freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress, saveProgress } from './game/progress';
+import { rememberUnlocks } from './game/unlocks';
 import { guestId, setMaxBot, tg } from './telegram';
-import { reportError } from './telemetry';
+import { reportError, track, trackVillageTh2 } from './telemetry';
+import { thLevel } from '../shared/village';
 import { getLang, t, tErr } from './i18n';
 
 // Язык — чтобы бот писал игроку на языке игры.
-const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId(), lang: getLang() });
+// tz — пояс телефона (минуты к востоку от UTC): бот пишет днём по времени игрока (server/winback.ts).
+const auth = () => ({ initData: tg?.initData ?? '', guestId: guestId(), lang: getLang(), tz: -new Date().getTimezoneOffset() });
 
 export const post = (path: string, body: object, keepalive = false) =>
   fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth(), ...body }), keepalive }).then(async (r) => {
@@ -104,7 +107,7 @@ export interface StarterOffer {
   price: number;
   bought: boolean;
 }
-type CloudState = { remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
+type CloudState = { inClan?: boolean; remind: Remind | null; bot: boolean; telegram: boolean; pro: boolean; proOffer: ProOffer | null; starter: StarterOffer | null; raidNotify: boolean; letters: boolean; admin: boolean; account?: string; linkable: boolean; emoji: Record<string, string> };
 let cloud: CloudState | null = null;
 const listeners = new Set<(c: CloudState) => void>();
 
@@ -165,6 +168,8 @@ function onSaveError(e: { status?: number; body?: { account?: string } }): boole
 /** Запуск синхронизации. onRemote — пришла более свежая копия с сервера. */
 export async function startCloud(onRemote: (p: Progress) => void): Promise<void> {
   onProgressSaved((p) => {
+    // Первое улучшение ратуши: проверка экономики деревни для новичков (shared/balance.ts earlyLoot).
+    if (p.village?.b) trackVillageTh2(thLevel({ b: p.village.b }), p.days);
     pending = p;
     if (cloud && !timer) timer = setTimeout(push, 1500);
   });
@@ -179,14 +184,21 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       proOffer?: ProOffer | null;
       starter?: StarterOffer | null;
       raidNotify?: boolean;
+      letters?: boolean;
       emoji?: Record<string, string>;
       admin?: boolean;
       account?: string;
       linkable?: boolean;
       maxBot?: string | null;
+      // Ступени разделов: играл до них (всё открыто), был в дуэлях, состоит в клане.
+      veteran?: boolean;
+      duels?: boolean;
+      clan?: boolean;
+      // Подарок бота за возвращение (server/winback.ts).
+      gift?: { id: string; coins: number; vigor?: number; text: string } | null;
     };
     setMaxBot(r.maxBot);
-    cloud = { remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
+    cloud = { inClan: !!r.clan, remind: r.remind, bot: r.bot, telegram: r.telegram, pro: !!r.pro, proOffer: r.proOffer ?? null, starter: r.starter ?? null, raidNotify: r.raidNotify !== false, letters: r.letters !== false, admin: !!r.admin, account: r.account, linkable: !!r.linkable, emoji: r.emoji ?? {} };
     listeners.forEach((fn) => fn(cloud!));
     // В телефоне прогресс другого аккаунта (вход привязали к другому герою на другой платформе): он здесь больше не нужен.
     const before = storedAccount();
@@ -208,12 +220,37 @@ export async function startCloud(onRemote: (p: Progress) => void): Promise<void>
       pending ??= { ...local, savedAt: local.savedAt || Date.now() };
       push();
     }
+    // Сервер знает игрока по прежней версии, дуэлям или клану: эти разделы не закрываем (src/game/unlocks.ts).
+    const cur = loadProgress();
+    const opened = r.veteran && cur.gates !== 'all' ? { ...cur, gates: 'all' as const } : rememberUnlocks(cur, [...(r.duels ? ['duel' as const] : []), ...(r.clan ? ['clan' as const] : [])]);
+    if (opened !== cur) onRemote(saveProgress(opened));
+    // Подарок за возвращение: забираем один раз и показываем, что пришло.
+    const gifted = r.gift ? claimGift(loadProgress(), r.gift) : null;
+    if (gifted && r.gift) {
+      track('gift_claim', r.gift.id.split('-')[0]);
+      onRemote(gifted);
+      giftListeners.forEach((fn) => fn(r.gift!.text));
+    }
   } catch {
     // Сервер недоступен: играем на копии в телефоне, отправим в следующий раз.
   }
 }
 
 export const cloudState = () => cloud;
+
+const giftListeners = new Set<(text: string) => void>();
+/** Пришёл подарок за возвращение: текст для тоста. */
+export function onGift(fn: (text: string) => void): () => void {
+  giftListeners.add(fn);
+  return () => giftListeners.delete(fn);
+}
+
+/** Состоит ли игрок в клане (по ответу сервера): «Тренировка дня» зовёт в рейд. */
+export function useInClan(): boolean {
+  const [v, setV] = useState(() => !!cloud?.inClan);
+  useEffect(() => onCloud((c) => setV(!!c.inClan)), []);
+  return v;
+}
 
 /** Есть ли Pro Pass: до ответа сервера — нет. */
 export function usePro(): boolean {
@@ -252,6 +289,13 @@ export async function giftTrial(forId: string): Promise<void> {
   }
 }
 
+/** Сервер ответил на загрузку прогресса: знаем Pro, набор и прочее. До этого предложения покупки не показываем. */
+export function useCloudReady(): boolean {
+  const [v, setV] = useState(() => !!cloud);
+  useEffect(() => onCloud(() => setV(true)), []);
+  return v;
+}
+
 /** Набор «Новичок» (null — до ответа сервера или гость). */
 export function useStarter(): StarterOffer | null {
   const [s, setS] = useState(() => cloud?.starter ?? null);
@@ -280,6 +324,13 @@ export async function setRemind(hour: number | null): Promise<Remind | null> {
 }
 
 /** Уведомления бота о рейде клана: начало, напоминание, итог. */
+/** Письма Мастера Грома: «возвращайся» после нескольких дней без тренировки и сводка недели по понедельникам. */
+export async function setLetters(on: boolean): Promise<boolean> {
+  const r = (await post('/api/letters', { on })) as { letters: boolean };
+  if (cloud) cloud.letters = r.letters;
+  return r.letters;
+}
+
 export async function setRaidNotify(on: boolean): Promise<boolean> {
   const r = (await post('/api/raid-notify', { on })) as { raidNotify: boolean };
   if (cloud) cloud.raidNotify = r.raidNotify;

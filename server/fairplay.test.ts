@@ -187,6 +187,10 @@ describe('уровень героя, который видят другие', ()
     expect(plausibleXp(null, now)).toBe(0);
   });
 
+  it('повторы «посчитал сам» опыта не дают', () => {
+    expect(plausibleXp({ days: { '2026-10-19': 100, '2026-10-20': 50 }, manual: { '2026-10-19': 60, '2026-10-20': 80 } }, now)).toBe(40);
+  });
+
   it('растёт не быстрее XP_DAY_MAX в день, первая копия — не больше FIRST_XP_MAX', () => {
     const clips: string[] = [];
     const s = new SaveStore(null);

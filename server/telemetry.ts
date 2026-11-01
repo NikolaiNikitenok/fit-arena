@@ -10,7 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { anonSource } from '../shared/anon';
 
 /** События клиента. Новое событие — сначала сюда, иначе сервер его не примет. */
-export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status'] as const;
+export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status', 'manual_start', 'first_rep', 'unlock', 'letter_open', 'gift_claim', 'weekly_card', 'ghost_fight', 'village_th2', 'balance', 'group_join', 'group_create', 'invite_card', 'offer_seen', 'buy_tap', 'buy_result', 'offer_popup'] as const;
 export type EventName = (typeof EVENTS)[number];
 
 /** Шаги воронки: бит в карточке игрока. */
@@ -290,6 +290,14 @@ export class Telemetry {
   private count(d: Day, key: string, n = 1): void {
     if (!(key in d.events) && Object.keys(d.events).length >= MAX_DAY_KEYS) return;
     d.events[key] = (d.events[key] ?? 0) + n;
+  }
+
+  /** Счётчик дня с самого сервера (без игрока): например, сколько писем бота ушло. */
+  serverEvent(name: string, param?: string): void {
+    const d = this.dayRec(mskDay(this.now()));
+    this.count(d, name);
+    if (param) this.count(d, `${name}:${param}`);
+    this.save();
   }
 
   /** Пакет с телефона. Возвращает HTTP-код ответа. */

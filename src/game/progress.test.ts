@@ -133,3 +133,22 @@ describe('повторы вне карты', () => {
     expect(loadProgress().days[dayKey(NOW)]).toBe(25);
   });
 });
+
+describe('подарки и бесплатные попытки', () => {
+  it('подарок за возвращение забирается один раз', async () => {
+    const { claimGift, loadProgress } = await import('./progress');
+    const p = loadProgress();
+    const g = claimGift(p, { id: 'wb7-2026-11-08', coins: 200, vigor: 2 })!;
+    expect(g.coins).toBe(p.coins + 200);
+    expect(g.potions?.vigor).toBe((p.potions?.vigor ?? 0) + 2);
+    expect(claimGift(g, { id: 'wb7-2026-11-08', coins: 200, vigor: 2 })).toBeNull();
+  });
+  it('испытание бесплатно только до первой победы', async () => {
+    const { freeAttempt, loadProgress } = await import('./progress');
+    const p = loadProgress();
+    expect(freeAttempt(p, { id: 1, type: 'trial' })).toBe(true);
+    expect(freeAttempt({ ...p, stars: { 1: 2 } }, { id: 1, type: 'trial' })).toBe(false);
+    expect(freeAttempt(p, { id: 5, type: 'build' })).toBe(false);
+    expect(freeAttempt(p, { id: 5, type: 'build', daily: true })).toBe(true);
+  });
+});
