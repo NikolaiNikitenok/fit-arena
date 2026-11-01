@@ -19,6 +19,10 @@ export interface ReelsDeps {
   now?: () => number;
 }
 
+/** Ссылка на бота с меткой публикации: src-reel-N, src-talk-N, src-car-N, src-story-N (server/statsPage.ts contentRows). */
+export const contentLink = (job: "reel" | "carousel" | "story" | "talk", n: number) =>
+  `https://t.me/ArenaNikitenokBot?start=src-${job === "carousel" ? "car" : job}-${n}`;
+
 /** Запуск workflow через API GitHub. */
 export async function dispatchReel(
   token: string,
@@ -176,15 +180,18 @@ export class Reels {
     void (this.d.dispatch ?? dispatchReel)(token, inputs, J.workflow).then(
       (r) => {
         const about = topic ? ` на тему «${topic}»` : "";
+        // Своя метка у каждого ролика и карусели: ссылку с ней ставь в стикер сторис, закреп или профиль —
+        // статистика («Контент по цифрам») покажет, сколько пришло и вернулось именно с него.
+        const tagLine = `\n🔗 Ссылка с меткой для этой публикации: ${contentLink(job, n)}`;
         if (r.ok)
           return reply(
-            job === "carousel"
+            (            job === "carousel"
               ? `🖼 Делаю карусель №${n} ${kind === "app" ? "про приложение" : "с советами"}${about}. Пришлю картинки примерно через минуту.`
               : job === "story"
                 ? `📱 Делаю сторис №${n}${about}: три картинки на выбор. Пришлю примерно через минуту.`
                 : job === "talk"
                   ? `🎭 Делаю рилс от персонажа №${n}${about}: ведёт ${TALK_HOSTS[n % 4]}, тон ${TALK_TONES[n % 3]}. Пришлю файл минут через 10–12.`
-                  : `🎬 Делаю рилс №${n}${about}. Пришлю файл минут через 5–7.`,
+                  : `🎬 Делаю рилс №${n}${about}. Пришлю файл минут через 5–7.`) + tagLine,
           );
         this.state[J.at] = 0;
         this.save();

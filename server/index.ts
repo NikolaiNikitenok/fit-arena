@@ -50,7 +50,7 @@ import { heroPower } from '../src/game/power';
 import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
 import { dueMessages, pendingStage, weeklyDue } from './winback';
-import { challengeScore, GroupChallenges, type GroupChallenge, parseGroupCommand, tableText } from './groupChallenges';
+import { challengeScore, GROUP_POST_COOLDOWN_MS, GroupChallenges, type GroupChallenge, parseGroupCommand, tableText, tgOutcome } from './groupChallenges';
 import { petById, type PetId } from '../src/game/pets';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
@@ -592,33 +592,69 @@ const reels = new Reels(process.env.REELS_FILE ?? join(dirname(process.env.DATA_
 const groups = new GroupChallenges(process.env.GROUPS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'group-challenges.json'));
 const groupRows = (c: GroupChallenge) => Object.entries(c.members).map(([id, m]) => ({ id, name: m.name, reps: challengeScore(saves.get(id)?.progress, c.exercise, c.from, c.to) }));
 const groupButton = (c: GroupChallenge) => ({ inline_keyboard: [[{ text: tl(c.lang, 'Участвовать'), url: `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=gc-${c.id}` }]] });
-/** Опубликовать таблицу новым сообщением (новый вызов, /top, итоги). */
-async function postGroupTable(c: GroupChallenge): Promise<void> {
+type TgResult = Awaited<ReturnType<ReturnType<typeof botApi>>>;
+/** Ответ Telegram на сообщение в группе: что делать с вызовом (server/groupChallenges.ts tgOutcome). */
+function onGroupError(c: GroupChallenge, r: TgResult | null): 'ok' | 'retry' | 'migrated' | 'missing' | 'gone' {
+  const o = tgOutcome(r);
+  if (o === 'migrated') groups.migrate(c.chat, Number(r!.parameters!.migrate_to_chat_id));
+  // Бота удалили из чата или запретили писать: вызов закрываем.
+  if (o === 'gone') groups.update(c, { done: true, finalPending: false });
+  return o;
+}
+/** Опубликовать таблицу новым сообщением (новый вызов, /top, итоги). false — не вышло (сеть, лимит): попробуем позже. */
+async function postGroupTable(c: GroupChallenge, attempt = 0): Promise<boolean> {
   const text = tableText(c, groupRows(c), Date.now());
   const r = await botApi(BOT_TOKEN)('sendMessage', { chat_id: c.chat, text, reply_markup: c.done ? undefined : groupButton(c) }, 15_000).catch(() => null);
+  const o = onGroupError(c, r);
+  // Группа стала супергруппой: тот же вызов, новый id чата — отправляем ещё раз.
+  if (o === 'migrated' && attempt < 1) return postGroupTable(c, attempt + 1);
+  if (o !== 'ok') return false;
   const id = (r?.result as { message_id?: number } | undefined)?.message_id;
-  // Бота удалили из чата или запретили писать: вызов закрываем.
-  if (r && !r.ok && (r.error_code === 403 || r.error_code === 400)) return groups.update(c, { done: true });
-  if (id) groups.update(c, { msg: id, shown: text });
+  groups.update(c, { msg: id, shown: text, postedAt: Date.now() });
+  return true;
 }
 /** Сообщение в группе: /challenge [упражнение], /start gc-… (бота добавили кнопкой из игры), /top. true — разобрано. */
 const groupUpdate = (u: Update): boolean => {
+  // Бота удалили из группы: вызов в ней закрываем сразу, а не через неделю ошибок.
+  const member = u.my_chat_member;
+  if (member && (member.chat.type === 'group' || member.chat.type === 'supergroup')) {
+    if (member.new_chat_member.status === 'left' || member.new_chat_member.status === 'kicked') {
+      const live = groups.ofChat(member.chat.id);
+      if (live) groups.update(live, { done: true });
+    }
+    return true;
+  }
   const msg = u.message;
-  if (!BOT_TOKEN || !msg?.text || (msg.chat.type !== 'group' && msg.chat.type !== 'supergroup')) return false;
-  const cmd = parseGroupCommand(msg.text);
+  if (!BOT_TOKEN || !msg || (msg.chat.type !== 'group' && msg.chat.type !== 'supergroup')) return false;
+  // Группа стала супергруппой: переносим идущий вызов на новый id чата.
+  if (msg.migrate_to_chat_id) {
+    groups.migrate(msg.chat.id, msg.migrate_to_chat_id);
+    return true;
+  }
+  if (!msg.text) return false;
+  const cmd = parseGroupCommand(msg.text, botUsername);
   if (!cmd) return false;
   const chat = msg.chat as { id: number; type: string; title?: string };
+  const l = langOfChat(msg.from);
+  const say = (text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chat.id, text, reply_to_message_id: msg.message_id }, 15_000).catch(() => null);
+  if (cmd.kind === 'unknown') {
+    say(tl(l, 'Такого упражнения нет. Можно: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.'));
+    return true;
+  }
   const live = groups.ofChat(chat.id);
+  const now = Date.now();
+  // Таблицу новым сообщением — не чаще раза в минуту на чат: /top и /challenge подряд не зальют чат.
+  const cooling = (c: GroupChallenge) => !!c.postedAt && now - c.postedAt < GROUP_POST_COOLDOWN_MS;
   if (cmd.kind === 'top') {
-    if (live) void postGroupTable(live);
-    else void botApi(BOT_TOKEN)('sendMessage', { chat_id: chat.id, text: tl(langOfChat(msg.from), 'Сейчас вызова нет. Начните: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.') }, 15_000).catch(() => null);
+    if (!live) say(tl(l, 'Сейчас вызова нет. Начните: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.'));
+    else if (!cooling(live)) void postGroupTable(live);
     return true;
   }
   const by = msg.from?.id ? accounts.resolve(`tg:${msg.from.id}`) : '';
-  const { c, created } = groups.create(chat.id, chat.title ?? '', cmd.exercise, by, msg.from?.first_name ?? '', langOfChat(msg.from), Date.now());
+  const { c, created } = groups.create(chat.id, chat.title ?? '', cmd.exercise, by, msg.from?.first_name ?? '', l, now);
   // Сколько вызовов начато (и в скольких чатах) — рост через группы виден в статистике.
   if (created) telemetry.serverEvent('group_start', cmd.exercise);
-  void postGroupTable(c);
+  if (!cooling(c)) void postGroupTable(c);
   return true;
 };
 /** Игра: вступить в вызов чата по кнопке «Участвовать» или посмотреть свои вызовы. */
@@ -640,20 +676,32 @@ async function onGroupApi(path: string, req: IncomingMessage, res: ServerRespons
   return reply(200, { challenges: groups.ofPlayer(who.id).map(view) });
 }
 // Таблицы вызовов: раз в 10 минут правим сообщение в чате, если счёт изменился; через неделю — итоги новым сообщением.
+let groupsTicking = false;
+async function groupsTick(): Promise<void> {
+  const now = Date.now();
+  for (const c of groups.pending()) {
+    if (c.finalPending || now > c.endsAt) {
+      // Итоги: закрываем вызов, но помним, что их ещё надо доставить, пока Telegram не примет сообщение.
+      if (!c.done) groups.update(c, { done: true, finalPending: true });
+      if (await postGroupTable(c)) groups.update(c, { finalPending: false });
+      continue;
+    }
+    const text = tableText(c, groupRows(c), now);
+    if (!c.msg || text === c.shown) continue;
+    const r = await botApi(BOT_TOKEN)('editMessageText', { chat_id: c.chat, message_id: c.msg, text, reply_markup: groupButton(c) }, 15_000).catch(() => null);
+    const o = onGroupError(c, r);
+    // Показанный текст запоминаем только после успеха: при лимите или обрыве сети попробуем снова.
+    if (o === 'ok') groups.update(c, { shown: text });
+    // Таблицу удалили (или её уже нельзя править, или чат переехал) — публикуем заново.
+    else if (o === 'missing' || o === 'migrated') await postGroupTable(c);
+    await new Promise((res) => setTimeout(res, 100));
+  }
+}
 if (BOT_TOKEN)
   setInterval(() => {
-    const now = Date.now();
-    for (const c of groups.active()) {
-      if (now > c.endsAt) {
-        groups.update(c, { done: true });
-        void postGroupTable(c);
-        continue;
-      }
-      const text = tableText(c, groupRows(c), now);
-      if (!c.msg || text === c.shown) continue;
-      groups.update(c, { shown: text });
-      void botApi(BOT_TOKEN)('editMessageText', { chat_id: c.chat, message_id: c.msg, text, reply_markup: groupButton(c) }, 15_000).catch(() => null);
-    }
+    if (groupsTicking) return;
+    groupsTicking = true;
+    groupsTick().finally(() => (groupsTicking = false));
   }, 10 * 60_000);
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
 const channelUpdate = (u: Update): boolean => {

@@ -26,7 +26,7 @@ const SOURCE_NAMES: Record<string, string> = {
   unknown: 'Неизвестно',
   other: 'Прочие метки',
 };
-export const sourceName = (o: string) => SOURCE_NAMES[o] ?? (o.startsWith('ch-') ? `Канал: ${o.slice(3)}` : o.startsWith('th-') ? `Threads: ${o.slice(3)}` : `Метка «${o}»`);
+export const sourceName = (o: string) => SOURCE_NAMES[o] ?? (o.startsWith('ch-') ? `Канал: ${o.slice(3)}` : o.startsWith('th-') ? `Threads: ${o.slice(3)}` : /^(reel|talk|car|story)-\d+$/.test(o) ? `${{ reel: 'Рилс', talk: 'Рилс от персонажа', car: 'Карусель', story: 'Сторис' }[o.split('-')[0]]} №${o.split('-')[1]}` : `Метка «${o}»`);
 
 // Продвижение за деньги (каталоги, взаимная реклама, Telegram Ads) — только когда D1 дошёл до этой доли.
 export const PROMO_D1 = 0.25;
@@ -42,6 +42,8 @@ export function promoGate(d1: number, cohort: number): { ok: boolean; text: stri
     : { ok: false, text: `Продвижение в Telegram: рано — D1 ${pctText}, нужно ${PROMO_D1 * 100}%. Платить за игроков, которые уходят в первый день, бессмысленно: сначала удержание.` };
 }
 
+export const CONTENT_MIN = 10;
+
 export interface ContentRow {
   source: string;
   users: number;
@@ -53,9 +55,10 @@ export interface ContentRow {
 /** «Контент по цифрам»: метки постов (ch-, th-, канал, Threads, рилсы) — сколько пришло и сколько вернулось назавтра.
  *  «Оставить» — два формата, которые дают больше всего вернувшихся (не кликов). */
 export function contentRows(sources: Stats['sources']): ContentRow[] {
-  const rows = sources.filter((x) => /^(ch-|th-|reel|story|carousel|insta)/.test(x.source) || x.source === 'channel' || x.source === 'threads');
+  const rows = sources.filter((x) => /^(ch-|th-|reel|talk|car-|story|insta)/.test(x.source) || x.source === 'channel' || x.source === 'threads');
+  // «Оставить» — только где выборка уже что-то значит: хотя бы 10 новичков с известным D1.
   const best = [...rows]
-    .filter((x) => x.d1 > 0)
+    .filter((x) => x.d1 > 0 && x.d1Of >= CONTENT_MIN)
     .sort((a, b) => b.d1 - a.d1 || b.d1 / Math.max(1, b.d1Of) - a.d1 / Math.max(1, a.d1Of))
     .slice(0, 2)
     .map((x) => x.source);
@@ -139,6 +142,9 @@ export function statsHtml(s: Stats, opts: { inApp?: boolean } = {}): string {
   const ret = s.retention.filter((r) => r.cohort > 0);
   const d1 = ret.filter((r) => r.d1 != null);
   const d1Rate = d1.length ? d1.reduce((a, r) => a + r.d1!, 0) / Math.max(1, d1.reduce((a, r) => a + r.cohort, 0)) : null;
+  // Для решения о рекламе — только когорты, чей «завтра» уже закончился (вчерашние ещё могут вернуться сегодня).
+  const yesterday = new Date(Date.parse(`${s.today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const settled = d1.filter((r) => r.date < yesterday);
   const funnelMax = Math.max(1, s.funnel[0]?.users ?? 1);
   const tile = (label: string, value: string, note = '') => `<div class="tile"><div class="tl">${esc(label)}</div><div class="tv">${esc(value)}</div>${note ? `<div class="tn">${esc(note)}</div>` : ''}</div>`;
   const worst = worstStep(s.funnel);
@@ -183,7 +189,7 @@ ${tile('Удержание D1', d1Rate == null ? '—' : `${Math.round(d1Rate * 
 ${tile('Ошибок за 7 дней', String(errors7), `${s.errors.length} разных`)}
 </div>
 
-<div class="hint" style="margin-top:12px">${esc(promoGate(d1.reduce((a, r) => a + r.d1!, 0), d1.reduce((a, r) => a + r.cohort, 0)).text)}</div>
+<div class="hint" style="margin-top:12px">${esc(promoGate(settled.reduce((a, r) => a + r.d1!, 0), settled.reduce((a, r) => a + r.cohort, 0)).text)}</div>
 
 <h2>Главное</h2>
 <ul class="main">${insights(s).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
@@ -242,7 +248,7 @@ ${(
 </table></div>
 
 <h2>Контент по цифрам</h2>
-<div class="hint">У каждого поста своя метка: <code>ch-рубрика</code> — канал, <code>th-рубрика</code> — Threads. Считаем не лайки, а сколько новичков пришло и сколько вернулось на следующий день. Через две недели оставляем два формата с пометкой «оставить».</div>
+<div class="hint">У каждого поста своя метка: <code>ch-рубрика</code> — канал, <code>th-рубрика</code> — Threads, <code>reel-N</code>, <code>talk-N</code>, <code>car-N</code>, <code>story-N</code> — рилсы, карусели и сторис (ссылку с меткой бот присылает вместе с заказом). Данные за ${s.days} дней; «оставить» — при 10+ новичках с известным D1. Считаем не лайки, а сколько новичков пришло и сколько вернулось на следующий день. Через две недели оставляем два формата с пометкой «оставить».</div>
 <div class="card scroll"><table>
 <tr><th>Формат</th><th class="n">Новых</th><th class="n">Вернулись (D1)</th><th></th></tr>
 ${contentRows(s.sources).map((x) => `<tr><td>${esc(sourceName(x.source))}</td><td class="n">${x.users}</td><td class="n">${x.d1Of ? `${x.d1} · ${pct(x.d1, x.d1Of)}` : '—'}</td><td>${x.keep ? '<b>оставить</b>' : ''}</td></tr>`).join('\n') || '<tr><td colspan="4" class="muted">Пока никто не пришёл по меткам постов</td></tr>'}

@@ -80,19 +80,23 @@ export interface TgMessage {
   photo?: { file_id: string; width: number; height: number }[];
   media_group_id?: string;
   reply_to_message?: { message_id: number };
+  // Группа стала супергруппой: новый id чата (server/groupChallenges.ts).
+  migrate_to_chat_id?: number;
   // Оплата звёздами прошла (Pro Pass, server/proSales.ts).
   successful_payment?: { currency: string; total_amount: number; invoice_payload: string; telegram_payment_charge_id: string };
 }
 export interface Update {
   update_id: number;
   message?: TgMessage;
+  // Бота добавили в чат или удалили из него (вызовы в группах).
+  my_chat_member?: { chat: { id: number; type: string }; new_chat_member: { status: string } };
   // Нажатие кнопки под сообщением бота (черновики постов для канала).
   callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; chat: { id: number } } };
   // Игрок нажал «Оплатить»: за 10 секунд нужно подтвердить или отказать.
   pre_checkout_query?: { id: string; from: { id: number; first_name?: string; language_code?: string }; currency: string; total_amount: number; invoice_payload: string };
 }
 
-type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number } };
+type TgReply = { ok: boolean; result?: unknown; description?: string; error_code?: number; parameters?: { retry_after?: number; migrate_to_chat_id?: number } };
 
 // Адрес Bot API: если с сервера Telegram недоступен напрямую, можно указать свой прокси-адрес.
 const TG_API = (process.env.TG_API_BASE ?? 'https://api.telegram.org').replace(/\/$/, '');
@@ -282,7 +286,7 @@ export function runBot(token: string, appUrl: string, clanByCode: Parameters<typ
     await api('setChatMenuButton', { menu_button: menuButton(appUrl, 'ru') }).catch(() => null);
     for (;;) {
       try {
-        const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'pre_checkout_query'] });
+        const r = await api('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'pre_checkout_query', 'my_chat_member'] });
         if (r.error_code === 409) {
           botStatus.webhook = true;
           botStatus.polling = false;

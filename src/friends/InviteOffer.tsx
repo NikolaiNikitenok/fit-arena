@@ -1,5 +1,5 @@
 // «Позови троих — легендарный облик»: одна заметная награда за приглашение, и показываем её сразу после
-// яркой победы (три звезды или босс), когда игрок доволен. Не чаще раза в день, пока облик не получен.
+// яркой победы (три звезды на обычном уровне), когда игрок доволен. Не чаще раза в день, пока облик не получен.
 import { useState } from 'react';
 import { friendsApi } from './api';
 import { OutfitFace } from '../game/EventScreen';
@@ -20,7 +20,8 @@ export function inviteOfferDue(p: Progress, stars: number, boss: boolean, today:
   if (platform !== 'tg' || p.items.includes(LEADER) || refCount(p) >= REF_LEADER_AT) return false;
   // Друзья и дуэли открываются с 5-го уровня карты: раньше новичку не до приглашений.
   if (!isUnlocked(p, 'duel')) return false;
-  if (stars < 3 && !boss) return false;
+  // Только три звезды на обычном уровне: после босса и так есть «Поделиться победой» — две кнопки рядом мешают.
+  if (stars < 3 || boss) return false;
   try {
     return localStorage.getItem(KEY) !== today;
   } catch {

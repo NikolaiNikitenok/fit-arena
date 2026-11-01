@@ -3587,7 +3587,7 @@ export const EN: Record<string, string> = {
   "Если пропадёшь на 3 или 7 дней, Гром напишет и оставит подарок; по понедельникам — сколько ты сделал за неделю. Не чаще одного сообщения в день.": "If you disappear for 3 or 7 days, Thunder will write and leave a gift; on Mondays, how much you did that week. No more than one message a day.",
   "{0} · запись": "{0} · recording",
   "Тень Грома · тренировка": "Thunder's Shadow · training",
-  "Давай тренироваться вместе в NikitenokArena: камера считает отжимания, а каждый повтор бьёт врага. Проведи первый бой — получишь облик «Побратим»!": "Let's train together in NikitenokArena: the camera counts push-ups and every rep hits an enemy. Win your first fight and get the “Blood Brother” outfit!",
+  "Давай тренироваться вместе в NikitenokArena: камера считает отжимания, а каждый повтор бьёт врага. Проведи первый бой — получишь облик «Побратим»!": "Let's train together in NikitenokArena: the camera counts push-ups and every rep hits an enemy. Finish your first fight and get the “Blood Brother” outfit!",
   "Позови {0} друзей — облик «{1}»": "Invite {0} friends — get the “{1}” outfit",
   "Легендарный, +25% монет. Друг засчитывается, когда проведёт первый бой. Уже {0} из {1}.": "Legendary, +25% coins. A friend counts once they finish their first fight. {0} of {1} so far.",
   "ещё {0} дн.": "{0} more days",
@@ -3627,4 +3627,5 @@ export const EN: Record<string, string> = {
   "Деньги без силы": "Fair purchases",
   "Набор «Новичок» и золотая дорожка пропуска больше не дают зелий бодрости: жизни за звёзды не продаются.": "The Starter pack and the gold pass track no longer give vigor potions: lives are never sold for Stars.",
   "Предложение купить появляется не сразу, а после первого босса, на 3-й день серии или у закрытой золотой награды — один раз.": "Purchase offers now appear only after your first boss, on day 3 of a streak, or at a locked gold reward, and just once.",
+  "Такого упражнения нет. Можно: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.": "There's no such exercise. Try: /challenge for push-ups, /challenge squat for squats, /challenge situp for sit-ups.",
 };
