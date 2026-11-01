@@ -1030,6 +1030,15 @@ async function onCityApi(path: string, req: IncomingMessage, res: ServerResponse
   reply(200, cities.board({ days: (id) => cameraDays(saves.get(id)?.progress), level: (id) => saves.heroLevel(id), isPro: (id) => isPro(id), clanCity: (id) => clans.clanOf(id)?.city, clanCountry: (id) => clans.clanOf(id)?.country, profileId: (id) => pids.of(id) }, me.id, now));
 }
 
+// Почему «Поделиться в чат» пошло запасным путём — админам в бот, не чаще раза в 10 минут.
+let shareProblemAt = 0;
+function shareProblem(text: string): void {
+  console.warn(`share: ${text}`);
+  if (!BOT_TOKEN || Date.now() - shareProblemAt < 600_000) return;
+  shareProblemAt = Date.now();
+  for (const id of admins.ids()) botApi(BOT_TOKEN)('sendMessage', { chat_id: Number(id), text: `⚠️ Поделиться в чат: ${text}` }, 15_000).catch(() => null);
+}
+
 /**
  * Загрузить картинку в Telegram и вернуть её file_id: тихо отправляем фото в личку с ботом (или первому
  * админу, если игрок не писал боту) и сразу удаляем сообщение — file_id остаётся рабочим.
@@ -1040,7 +1049,10 @@ async function shareFileId(tgId: number, img: Buffer | null): Promise<string | n
     const r = await botUploadFiles(BOT_TOKEN, 'sendPhoto', { chat_id: chat, disable_notification: true }, [{ field: 'photo', name: 'share.jpg', type: 'image/jpeg', data: img }]).catch(() => null);
     const sent = r?.ok ? (r.result as { message_id: number; photo?: { file_id: string }[] }) : null;
     const id = sent?.photo?.at(-1)?.file_id;
-    if (!sent || !id) continue;
+    if (!sent || !id) {
+      shareProblem(`загрузка в чат ${chat}: ${r ? (r.description ?? 'нет file_id') : 'нет ответа (сеть/прокси)'}`);
+      continue;
+    }
     void botApi(BOT_TOKEN)('deleteMessage', { chat_id: chat, message_id: sent.message_id }, 15_000).catch(() => null);
     return id;
   }
