@@ -346,7 +346,7 @@ function NotifyRow({ field, set, title, text }: { field: 'raidNotify' | 'letters
         <div className="toggle-title">{title}</div>
         <div className="muted">{text}</div>
       </div>
-      <input type="checkbox" className="switch" checked={on} disabled={busy || !cloud?.bot || !cloud.telegram} onChange={(e) => change(e.target.checked)} />
+      <input type="checkbox" className="switch" checked={on} disabled={busy || !cloud?.bot || (field === 'raidNotify' && !cloud.telegram)} onChange={(e) => change(e.target.checked)} />
     </label>
   );
 }

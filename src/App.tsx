@@ -11,6 +11,7 @@ import { rememberUnlocks } from './game/unlocks';
 import { linkUnlocks } from './game/unlockLinks';
 import { markFirstOpen, track } from './telemetry';
 import { onGift } from './cloud';
+import { GroupJoin } from './group/GroupChallenge';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
 import { useBusy } from './updates/busy';
@@ -134,6 +135,9 @@ export function App() {
       />
 
       <PowerToast />
+
+      {/* Кнопка «Участвовать» под таблицей вызова в групповом чате. */}
+      <GroupJoin onTrain={() => setTab('hero')} />
 
       <UpdateBanner />
 

@@ -9,7 +9,7 @@ declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
 
 /** События — тот же список, что на сервере (EVENTS в server/telemetry.ts). */
-export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance';
+export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance' | 'group_join' | 'group_create' | 'invite_card';
 
 export type ErrorKind = 'error' | 'promise' | 'react' | 'camera' | 'model' | 'webgl';
 
@@ -84,7 +84,12 @@ const TH2_KEY = 'fit-arena-th2';
 /** Ратуша деревни впервые стала 2-го уровня: через сколько дней от первой тренировки (цель — 1–2 дня). */
 export function trackVillageTh2(th: number, days: Record<string, number>): void {
   try {
-    if (th < 2 || localStorage.getItem(TH2_KEY)) return;
+    // Только настоящий переход с 1-го уровня на этом телефоне: старые игроки с ратушей 2+ цифру не портят.
+    if (th < 2) {
+      if (!localStorage.getItem(TH2_KEY)) localStorage.setItem(TH2_KEY, 'th1');
+      return;
+    }
+    if (localStorage.getItem(TH2_KEY) !== 'th1') return localStorage.setItem(TH2_KEY, '1');
     localStorage.setItem(TH2_KEY, '1');
     const first = Object.keys(days).sort()[0];
     const n = first ? Math.max(0, Math.round((Date.now() - Date.parse(`${first}T12:00:00`)) / 86_400_000)) : 0;

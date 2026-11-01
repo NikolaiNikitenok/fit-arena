@@ -9,6 +9,7 @@ import { giftTrial, useProOffer } from '../cloud';
 import { payStars } from '../payments';
 import { friendsApi, type FriendsReply, lastDayText, NotTelegram } from './api';
 import { PlayerMenu, type PlayerMenuTarget } from '../moderation/PlayerMenu';
+import { GroupCard } from '../group/GroupChallenge';
 import { Sheet } from '../Sheet';
 import { itemById } from '../game/items';
 import { loadProgress, saveProgress } from '../game/progress';
@@ -112,6 +113,8 @@ export function FriendsScreen({ exercise, onBack, onRoom }: { exercise: Exercise
           {note}
         </button>
       )}
+
+      <GroupCard />
 
       <RefCard refs={data.referrals} onInvite={() => setAdding(true)} />
 

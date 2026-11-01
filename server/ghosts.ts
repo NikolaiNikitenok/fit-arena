@@ -53,7 +53,7 @@ export class GhostStore {
     // Не больше двух записей одного игрока: новая и одна прошлая, чтобы очередь не заполнил один активный.
     const all = this.data[exercise] ?? [];
     const prev = all.filter((r) => r.id === rec.id).slice(-1);
-    const list = [...all.filter((r) => r.id !== rec.id), ...prev];
+    const list = all.filter((r) => r.id !== rec.id || r === prev[0]);
     list.push({ ...rec, times, reps: times.length });
     this.data[exercise] = list.slice(-KEEP);
     this.schedule();

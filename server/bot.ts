@@ -58,6 +58,13 @@ export function startReply(text: string, appUrl: string, clanByCode: (code: stri
       url: `${base}/?friend=${token}`,
     };
   }
+  // Кнопка «Участвовать» под таблицей вызова в групповом чате (server/groupChallenges.ts).
+  if (/^gc-[0-9a-f]{10}$/.test(param))
+    return {
+      text: tl(l, 'Вызов чата: кто больше повторов за неделю. Нажми кнопку — и ты в таблице. Засчитываются повторы из любого режима игры, камера считает сама.'),
+      button: tl(l, 'Участвовать'),
+      url: `${base}/?gc=${param.slice(3)}`,
+    };
   if (/^[A-Z0-9]{4,8}$/i.test(param)) return { text: tl(l, 'Тебя вызвали на дуэль! Нажми кнопку, чтобы войти в комнату боя.'), button: tl(l, 'Принять вызов'), url: `${base}/?room=${param.toUpperCase()}` };
   // Метка источника (реклама, пост, блогер): t.me/<бот>?start=src-МЕТКА — статистика покажет, сколько пришло.
   const src = param.startsWith('src-') ? param.slice(4).replace(/[^\w-]/g, '').slice(0, 24) : '';

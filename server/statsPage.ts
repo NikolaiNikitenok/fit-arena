@@ -18,12 +18,49 @@ const SOURCE_NAMES: Record<string, string> = {
   duel: 'Вызов на дуэль',
   bot: 'Кнопка из уведомления бота',
   channel: 'Канал NikitenokArena',
+  threads: 'Threads',
+  group: 'Вызов в групповом чате',
+  share: 'Карточка «Повержен босс»',
   web: 'Сайт в браузере',
   max: 'Max',
   unknown: 'Неизвестно',
   other: 'Прочие метки',
 };
-export const sourceName = (o: string) => SOURCE_NAMES[o] ?? `Метка «${o}»`;
+export const sourceName = (o: string) => SOURCE_NAMES[o] ?? (o.startsWith('ch-') ? `Канал: ${o.slice(3)}` : o.startsWith('th-') ? `Threads: ${o.slice(3)}` : `Метка «${o}»`);
+
+// Продвижение за деньги (каталоги, взаимная реклама, Telegram Ads) — только когда D1 дошёл до этой доли.
+export const PROMO_D1 = 0.25;
+// И когда новичков достаточно, чтобы доле можно было верить.
+export const PROMO_MIN_COHORT = 30;
+
+/** Можно ли платить за игроков: D1 за последние дни против ориентира плана (этап 4). */
+export function promoGate(d1: number, cohort: number): { ok: boolean; text: string } {
+  if (cohort < PROMO_MIN_COHORT) return { ok: false, text: `Продвижение в Telegram: рано судить — новичков с известным D1 пока ${cohort}, нужно хотя бы ${PROMO_MIN_COHORT}.` };
+  const pctText = `${Math.round((d1 / cohort) * 100)}%`;
+  return d1 / cohort >= PROMO_D1
+    ? { ok: true, text: `Продвижение в Telegram: можно — D1 ${pctText} (ориентир ${PROMO_D1 * 100}%). Каталоги мини-приложений, взаимная реклама с фитнес-каналами, небольшой тест Telegram Ads со своей меткой src-.` }
+    : { ok: false, text: `Продвижение в Telegram: рано — D1 ${pctText}, нужно ${PROMO_D1 * 100}%. Платить за игроков, которые уходят в первый день, бессмысленно: сначала удержание.` };
+}
+
+export interface ContentRow {
+  source: string;
+  users: number;
+  d1Of: number;
+  d1: number;
+  keep: boolean;
+}
+
+/** «Контент по цифрам»: метки постов (ch-, th-, канал, Threads, рилсы) — сколько пришло и сколько вернулось назавтра.
+ *  «Оставить» — два формата, которые дают больше всего вернувшихся (не кликов). */
+export function contentRows(sources: Stats['sources']): ContentRow[] {
+  const rows = sources.filter((x) => /^(ch-|th-|reel|story|carousel|insta)/.test(x.source) || x.source === 'channel' || x.source === 'threads');
+  const best = [...rows]
+    .filter((x) => x.d1 > 0)
+    .sort((a, b) => b.d1 - a.d1 || b.d1 / Math.max(1, b.d1Of) - a.d1 / Math.max(1, a.d1Of))
+    .slice(0, 2)
+    .map((x) => x.source);
+  return rows.map((x) => ({ source: x.source, users: x.users, d1Of: x.d1Of, d1: x.d1, keep: best.includes(x.source) })).sort((a, b) => b.d1 - a.d1 || b.users - a.users);
+}
 
 /** Шаг воронки с самой большой потерей против предыдущего; 0 — потерь нет.
  *  Последний шаг («вернулись в другой день») не сравниваем: он про другое. */
@@ -144,6 +181,8 @@ ${tile('Удержание D1', d1Rate == null ? '—' : `${Math.round(d1Rate * 
 ${tile('Ошибок за 7 дней', String(errors7), `${s.errors.length} разных`)}
 </div>
 
+<div class="hint" style="margin-top:12px">${esc(promoGate(d1.reduce((a, r) => a + r.d1!, 0), d1.reduce((a, r) => a + r.cohort, 0)).text)}</div>
+
 <h2>Главное</h2>
 <ul class="main">${insights(s).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
 
@@ -160,6 +199,10 @@ ${tile('Ошибок за 7 дней', String(errors7), `${s.errors.length} ра
 <tr><td>Дуэли · рейды · программы · события</td><td class="n">${sum('duel_start')} · ${sum('raid_start')} · ${sum('program_start')} · ${sum('event_start')}</td></tr>
 <tr><td>Итоги месяца: открыли / поделились</td><td class="n">${sum('recap_open')} / ${sum('recap_share')}</td></tr>
 <tr><td>Telegram: в чат / ярлык на экран / emoji-статус</td><td class="n">${sum('share_chat')} / ${sum('home_shortcut')} / ${sum('emoji_status')}</td></tr>
+<tr><td>Письма бота: ушло / вернулись по ним / подарков забрали</td><td class="n">${sum('letter_sent')} / ${sum('letter_open')} / ${sum('gift_claim')}</td></tr>
+<tr><td>Бои с «призраком»: победы / поражения</td><td class="n">${sum('ghost_fight:win')} / ${sum('ghost_fight:lose')}</td></tr>
+<tr><td>Вызовы в чатах: начато / вступили</td><td class="n">${sum('group_start')} / ${sum('group_join:ok')}</td></tr>
+<tr><td>«Позови троих» после победы: показано / нажали</td><td class="n">${sum('invite_card:show')} / ${sum('invite_card:tap')}</td></tr>
 </table></div>
 
 <h2>Воронка новичка: где уходят</h2>
@@ -178,6 +221,13 @@ ${s.funnel
 <div class="card scroll"><table>
 <tr><th>Источник</th><th class="n">Новых</th><th class="n">Камера</th><th class="n">1-я победа</th><th class="n">Дуэль и др.</th><th class="n">D1</th></tr>
 ${s.sources.map((x) => `<tr><td>${esc(sourceName(x.source))}</td><td class="n">${x.users}</td><td class="n">${pct(x.camera, x.users)}</td><td class="n">${pct(x.won, x.users)}</td><td class="n">${pct(x.played, x.users)}</td><td class="n">${x.d1Of ? pct(x.d1, x.d1Of) : '—'}</td></tr>`).join('\n') || '<tr><td colspan="6" class="muted">Пока нет данных</td></tr>'}
+</table></div>
+
+<h2>Контент по цифрам</h2>
+<div class="hint">У каждого поста своя метка: <code>ch-рубрика</code> — канал, <code>th-рубрика</code> — Threads. Считаем не лайки, а сколько новичков пришло и сколько вернулось на следующий день. Через две недели оставляем два формата с пометкой «оставить».</div>
+<div class="card scroll"><table>
+<tr><th>Формат</th><th class="n">Новых</th><th class="n">Вернулись (D1)</th><th></th></tr>
+${contentRows(s.sources).map((x) => `<tr><td>${esc(sourceName(x.source))}</td><td class="n">${x.users}</td><td class="n">${x.d1Of ? `${x.d1} · ${pct(x.d1, x.d1Of)}` : '—'}</td><td>${x.keep ? '<b>оставить</b>' : ''}</td></tr>`).join('\n') || '<tr><td colspan="4" class="muted">Пока никто не пришёл по меткам постов</td></tr>'}
 </table></div>
 
 <h2>До какого уровня дошли</h2>

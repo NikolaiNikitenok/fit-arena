@@ -183,6 +183,15 @@ export const safeLink = (href: string): boolean => {
     return false;
   }
 };
+/**
+ * Своя метка у каждого поста: ссылка на бота src-channel → src-ch-РУБРИКА (src-threads → src-th-РУБРИКА).
+ * Статистика (/api/admin/stats, «Контент») показывает по рубрикам, кто пришёл и остался, а не лайки.
+ */
+export function tagLinks(text: string, from: string, tag: string): string {
+  const clean = tag.replace(/[^\w-]/g, '').slice(0, 24);
+  return text.split(`start=src-${from}`).join(`start=src-${clean}`);
+}
+
 /** Ссылки, которые можно ставить в посты: подсказка для промпта. */
 export const LINKS_HINT = `Ссылки: можно 0–1 ссылку на пост, только если она к месту, тегом <a href="адрес">текст</a>, и только эти адреса:
 - https://t.me/NikitenokArena — канал NikitenokArena
@@ -272,7 +281,8 @@ export interface ChannelDeps {
   changelog: () => string;
   // Отправка в Bot API; возвращает ответ Telegram.
   bot: (method: string, body: unknown) => Promise<{ ok: boolean; result?: unknown; description?: string }>;
-  appLink: () => string;
+  // Ссылка на бота для кнопки под постом; tag — метка рубрики (ch-РУБРИКА).
+  appLink: (tag?: string) => string;
   // Загрузка картинок (multipart) и папка со скриншотами.
   upload?: Upload;
   mediaDir?: string;
@@ -395,7 +405,7 @@ export class Channel {
     return {
       rubric: plan.rubric,
       topic: out.topic.slice(0, 120),
-      text: telegramHtml(out.text),
+      text: tagLinks(telegramHtml(out.text), 'channel', `ch-${plan.rubric}`),
       mentionsApp: plan.mentionsApp && !!out.mentions_app,
       commit: plan.rubric === 'news' ? commits[0]?.hash : undefined,
       media: aboutApp && this.d.upload && this.d.mediaDir ? pickMedia(out.images).slice(0, 2).map((file) => ({ file })) : [],
@@ -404,7 +414,7 @@ export class Channel {
 
   /** Отправка поста в чат (канал или админу для проверки). Если HTML не прошёл — шлём простым текстом. */
   async send(chatId: string | number, draft: Draft): Promise<number | undefined> {
-    const reply_markup = draft.mentionsApp ? { inline_keyboard: [[{ text: '🤖 Бот NikitenokArena', url: this.d.appLink() }]] } : undefined;
+    const reply_markup = draft.mentionsApp ? { inline_keyboard: [[{ text: '🤖 Бот NikitenokArena', url: this.d.appLink(`ch-${draft.rubric}`) }]] } : undefined;
     return sendPost(this.d, chatId, draft, reply_markup);
   }
 

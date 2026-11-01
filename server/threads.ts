@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { type ChannelDeps, type ChannelPost, type ChannelState, type Commit, type Draft, dueSlot, imagesHint, parseChangelog, sendPost, writePost } from './channel';
+import { type ChannelDeps, type ChannelPost, type ChannelState, type Commit, type Draft, dueSlot, imagesHint, parseChangelog, sendPost, tagLinks, writePost } from './channel';
 import { pickMedia } from './channelMedia';
 import type { Update } from './bot';
 
@@ -312,7 +312,8 @@ export class Threads {
     const prompt = threadsPrompt({ now, rubric, recent: this.state.posts.filter((p) => !p.skipped).slice(-60), commits, idea });
     const out = await writePost(this.d, THREADS_SYSTEM, prompt);
     if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
-    const plain = threadsText(out.text);
+    // Метка рубрики в ссылке — до обрезки по длине, чтобы предел считался уже с ней.
+    const plain = threadsText(tagLinks(out.text, 'threads', `th-${idea ? 'idea' : rubric}`));
     const media = (rubric === 'app' || rubric === 'build' || rubric === 'author' || idea) && this.d.mediaDir ? pickMedia(out.images).slice(0, 1).map((file) => ({ file })) : [];
     return { rubric: idea ? 'idea' : rubric, topic: out.topic.slice(0, 120), text: escHtml(plain), plain, mentionsApp: !!out.mentions_app, media, tag: threadsTag((out as { tag?: unknown }).tag, rubric) };
   }

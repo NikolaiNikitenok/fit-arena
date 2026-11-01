@@ -50,6 +50,7 @@ import { heroPower } from '../src/game/power';
 import { heroLevel, type Progress } from '../src/game/progress';
 import { handleTelemetry, Telemetry } from './telemetry';
 import { dueMessages, pendingStage, weeklyDue } from './winback';
+import { challengeScore, GroupChallenges, type GroupChallenge, parseGroupCommand, tableText } from './groupChallenges';
 import { petById, type PetId } from '../src/game/pets';
 import { AdminList, adminToken, checkAdminToken } from './admin';
 import { statsHtml } from './statsPage';
@@ -558,7 +559,7 @@ const channelDeps: ChannelDeps = {
   bot: (method, body) => botApi(BOT_TOKEN)(method, body, 30_000),
   upload: (method, fields, files) => botUploadFiles(BOT_TOKEN, method, fields, files),
   mediaDir: mediaDir(__dirname),
-  appLink: () => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=src-channel`,
+  appLink: (tag = 'channel') => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=src-${tag}`,
   log: (m) => console.log(m),
 };
 const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), channelDeps);
@@ -587,6 +588,73 @@ const threads = new Threads(process.env.THREADS_FILE ?? join(dirname(process.env
 const reels = new Reels(process.env.REELS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'reels.json'), {
   token: () => process.env.GH_ACTIONS_TOKEN || readToken(join(__dirname, '.gh-token')),
 });
+// Вызовы в групповых чатах (server/groupChallenges.ts): бот ведёт таблицу «кто больше за неделю» прямо в чате.
+const groups = new GroupChallenges(process.env.GROUPS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'group-challenges.json'));
+const groupRows = (c: GroupChallenge) => Object.entries(c.members).map(([id, m]) => ({ id, name: m.name, reps: challengeScore(saves.get(id)?.progress, c.exercise, c.from, c.to) }));
+const groupButton = (c: GroupChallenge) => ({ inline_keyboard: [[{ text: tl(c.lang, 'Участвовать'), url: `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=gc-${c.id}` }]] });
+/** Опубликовать таблицу новым сообщением (новый вызов, /top, итоги). */
+async function postGroupTable(c: GroupChallenge): Promise<void> {
+  const text = tableText(c, groupRows(c), Date.now());
+  const r = await botApi(BOT_TOKEN)('sendMessage', { chat_id: c.chat, text, reply_markup: c.done ? undefined : groupButton(c) }, 15_000).catch(() => null);
+  const id = (r?.result as { message_id?: number } | undefined)?.message_id;
+  // Бота удалили из чата или запретили писать: вызов закрываем.
+  if (r && !r.ok && (r.error_code === 403 || r.error_code === 400)) return groups.update(c, { done: true });
+  if (id) groups.update(c, { msg: id, shown: text });
+}
+/** Сообщение в группе: /challenge [упражнение], /start gc-… (бота добавили кнопкой из игры), /top. true — разобрано. */
+const groupUpdate = (u: Update): boolean => {
+  const msg = u.message;
+  if (!BOT_TOKEN || !msg?.text || (msg.chat.type !== 'group' && msg.chat.type !== 'supergroup')) return false;
+  const cmd = parseGroupCommand(msg.text);
+  if (!cmd) return false;
+  const chat = msg.chat as { id: number; type: string; title?: string };
+  const live = groups.ofChat(chat.id);
+  if (cmd.kind === 'top') {
+    if (live) void postGroupTable(live);
+    else void botApi(BOT_TOKEN)('sendMessage', { chat_id: chat.id, text: tl(langOfChat(msg.from), 'Сейчас вызова нет. Начните: /challenge — отжимания, /challenge squat — приседания, /challenge situp — пресс.') }, 15_000).catch(() => null);
+    return true;
+  }
+  const by = msg.from?.id ? accounts.resolve(`tg:${msg.from.id}`) : '';
+  const { c, created } = groups.create(chat.id, chat.title ?? '', cmd.exercise, by, msg.from?.first_name ?? '', langOfChat(msg.from), Date.now());
+  // Сколько вызовов начато (и в скольких чатах) — рост через группы виден в статистике.
+  if (created) telemetry.serverEvent('group_start', cmd.exercise);
+  void postGroupTable(c);
+  return true;
+};
+/** Игра: вступить в вызов чата по кнопке «Участвовать» или посмотреть свои вызовы. */
+async function onGroupApi(path: string, req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const who = body && identify(body);
+  if (!who) return reply(401, { error: 'Открой приложение из Telegram' });
+  const now = Date.now();
+  const view = (c: GroupChallenge) => ({ id: c.id, title: c.title, exercise: c.exercise, endsAt: c.endsAt, rows: groupRows(c).sort((a, b) => b.reps - a.reps).slice(0, 20), me: who.id });
+  if (path === '/api/group/join') {
+    // Вызов ведётся по повторам Telegram-игроков: гостю нечего показывать в таблице чата.
+    if (!who.login) return reply(403, { error: 'Открой приложение из Telegram' });
+    const c = groups.join(String(body!.id ?? ''), who.id, villageName(who.id, body!) ?? '?', now);
+    if (!c) return reply(404, { error: 'Вызов уже закончился' });
+    return reply(200, { challenge: view(c) });
+  }
+  return reply(200, { challenges: groups.ofPlayer(who.id).map(view) });
+}
+// Таблицы вызовов: раз в 10 минут правим сообщение в чате, если счёт изменился; через неделю — итоги новым сообщением.
+if (BOT_TOKEN)
+  setInterval(() => {
+    const now = Date.now();
+    for (const c of groups.active()) {
+      if (now > c.endsAt) {
+        groups.update(c, { done: true });
+        void postGroupTable(c);
+        continue;
+      }
+      const text = tableText(c, groupRows(c), now);
+      if (!c.msg || text === c.shown) continue;
+      groups.update(c, { shown: text });
+      void botApi(BOT_TOKEN)('editMessageText', { chat_id: c.chat, message_id: c.msg, text, reply_markup: groupButton(c) }, 15_000).catch(() => null);
+    }
+  }, 10 * 60_000);
 /** Кнопки и ответы на черновики личного канала (опрос и вебхук). */
 const channelUpdate = (u: Update): boolean => {
   const reply = (chatId: number, text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null);
@@ -858,6 +926,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
   accounts.forget(who.id);
   for (const id of [who.id, who.guest].filter((x): x is string => !!x)) {
     const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, now);
+    groups.forget(id);
     if (clan) {
       sendClan(clan);
       toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -871,6 +940,7 @@ async function onDeleteMe(req: IncomingMessage, res: ServerResponse) {
 function dropAccount(id: string): void {
   accounts.archiveOf({ account: id, logins: accounts.logins(id), progress: saves.get(id)?.progress ?? null, cups: store.cupsOf(id) });
   const { clan } = deletePlayer({ store, saves, clans, friends, telemetry, villages, cities, referrals, trials }, id, Date.now());
+  groups.forget(id);
   if (clan) {
     sendClan(clan);
     toClan(clan, { type: 'chat', messages: chatOf(clan) });
@@ -1100,11 +1170,12 @@ const http = createServer((req, res) => {
         const pay = payUpdate(update as unknown as Update);
         if (pay !== undefined) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end(pay ? JSON.stringify(pay) : '{}');
         if (proCommand(chat?.id ?? 0, msg?.text ?? '') || giftCommand(chat?.id ?? 0, msg?.text ?? '')) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        if (groupUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         if (channelUpdate(update as unknown as Update)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         // Команды модерации от админа (/mute_…, /unmute_…, /reports).
         if (msg?.text && chat?.type === 'private' && channelCommand(chat.id, msg.text)) return void res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
         const admin = msg?.text && chat?.type === 'private' ? (adminBalance(chat.id, msg.text) ?? adminCommand(moderationDeps, chat.id, adminText(chat.id, msg.text))) : null;
-        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
+        const answer = admin ? { method: 'sendMessage', chat_id: chat!.id, text: admin } : (webhookReply(update as unknown as Update, APP_URL, clanInfo, langOfChat) ?? (msg?.text && chat?.type === 'private' && !msg.text.startsWith('/') ? onPlayerText(msg) : null));
         if (answer) botStatus.handled++;
         // Англоязычному игроку — своя кнопка меню «Play» вместо общей «Играть».
         if (BOT_TOKEN && msg?.text?.startsWith('/start') && chat?.type === 'private' && langOfChat(msg.from) === 'en') botApi(BOT_TOKEN)('setChatMenuButton', { chat_id: chat.id, menu_button: menuButton(APP_URL, 'en') }, 15_000).catch(() => null);
@@ -1119,6 +1190,10 @@ const http = createServer((req, res) => {
   }
   if (path.startsWith('/api/progress/') || path === '/api/remind' || path === '/api/raid-notify' || path === '/api/letters') {
     onProgressApi(path, req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/group/join' || path === '/api/group/state') {
+    onGroupApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/telemetry') return handleTelemetry(telemetry, req, res);
@@ -1636,6 +1711,7 @@ if (BOT_TOKEN)
     },
     (chatId, text) => (proCommand(chatId, text) || giftCommand(chatId, text) || channelCommand(chatId, text) ? '' : (adminBalance(chatId, text) ?? adminCommand(moderationDeps, chatId, adminText(chatId, text)))),
     (u) => {
+      if (groupUpdate(u)) return true;
       const pay = payUpdate(u);
       if (pay === undefined) return channelUpdate(u);
       if (pay) {
@@ -1710,6 +1786,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     friends.flush();
     cities.flush();
     ghosts.flush();
+    groups.flush();
     guard.flush();
     telemetry.flush();
     mod.flush();

@@ -21,11 +21,12 @@ import { Stars } from './Stars';
 import { bossCard, ShareVictory } from './ShareCard';
 import { HomeShortcutOffer } from '../HomeShortcut';
 import { Dialog, Remark } from './Dialog';
-import { freeAttempt, Progress, SWAPS_PER_DAY, WinReward } from './progress';
+import { dayKey, freeAttempt, Progress, SWAPS_PER_DAY, WinReward } from './progress';
 import { afterLine, bossDefeat, restLine } from './story';
 import { type Combo, comboLive, comboShout, comboTier, nextCombo, NO_COMBO } from './combo';
 import { sfx } from '../audio';
 import { locale, t } from '../i18n';
+import { InviteOffer, inviteOfferDue } from '../friends/InviteOffer';
 
 const PREP_S = 5;
 // Без камеры: отсчёт короче (телефон уже в руке), и не чаще повтора в 0,6 с — быстрее никто не приседает.
@@ -80,6 +81,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const level: LevelDef = exercises === original.exercises ? original : { ...original, exercises };
   // Попытка бесплатна (задание дня, первое прохождение испытания силы); решаем по началу боя, а не по ходу.
   const [free] = useState(() => freeAttempt(progress, original));
+  // После яркой победы — одно предложение: позвать друзей за легендарный облик (или ярлык на экран).
+  const [invite, setInvite] = useState(false);
   const swapCount = exercises.filter((e, i) => e !== original.exercises[i]).length;
   const canSwap = original.type !== 'trial' && !original.daily;
   const land = LANDS[level.land];
@@ -156,6 +159,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     if (v.outcome === 'won') {
       const stars = m.stars(now);
       // Без камеры рекорд испытания не меняет силу врагов: самоотчёт может быть любым.
+      setInvite(inviteOfferDue(progress, stars, level.type === 'boss', dayKey(Date.now())));
       setResult({ stars, reward: onWin(stars, manualRef.current ? undefined : v.record) });
       setEpilogue(level.type === 'boss');
       setStatus('won');
@@ -509,7 +513,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         </button>
       )}
       {status === 'won' && result && !epilogue && level.type === 'boss' && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
-      {status === 'won' && result && !epilogue && <HomeShortcutOffer />}
+      {status === 'won' && result && !epilogue && (invite ? <InviteOffer progress={progress} today={dayKey(Date.now())} /> : <HomeShortcutOffer />)}
       {status === 'won' && onNext && (
         <button className="primary" onClick={onNext}>
           {t('Дальше')}
