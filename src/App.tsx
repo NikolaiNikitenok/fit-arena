@@ -18,7 +18,7 @@ import { WarmupHost } from './warmup/Warmup';
 import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 import { t } from './i18n';
-import { onOpenFeed } from './social/bus';
+import { onClanJoin, onOpenFeed } from './social/bus';
 
 // Профиль игрока — лист поверх любой вкладки, грузится при первом открытии.
 const ProfileHost = lazy(() => import('./social/ProfileSheet').then((m) => ({ default: m.ProfileHost })));
@@ -87,6 +87,8 @@ export function App() {
   );
   // «Написать пост» из профиля во вкладке дуэли: лента живёт на главной.
   useEffect(() => onOpenFeed(() => setTab('hero')), []);
+  // «Вступить» в клан из профиля игрока: открываем вкладку клана, там и вступаем.
+  useEffect(() => onClanJoin(() => setTab('clan')), []);
   const showLock = (tb: 'village' | 'clan' | 'duel') => {
     setLockToast(lockedText(tb, locks[tb] ?? 0));
     clearTimeout(toastTimer.current);

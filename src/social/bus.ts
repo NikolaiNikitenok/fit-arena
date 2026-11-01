@@ -43,3 +43,20 @@ export function onOpenFeed(l: FeedListener): () => void {
   feedListeners.add(l);
   return () => void feedListeners.delete(l);
 }
+
+// «Вступить» в клан из профиля игрока: App переключается на вкладку клана, экран клана вступает, как по приглашению.
+let clanPending: string | null = null;
+const clanListeners = new Set<() => void>();
+export function joinClanFromProfile(id: string): void {
+  clanPending = id;
+  for (const l of clanListeners) l();
+}
+export function takeClanJoin(): string | null {
+  const id = clanPending;
+  clanPending = null;
+  return id;
+}
+export function onClanJoin(l: () => void): () => void {
+  clanListeners.add(l);
+  return () => void clanListeners.delete(l);
+}

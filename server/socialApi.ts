@@ -9,7 +9,7 @@
 // (server/moderation.ts) посты не публикует. Посты тех, кто в чёрном списке (в любую сторону), не видны.
 import { heroLevel, heroXp, streak, type Progress } from '../src/game/progress';
 import { type Exercise, repsEquivalent } from '../src/repCounter';
-import { type FeedTab, type FriendStatus, type PostView, type ProfileView, FEED_PAGE } from '../shared/social';
+import { type FeedTab, type FriendStatus, type ProfileClan, type PostView, type ProfileView, FEED_PAGE } from '../shared/social';
 import type { FeedStore, Post } from './feed';
 import { DAY_REPS_MAX } from './saves';
 
@@ -58,7 +58,8 @@ export interface SocialDeps {
   lastSeen: (id: string) => number | null;
   online: (id: string) => boolean;
   cups: (id: string) => number;
-  clan: (id: string) => { name: string; tag: string } | undefined;
+  // Клан игрока id глазами игрока viewer (можно ли вступить).
+  clan: (id: string, viewer: string) => ProfileClan | undefined;
   city: (id: string) => string | undefined;
   // Такой игрок вообще есть (есть копия прогресса или профиль дуэлей).
   exists: (id: string) => boolean;
@@ -157,7 +158,7 @@ export function profileView(d: SocialDeps, me: string, id: string): ProfileView 
     me: me === id,
     level: levelOf(d, id),
     pro: d.isPro(id) || undefined,
-    clan: d.clan(id),
+    clan: d.clan(id, me),
     city: d.city(id),
     cups: d.cups(id),
     online,

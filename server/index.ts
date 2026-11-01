@@ -904,9 +904,12 @@ const socialDeps: SocialDeps = {
   lastSeen: (id) => saves.get(id)?.savedAt ?? null,
   online: (id) => isOnline(id) || friends.seenRecently(id),
   cups: (id) => store.cupsOf(id),
-  clan: (id) => {
+  clan: (id, viewer) => {
     const c = clans.clanOf(id);
-    return c && { name: c.name, tag: c.tag };
+    if (!c) return;
+    const mine = clans.clanOf(viewer);
+    const join = mine ? (mine === c ? 'member' : 'inClan') : !c.open ? 'invite' : (saves.heroLevel(viewer) ?? 1) < c.minLevel ? 'level' : 'open';
+    return { ...clans.listItem(c), join };
   },
   city: (id) => cities.get(id)?.city,
   exists: (id) => !!saves.get(id) || store.played(id) || !!friends.get(id),

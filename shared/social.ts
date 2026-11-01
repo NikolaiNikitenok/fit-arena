@@ -1,5 +1,11 @@
 // Лента и профили игроков: что сервер (server/feed.ts, server/socialApi.ts) отдаёт приложению (src/social/).
 import type { Exercise } from '../src/repCounter';
+import type { ClanListItem } from './clan';
+
+// Можно ли мне вступить в клан игрока: open — да; member — я уже в нём; inClan — я в другом клане;
+// level — мал уровень; invite — только по приглашению.
+export type ClanJoin = 'open' | 'member' | 'inClan' | 'level' | 'invite';
+export type ProfileClan = ClanListItem & { join: ClanJoin };
 
 // Длина текста поста и сколько постов в день можно опубликовать.
 export const POST_TEXT_MAX = 500;
@@ -61,7 +67,7 @@ export interface ProfileView {
   me: boolean;
   level: number;
   pro?: boolean;
-  clan?: { name: string; tag: string };
+  clan?: ProfileClan;
   city?: string;
   cups: number;
   // В сети сейчас; иначе — дата последнего захода (ГГГГ-ММ-ДД по UTC), если известна.

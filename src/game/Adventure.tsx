@@ -62,7 +62,7 @@ import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
 import { Sheet } from '../Sheet';
-import { openPassInTelegram, platform, startTab } from '../telegram';
+import { openPassInTelegram, platform, startPost, startTab } from '../telegram';
 import { type FeedOpen, onOpenFeed, takeFeedRequest } from '../social/bus';
 import { useCloudReady, useStarter } from '../cloud';
 import { type OfferPlace, offerSeen, payStars } from '../payments';
@@ -190,7 +190,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
   // Лента (src/social): с главной, из профиля («Написать пост») и по кнопке бота ?tab=feed&post=ID.
-  const [feed, setFeed] = useState<FeedOpen | null>(() => takeFeedRequest() ?? (startTab() === 'feed' ? { post: new URLSearchParams(location.search).get('post') ?? undefined } : null));
+  const [feed, setFeed] = useState<FeedOpen | null>(() => takeFeedRequest() ?? (startTab() === 'feed' || startPost() ? { post: startPost() ?? undefined } : null));
   useEffect(
     () =>
       onOpenFeed(() => {

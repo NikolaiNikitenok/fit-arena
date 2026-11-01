@@ -11,7 +11,11 @@ import { locale, t } from '../i18n';
 import { Check, UserPlus } from '../icons';
 import { NotSignedIn, type ProfileRef, socialApi } from './api';
 import { Avatar } from './Avatar';
-import { closeProfile, openFeed, useOpenProfile } from './bus';
+import { closeProfile, joinClanFromProfile, openFeed, useOpenProfile } from './bus';
+import { Flag } from '../clan/Flag';
+import { clanLevel, clanPerks } from '../../shared/clanLevel';
+import { clanPlace } from '../../shared/clan';
+import type { ProfileClan } from '../../shared/social';
 import { PostCard } from './PostCard';
 import './social.css';
 
@@ -41,6 +45,7 @@ export function ProfileSheet({ target, onClose }: { target: ProfileRef; onClose:
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [clanOpen, setClanOpen] = useState(false);
   const [posts, setPosts] = useState<PostView[] | null>(null);
   const [more, setMore] = useState(false);
 
@@ -110,9 +115,9 @@ export function ProfileSheet({ target, onClose }: { target: ProfileRef; onClose:
 
       <div className="profile-chips">
         {p.clan && (
-          <span className="soc-chip">
-            [{p.clan.tag}] {p.clan.name}
-          </span>
+          <button className="soc-chip profile-clan" onClick={() => setClanOpen(true)}>
+            <Flag flag={p.clan.flag} tag={p.clan.tag} level={clanLevel(p.clan.xp).level} size={22} />[{p.clan.tag}] {p.clan.name}
+          </button>
         )}
         {p.city && <span className="soc-chip">📍 {p.city}</span>}
         {p.cups > 0 && (
@@ -237,7 +242,72 @@ export function ProfileSheet({ target, onClose }: { target: ProfileRef; onClose:
         </div>
       )}
 
+      {clanOpen && p.clan && (
+        <ClanPeek
+          clan={p.clan}
+          onClose={() => setClanOpen(false)}
+          onJoin={() => {
+            setClanOpen(false);
+            onClose();
+            joinClanFromProfile(p.clan!.id);
+          }}
+        />
+      )}
       {menu && <PlayerMenu target={{ id: `pid:${p.pid}`, name: p.name, where: 'profile' }} onBlocked={() => setP({ ...p, blocked: true, iFollow: false })} onClose={() => setMenu(false)} />}
+    </Sheet>
+  );
+}
+
+/** Карточка клана из профиля: флаг, уровень, описание, состав и «Вступить», если можно. */
+function ClanPeek({ clan: c, onClose, onJoin }: { clan: ProfileClan; onClose: () => void; onJoin: () => void }) {
+  const lvl = clanLevel(c.xp).level;
+  const slots = clanPerks(lvl).slots;
+  const full = c.members >= slots;
+  return (
+    <Sheet onClose={onClose} bodyClassName="clan-peek">
+      <div className="clan-peek-head">
+        <Flag flag={c.flag} tag={c.tag} level={lvl} size={64} />
+        <div>
+          <div className="clan-name">
+            {c.name} <span className="clan-tag">[{c.tag}]</span>
+          </div>
+          {clanPlace(c) && <div className="muted">{clanPlace(c)}</div>}
+        </div>
+      </div>
+      {c.description && <p className="clan-peek-desc">{c.description}</p>}
+      <div className="clan-peek-stats">
+        <div>
+          <b>{lvl}</b>
+          <small>{t('уровень клана')}</small>
+        </div>
+        <div>
+          <b>
+            {c.members}/{slots}
+          </b>
+          <small>{t('участников')}</small>
+        </div>
+        <div>
+          <b>{c.raidWins}</b>
+          <small>{t('побед в рейдах')}</small>
+        </div>
+      </div>
+      {c.join === 'member' ? (
+        <button className="secondary" onClick={onJoin}>
+          {t('Это твой клан — открыть')}
+        </button>
+      ) : c.join === 'inClan' ? (
+        <div className="muted center">{t('Ты уже в другом клане. Чтобы вступить сюда, сначала выйди из своего.')}</div>
+      ) : c.join === 'invite' ? (
+        <div className="muted center">{t('В этот клан вступают только по приглашению. Попроси ссылку у участника.')}</div>
+      ) : c.join === 'level' ? (
+        <div className="muted center">{t('В клан берут с {0} уровня героя.', { 0: c.minLevel })}</div>
+      ) : full ? (
+        <div className="muted center">{t('В клане нет свободных мест.')}</div>
+      ) : (
+        <button className="primary" onClick={onJoin}>
+          {t('Вступить в клан')}
+        </button>
+      )}
     </Sheet>
   );
 }

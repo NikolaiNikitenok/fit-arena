@@ -5,6 +5,8 @@ import { locale, t } from '../i18n';
 import { socialApi } from './api';
 import { openProfile } from './bus';
 import { Avatar } from './Avatar';
+import { Send } from '../icons';
+import { SharePost } from './SharePost';
 
 /** «только что», «5 мин», «3 ч», «вчера», «12 окт.». */
 export function agoText(at: number, now = Date.now()): string {
@@ -23,6 +25,7 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pop, setPop] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const author = () => !noAuthorLink && openProfile({ pid: post.author.pid });
   const like = () => {
     const on = !post.liked;
@@ -99,7 +102,13 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
           <span className="post-like-ico">💪</span>
           <span>{post.likes > 0 ? post.likes : t('Респект')}</span>
         </button>
+        {!post.hidden && (
+          <button className="post-share" onClick={() => setSharing(true)}>
+            <Send size={16} /> {t('Поделиться')}
+          </button>
+        )}
       </footer>
+      {sharing && <SharePost post={post} onClose={() => setSharing(false)} />}
     </article>
   );
 }
