@@ -1,9 +1,9 @@
 // Текст карусели для Instagram: Claude пишет слайды (обложка, пункты, финал) и подпись; проверяем и сохраняем в carousel.json.
 // Запуск: node generate.mjs <номер> <tips|app|story> [тема]. Виды: полезные советы (приложение только в финале), про приложение
 // и story — три сторис 1080×1920 на выбор (story.mjs).
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { askApi, askClaude, FACTS } from "../reels/generate.mjs";
-import { storyProblems, storyPrompt } from "./story.mjs";
+import { storyProblems, storyPrompt, storyLines } from "./story.mjs";
 
 const n = Number(process.argv[2] ?? 0) || 0;
 const kind = ["app", "story"].includes(process.argv[3])
@@ -91,11 +91,43 @@ export const NPCS = {
     "Борис Петрович — обычный офисный дядька, который начал тренироваться: советы новичкам и тем, кто сидит весь день",
 };
 
+// В сторис больше персонажей: злодей для «лени», купец для наград.
+const STORY_NPCS = {
+  ...NPCS,
+  knyaz:
+    "Князь Диван — главный злодей, ленивый и вальяжный, уговаривает не тренироваться; смешно злится, когда ты всё равно качаешься",
+  fedor:
+    "Купец Фёдор — хитрый торговец, всё сводит к наградам: за каждый повтор — монетки, сундуки и обновки",
+};
+
 // Факты о приложении — общие для рилсов, каруселей и сторис (promo/reels/generate.mjs).
+
+// Память о прошлых выпусках: workflow хранит history.json в кэше GitHub Actions между запусками. Последние тексты
+// этого вида уходят в промпт с просьбой не повторять ни темы, ни задания, ни формулировки.
+const HISTORY = process.env.HISTORY || "history.json";
+const history = (() => {
+  try {
+    return existsSync(HISTORY) ? JSON.parse(readFileSync(HISTORY, "utf8")) : [];
+  } catch {
+    return [];
+  }
+})();
+const recent = history.filter((h) => h.kind === kind).slice(-40);
+const lines = (c) =>
+  kind === "story"
+    ? storyLines(c)
+    : [c.title, ...(c.slides ?? []).map((s) => [s.top, s.accent, s.title].filter(Boolean).join(" "))].filter(Boolean);
+const avoid = () =>
+  recent.length
+    ? `\n\nУЖЕ БЫЛО (${recent.length} прошлых выпусков) — не повторяй ни темы, ни задания, ни вопросы, ни формулировки, ни числа повторов; придумай свежий угол:\n${recent
+        .map((h) => `- ${h.lines.join(" | ")}`)
+        .join("\n")
+        .slice(-6000)}`
+    : "";
 
 function prompt() {
   if (kind === "story")
-    return storyPrompt({ n, topic, facts: FACTS, npcs: NPCS, shots: SHOTS });
+    return storyPrompt({ n, topic, facts: FACTS, npcs: STORY_NPCS, shots: SHOTS }) + avoid();
   const theme =
     topic ||
     (kind === "app"
@@ -131,12 +163,13 @@ ${FACTS}
 
 Ответь только JSON без пояснений и без markdown:
 {"title":"тема в 3–6 словах",${kind === "tips" ? '"npc":"id",' : ""}"slides":[{"type":"cover","top":"...","accent":"...","sub":"..."},{"type":"point","title":"...","text":"..."${kind === "tips" ? ',"big":""' : ',"shot":"id"'}},{"type":"cta","title":"...","text":"..."${kind === "app" ? ',"shot":"id"' : ""}}],"caption":"подпись для Instagram: 3–6 коротких строк с эмодзи, ${kind === "tips" ? "польза и призыв сохранить, вопрос для комментариев, в конце NikitenokArena — ссылка в профиле" : "выгода, вопрос для комментариев, «ссылка в профиле»"}","hashtags":["#..."]}
-Хэштегов 8–12, по-русски и пара английских.`;
+Хэштегов 8–12, по-русски и пара английских.${avoid()}`;
 }
 
 /** Проверка: возвращает список проблем (пустой — всё хорошо). */
 export function problems(c, k = kind) {
-  if (k === "story") return storyProblems(c, { npcs: NPCS, shots: SHOTS, n });
+  if (k === "story")
+    return storyProblems(c, { npcs: STORY_NPCS, shots: SHOTS, n });
   const out = [];
   const S = c?.slides;
   if (!Array.isArray(S) || S.length < 6 || S.length > 10)
@@ -193,6 +226,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         "carousel.json",
         JSON.stringify({ n, kind, topic, ...json }, null, 2),
       );
+      history.push({ kind, n, at: new Date().toISOString(), lines: lines(json) });
+      writeFileSync(HISTORY, JSON.stringify(history.slice(-200)));
       console.log(JSON.stringify(json, null, 2));
       process.exit(0);
     } catch (e) {

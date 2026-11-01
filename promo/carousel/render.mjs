@@ -2,6 +2,8 @@
 // а для kind=story — три сторис 1080×1920. Нужен playwright.
 import { chromium } from "playwright";
 import { existsSync, readFileSync } from "node:fs";
+import { renderHeroes } from "./hero3d.mjs";
+import { SHOT_FORMATS } from "./story.mjs";
 
 const c = JSON.parse(readFileSync("carousel.json", "utf8"));
 const root = new URL("../../", import.meta.url);
@@ -25,12 +27,16 @@ const NPC_NAMES = {
   lisa: "Лиса",
   marfa: "Бабушка Марфа",
   boris: "Борис Петрович",
+  fedor: "Купец Фёдор",
+  knyaz: "Князь Диван",
 };
 const NPC_COLORS = {
   grom: "#ff7043",
   lisa: "#ffb74d",
   marfa: "#f48fb1",
   boris: "#81c784",
+  fedor: "#9575cd",
+  knyaz: "#ba68c8",
 };
 
 const fonts = [700, 800, 900]
@@ -65,6 +71,14 @@ html,body{margin:0;width:1080px;height:${H}px;overflow:hidden;background:#0d0f17
 .st p{font:700 50px/1.32 N;color:#d3d8e4;margin:30px 0 0}
 .st .npc{width:600px;height:600px;right:20px;bottom:330px}
 .st .who{bottom:380px}
+.st .scene{position:absolute;inset:0;background-size:cover;background-position:center;filter:blur(14px) brightness(.5) saturate(1.25);transform:scale(1.08)}
+.st .veil{position:absolute;inset:0;background:linear-gradient(#0d0f17 0%,rgba(13,15,23,.88) 30%,rgba(13,15,23,.25) 58%,rgba(13,15,23,.55) 88%,#0d0f17 100%)}
+.st .scene~*{z-index:1}
+.st .hero{position:absolute;right:-60px;bottom:170px;width:900px;height:1260px;z-index:1}
+.st .hero .glow{position:absolute;left:120px;right:120px;top:300px;bottom:80px;border-radius:50%;filter:blur(30px)}
+.st .hero img{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 40px 50px rgba(0,0,0,.6))}
+.st .hero~.who{bottom:230px;z-index:2;padding:14px 26px;border-radius:999px;background:rgba(13,15,23,.72)}
+.st .tx{z-index:2}
 .st .shotbox{bottom:330px}
 .st.cat .shotbox{bottom:90px}
 .st.full .bg{position:absolute;left:0;top:700px;width:1080px;height:auto}
@@ -107,6 +121,17 @@ html,body{margin:0;width:1080px;height:${H}px;overflow:hidden;background:#0d0f17
 `;
 
 const pages = story ? c.stories : c.slides;
+// Сторис с персонажем: заранее рисуем его в 3D и подбираем кадр игры для размытого фона.
+const SCENES = ["world-map-forest", "village", "duel-fight", "boss-hit", "tower-climb", "dungeon", "clan-raid", "holiday", "village-raid", "level-win"];
+if (story) {
+  const npcStories = pages.filter((s) => !SHOT_FORMATS.has(s.format));
+  const heroes = await renderHeroes(npcStories.map((s) => ({ npc: s.npc, format: s.format })));
+  npcStories.forEach((s, k) => {
+    s.hero = heroes[k];
+    const ok = (id) => id && existsSync(new URL(shotPath(id), root));
+    if (!ok(s.bg)) s.bg = SCENES[((c.n ?? 0) * 3 + pages.indexOf(s)) % SCENES.length];
+  });
+}
 const total = pages.length;
 const head = (i) =>
   `<div class="brand"><img src="${img("public/icons/icon-192.png")}">NikitenokArena</div><div class="page">${i + 1}/${total}</div>`;
@@ -176,8 +201,11 @@ function storyHtml(s) {
     return `<div class="s st vs">${head}<div class="pair"><div class="phone l"><img src="${shot(s.shot)}"></div><div class="or">или</div><div class="phone r"><img src="${shot(s.shot2)}"></div></div></div>`;
   if (["app", "screen", "boss"].includes(s.format))
     return `<div class="s st${c.catalog ? " cat" : ""}">${head}${shotHtml(s.shot)}</div>`;
-  const face = img(`public/portraits/${s.npc}.png`);
   const color = NPC_COLORS[s.npc] ?? "#ff8a5c";
+  // Крупный 3D-персонаж в полный рост на размытом кадре игры; без 3D — прежний портрет.
+  if (s.hero)
+    return `<div class="s st"><div class="scene" style="background-image:url('${shot(s.bg)}')"></div><div class="veil"></div>${head}<div class="hero"><div class="glow" style="background:radial-gradient(circle,${color}66,transparent 70%)"></div><img src="${s.hero}"></div><div class="who"><b style="color:${color}">${esc(NPC_NAMES[s.npc] ?? "")}</b></div></div>`;
+  const face = img(`public/portraits/${s.npc}.png`);
   return `<div class="s st${c.catalog ? " cat" : ""}">${head}<div class="npc"><div class="glow" style="background:radial-gradient(circle,${color}55,transparent 68%)"></div><img src="${face}"></div><div class="who"><b style="color:${color}">${esc(NPC_NAMES[s.npc] ?? "")}</b></div></div>`;
 }
 
@@ -217,6 +245,12 @@ for (let i = 0; i < total; i++) {
       );
       bg.style.top = `${y}px`;
       bg.nextElementSibling.style.top = `${y - 60}px`;
+    }
+    // 3D-персонаж сторис встаёт сразу под текст и занимает всё место до низа.
+    for (const h of document.querySelectorAll(".st .hero")) {
+      const top = document.querySelector(".tx").getBoundingClientRect().bottom + 10;
+      const height = Math.max(700, H - 150 - top);
+      Object.assign(h.style, { top: `${H - 150 - height}px`, bottom: "auto", height: `${height}px`, width: `${height * 0.72}px`, right: "10px" });
     }
     // Скриншот вписываем в место под текстом: вертикальный — в рамку телефона.
     for (const box of document.querySelectorAll(".shotbox")) {
