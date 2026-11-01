@@ -3,7 +3,7 @@ import { sfx } from '../audio';
 import { Check, Cross } from '../icons';
 import { useIsBusy } from './busy';
 import { ChangeEntry } from './changelog';
-import { applyUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate } from './updates';
+import { applyUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate, setBannerOpen } from './updates';
 import './updates.css';
 import { t, locale } from '../i18n';
 
@@ -46,6 +46,11 @@ export function UpdateBanner() {
 
   const mode = busy ? null : remote && !snoozed ? 'update' : fresh.length ? 'fresh' : null;
   const entries = mode === 'update' ? newEntries(remote!) : fresh;
+
+  useEffect(() => {
+    setBannerOpen(!!mode);
+    return () => setBannerOpen(false);
+  }, [mode]);
 
   useEffect(() => {
     if (!mode) return;

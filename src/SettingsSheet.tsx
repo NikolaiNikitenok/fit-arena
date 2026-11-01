@@ -26,6 +26,7 @@ const TOGGLES: Record<string, { key: ToggleKey; title: string; text: string }> =
   haptics: { key: 'haptics', title: t('Вибрация'), text: t('Телефон коротко вибрирует на повтор.') },
   guide: { key: 'guide', title: t('Подсказка перед уровнем'), text: t('3D-схема, как поставить телефон.') },
   warmup: { key: 'warmup', title: t('Разминка'), text: t('Перед первым подходом за день Гром предложит размяться пару минут. Можно пропустить.') },
+  morning: { key: 'morning', title: t('Утренняя зарядка'), text: t('Утром при первом заходе предложим начать день с короткой зарядки.') },
   story: { key: 'story', title: t('Диалоги сюжета'), text: t('Разговоры с героями перед уровнями. Без них сразу к тренировке.') },
   skeleton: { key: 'skeleton', title: t('Скелет на видео'), text: t('Линии позы поверх камеры: видно, что приложение тебя распознаёт.') },
   dayNight: { key: 'dayNight', title: t('День и ночь в деревне'), text: t('Деревня живёт по твоим часам: золотой вечер, ночью горят фонари. Без этого всегда светлый день.') },
@@ -64,7 +65,7 @@ type Section = 'sound' | 'training' | 'graphics' | 'notify' | 'account' | 'about
 type Tone = 'accent' | 'mint' | 'violet' | 'gold' | 'blue' | 'grey' | 'rose';
 
 const SOUND: ToggleKey[] = ['sound', 'music', 'voice', 'haptics'];
-const TRAINING: ToggleKey[] = ['guide', 'warmup', 'story', 'skeleton'];
+const TRAINING: ToggleKey[] = ['guide', 'warmup', 'morning', 'story', 'skeleton'];
 const GRAPHICS: ToggleKey[] = ['lowPower', 'dayNight', 'villageFx', 'flyIn', 'homeList'];
 
 /**
