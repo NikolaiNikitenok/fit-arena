@@ -147,3 +147,41 @@ describe("рилс от персонажа", () => {
     expect(out.at(-1)).toMatch(/Рилс от персонажа уже собирается/);
   });
 });
+
+describe("рилс-петля", () => {
+  it("без своих клипов — только игра; присланные клипы идут по кругу, свежий первым", async () => {
+    let now = 5_000_000;
+    const runs: [Record<string, string>, string][] = [];
+    const r = new Reels(null, {
+      token: () => "gh",
+      now: () => now,
+      dispatch: async (_, i, w) => (runs.push([i, w]), { ok: true }),
+    });
+    const out: string[] = [];
+    expect(r.command(7, "/loop", (t) => out.push(t))).toBe(true);
+    await flush();
+    expect(runs[0]).toEqual([{ chat_id: "7", n: "1", topic: "", kind: "loop" }, "reel.yml"]);
+    expect(out.at(-1)).toMatch(/Только кадры игры/);
+    expect(out.at(-1)).toMatch(/src-loop-1/);
+    r.addClip(7, { file_id: "A", duration: 6 }, "", (t) => out.push(t));
+    r.addClip(7, { file_id: "B", duration: 6 }, "", (t) => out.push(t));
+    expect(out.at(-1)).toMatch(/своих клипов сейчас 2/);
+    now += REEL_COOLDOWN;
+    r.command(7, "/loop", () => undefined);
+    now += REEL_COOLDOWN;
+    r.command(7, "/loop", () => undefined);
+    await flush();
+    expect(runs.slice(1).map(([i]) => i.clip)).toEqual(["A", "B"]);
+  });
+
+  it("видео с подписью /loop сразу запускает сборку, большое видео не берёт", async () => {
+    const runs: Record<string, string>[] = [];
+    const r = new Reels(null, { token: () => "gh", dispatch: async (_, i) => (runs.push(i), { ok: true }) });
+    const out: string[] = [];
+    r.addClip(7, { file_id: "big", file_size: 30 * 1024 * 1024 }, "/loop", (t) => out.push(t));
+    expect(out.at(-1)).toMatch(/больше 20 МБ/);
+    r.addClip(7, { file_id: "C" }, "/loop отжимания", (t) => out.push(t));
+    await flush();
+    expect(runs).toEqual([{ chat_id: "7", n: "1", topic: "отжимания", kind: "loop", clip: "C" }]);
+  });
+});

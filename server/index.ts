@@ -722,6 +722,15 @@ if (BOT_TOKEN)
 const channelUpdate = (u: Update): boolean => {
   const reply = (chatId: number, text: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text }, 15_000).catch(() => null);
   const answer = (id: string, text?: string) => void botApi(BOT_TOKEN)('answerCallbackQuery', { callback_query_id: id, text }, 15_000).catch(() => null);
+  // Админ прислал видео: свой клип для рилса-петли (подпись /loop или кнопка — сразу сборка).
+  const m = u.message;
+  const clip = m?.video ?? (m?.document?.mime_type?.startsWith('video/') ? m.document : undefined);
+  if (clip && m?.chat.type === 'private' && admins.has(`tg:${m.chat.id}`)) {
+    const chatId = m.chat.id;
+    const r = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: ADMIN_KEYBOARD }, 15_000).catch(() => null);
+    reels.addClip(chatId, clip, adminText(chatId, m.caption ?? ''), r);
+    return true;
+  }
   return (THREADS !== 'off' && threads.onUpdate(u, reply, answer)) || (PERSONAL_CHANNEL !== 'off' && personal.onUpdate(u, reply, answer));
 };
 /** Команды канала от админа: /channel, /channel_draft, /channel_post. */
@@ -737,12 +746,13 @@ const ADMIN_BUTTONS: Record<string, string> = {
   '🖼 Карусель: приложение': '/carousel app',
   '📱 Сторис': '/story',
   '🎭 Рилс от персонажа': '/talk',
+  '🔁 Рилс-петля': '/loop',
   '🧵 Пост в Threads': '/threads',
   '⚖️ Баланс': '/balance',
   '💳 Проверить оплату': '/testpay',
 };
 const ADMIN_KEYBOARD = {
-  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }, { text: '💳 Проверить оплату' }]],
+  keyboard: [[{ text: '📊 Статус каналов' }], [{ text: '📝 Черновик Арены' }, { text: '📣 Пост в Арену сейчас' }], [{ text: '✍️ Личный канал' }, { text: '🚩 Жалобы' }], [{ text: '🎬 Новый рилс' }, { text: '🎭 Рилс от персонажа' }], [{ text: '🔁 Рилс-петля' }], [{ text: '🖼 Карусель: советы' }, { text: '🖼 Карусель: приложение' }], [{ text: '📱 Сторис' }, { text: '🧵 Пост в Threads' }], [{ text: '⚖️ Баланс' }, { text: '💳 Проверить оплату' }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -750,10 +760,10 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|threads)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|loop\b|threads)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
-  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, карусели и сторис для Instagram, пост в Threads. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
+  if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, рилс-петля (8–10 с; пришли боту видео, как отжимаешься, и петля начнётся с тебя), карусели и сторис для Instagram, пост в Threads. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}\n\n${threads.status()}`), true;
@@ -1878,6 +1888,7 @@ const ADMIN_COMMANDS = [
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
   { command: 'threads', description: 'Пост для Threads: /threads [тема], /threads_auto on|off' },
   { command: 'talk', description: 'Рилс, где рассказывает персонаж игры: /talk [тема]' },
+  { command: 'loop', description: 'Короткий закольцованный рилс 8–10 с: /loop [тема]' },
   { command: 'emoji_setup', description: 'Набор значков для emoji-статуса игроков' },
   { command: 'titan_gifts', description: 'Подарки Telegram лучшим героям за Титана' },
 ];
