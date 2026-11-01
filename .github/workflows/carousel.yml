@@ -31,14 +31,21 @@ jobs:
       - name: Tools
         run: |
           npm i -g @anthropic-ai/claude-code > /dev/null
-          npm i --prefix $HOME/pw playwright@1.63.0 > /dev/null
+          # three — для крупного 3D-персонажа в сторис (сцена promo/talk/scene.html).
+          npm i --prefix $HOME/pw playwright@1.63.0 three@0.186.1 > /dev/null
           ln -s $HOME/pw/node_modules promo/carousel/node_modules
+          echo "THREE_MODULES=$HOME/pw/node_modules" >> $GITHUB_ENV
           # Браузер берём готовый с раннера (Google Chrome): установка Chromium с зависимостями занимает 5–10 минут.
           echo "CHROME=$(which google-chrome || which chromium)" >> $GITHUB_ENV
           mkdir -p out
+      # Прошлые тексты (out/history.json) живут в кэше Actions: берём самый свежий, после удачной генерации кладём новый.
+      - uses: actions/cache/restore@v4
+        with: { path: out/history.json, key: "promo-history-${{ github.run_id }}", restore-keys: "promo-history-" }
       - name: Text
         working-directory: out
         run: node ../promo/carousel/generate.mjs "$N" "$KIND" "$TOPIC"
+      - uses: actions/cache/save@v4
+        with: { path: out/history.json, key: "promo-history-${{ github.run_id }}" }
       - name: Slides
         working-directory: out
         run: node ../promo/carousel/render.mjs
