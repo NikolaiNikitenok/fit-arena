@@ -2,7 +2,7 @@ import { lazy, ReactNode, Suspense, useEffect, useRef, useState, type CSSPropert
 import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, Exercise, repsEquivalent } from '../repCounter';
 import { Portrait } from './Dialog';
-import { GearFace, HeroHome, ShopTab } from './HeroHome';
+import { GearFace, HomeScreen, ShopTab } from './HeroHome';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
 import { heroLook, outfitSkin } from './outfitSkin';
 import { OutfitPreview } from './OutfitPreview';
@@ -615,7 +615,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   if (tab === 'hero')
     return (
       <>
-        <HeroHome
+        <HomeScreen
           progress={progress}
           lives={<LivesPill progress={progress} />}
           current={currentDef}

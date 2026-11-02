@@ -7,6 +7,8 @@ import { loadProgress } from './game/progress';
 import type { CharName } from './three/kit';
 import type { FighterView } from '../shared/protocol';
 import { t } from './i18n';
+import { useSport } from './settings';
+import { SportDuel } from './sport/SportDuel';
 
 export const PLAYER_COLOR = '#ff5a36';
 
@@ -32,6 +34,7 @@ interface Props {
 
 /** Арена со шкалами здоровья, таймером и окошком камеры в углу. */
 export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opponentColor = '#22c55e', opponentScale, enraged, botLevel, opponentLook, result, children }: Props) {
+  const sport = useSport();
   const over = me.hp === 0 || opponent.hp === 0;
   // Герой выглядит так же, как в приключении: костюм, оттенок, свечение и оружие.
   const hero = useMemo(() => {
@@ -44,16 +47,20 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
   const lost = result === 'lose' || (over && me.hp === 0);
   return (
     <div className="arena">
-      <Arena3D
-        player={{ ...hero, punchSeq: me.hits, hitSeq: opponent.hits, combo: me.combo, knockedOut: me.hp === 0, won, lost: lost && me.hp > 0 }}
-        opponent={{ ...rival, punchSeq: opponent.hits, hitSeq: me.hits, combo: opponent.combo, knockedOut: opponent.hp === 0, won: lost, lost: won && opponent.hp > 0, scale: opponentScale, enraged }}
-      />
-      <div className="hud">
+      {sport ? (
+        <SportDuel me={me} opponent={opponent} seconds={seconds} />
+      ) : (
+        <Arena3D
+          player={{ ...hero, punchSeq: me.hits, hitSeq: opponent.hits, combo: me.combo, knockedOut: me.hp === 0, won, lost: lost && me.hp > 0 }}
+          opponent={{ ...rival, punchSeq: opponent.hits, hitSeq: me.hits, combo: opponent.combo, knockedOut: opponent.hp === 0, won: lost, lost: won && opponent.hp > 0, scale: opponentScale, enraged }}
+        />
+      )}
+      <div className={`hud ${sport ? 'hidden' : ''}`}>
         <HpBar label={me.name} hp={me.hp} maxHp={me.maxHp} color={PLAYER_COLOR} pro={me.pro} />
         <div className="timer">{seconds}</div>
         <HpBar label={opponent.name} hp={opponent.hp} maxHp={opponent.maxHp} color={opponentColor} right pro={opponent.pro} />
       </div>
-      {me.combo && camera.active && (
+      {me.combo && camera.active && !sport && (
         <div key={me.hits} className="combo">
           {t('КОМБО!')}
         </div>

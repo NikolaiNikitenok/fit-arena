@@ -11,6 +11,8 @@ import { rememberUnlocks, UNLOCK_AT } from './game/unlocks';
 import { linkUnlocks } from './game/unlockLinks';
 import { markFirstOpen, track } from './telemetry';
 import { onGift } from './cloud';
+import { StylePick } from './sport/StylePick';
+import { useSettings } from './settings';
 import { GroupJoin } from './group/GroupChallenge';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
@@ -68,6 +70,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>(inviteCode() || friendsFirst ? 'duel' : clanInviteCode() || startTab() === 'clan' ? 'clan' : startTab() === 'village' ? 'village' : 'hero');
   const [exercise, setExercise] = useState<RepExercise>('pushup');
   const [playing, setPlaying] = useState(false);
+  const settings = useSettings();
   useBusy(playing);
   const full = (tab === 'map' || tab === 'village') && !playing;
   // Вкладки, которые ещё не открыты уровнями карты (src/game/unlocks.ts): сколько уровней осталось.
@@ -153,6 +156,7 @@ export function App() {
 
       <UpdateBanner />
       <WarmupHost />
+      {!settings.styleChosen && !playing && <StylePick />}
 
       {lockToast && !playing && <div className="toast global">{lockToast}</div>}
 
@@ -174,7 +178,7 @@ export function App() {
                 }}
               >
                 {left ? <Lock size={22} /> : <n.Icon />}
-                {n.label}
+                {settings.style === 'sport' && n.tab === 'hero' ? t('Главная') : settings.style === 'sport' && n.tab === 'map' ? t('Уровни') : n.label}
                 {at > 0 && <span className="nav-lock-lv">{t('ур. {0}', { 0: at })}</span>}
               </button>
             );

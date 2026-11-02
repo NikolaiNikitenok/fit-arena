@@ -40,10 +40,14 @@ export interface Settings {
   flyIn: boolean;
   // Главная старым списком с прокруткой вместо сцены «во весь экран».
   homeList: boolean;
+  // Стиль игры: «Приключение» — 3D, герои и сюжет; «Спорт» — строгие экраны с цифрами, без сказки
+  // (решение владельца, 2026-11-02: взрослым нужен минимализм). Спрашиваем один раз (styleChosen).
+  style: 'adventure' | 'sport';
+  styleChosen: boolean;
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { autoPosts: true, sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, warmup: true, morning: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false };
+const DEFAULTS: Settings = { autoPosts: true, sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, warmup: true, morning: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false, style: 'adventure', styleChosen: false };
 
 let current: Settings = (() => {
   try {
@@ -85,6 +89,10 @@ export const subscribeSettings = (l: () => void): (() => void) => {
 };
 
 export const useSettings = (): Settings => useSyncExternalStore(subscribeSettings, () => current);
+
+/** Строгий стиль «Спорт»: без 3D-сцен, сюжета и сказочных слов. */
+export const isSport = () => current.style === 'sport';
+export const useSport = (): boolean => useSettings().style === 'sport';
 
 /** Параметры 3D-сцен с учётом экономии батареи. На сильных телефонах всё как было. */
 export const canvasProps = (s: Settings) =>

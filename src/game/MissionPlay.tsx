@@ -18,6 +18,7 @@ import { Mission, MissionView } from './mission';
 import { heroHands, heroPower } from './power';
 import { petLook } from './pets';
 import { MissionScene3D } from './MissionScene3D';
+import { SportStage } from '../sport/SportStage';
 import { Stars } from './Stars';
 import { bossCard, makeShareCard, ShareVictory } from './ShareCard';
 import { WinPost } from '../social/WinPost';
@@ -50,6 +51,16 @@ const TYPE_NAMES: Record<LevelDef['type'], string> = {
   defend: t('Оборона'),
   rescue: t('Спасение'),
   boss: t('Босс'),
+};
+// Стиль «Спорт»: без сказочных названий — обычный подход, контрольный подход, тест силы.
+const SPORT_NAMES: Record<LevelDef['type'], string> = {
+  trial: t('Тест силы'),
+  build: t('Подход'),
+  chase: t('Подход на темп'),
+  climb: t('Подход'),
+  defend: t('Подход'),
+  rescue: t('Подход'),
+  boss: t('Контрольный подход'),
 };
 
 // Звёзды уровня: в отдельном модуле, чтобы карта не тянула за собой экран миссии.
@@ -98,7 +109,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const make = () => new Mission(level, progress.baseline, combat);
   const mission = useRef<Mission>(make());
   const settings = useSettings();
-  const [status, setStatus] = useState<Status>(original.story.length && getSettings().story && !autoStart ? 'story' : 'ready');
+  const [status, setStatus] = useState<Status>(original.story.length && getSettings().story && getSettings().style !== 'sport' && !autoStart ? 'story' : 'ready');
   // «Считаю сам»: камеры нет или не дали доступ — игрок жмёт кнопку после каждого повтора.
   const [manual, setManual] = useState(false);
   const manualRef = useRef(false);
@@ -169,7 +180,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       // Канал игры — один раз, начиная со второй победы, и не вместе с приглашением друзей.
       setChannelOffer(!inviteNow && channelAfterWinDue());
       setResult({ stars, reward: onWin(stars, manualRef.current ? undefined : v.record) });
-      setEpilogue(level.type === 'boss');
+      setEpilogue(level.type === 'boss' && getSettings().style !== 'sport');
       setStatus('won');
     } else {
       onLose();
@@ -350,11 +361,24 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const waitMin = Math.max(1, Math.ceil(lives.nextMs / 60000));
 
   const busy = status === 'loading' || status === 'running';
-  const tag = level.world === 3 ? t('Финал') : t('{0} · {1} · уровень {2}', { 0: WORLD_NAMES[land.world], 1: land.name, 2: level.num });
+  const sport = settings.style === 'sport';
+  const tag = sport ? t('Уровень {0}', { 0: level.id }) : level.world === 3 ? t('Финал') : t('{0} · {1} · уровень {2}', { 0: WORLD_NAMES[land.world], 1: land.name, 2: level.num });
 
   return (
     <>
       <div className="arena mission" ref={arenaRef}>
+        {sport ? (
+          <SportStage
+            exercise={view.exercise}
+            reps={view.reps}
+            target={mission.current.target}
+            share={view.progress}
+            leftMs={view.leftMs}
+            totalMs={level.seconds * 1000}
+            live={status === 'running'}
+            step={level.type === 'boss' && view.phase != null && level.exercises.length > 1 ? `${view.phase + 1}/${level.exercises.length}` : undefined}
+          />
+        ) : (
         <MissionScene3D
           level={level}
           land={land}
@@ -368,7 +392,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           heroHands={heroHands(progress)}
           pet={petLook(progress, Date.now())}
         />
-        <div className={`mhud ${busy ? '' : 'hidden'}`}>
+        )}
+        <div className={`mhud ${busy && !sport ? '' : 'hidden'}`}>
           <div className="mhud-row">
             <span className="mhud-ex">{EXERCISE_LABELS[view.exercise]}</span>
             {level.type === 'boss' && (
@@ -421,13 +446,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         {status === 'ready' && (
           <div className="result">
             <div className="level-tag">{tag}</div>
-            <div className="result-title small">{level.title}</div>
+            <div className="result-title small">{sport ? SPORT_NAMES[level.type] : level.title}</div>
             <div className="muted light">
-              {TYPE_NAMES[level.type]} · {level.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
+              {!sport && <>{TYPE_NAMES[level.type]} · </>} {level.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}
               {level.type !== 'trial' && t(' · цель {0}', { 0: mission.current.target })}
               {level.rest && t(' · лёгкий день')}
             </div>
-            {level.type !== 'trial' && (
+            {level.type !== 'trial' && !sport && (
               <div className="power-line">
                 <span>
                   <Swords size={14} /> {t('урон {0}', { 0: view.damage })}
@@ -478,7 +503,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
                 </div>
               </div>
             )}
-            <Remark line={afterLine(level.world, true, level.id + attempt)} />
+            {!sport && <Remark line={afterLine(level.world, true, level.id + attempt)} />}
           </div>
         )}
         {status === 'lost' && (
@@ -490,7 +515,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
                 {t('−1 ♥ · осталось {0} из {1}', { 0: lives.lives, 1: lives.max })}
               </div>
             )}
-            <Remark line={noLives ? restLine(waitMin) : afterLine(level.world, false, level.id + attempt)} />
+            {(!sport || noLives) && <Remark line={noLives ? restLine(waitMin) : afterLine(level.world, false, level.id + attempt)} />}
           </div>
         )}
 
@@ -525,14 +550,14 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       )}
       {status === 'won' && result && !epilogue && !level.daily && (
         <WinPost
-          title={level.title}
+          title={sport ? SPORT_NAMES[level.type] : level.title}
           levelNum={level.id}
           reps={view.reps}
           starsN={result.stars}
-          boss={level.type === 'boss' ? { name: LANDS[level.land].boss.name, card: () => makeShareCard(bossCard(level, progress, view.reps, result.stars)) } : undefined}
+          boss={level.type === 'boss' && !sport ? { name: LANDS[level.land].boss.name, card: () => makeShareCard(bossCard(level, progress, view.reps, result.stars)) } : undefined}
         />
       )}
-      {status === 'won' && result && !epilogue && level.type === 'boss' && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
+      {status === 'won' && result && !epilogue && level.type === 'boss' && !sport && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
       {status === 'won' && result && !epilogue && (invite ? <InviteOffer progress={progress} today={dayKey(Date.now())} /> : channelOffer ? <ChannelOffer place="win" /> : <HomeShortcutOffer />)}
       {status === 'won' && onNext && (
         <button className="primary" onClick={onNext}>
@@ -581,7 +606,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       )}
       {!busy && (
         <button className="link" onClick={onExit}>
-          {t('К карте')}
+          {sport ? t('К уровням') : t('К карте')}
         </button>
       )}
     </>

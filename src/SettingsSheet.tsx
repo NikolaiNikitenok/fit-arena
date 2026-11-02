@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { ChannelOffer, channelOfferDue } from './social/ChannelOffer';
 import { setAutoPostsPref } from './social/autoPost';
+import { StyleSwitch } from './sport/StylePick';
 import { calibrationStatus, CalibrationStatus, resetCalibration, useCalibration } from './calibration';
 import { RecalibrateScreen } from './RecalibrateScreen';
 import { cloudState, onCloud, setLetters, setRaidNotify, setRemind } from './cloud';
@@ -107,7 +108,18 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
             </div>
           </>
         )}
-        {section === 'graphics' && <Toggles keys={GRAPHICS} />}
+        {section === 'graphics' && (
+          <>
+            <div className="toggle-row style-row">
+              <div>
+                <div className="toggle-title">{t('Стиль игры')}</div>
+                <div className="muted">{t('«Приключение» — 3D-герои и сюжет. «Спорт» — строгие экраны с цифрами, без сказки.')}</div>
+              </div>
+            </div>
+            <StyleSwitch value={s.style} />
+            <Toggles keys={GRAPHICS} />
+          </>
+        )}
         {section === 'notify' && (
           <>
             {channelOfferDue() && <ChannelOffer place="settings" />}

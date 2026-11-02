@@ -1,4 +1,5 @@
 import { type CSSProperties, lazy, ReactNode, Suspense, useEffect, useState } from 'react';
+import { SportHome } from '../sport/SportHome';
 import { amountText, EXERCISE_LABELS } from '../repCounter';
 import { PetFace } from './PetEntry';
 import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, POTIONS, RARITY_COLORS, RARITY_NAMES } from './items';
@@ -28,7 +29,7 @@ import { Bolt, MonsterFace } from './match3/art';
 import { DUNGEON_LANDS, dungeonOf, FLOOR_COST, FLOOR_COUNT, floorDef } from './match3/dungeon';
 import { homeBadges } from './homeBadges';
 import { WorldBackdrop } from './WorldBackdrop';
-import { useSettings } from '../settings';
+import { useSettings, useSport } from '../settings';
 import { LANDS } from './lands';
 import { MONTHS, MONTHS_OF, recapMonth } from './recap';
 import { lastTitan, titanWindow } from '../../shared/titan';
@@ -206,6 +207,11 @@ function useNow(ms = 30000) {
     return () => clearInterval(tm);
   }, [ms]);
   return now;
+}
+
+/** Главная: в стиле «Спорт» — сводка дня (src/sport/SportHome.tsx), иначе герой на сцене. */
+export function HomeScreen(props: Props) {
+  return useSport() ? <SportHome {...props} /> : <HeroHome {...props} />;
 }
 
 export function HeroHome(props: Props) {
