@@ -1,7 +1,7 @@
 // Дневник зала: свои тренировки из каталога, план на неделю, подходы «вес × повторы» и итог с объёмом и рекордами.
 // Это просто удобство: ни серия, ни задание дня, ни рейтинг, ни опыт героя от зала не меняются.
 import { dayKey, type Progress } from '../game/progress';
-import { gymExercise, type GymKind } from './catalog';
+import { type Equip, gymExercise, type GymKind } from './catalog';
 import { locale, t } from '../i18n';
 
 /** Подход: w — вес (кг), r — повторы, t — секунды (или минуты для кардио), d — км. */
@@ -28,6 +28,17 @@ export interface GymTemplate {
 export interface RunExercise {
   ex: string;
   sets: GymSet[];
+  // Цель по плану (повторы в подходе) и подсказка прогрессии на этот раз.
+  target?: number;
+  hint?: ProgHint;
+}
+
+/** Почему сегодня такой вес: up — прибавили, down — сбросили после застоя, same — повторяем, first — первый раз. */
+export interface ProgHint {
+  why: 'up' | 'down' | 'same' | 'first';
+  // На сколько изменился вес (кг) или повторы (для своего веса).
+  delta?: number;
+  reps?: boolean;
 }
 
 /** Идущая тренировка: переживает перезапуск приложения. */
@@ -66,6 +77,10 @@ export interface GymState {
   best: Record<string, GymBest>;
   // Подходы прошлого раза по упражнению: подставляем вес и повторы.
   last: Record<string, GymSet[]>;
+  // Сколько тренировок подряд не дотянул до цели плана: после двух — сброс веса на 10%.
+  miss?: Record<string, number>;
+  // Автопрогрессия веса (по умолчанию включена).
+  auto?: boolean;
 }
 
 export const HISTORY_MAX = 60;
@@ -166,9 +181,57 @@ export function freshSets(g: GymState, ex: string, n = 3, reps?: number): GymSet
   });
 }
 
+// Шаг веса: штангу и тренажёры — по 2,5 кг, гантели и гири — по 2 кг (одна пара вверх).
+const STEP: Partial<Record<Equip, number>> = { db: 2, kb: 2, band: 0 };
+export const weightStep = (equip: Equip) => STEP[equip] ?? 2.5;
+// Сброс — до ближайшего шага, но хотя бы на один шаг легче.
+const roundTo = (w: number, step: number) => Math.max(step, Math.round(w / step) * step);
+// Застой: столько тренировок подряд без цели — и вес сбрасывается.
+export const STALL = 2;
+export const DELOAD = 0.1;
+
+/** Подход выполнен по плану: отмечен и повторов не меньше цели. */
+const hitTarget = (sets: GymSet[], target: number) => sets.length > 0 && sets.every((s) => s.done && num(s.r) >= target);
+
+/**
+ * Прогрессия «по правилу»: все подходы прошлого раза сделаны на цель — прибавляем шаг веса
+ * (для своего веса — повтор); два раза подряд не дотянул — минус 10%; иначе повторяем.
+ */
+export function suggest(g: GymState, ex: string, target: number): { sets?: (s: GymSet) => GymSet; hint: ProgHint } {
+  const e = gymExercise(ex);
+  const last = g.last[ex];
+  if (!last?.length) return { hint: { why: 'first' } };
+  if (e.kind === 't' || e.kind === 'c') return { hint: { why: 'same' } };
+  const maxW = Math.max(0, ...last.map((s) => num(s.w)));
+  const hit = last.every((s) => num(s.r) >= target);
+  // Свой вес без отягощения: растут повторы, а не вес.
+  if (!maxW) {
+    if (!hit) return { hint: { why: 'same', reps: true } };
+    const r = Math.max(...last.map((s) => num(s.r))) + 1;
+    return { sets: (s) => ({ ...s, r }), hint: { why: 'up', delta: 1, reps: true } };
+  }
+  const step = weightStep(e.equip) || 1;
+  if (hit) return { sets: (s) => ({ ...s, w: maxW + step, r: target }), hint: { why: 'up', delta: step } };
+  if ((g.miss?.[ex] ?? 0) >= STALL) {
+    const w = Math.min(maxW - step, roundTo(maxW * (1 - DELOAD), step));
+    return { sets: (s) => ({ ...s, w, r: target }), hint: { why: 'down', delta: w - maxW } };
+  }
+  return { hint: { why: 'same' } };
+}
+
+/** Подходы на сегодня по плану: с прогрессией, если она включена. */
+export function planSets(g: GymState, item: PlanItem): RunExercise {
+  const sets = freshSets(g, item.ex, item.sets, item.reps);
+  if (g.auto === false) return { ex: item.ex, sets, target: item.reps };
+  const s = suggest(g, item.ex, item.reps);
+  return { ex: item.ex, sets: s.sets ? sets.map(s.sets) : sets, target: item.reps, hint: s.hint };
+}
+
+export const setAuto = (p: Progress, on: boolean): Progress => put(p, { ...gymOf(p), auto: on });
+
 export function startRun(p: Progress, now: number, tpl?: GymTemplate): Progress {
   const g = gymOf(p);
-  const items = (tpl?.items ?? []).map((i) => ({ ex: i.ex, sets: freshSets(g, i.ex, i.sets, i.reps) }));
+  const items = (tpl?.items ?? []).map((i) => planSets(g, i));
   return put(p, { ...g, run: { id: uid(), name: tpl?.name ?? t('Свободная тренировка'), tpl: tpl?.id, start: now, items } });
 }
 
@@ -244,6 +307,9 @@ export function finishRun(p: Progress, now: number): GymResult | null {
   if (!items.length) return { progress: cancelRun(p), session: { id: run.id, name: run.name, start: run.start, end: now, vol: 0, prs: [], items: [] } };
   const best = { ...g.best };
   const last = { ...g.last };
+  const miss = { ...g.miss };
+  // Застой считаем только по упражнениям с целью плана: выполнил всё — счётчик с нуля, нет — плюс один.
+  for (const it of run.items) if (it.target && doneSets(it).length && gymExercise(it.ex).kind !== 't' && gymExercise(it.ex).kind !== 'c') miss[it.ex] = hitTarget(it.sets, it.target) ? 0 : (miss[it.ex] ?? 0) + 1;
   const prs: string[] = [];
   for (const it of items) {
     const kind = gymExercise(it.ex).kind;
@@ -264,7 +330,7 @@ export function finishRun(p: Progress, now: number): GymResult | null {
     items: items.map((it) => ({ ex: it.ex, sets: doneSets(it).map((s) => [num(s.w) || num(s.d), num(s.r) || num(s.t)] as [number, number]) })),
   };
   const history = [session, ...g.history].slice(0, HISTORY_MAX);
-  return { progress: put(p, { ...g, run: undefined, history, best, last }), session };
+  return { progress: put(p, { ...g, run: undefined, history, best, last, miss }), session };
 }
 
 export const minutesOf = (s: Pick<GymSession, 'start' | 'end'>) => Math.max(1, Math.round((s.end - s.start) / 60000));

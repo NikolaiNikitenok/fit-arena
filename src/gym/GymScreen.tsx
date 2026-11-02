@@ -38,6 +38,10 @@ import {
   WEEKDAYS,
 } from './gym';
 import { ExIcon } from './GymIcons';
+import { e1rm, type ProgHint, setAuto } from './gym';
+import { loadOf, restingMuscles, slugLevels, weekLoad } from './muscles';
+import { MuscleMapView } from './MuscleMapView';
+import { applyImport, type Imported, parseWorkouts } from './importCsv';
 import './gym.css';
 import { Sheet } from '../Sheet';
 import { t, locale } from '../i18n';
@@ -104,6 +108,10 @@ export function GymScreen({ progress, update, onClose }: Props) {
           <span />
         </div>
         <SessionCard s={view.session} open />
+        <div className="gym-card gym-map-card">
+          <div className="gym-map-title">{t('Что поработало')}</div>
+          <MuscleMapView levels={slugLevels(loadOf([view.session]), 6)} size={130} />
+        </div>
         {view.fresh && (
           <Remark
             line={grom(
@@ -132,6 +140,7 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
   // Даты текущей недели с понедельника: отметить, в какие дни уже был в зале.
   const monday = now - weekday(now) * 86400_000;
   const [showAll, setShowAll] = useState(false);
+  const [tool, setTool] = useState<'records' | 'import' | null>(null);
   const history = showAll ? g.history : g.history.slice(0, 5);
   const volWeek = g.history.filter((s) => s.start >= new Date(dayKey(monday) + 'T00:00:00').getTime()).reduce((a, s) => a + s.vol, 0);
 
@@ -180,6 +189,7 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
       <button className={today ? 'secondary' : 'primary'} onClick={() => update((p) => startRun(p, Date.now()))}>
         {t('Свободная тренировка')}
       </button>
+      <WeekMuscles progress={progress} />
 
       <div className="section-title">
         {t('Мои тренировки')}
@@ -213,6 +223,25 @@ function Home({ progress, update, onClose, setView }: Props & { setView: (v: Vie
           </div>
         </div>
       )}
+
+      <div className="section-title">{t('Инструменты')}</div>
+      <label className="toggle-row">
+        <div>
+          <div className="toggle-title">{t('Автопрогрессия веса')}</div>
+          <div className="muted">{t('Сделал все подходы на цель — в следующий раз +2,5 кг (гантели +2). Два раза подряд не дотянул — минус 10%.')}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={g.auto !== false} onChange={(e) => update((p) => setAuto(p, e.target.checked))} />
+      </label>
+      <div className="gym-tools">
+        <button className="secondary" onClick={() => setTool('records')}>
+          <Medal size={18} /> {t('Рекорды и максимум')}
+        </button>
+        <button className="secondary" onClick={() => setTool('import')}>
+          <Plus size={18} /> {t('Импорт из Strong / Hevy')}
+        </button>
+      </div>
+      {tool === 'records' && <RecordsSheet progress={progress} onClose={() => setTool(null)} />}
+      {tool === 'import' && <ImportSheet update={update} onClose={() => setTool(null)} />}
 
       {!!g.history.length && <div className="section-title">{t('История')}</div>}
       {history.map((s) => (
@@ -449,6 +478,12 @@ function RunView({ run, progress, update, onFinish }: { run: GymRun; progress: P
                 <Trash size={15} />
               </button>
             </div>
+            {(it.hint || prev?.e) && (
+              <div className="gym-hints">
+                {it.hint && it.hint.why !== 'first' && <ProgChip hint={it.hint} target={it.target} />}
+                {!!prev?.e && <span className="gym-hint e1rm">{t('максимум на раз ≈ {0}', { 0: kgText(prev.e) })}</span>}
+              </div>
+            )}
             <div className={`gym-sets k-${ex.kind}`}>
               <div className="gym-set head">
                 <span>№</span>
@@ -771,5 +806,139 @@ function Picker({ onPick, onClose }: { onPick: (ids: string[]) => void; onClose:
         </button>
       </div>
     </div>
+  );
+}
+
+const kgDelta = (d: number) => `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`;
+
+/** Почему сегодня такой вес: прибавили, повторяем или сбросили после застоя. */
+function ProgChip({ hint, target }: { hint: ProgHint; target?: number }) {
+  const text =
+    hint.why === 'up'
+      ? hint.reps
+        ? t('↑ +1 повтор: в прошлый раз всё по плану')
+        : t('↑ {0} кг: в прошлый раз все подходы на цель', { 0: kgDelta(hint.delta ?? 0) })
+      : hint.why === 'down'
+        ? t('↓ {0} кг: два раза подряд не дотянул — сбросили на 10%, наберём снова', { 0: kgDelta(hint.delta ?? 0) })
+        : target
+          ? t('= тот же вес: сделай по {0} во всех подходах — и прибавим', { 0: target })
+          : t('= тот же вес, что в прошлый раз');
+  return <span className={`gym-hint ${hint.why}`}>{text}</span>;
+}
+
+/** Карта тела за 7 дней: какие мышцы горят, а какие отдыхают. */
+function WeekMuscles({ progress }: { progress: Progress }) {
+  const g = gymOf(progress);
+  const load = useMemo(() => weekLoad(g.history, Date.now()), [g.history]);
+  if (!g.history.length) return null;
+  const top = MUSCLES.filter((m) => m.id !== 'cardio' && (load[m.id] ?? 0) >= 1)
+    .sort((a, b) => (load[b.id] ?? 0) - (load[a.id] ?? 0))
+    .slice(0, 4);
+  const rest = restingMuscles(load).map((m) => MUSCLES.find((x) => x.id === m)!.label.toLowerCase());
+  return (
+    <div className="gym-card gym-map-card">
+      <div className="gym-map-title">{t('Мышцы за 7 дней')}</div>
+      <MuscleMapView levels={slugLevels(load)} />
+      {!!top.length && (
+        <div className="gym-chips gym-map-top">
+          {top.map((m) => (
+            <span key={m.id} className="swap-chip">
+              {m.label} · {Math.round(load[m.id] ?? 0)} {setsWord(Math.round(load[m.id] ?? 0))}
+            </span>
+          ))}
+        </div>
+      )}
+      {!!rest.length && rest.length < 10 && <div className="muted gym-note">{t('Отдыхают: {0}', { 0: rest.join(', ') })}</div>}
+    </div>
+  );
+}
+
+const REP_TABLE = [1, 2, 3, 5, 8, 10, 12];
+
+/** Рекорды по упражнениям и калькулятор максимума на один раз (формула Эпли, честно только до 12 повторов). */
+function RecordsSheet({ progress, onClose }: { progress: Progress; onClose: () => void }) {
+  const g = gymOf(progress);
+  const list = Object.entries(g.best)
+    .filter(([, b]) => b.e || b.w)
+    .sort((a, b) => (b[1].e ?? b[1].w ?? 0) - (a[1].e ?? a[1].w ?? 0));
+  const [w, setW] = useState<number | undefined>(list[0]?.[1].w);
+  const [r, setR] = useState<number | undefined>(5);
+  const max = w && r && r <= 12 ? e1rm(w, r) : 0;
+  return (
+    <Sheet onClose={onClose}>
+      <div className="section-title">{t('Максимум на один раз')}</div>
+      <div className="gym-calc">
+        <NumInput value={w} step={0.5} placeholder={t('кг')} onChange={setW} />
+        <span>×</span>
+        <NumInput value={r} placeholder={t('повт.')} onChange={setR} />
+        <span>=</span>
+        <b>{max ? kgText(max) : '—'}</b>
+      </div>
+      {r != null && r > 12 && <div className="muted">{t('Больше 12 повторов — оценка уже неточная, не считаю.')}</div>}
+      {max > 0 && (
+        <div className="gym-reptable">
+          {REP_TABLE.map((n) => (
+            <div key={n}>
+              <span>{t('на {0}', { 0: n })}</span>
+              <b>{fmt(Math.round((max / (1 + (n === 1 ? 0 : n / 30))) * 2) / 2)}</b>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="section-title">{t('Мои рекорды')}</div>
+      {!list.length && <div className="muted">{t('Пока пусто: отметь подходы с весом — и здесь появятся рекорды.')}</div>}
+      <div className="gym-records">
+        {list.map(([id, b]) => {
+          const ex = gymExercise(id);
+          return (
+            <button key={id} className="gym-record" onClick={() => (setW(b.w), setR(b.e && b.w ? Math.max(1, Math.round((b.e / b.w - 1) * 30)) : 1))}>
+              <ExIcon ex={ex} size={34} />
+              <span className="gym-ex-text">
+                <span>{ex.name}</span>
+                <small>{t('лучший вес {0}', { 0: t('{0} кг', { 0: fmt(b.w ?? 0) }) })}</small>
+              </span>
+              {b.e ? <b>≈ {kgText(b.e)}</b> : null}
+            </button>
+          );
+        })}
+      </div>
+    </Sheet>
+  );
+}
+
+/** Импорт истории: CSV из Strong (Настройки → Экспорт данных) или Hevy (Профиль → Настройки → Экспорт). */
+function ImportSheet({ update, onClose }: { update: Props['update']; onClose: () => void }) {
+  const [res, setRes] = useState<{ added: number; data: Imported } | 'bad' | null>(null);
+  const read = async (file: File) => {
+    const data = parseWorkouts(await file.text());
+    if (!data || !data.sessions.length) return setRes('bad');
+    let added = 0;
+    update((p) => {
+      const r = applyImport(p, data.sessions);
+      added = r.added;
+      return r.progress;
+    });
+    setRes({ added, data });
+    sfx('chest');
+  };
+  return (
+    <Sheet onClose={onClose}>
+      <div className="section-title">{t('Импорт из Strong и Hevy')}</div>
+      <div className="muted">{t('Выгрузи историю в CSV: в Strong — «Настройки → Экспорт данных», в Hevy — «Профиль → Настройки → Экспорт и импорт → Экспорт тренировок». Потом выбери файл здесь.')}</div>
+      <label className="primary gym-file">
+        {t('Выбрать CSV-файл')}
+        <input type="file" accept=".csv,text/csv,text/comma-separated-values" onChange={(e) => e.target.files?.[0] && void read(e.target.files[0])} />
+      </label>
+      {res === 'bad' && <div className="muted">{t('Не похоже на выгрузку Strong или Hevy. Нужен именно CSV-файл из их экспорта.')}</div>}
+      {res && res !== 'bad' && (
+        <div className="gym-import-res">
+          <b>{res.added ? t('Добавлено тренировок: {0}', { 0: res.added }) : t('Все эти тренировки уже есть в дневнике')}</b>
+          <div className="muted">{t('Рекорды и веса «прошлого раза» обновлены. В истории хранятся последние {0} тренировок.', { 0: 60 })}</div>
+          {!!res.data.unknown.length && (
+            <div className="muted">{t('Не нашёл в каталоге, записал своими: {0}', { 0: res.data.unknown.slice(0, 8).join(', ') + (res.data.unknown.length > 8 ? '…' : '') })}</div>
+          )}
+        </div>
+      )}
+    </Sheet>
   );
 }

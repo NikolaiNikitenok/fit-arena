@@ -127,3 +127,31 @@
 .gym-cat-row.on .gym-tick { background: var(--accent-grad); border-color: transparent; color: var(--on-accent); }
 .gym-picker-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 70%, transparent); }
 .gym-picker-bar .primary { width: 100%; max-width: 448px; margin: 0 auto; }
+
+/* Карта мышц, подсказки прогрессии, рекорды и импорт. */
+.gym-map-card { align-items: center; gap: 8px; }
+.gym-map-title { align-self: stretch; font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: .3px; }
+.gym-body { display: flex; justify-content: center; gap: 18px; }
+.gym-body figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.gym-body figcaption { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.gym-body svg { max-width: 40vw; height: auto; }
+.gym-map-top { justify-content: center; }
+.gym-hints { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 6px; }
+.gym-hint { font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.gym-hint.up { color: #86efac; border-color: rgba(134,239,172,.35); background: rgba(134,239,172,.08); }
+.gym-hint.down { color: #fbbf24; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+.gym-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gym-tools button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; padding: 12px 8px; }
+.gym-calc { display: flex; align-items: center; gap: 8px; font-size: 18px; }
+.gym-calc .gym-num { width: 84px; }
+.gym-calc b { font-size: 22px; color: var(--accent); }
+.gym-reptable { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.gym-reptable div { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; border-radius: 10px; background: var(--surface-2); }
+.gym-reptable span { font-size: 10px; color: var(--muted); }
+.gym-reptable b { font-size: 14px; }
+.gym-records { display: flex; flex-direction: column; gap: 6px; }
+.gym-record { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: inherit; text-align: left; }
+.gym-record b { white-space: nowrap; color: var(--accent); }
+.gym-file { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.gym-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.gym-import-res { display: flex; flex-direction: column; gap: 4px; }
