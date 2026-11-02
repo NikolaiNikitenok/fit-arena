@@ -168,6 +168,16 @@ describe('OIDC: полный вход', () => {
     expect((await fetch(base + '/userinfo', { headers: { Authorization: 'Bearer ' + t.id_token } })).status).toBe(401);
   });
 
+  it('главная: карточки всех сервисов, у подключённых отметка входа', async () => {
+    const r = await get('/');
+    expect(r.status).toBe(200);
+    const page = await r.text();
+    for (const host of ['arena.nikitenok.ru', 'print.nikitenok.ru', 'nikitenok.ru', 'habit.nikitenok.ru', 'admin.nikitenok.ru']) expect(page).toContain(`href="https://${host}"`);
+    expect(page.match(/pill on/g)?.length).toBe(1);
+    expect(page).toContain('Войти');
+    expect(page).not.toContain('{{nonce}}');
+  });
+
   it('отказывает чужому адресу возврата и публичному клиенту без PKCE', async () => {
     const r = await get(`/authorize?client_id=habit&redirect_uri=${encodeURIComponent('https://evil.com/')}&response_type=code&scope=openid`);
     expect(r.status).toBe(400);

@@ -9,7 +9,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { type SigningKey, jwks, signJwt, verifyJwt } from './jwt';
-import { accountPage, errorPage, loginPage, privacyPage } from './pages';
+import { accountPage, errorPage, homePage, loginPage, privacyPage } from './pages';
 import { verifyTelegram, yandexAuthorizeUrl, yandexUser } from './providers';
 import { type IdStore, LOGIN_RE, SESSION_DAYS } from './store';
 
@@ -313,6 +313,11 @@ export function createIdApp(cfg: IdConfig) {
     logout_all: { text: 'Вход закрыт на всех других устройствах.' },
   };
 
+  function home(req: IncomingMessage, res: ServerResponse): void {
+    const s = current(req);
+    const acc = s ? cfg.store.account(s.nid) : undefined;
+    send(res, 200, homePage({ me: acc ? { name: acc.name } : undefined, connected: cfg.clients.map((c) => c.id) }));
+  }
   function accountView(req: IncomingMessage, res: ServerResponse, url: URL): void {
     const s = current(req);
     if (!s) return redirect(res, '/login?return=%2Faccount');
@@ -326,7 +331,7 @@ export function createIdApp(cfg: IdConfig) {
       csrf: csrfOf(s.sid),
       msg: MSG[url.searchParams.get('msg') ?? ''],
       canLink: { tg: Boolean(cfg.telegram), ya: Boolean(cfg.yandex) },
-      apps: cfg.clients.filter((c) => c.url).map((c) => ({ name: c.name, url: c.url! })),
+      connected: cfg.clients.map((c) => c.id),
     }));
   }
 
@@ -383,7 +388,7 @@ export function createIdApp(cfg: IdConfig) {
     const path = url.pathname;
     const get = req.method === 'GET' || req.method === 'HEAD';
     try {
-      if (get && path === '/') return redirect(res, '/account');
+      if (get && path === '/') return home(req, res);
       if (get && path === '/.well-known/openid-configuration') return discovery(res);
       if (get && path === '/.well-known/jwks.json') return json(res, 200, jwks(cfg.keys), { 'Cache-Control': 'public, max-age=600', 'Access-Control-Allow-Origin': '*' });
       if (get && path === '/authorize') return authorize(req, res, url);
