@@ -155,7 +155,7 @@ export class HabitLinks {
 }
 
 export interface NidConfig {
-  /** Адрес ID изнутри сервера, например http://127.0.0.1:8095. */
+  /** Адрес ID изнутри сервера, например http://127.0.0.1:8096. */
   internal: string;
   /** Адрес ID снаружи — он же iss в токенах. */
   issuer: string;

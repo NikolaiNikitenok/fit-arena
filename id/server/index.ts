@@ -1,5 +1,5 @@
 // Сервер Nikitenok ID (id.nikitenok.ru). Отдельный процесс: падение Арены не мешает входу, и наоборот.
-//   PORT     — порт (по умолчанию 8095), снаружи его открывает Caddy
+//   PORT     — порт (по умолчанию 8096), снаружи его открывает Caddy
 //   ISSUER   — адрес сервиса (по умолчанию https://id.nikitenok.ru)
 //   DATA_DIR — данные (по умолчанию /opt/nikitenok-id/data):
 //     id.db            — аккаунты, привязки, сессии (SQLite)
@@ -20,7 +20,7 @@ import { IdStore } from './store';
 // node:sqlite ещё помечен как экспериментальный: предупреждение одно и то же при каждом запуске.
 process.removeAllListeners('warning');
 
-const PORT = Number(process.env.PORT ?? 8095);
+const PORT = Number(process.env.PORT ?? 8096);
 const ISSUER = (process.env.ISSUER ?? 'https://id.nikitenok.ru').replace(/\/$/, '');
 const DIR = process.env.DATA_DIR ?? '/opt/nikitenok-id/data';
 
