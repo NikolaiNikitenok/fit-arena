@@ -462,3 +462,9 @@ div.field-label { flex-direction: row; align-items: baseline; gap: 4px; margin-t
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Профиль Family */
+.account { display: flex; flex-direction: column; gap: 10px; }
+.account.on { background: linear-gradient(160deg, color-mix(in srgb, var(--accent2) 14%, var(--card)), var(--card) 70%); }
+.acc-head { display: flex; align-items: center; gap: 12px; }
+.acc-ico { font-size: 26px; width: 48px; height: 48px; display: grid; place-items: center; background: var(--card2); border-radius: 16px; flex: none; }

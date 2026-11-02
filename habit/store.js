@@ -21,6 +21,7 @@ const blank = () => ({
   notifyFrom: 9,
   notifyTo: 22,
   lastNotified: '',
+  savedAt: 0,
 });
 
 export let S = load();
@@ -45,12 +46,19 @@ function migrate(s) {
   }
   return s;
 }
-export function save() {
+const saveListeners = [];
+/** Подписка на сохранения (копия на сервере, cloud.js). */
+export const onSave = (fn) => saveListeners.push(fn);
+export function save({ silent = false } = {}) {
+  if (!silent) S.savedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {}
+  if (!silent) saveListeners.forEach((fn) => fn());
 }
-export function replaceState(data) {
+/** Заменить всё состояние (загрузка копии). silent — без отправки обратно на сервер. */
+export function replaceState(data, { silent = false } = {}) {
   S = migrate({ ...blank(), ...data });
-  save();
+  if (silent) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+  else save();
 }
 export function resetState() {
   S = blank();

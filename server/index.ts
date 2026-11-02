@@ -17,6 +17,7 @@
 //   MAX_BOT_TOKEN (или файл .max-token), MAX_CA_FILE — бот и мини-приложение в Max (server/maxBot.ts)
 //   YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET (или файлы .yandex-id, .yandex-secret) — вход в браузере через Яндекс ID (server/webAuth.ts)
 //   ACCOUNTS_FILE — какие входы (Telegram, потом Max и браузер) ведут в один аккаунт (server/accounts.ts)
+//   HABIT_FILE — прогресс «Свободы» по людям Family (по умолчанию habit.json рядом с DATA_FILE, server/habit.ts)
 //   MODERATION_FILE, REPORTS_FILE — чёрный список, запреты писать и жалобы (server/moderation.ts, server/reports.ts); о жалобах бот пишет ADMIN_IDS
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -26,7 +27,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
 import { leagueOf } from '../shared/rating';
 import { EXERCISE_LABELS, goalText, isRepExercise, type Exercise } from '../src/repCounter';
-import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './family';
+import { Family, FamilyHabits, parseClientItem, parseGymItem, RateLimit, telegramId } from './family';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
@@ -58,6 +59,7 @@ import { deletePlayer } from './deleteMe';
 import { alertText, FEEDBACK_THANKS, feedbackLimit, feedbackText } from './adminBot';
 import { ModerationStore } from './moderation';
 import { ReportStore } from './reports';
+import { habitApi, HabitStore } from './habit';
 import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
@@ -106,6 +108,8 @@ const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 const family = new Family();
 const activityLimit = new RateLimit();
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
+const familyHabits = new FamilyHabits();
+const habits = new HabitStore(process.env.HABIT_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'habit.json'));
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
@@ -1519,6 +1523,11 @@ const http = createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' }).end(answer ? JSON.stringify(answer) : '{}');
       })
       .catch(() => res.writeHead(400).end());
+    return;
+  }
+  // «Свобода» (habit.nikitenok.ru): вход через Family и копия прогресса (server/habit.ts).
+  if (path.startsWith('/api/habit/')) {
+    habitApi(path, req, res, habits, process.env.FAMILY_WEBHOOK_SECRET ?? '', (sum) => familyHabits.push(sum)).catch(() => res.writeHead(500).end());
     return;
   }
   if (path.startsWith('/api/pro/')) {

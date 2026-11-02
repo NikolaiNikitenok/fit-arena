@@ -4,6 +4,7 @@ import { $, $$, esc, pad, uid, DAY, money, num, dayKey, plural, parts, shortDur,
 import { S, save, replaceState, resetState, findHabit, elapsed, isPlanned, savedOf, savedTotal, checkStreak, logCraving, checkBadges, cravingStats, suggestActivities } from './store.js';
 import { openActivity } from './activities.js';
 import { shareProgress } from './share.js';
+import { account, onAccount, loginFromHash, pull, push, logout, status as syncStatus, FAMILY_LOGIN } from './cloud.js';
 
 const trig = (k) => TRIGGERS.find((t) => t.key === k);
 const act = (k) => ACTIVITIES.find((a) => a.key === k);
@@ -351,6 +352,8 @@ function motivationView() {
       </form>
     </section>
 
+    ${accountCard()}
+
     <section class="card">
       <h3>🔔 Фразы в уведомлениях</h3>
       <label class="switch"><input type="checkbox" data-act="notify" ${S.notify && perm === 'granted' ? 'checked' : ''}><span></span>Фраза каждый час</label>
@@ -371,6 +374,20 @@ function motivationView() {
       <button class="btn ghost small danger" data-act="reset">Начать всё с нуля</button>
     </section>
   `;
+}
+function accountCard() {
+  const a = account();
+  if (a) {
+    return `<section class="card account on">
+      <div class="acc-head"><span class="acc-ico">👨‍👩‍👧</span><div><b>${esc(a.name)}</b><small class="muted">Профиль NikitenokFamily · ${syncStatus.error ? 'нет связи, сохраню позже' : 'прогресс сохраняется'}</small></div></div>
+      <p class="muted tiny">Прогресс одинаковый на всех устройствах, где ты вошёл. Серия видна в твоём профиле в Family.</p>
+      <div class="row"><button class="btn ghost small" data-act="sync">Синхронизировать</button><button class="btn ghost small" data-act="logout">Выйти</button></div>
+    </section>`;
+  }
+  return `<section class="card account">
+    <div class="acc-head"><span class="acc-ico">👨‍👩‍👧</span><div><b>Войти через NikitenokFamily</b><small class="muted">Прогресс не потеряется и будет на всех устройствах</small></div></div>
+    <a class="btn primary wide" href="${FAMILY_LOGIN}">Войти через Family</a>
+  </section>`;
 }
 const hoursOpts = (sel) => Array.from({ length: 24 }, (_, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${pad(i)}:00</option>`).join('');
 
@@ -496,6 +513,7 @@ function onboarding() {
         <li><span>✨</span><div><b>Мотивация каждый день</b><small>Фразы, награды и твои собственные причины</small></div></li>
       </ul>
       <button class="btn primary wide big-btn" data-next>Начать</button>
+      <a class="btn ghost wide" href="${FAMILY_LOGIN}">👨‍👩‍👧 Войти через NikitenokFamily</a>
       <label class="btn ghost wide small">У меня есть копия данных<input type="file" accept="application/json" data-import hidden></label>`;
   }
   function pickHabit() {
@@ -577,7 +595,7 @@ function onboarding() {
         draft.when = b.dataset.when;
         const now = Date.now();
         if (draft.when === 'now') draft.start = now;
-        if (draft.when === 'past' && draft.start >= now) draft.start = now - DAY;
+        if (draft.when === 'past' && draft.start > now - 60e3) draft.start = now - DAY;
         if (draft.when === 'future' && draft.start <= now) { const d = new Date(now + DAY); d.setHours(8, 0, 0, 0); draft.start = d.getTime(); }
         readFields();
         draw();
@@ -993,6 +1011,10 @@ document.addEventListener('click', async (e) => {
   else if (a === 'letter') startActivity('letter', null);
   else if (a === 'letter-edit') { S.letter = ''; save(); startActivity('letter', null); }
   else if (a === 'install') installHelp();
+  else if (a === 'sync') { await push(true); await pull(); toast(syncStatus.error ? 'Нет связи с сервером — попробую позже' : 'Прогресс синхронизирован'); render(); }
+  else if (a === 'logout') {
+    if (await ask('Выйти из профиля?', 'Прогресс останется на этом устройстве и в профиле Family.', 'Выйти')) { logout(); render(); }
+  }
   else if (a === 'export') {
     const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
     const link = document.createElement('a');
@@ -1001,7 +1023,7 @@ document.addEventListener('click', async (e) => {
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   } else if (a === 'reset') {
-    if (await ask('Начать всё с нуля?', 'Все привычки, причины и прогресс удалятся с этого устройства. Сначала можно сохранить копию.', 'Удалить всё', 'Отмена', true)) {
+    if (await ask('Начать всё с нуля?', account() ? 'Все привычки, причины и прогресс удалятся с этого устройства и из профиля Family.' : 'Все привычки, причины и прогресс удалятся с этого устройства. Сначала можно сохранить копию.', 'Удалить всё', 'Отмена', true)) {
       resetState();
       location.hash = '#/';
       render();
@@ -1035,9 +1057,17 @@ document.addEventListener('submit', (e) => {
     toast(S.contact ? 'Сохранено. Кнопка звонка появится в окне тяги' : 'Контакт удалён');
   }
 });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { render(); checkNotify(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { render(); checkNotify(); pull().then(() => render()); } });
 
 // ---------- Старт ----------
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-render();
-checkNotify();
+onAccount(() => { $('.onboard')?.remove(); render(); });
+(async () => {
+  if (/[#&]sso=/.test(location.hash)) {
+    $('#main').innerHTML = '<p class="muted center">Входим через NikitenokFamily…</p>';
+    await loginFromHash();
+  }
+  render();
+  checkNotify();
+  if (account()) { await pull(); render(); }
+})();

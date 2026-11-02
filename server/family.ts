@@ -122,6 +122,52 @@ export class Family {
   }
 }
 
+/** Адрес для сводок «Свободы»: тот же сайт, путь …/habit вместо …/activity. */
+export const habitUrl = (activityUrl: string) => activityUrl.replace(/activity\/?$/, (m) => m.replace('activity', 'habit'));
+
+/**
+ * Сводка «Свободы» в профиль Family (server/habit.ts summarize): не чаще раза в минуту на человека,
+ * последняя сводка за минуту уходит в конце неё. Подпись та же, что у тренировок.
+ */
+export class FamilyHabits {
+  private pending = new Map<string, { body: object; timer: NodeJS.Timeout }>();
+  private last = new Map<string, number>();
+  constructor(
+    private readonly url = habitUrl(process.env.FAMILY_WEBHOOK_URL ?? ''),
+    private readonly secret = process.env.FAMILY_WEBHOOK_SECRET ?? '',
+    private readonly post: typeof fetch = fetch,
+    private readonly gapMs = 60_000,
+  ) {}
+  get enabled(): boolean {
+    return Boolean(this.url && this.secret);
+  }
+  push(summary: { pid: string } & object): void {
+    if (!this.enabled) return;
+    const pid = summary.pid;
+    const wait = Math.max(0, (this.last.get(pid) ?? 0) + this.gapMs - Date.now());
+    const prev = this.pending.get(pid);
+    if (prev) { prev.body = summary; return; }
+    const entry = { body: summary as object, timer: setTimeout(() => this.send(pid), wait) };
+    this.pending.set(pid, entry);
+  }
+  private send(pid: string): void {
+    const entry = this.pending.get(pid);
+    this.pending.delete(pid);
+    if (!entry) return;
+    this.last.set(pid, Date.now());
+    const body = JSON.stringify(entry.body);
+    const ts = Math.floor(Date.now() / 1000);
+    this.post(this.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Arena-Timestamp': String(ts), 'X-Arena-Signature': sign(this.secret, body, ts) },
+      body,
+      signal: AbortSignal.timeout(5000),
+    })
+      .then((res) => { if (!res.ok) console.error('family habit:', res.status); })
+      .catch((e) => console.error('family habit failed:', e));
+  }
+}
+
 /** Telegram ID из id игрока вида `tg:123`; у гостей — null. */
 export const telegramId = (playerId: string): number | null => {
   const m = /^tg:(\d+)$/.exec(playerId);
