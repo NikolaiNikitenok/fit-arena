@@ -1,10 +1,12 @@
-import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, ReactNode, Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, Exercise, repsEquivalent } from '../repCounter';
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
-import { outfitSkin } from './outfitSkin';
+import { heroLook, outfitSkin } from './outfitSkin';
+import { OutfitPreview } from './OutfitPreview';
+import { HeroThumb } from '../village/TroopInfo';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { Stars } from './Stars';
@@ -58,7 +60,7 @@ import {
   recordManual,
   applyFreeze,
 } from './progress';
-import { Chest, Coin, Flask, Heart, Lock, Star, Swords } from '../icons';
+import { Chest, Coin, Eye, Flask, Heart, Lock, Star, Swords } from '../icons';
 import { heroHands, heroPower } from './power';
 import { sfx, useMusic } from '../audio';
 import { missionTheme, worldTheme } from '../music';
@@ -857,7 +859,7 @@ export function StarterCard({ progress, place = 'shop' }: { progress: Progress; 
   );
 }
 
-function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (tm: ShopTab) => void; reachedLand: number; onClose: () => void }) {
+export function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { progress: Progress; setProgress: (p: Progress) => void; tab: ShopTab; setTab: (tm: ShopTab) => void; reachedLand: number; onClose: () => void }) {
   const price = (cost: number, buyIt: () => Progress | null) => (
     <button
       className="small-btn"
@@ -872,6 +874,8 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
     </button>
   );
   const [rarity, setRarity] = useState<Rarity | 'all'>('all');
+  // Примерка облика: id облика на подставке.
+  const [tryOn, setTry] = useState<string | null>(null);
   // Товар этой вкладки: что продаётся рядом по карте и что уже есть у героя.
   const stock = GEAR.filter((g) => g.slot === tab && (g.inShop || progress.items.includes(g.id)));
   const near = stock.filter((g) => progress.items.includes(g.id) || g.minLand <= reachedLand + 6);
@@ -983,9 +987,15 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
         ITEMS.filter((i) => i.inShop || progress.items.includes(i.id)).map((i) => {
           const owned = progress.items.includes(i.id);
           return (
-            <div key={i.id} className="shop-item">
-              <span className="swatch" style={{ background: i.color, boxShadow: i.glow ? `0 0 10px ${i.glow}` : undefined }} />
-              <div className="shop-name">
+            <div key={i.id} className="shop-item outfit-row" style={{ '--rc': RARITY_COLORS[i.rarity] } as CSSProperties}>
+              {/* Облик в 3D: тап по портрету или названию — примерка на подставке. */}
+              <button className="outfit-thumb" onClick={() => setTry(i.id)} aria-label={t('Примерить: {0}', { 0: i.name })}>
+                <HeroThumb look={heroLook(i)} size={56} />
+                <span className="outfit-eye">
+                  <Eye size={12} />
+                </span>
+              </button>
+              <div className="shop-name" onClick={() => setTry(i.id)}>
                 <div>{i.name}</div>
                 <div className="shop-meta" style={{ color: RARITY_COLORS[i.rarity] }}>
                   {RARITY_NAMES[i.rarity]}
@@ -1002,6 +1012,28 @@ function Shop({ progress, setProgress, tab, setTab, reachedLand, onClose }: { pr
             </div>
           );
         })}
+      {tryOn &&
+        (() => {
+          const item = itemById(tryOn);
+          return (
+            <OutfitPreview
+              item={item}
+              hands={heroHands(progress)}
+              owned={progress.items.includes(item.id)}
+              equipped={progress.equipped === item.id}
+              coins={progress.coins}
+              onBuy={() => {
+                const next = buy(progress, item.id);
+                if (!next) return;
+                sfx('coin');
+                // Купил — сразу надел: в примерке он уже на герое.
+                setProgress(equip(next, item.id));
+              }}
+              onEquip={() => setProgress(equip(progress, item.id))}
+              onClose={() => setTry(null)}
+            />
+          );
+        })()}
     </Sheet>
   );
 }

@@ -886,3 +886,18 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .small-note { font-size: 12px; text-align: center; margin-top: -4px; }
 .bottom-nav button.locked { position: relative; }
 .nav-lock-lv { position: absolute; top: 0; left: calc(50% + 4px); white-space: nowrap; padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 800; line-height: 1.3; background: #1b1d26; color: #ffd27a; border: 1px solid rgba(255, 210, 122, .6); }
+
+/* Лавка: облик в 3D и примерка (src/game/OutfitPreview.tsx). */
+.outfit-row { box-shadow: inset 3px 0 0 var(--rc); }
+.outfit-row .shop-name { cursor: pointer; }
+.outfit-thumb { position: relative; flex: none; width: 56px; height: 56px; padding: 0; border: 0; border-radius: var(--r-sm); overflow: hidden; background: radial-gradient(circle at 50% 70%, color-mix(in srgb, var(--rc) 35%, transparent), rgba(255,255,255,.04) 75%); }
+.outfit-thumb canvas { display: block; }
+.outfit-eye { position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: rgba(10,12,22,.75); color: #fff; }
+.outfit-preview .op-stage { height: min(52vh, 380px); margin: 4px -4px 0; border-radius: var(--r-md); overflow: hidden; }
+.outfit-preview .op-info { display: flex; flex-direction: column; gap: 8px; padding: 10px 2px 4px; }
+.outfit-preview .op-name { font-size: 22px; font-weight: 900; }
+.outfit-preview .op-meta { font-weight: 800; }
+.outfit-preview .op-perks { display: flex; flex-wrap: wrap; gap: 6px; }
+.outfit-preview .op-perk { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1.5px solid; background: rgba(255,255,255,.04); }
+.outfit-preview .op-btn { margin-top: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.outfit-preview .op-hint { text-align: center; font-size: 13px; }
