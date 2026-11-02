@@ -14,3 +14,6 @@
 
 Локально: `cd habit && python3 -m http.server`.
 Сервер: один раз `sudo bash deploy/setup-habit.sh habit` (Caddy-блок + /var/www/habit), дальше автодеплой при пуше в main.
+
+Вход: «Войти через Nikitenok ID» (id.nikitenok.ru, папка `id/` в корне репозитория) или по ссылке из NikitenokFamily.
+Кто вошёл через Family и потом нажал «Перейти на Nikitenok ID», остаётся при своём профиле Family: сервер запоминает nid → Family-pid (`habit-nid.json`).

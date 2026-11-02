@@ -1,5 +1,5 @@
 // Кэш для работы без сети и показ уведомлений.
-const CACHE = 'svoboda-v3';
+const CACHE = 'svoboda-v4';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -14,8 +14,11 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        // Возврат из Nikitenok ID (/?code=…) не кэшируем: одноразовые адреса.
+        if (!new URL(e.request.url).search) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
         return res;
       })
       .catch(() => caches.match(e.request).then((r) => r || caches.match('index.html'))),

@@ -6,3 +6,4 @@ dist-server
 data/
 .claude/worktrees/
 *.tsbuildinfo
+dist-id

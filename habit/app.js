@@ -4,7 +4,7 @@ import { $, $$, esc, pad, uid, DAY, money, num, dayKey, plural, parts, shortDur,
 import { S, save, replaceState, resetState, findHabit, elapsed, isPlanned, savedOf, savedTotal, checkStreak, logCraving, checkBadges, cravingStats, suggestActivities } from './store.js';
 import { openActivity } from './activities.js';
 import { shareProgress } from './share.js';
-import { account, onAccount, loginFromHash, pull, push, logout, status as syncStatus, FAMILY_LOGIN } from './cloud.js';
+import { account, onAccount, loginFromHash, loginFromNid, loginWithNid, hasNidReturn, pull, push, logout, status as syncStatus, FAMILY_LOGIN } from './cloud.js';
 
 const trig = (k) => TRIGGERS.find((t) => t.key === k);
 const act = (k) => ACTIVITIES.find((a) => a.key === k);
@@ -378,15 +378,20 @@ function motivationView() {
 function accountCard() {
   const a = account();
   if (a) {
+    const nid = a.via === 'nid';
+    const where = nid ? (a.family ? 'Nikitenok ID · связан с Family' : 'Nikitenok ID') : 'Профиль NikitenokFamily';
     return `<section class="card account on">
-      <div class="acc-head"><span class="acc-ico">👨‍👩‍👧</span><div><b>${esc(a.name)}</b><small class="muted">Профиль NikitenokFamily · ${syncStatus.error ? 'нет связи, сохраню позже' : 'прогресс сохраняется'}</small></div></div>
-      <p class="muted tiny">Прогресс одинаковый на всех устройствах, где ты вошёл. Серия видна в твоём профиле в Family.</p>
-      <div class="row"><button class="btn ghost small" data-act="sync">Синхронизировать</button><button class="btn ghost small" data-act="logout">Выйти</button></div>
+      <div class="acc-head"><span class="acc-ico">${nid ? '🔑' : '👨‍👩‍👧'}</span><div><b>${esc(a.name)}</b><small class="muted">${where} · ${syncStatus.error ? 'нет связи, сохраню позже' : 'прогресс сохраняется'}</small></div></div>
+      <p class="muted tiny">Прогресс одинаковый на всех устройствах, где ты вошёл.${!nid || a.family ? ' Серия видна в твоём профиле в Family.' : ''}</p>
+      ${nid ? '' : `<p class="muted tiny">Новое: один вход для всех приложений Nikitenok. Перейди на Nikitenok ID — прогресс и серия в Family останутся.</p>
+      <button class="btn primary wide small" data-act="nid-login">🔑 Перейти на Nikitenok ID</button>`}
+      <div class="row">${nid ? `<a class="btn ghost small" href="https://id.nikitenok.ru/account" target="_blank" rel="noopener">Аккаунт</a>` : ''}<button class="btn ghost small" data-act="sync">Синхронизировать</button><button class="btn ghost small" data-act="logout">Выйти</button></div>
     </section>`;
   }
   return `<section class="card account">
-    <div class="acc-head"><span class="acc-ico">👨‍👩‍👧</span><div><b>Войти через NikitenokFamily</b><small class="muted">Прогресс не потеряется и будет на всех устройствах</small></div></div>
-    <a class="btn primary wide" href="${FAMILY_LOGIN}">Войти через Family</a>
+    <div class="acc-head"><span class="acc-ico">🔑</span><div><b>Войти через Nikitenok ID</b><small class="muted">Telegram или Яндекс. Прогресс не потеряется и будет на всех устройствах</small></div></div>
+    <button class="btn primary wide" data-act="nid-login">Войти через Nikitenok ID</button>
+    <a class="btn ghost wide small" href="${FAMILY_LOGIN}">👨‍👩‍👧 Войти через Family</a>
   </section>`;
 }
 const hoursOpts = (sel) => Array.from({ length: 24 }, (_, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${pad(i)}:00</option>`).join('');
@@ -513,7 +518,8 @@ function onboarding() {
         <li><span>✨</span><div><b>Мотивация каждый день</b><small>Фразы, награды и твои собственные причины</small></div></li>
       </ul>
       <button class="btn primary wide big-btn" data-next>Начать</button>
-      <a class="btn ghost wide" href="${FAMILY_LOGIN}">👨‍👩‍👧 Войти через NikitenokFamily</a>
+      <button class="btn ghost wide" data-nid-login>🔑 Войти через Nikitenok ID</button>
+      <a class="btn ghost wide small" href="${FAMILY_LOGIN}">👨‍👩‍👧 Войти через NikitenokFamily</a>
       <label class="btn ghost wide small">У меня есть копия данных<input type="file" accept="application/json" data-import hidden></label>`;
   }
   function pickHabit() {
@@ -567,6 +573,7 @@ function onboarding() {
   const wire = [
     () => {
       $('[data-next]', wrap).onclick = () => go(1);
+      $('[data-nid-login]', wrap).onclick = () => loginWithNid();
       $('[data-import]', wrap).onchange = async (e) => {
         if (await importFile(e.target.files?.[0])) { wrap.remove(); render(); }
       };
@@ -1011,9 +1018,10 @@ document.addEventListener('click', async (e) => {
   else if (a === 'letter') startActivity('letter', null);
   else if (a === 'letter-edit') { S.letter = ''; save(); startActivity('letter', null); }
   else if (a === 'install') installHelp();
+  else if (a === 'nid-login') loginWithNid();
   else if (a === 'sync') { await push(true); await pull(); toast(syncStatus.error ? 'Нет связи с сервером — попробую позже' : 'Прогресс синхронизирован'); render(); }
   else if (a === 'logout') {
-    if (await ask('Выйти из профиля?', 'Прогресс останется на этом устройстве и в профиле Family.', 'Выйти')) { logout(); render(); }
+    if (await ask('Выйти из профиля?', 'Прогресс останется на этом устройстве и на сервере — войдёшь снова, и он вернётся.', 'Выйти')) { logout(); render(); }
   }
   else if (a === 'export') {
     const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
@@ -1023,7 +1031,7 @@ document.addEventListener('click', async (e) => {
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   } else if (a === 'reset') {
-    if (await ask('Начать всё с нуля?', account() ? 'Все привычки, причины и прогресс удалятся с этого устройства и из профиля Family.' : 'Все привычки, причины и прогресс удалятся с этого устройства. Сначала можно сохранить копию.', 'Удалить всё', 'Отмена', true)) {
+    if (await ask('Начать всё с нуля?', account() ? 'Все привычки, причины и прогресс удалятся с этого устройства и с сервера.' : 'Все привычки, причины и прогресс удалятся с этого устройства. Сначала можно сохранить копию.', 'Удалить всё', 'Отмена', true)) {
       resetState();
       location.hash = '#/';
       render();
@@ -1063,7 +1071,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 onAccount(() => { $('.onboard')?.remove(); render(); });
 (async () => {
-  if (/[#&]sso=/.test(location.hash)) {
+  if (hasNidReturn()) {
+    $('#main').innerHTML = '<p class="muted center">Входим через Nikitenok ID…</p>';
+    await loginFromNid();
+  } else if (/[#&]sso=/.test(location.hash)) {
     $('#main').innerHTML = '<p class="muted center">Входим через NikitenokFamily…</p>';
     await loginFromHash();
   }
