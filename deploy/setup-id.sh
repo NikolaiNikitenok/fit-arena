@@ -115,5 +115,5 @@ chmod 755 /etc/cron.daily/nikitenok-backup
 systemctl restart arena-server || true
 
 echo "Готово: https://$DOMAIN (A-запись $DOMAIN → IP этого сервера)."
-echo "Дальше: секреты репозитория ID_BOT_TOKEN и ID_BOT_USERNAME (бот для виджета, в BotFather /setdomain $DOMAIN),"
+echo "Дальше: секрет репозитория ID_BOT_TOKEN (бот @NikitenokID_Bot для виджета, в BotFather /setdomain $DOMAIN),"
 echo "и в приложении на oauth.yandex.ru добавить Redirect URI https://$DOMAIN/auth/yandex/callback."

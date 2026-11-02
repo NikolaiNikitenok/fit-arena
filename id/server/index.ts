@@ -48,7 +48,7 @@ if (!secret) {
   if (!existsSync(join(DIR, '.secret'))) writeFileSync(join(DIR, '.secret'), secret, { mode: 0o600 });
 }
 const tgToken = read('.tg-bot-token', 'ID_BOT_TOKEN');
-const tgBot = read('.tg-bot-username', 'ID_BOT_USERNAME').replace(/^@/, '');
+const tgBot = (read('.tg-bot-username', 'ID_BOT_USERNAME') || 'NikitenokID_Bot').replace(/^@/, '');
 const yaId = read('.yandex-id', 'YANDEX_CLIENT_ID');
 const yaSecret = read('.yandex-secret', 'YANDEX_CLIENT_SECRET');
 const clients = loadClients();

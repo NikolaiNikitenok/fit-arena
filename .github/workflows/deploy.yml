@@ -55,8 +55,11 @@ jobs:
           if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -w /opt/nikitenok-id/data; then
             rsync -az -e "$SSH" dist-id/ "$DEPLOY_USER@$DEPLOY_HOST:/opt/nikitenok-id/"
             # Бот для виджета входа Telegram (BotFather: /setdomain id.nikitenok.ru) и тот же Яндекс, что у Арены.
-            if [ -n "$ID_BOT_TOKEN" ] && [ -n "$ID_BOT_USERNAME" ]; then
+            # Имя бота по умолчанию — @NikitenokID_Bot (id/server/index.ts), секрет ID_BOT_USERNAME нужен, только если бот сменится.
+            if [ -n "$ID_BOT_TOKEN" ]; then
               printf '%s' "$ID_BOT_TOKEN" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/nikitenok-id/data/.tg-bot-token'
+            fi
+            if [ -n "$ID_BOT_USERNAME" ]; then
               printf '%s' "$ID_BOT_USERNAME" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/nikitenok-id/data/.tg-bot-username'
             fi
             if [ -n "$YANDEX_CLIENT_ID" ] && [ -n "$YANDEX_CLIENT_SECRET" ]; then
