@@ -16,7 +16,7 @@ interface Props {
   me: FighterView;
   opponent: FighterView;
   seconds: number;
-  camera: { videoRef: RefObject<HTMLVideoElement | null>; canvasRef: RefObject<HTMLCanvasElement | null>; active: boolean; angle?: number | null };
+  camera: { videoRef: RefObject<HTMLVideoElement | null>; canvasRef: RefObject<HTMLCanvasElement | null>; active: boolean; angle?: number | null; waiting?: boolean };
   overlay?: ReactNode;
   banner?: string | null;
   opponentColor?: string;
@@ -72,7 +72,7 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
       )}
       {overlay && <div className="result">{overlay}</div>}
       {children}
-      <div className={`pip ${camera.active ? '' : 'hidden'}`}>
+      <div className={`pip ${camera.active ? '' : 'hidden'} ${camera.waiting ? 'big' : ''}`}>
         <video ref={camera.videoRef} playsInline muted />
         <canvas ref={camera.canvasRef} />
         <div className="pip-count">{me.hits}</div>

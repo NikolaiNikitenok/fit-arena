@@ -914,3 +914,59 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .pass-sheet-text { margin: 10px 0 14px; opacity: .9; }
 .pass-sheet-state { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border-radius: var(--r-md); background: rgba(255,255,255,.06); font-weight: 800; margin-top: 6px; }
 .pass-sheet .op-btn, .pass-sheet .primary { width: 100%; }
+
+/* Кнопка «Начать» перед боем и перерыв между упражнениями (src/StartGate.tsx). */
+.pip.big { left: 50%; right: auto; top: 12px; bottom: auto; width: auto; height: min(32%, 280px); transform: translateX(-50%); z-index: 4; border-color: rgba(255,255,255,.85); box-shadow: 0 10px 30px rgba(0,0,0,.55); transition: width .25s ease; }
+.gate { position: absolute; inset: 0; z-index: 3; container-type: size; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 12px 14px 14px; color: #fff; text-align: center;
+  background: linear-gradient(180deg, rgba(9,10,16,.35) 0%, rgba(9,10,16,.55) 40%, rgba(9,10,16,.9) 100%); animation: gate-in .3s ease-out; }
+.gate.rest { justify-content: center; background: radial-gradient(ellipse at 50% 45%, rgba(9,10,16,.7), rgba(9,10,16,.92)); }
+@keyframes gate-in { from { opacity: 0; } to { opacity: 1; } }
+.gate-card { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 8px; animation: gate-up .4s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes gate-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.gate-kicker { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.gate-title { font-size: 20px; font-weight: 900; line-height: 1.2; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+.gate-sub { font-size: 13px; line-height: 1.35; color: rgba(255,255,255,.8); }
+.gate-hint { font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.1); }
+.gate-hint.ok { color: #86efac; }
+.gate-hint.warn { color: #fde68a; }
+.gate-go { position: relative; margin: 8px 0 2px; width: 132px; height: 132px; border-radius: 50%; border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 0 0 6px rgba(255,138,92,.22), 0 14px 34px rgba(255,122,89,.45); animation: gate-pulse 1.6s ease-in-out infinite; }
+.gate-go b { font-size: 19px; font-weight: 900; letter-spacing: .02em; }
+.gate-go:active { transform: scale(.94); }
+.gate-ring { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; animation: gate-ring 1.8s ease-out infinite; pointer-events: none; }
+.gate-ring.two { animation-delay: .9s; }
+@keyframes gate-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes gate-ring { 0% { transform: scale(.95); opacity: .8; } 100% { transform: scale(1.45); opacity: 0; } }
+.gate-go.wide { width: 100%; max-width: 280px; height: 58px; border-radius: 18px; flex-direction: row; gap: 8px; animation: none; box-shadow: 0 10px 26px rgba(255,122,89,.35); }
+.gate-note { font-size: 12px; color: rgba(255,255,255,.6); }
+.rest-clock { display: flex; flex-direction: column; align-items: center; font-size: 56px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.rest-clock small { margin-top: 6px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .06em; }
+.rest-next { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 18px; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); }
+.rest-next small { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.6); }
+.rest-next b { font-size: 20px; font-weight: 900; }
+.rest-next b span { color: var(--accent); }
+.rest-dots { display: flex; gap: 8px; margin: 4px 0; }
+.rest-dots span { width: 34px; height: 6px; border-radius: 4px; background: rgba(255,255,255,.18); }
+.rest-dots span.on { background: var(--accent-grad); }
+.rest-dots span.next { background: rgba(255,255,255,.45); animation: gate-blink 1.2s ease-in-out infinite; }
+@keyframes gate-blink { 50% { opacity: .4; } }
+/* «Спорт»: тёмная карточка, зелёный акцент, без сказочного свечения. */
+.gate.sport { background: linear-gradient(180deg, rgba(15,17,21,.55) 0%, rgba(15,17,21,.85) 40%, rgba(15,17,21,.97) 100%); }
+.gate.sport.rest { background: rgba(15,17,21,.94); }
+.gate.sport .gate-kicker, .gate.sport .rest-next b span { color: var(--sp-accent, #4ade80); }
+.gate.sport .gate-title { text-shadow: none; }
+.gate.sport .gate-go { background: var(--sp-accent, #4ade80); color: #0b1a10; box-shadow: 0 0 0 6px rgba(74,222,128,.18), 0 14px 34px rgba(74,222,128,.28); }
+.gate.sport .gate-go.wide { box-shadow: 0 10px 26px rgba(74,222,128,.25); }
+.gate.sport .gate-ring { border-color: var(--sp-accent, #4ade80); }
+.gate.sport .rest-next { background: var(--sp-card, #171a21); border-color: var(--sp-line, rgba(255,255,255,.08)); }
+.gate.sport .rest-dots span.on { background: var(--sp-accent, #4ade80); }
+@media (prefers-reduced-motion: reduce) { .gate-go, .gate-ring, .rest-dots span.next { animation: none; } }
+.pip.big .pip-count, .pip.big .pip-angle { display: none; }
+/* Невысокая арена (дуэль 3:4): кнопка меньше, лишний текст прячем, чтобы не залезать под окно камеры. */
+@container (max-height: 560px) {
+  .gate-card { gap: 6px; }
+  .gate-sub, .gate-note { display: none; }
+  .gate-go { width: 104px; height: 104px; margin: 4px 0 0; }
+  .gate-go b { font-size: 17px; }
+  .gate-title { font-size: 17px; }
+}

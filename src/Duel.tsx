@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { track } from './telemetry';
 import { useBusy } from './updates/busy';
+import { StartGate } from './StartGate';
 import { ArenaStage } from './ArenaStage';
 import { MAX_HP } from '../shared/battle';
 import type { ClientMessage, FighterView, PlayerInfo, ProfileView, ServerMessage, TopEntry } from '../shared/protocol';
@@ -196,7 +197,8 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
   const ready = async () => {
     setError(null);
     try {
-      if (!camera.active) await camera.start(room?.exercise ?? exercise, () => send({ type: 'rep' }));
+      // Первый раз камера включается с кнопкой «Начать»: «готов» уходит сопернику, когда игрок встал в кадр.
+      if (!camera.active) return void (await camera.start(room?.exercise ?? exercise, () => send({ type: 'rep' }), undefined, { gate: true }));
       send({ type: 'ready' });
       track('duel_start', 'live');
     } catch (e) {
@@ -247,7 +249,20 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
 
   return (
     <>
-      <ArenaStage me={view.me} opponent={view.opponent} seconds={phase === 'fight' ? seconds : 60} camera={camera} overlay={overlay} result={phase === 'over' ? result?.result : null} />
+      <ArenaStage me={view.me} opponent={view.opponent} seconds={phase === 'fight' ? seconds : 60} camera={camera} overlay={overlay} result={phase === 'over' ? result?.result : null}>
+        {camera.waiting && room && (
+          <StartGate
+            title={t('Дуэль · {0}', { 0: EXERCISE_LABELS[room.exercise] })}
+            sub={room.players.length < 2 ? t('Соперник ещё не пришёл. Встань так, чтобы в кадре было всё тело') : undefined}
+            hint={camera.hint}
+            onGo={() => {
+              camera.go();
+              send({ type: 'ready' });
+              track('duel_start', 'live');
+            }}
+          />
+        )}
+      </ArenaStage>
 
       <div className="hint-line">
         {error ??
@@ -351,7 +366,7 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
               {shared ?? t('Позвать друга')}
             </button>
           )}
-          {room.players.length === 2 && !myInfo?.ready && (
+          {room.players.length === 2 && !myInfo?.ready && !camera.waiting && (
             <button className="primary" onClick={ready}>
               {phase === 'over' ? t('Реванш') : t('Я готов')}
             </button>

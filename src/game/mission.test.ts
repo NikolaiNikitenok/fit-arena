@@ -15,6 +15,29 @@ function reps(m: Mission, n: number, t0: number, step = 2000): number {
 }
 
 describe('Mission', () => {
+  it('перерыв: время, сердца и повторы стоят, после — часы сдвигаются', () => {
+    const boss = LEVELS[9];
+    const m = new Mission(boss, DEFAULT_BASELINE);
+    m.start(0);
+    const t = reps(m, m.phaseTarget(0), 0, 1000);
+    expect(m.phaseIndex).toBe(1);
+    m.pause(t);
+    const left = m.view(t).leftMs;
+    const hearts = m.view(t).hearts;
+    // Две минуты отдыха: сердца не сгорают, время не идёт, повторы не считаются.
+    m.tick(t + 120000);
+    m.rep(t + 120000);
+    expect(m.view(t + 120000).leftMs).toBe(left);
+    expect(m.view(t + 120000).hearts).toBe(hearts);
+    expect(m.view(t + 120000).reps).toBe(m.phaseTarget(0));
+    m.resume(t + 120000);
+    expect(m.paused).toBe(false);
+    expect(m.view(t + 121000).leftMs).toBe(left - 1000);
+    m.rep(t + 121000);
+    expect(m.view(t + 121000).reps).toBe(m.phaseTarget(0) + 1);
+    expect(m.view(t + 121000).outcome).toBe('running');
+  });
+
   it('строитель: победа после нужного числа повторов', () => {
     const m = new Mission(level('build'), DEFAULT_BASELINE);
     m.start(0);

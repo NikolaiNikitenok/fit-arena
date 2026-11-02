@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { track } from './telemetry';
 import { useBusy } from './updates/busy';
+import { StartGate } from './StartGate';
 import { ArenaStage } from './ArenaStage';
 import { type Battle, MAX_HP, newBattle, type Side, strike, winner } from '../shared/battle';
 import type { FighterView } from '../shared/protocol';
@@ -25,6 +26,7 @@ type Phase = 'pick' | 'talk' | 'countdown' | 'fight' | 'over';
 
 const FIGHT_MS = 60_000;
 const COUNTDOWN_MS = 3000;
+const GATE_COUNTDOWN_MS = 5000;
 // Как на сервере живых дуэлей: чаще повторы не засчитываются.
 const MIN_REP_INTERVAL_MS = 400;
 // Бой засчитывается в пропуск, если игрок правда тренировался.
@@ -177,8 +179,12 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
   const ready = async () => {
     setError(null);
     try {
-      if (!camera.active) await camera.start(exercise, onRep);
-      track('duel_start', 'trainer');
+      // Камера включается, но бой ждёт кнопку «Начать»: игрок видит себя и встаёт, когда готов.
+      if (!camera.active) {
+        await camera.start(exercise, onRep, undefined, { gate: true });
+        setTalking(false);
+        return;
+      }
     } catch (e) {
       // В DEV можно драться и без камеры: повторы приходят из __trainerRep.
       if (!import.meta.env.DEV) {
@@ -186,13 +192,19 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
         return;
       }
     }
+    launch();
+  };
+
+  // С кнопки «Начать» отсчёт длиннее: игроку ещё отойти от телефона и встать в позицию.
+  const launch = (prepMs = COUNTDOWN_MS) => {
+    track('duel_start', 'trainer');
     const tm = Date.now();
     const fightSeed = (seed ^ tm) >>> 0;
     fight.current = {
       exercise,
       battle: newBattle(),
       combo: { player: false, bot: false },
-      startAt: tm + COUNTDOWN_MS,
+      startAt: tm + prepMs,
       schedule: trainerSchedule(trainer, loadProgress().baseline, exercise, FIGHT_MS, fightSeed),
       next: 0,
       lastRepAt: -Infinity,
@@ -265,14 +277,26 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
         opponentScale={trainer.scale}
         enraged={trainer.id === 'knyaz' && phase === 'fight' && opponent.hp > 0 && opponent.hp <= opponent.maxHp * KNYAZ_RAGE}
       >
-        {phase === 'talk' && talking && <Dialog key={`${trainer.id}-${seed}`} lines={intro} onDone={() => setTalking(false)} />}
+        {phase === 'talk' && camera.waiting && (
+          <StartGate
+            title={t('Дуэль с тренером: {0} · {1}', { 0: npc.name, 1: EXERCISE_LABELS[exercise] })}
+            hint={camera.hint}
+            onGo={() => {
+              camera.go();
+              launch(GATE_COUNTDOWN_MS);
+            }}
+          />
+        )}
+        {phase === 'talk' && talking && !camera.waiting && <Dialog key={`${trainer.id}-${seed}`} lines={intro} onDone={() => setTalking(false)} />}
       </ArenaStage>
 
       <div className="hint-line">
         {error ??
           (phase === 'pick'
             ? t('Темп тренера подстроится под твою силу. Кубки не меняются')
-            : phase === 'talk'
+            : phase === 'talk' && camera.waiting
+              ? t('Нажми «Начать», когда будешь готов')
+              : phase === 'talk'
               ? t('{0}: встань в кадр и жми «Я готов»', { 0: EXERCISE_LABELS[exercise] })
               : phase === 'fight'
                 ? camera.hint ?? t('Отлично, продолжай!')
@@ -311,7 +335,7 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
         </>
       )}
 
-      {phase === 'talk' && (
+      {phase === 'talk' && !camera.waiting && (
         <>
           <CameraGuide exercise={exercise} />
           <button className="primary" onClick={() => withWarmup(() => void ready())}>

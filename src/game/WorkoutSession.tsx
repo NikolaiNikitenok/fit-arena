@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { StartGate } from '../StartGate';
 import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, goalText, isTimed, type RepExercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
@@ -56,7 +57,10 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
   };
   const calibrating = camera.calib != null;
   const calibRef = useRef(false);
-  calibRef.current = calibrating;
+  // До кнопки «Начать» и во время калибровки время не идёт.
+  calibRef.current = calibrating || camera.waiting;
+  // Повторы калибровки засчитываются в первый подход.
+  const credit = useRef(0);
 
   const set = sets[idx];
   const timed = isTimed(set.exercise);
@@ -72,6 +76,9 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     setIdx(i);
     camera.switchExercise(sets[i].exercise);
     setPhase('work');
+    const n = credit.current;
+    credit.current = 0;
+    for (let k = 0; k < n; k++) onRep();
   };
 
   const endSet = (at: number) => {
@@ -157,7 +164,14 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     const st = s.current;
     st.idx = 0;
     try {
-      await camera.start(sets[0].exercise, onRep, undefined, { calibrate: needsCalibration(sets[0].exercise) });
+      credit.current = 0;
+      await camera.start(sets[0].exercise, onRep, undefined, {
+        calibrate: needsCalibration(sets[0].exercise),
+        gate: true,
+        onCalibrated: (n) => {
+          credit.current = n;
+        },
+      });
       track('program_start');
     } catch (e) {
       // В DEV можно тренироваться и без камеры: повторы приходят из __workoutRep.
@@ -232,7 +246,8 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
             </div>
           </div>
         )}
-        {phase === 'prep' && !calibrating && (
+        {camera.waiting && <StartGate title={title} hint={camera.hint} onGo={camera.go} />}
+        {phase === 'prep' && !calibrating && !camera.waiting && (
           <div className="countdown">
             <div className="countdown-num">{restLeft}</div>
             <div>{t('Займи позицию')}</div>

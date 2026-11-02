@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { StartGate } from '../StartGate';
 import { EXERCISE_LABELS, Exercise } from '../repCounter';
 import { getSettings } from '../settings';
 import { Character, CharacterProps } from '../three/Character';
@@ -320,6 +321,8 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
           }
           return true;
         },
+        // Бой ждёт кнопку «Начать»: игрок видит себя и встаёт, когда готов.
+        { gate: true },
       )
       .catch((e) => {
         setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
@@ -361,7 +364,8 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
             −{power.damage}
           </div>
         )}
-        {(phase === 'prep' || phase === 'loading') && (
+        {camera.waiting && <StartGate title={t('Событие: {0} · {1}', { 0: boss.name, 1: EXERCISE_LABELS[exercise] })} hint={camera.hint} onGo={camera.go} />}
+        {(phase === 'prep' || phase === 'loading') && !camera.waiting && (
           <div className="countdown">
             <div className="countdown-num">{phase === 'loading' ? '…' : left}</div>
             <div>{phase === 'loading' ? t('Включаю камеру') : t('Займи позицию')}</div>
@@ -373,7 +377,7 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
             <div className="muted light">{t('{0} · попытка не потрачена', { 0: error })}</div>
           </div>
         )}
-        <div className={`pip ${camera.active ? '' : 'hidden'}`}>
+        <div className={`pip ${camera.active ? '' : 'hidden'} ${camera.waiting ? 'big' : ''}`}>
           <video ref={camera.videoRef} playsInline muted />
           <canvas ref={camera.canvasRef} />
           <div className="pip-count">{reps}</div>

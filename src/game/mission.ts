@@ -59,6 +59,8 @@ export class Mission {
   private hearts: number;
   private phase = 0;
   private lastTick = 0;
+  // Перерыв между упражнениями босса: время, сердца и погоня стоят.
+  private pausedAt: number | null = null;
   readonly target: number;
   private readonly phaseTargets: number[];
   private readonly catchS: number;
@@ -93,12 +95,38 @@ export class Mission {
     this.lastTick = now;
   }
 
+  get paused(): boolean {
+    return this.pausedAt !== null;
+  }
+
+  /** Перерыв: повторы не идут, время боя и удары босса за бездействие стоят. */
+  pause(now: number): void {
+    if (this.outcome !== 'running' || this.startedAt === null || this.pausedAt !== null) return;
+    this.tick(now);
+    this.pausedAt = now;
+  }
+
+  /** Конец перерыва: часы боя сдвигаются на его длину, будто его и не было. */
+  resume(now: number): void {
+    if (this.pausedAt === null || this.startedAt === null) return;
+    const d = now - this.pausedAt;
+    this.startedAt += d;
+    this.lastRepAt += d;
+    this.lastTick += d;
+    this.pausedAt = null;
+  }
+
+  /** Индекс текущего упражнения (у босса — фаза). */
+  get phaseIndex(): number {
+    return this.phase;
+  }
+
   get exercise(): RepExercise {
     return this.level.exercises[Math.min(this.phase, this.level.exercises.length - 1)];
   }
 
   rep(now: number): void {
-    if (this.outcome !== 'running' || this.startedAt === null) return;
+    if (this.outcome !== 'running' || this.startedAt === null || this.pausedAt !== null) return;
     this.tick(now);
     if (this.outcome !== 'running') return;
     this.reps += 1;
@@ -123,7 +151,7 @@ export class Mission {
   }
 
   tick(now: number): void {
-    if (this.outcome !== 'running' || this.startedAt === null) return;
+    if (this.outcome !== 'running' || this.startedAt === null || this.pausedAt !== null) return;
     const dt = (now - this.lastTick) / 1000;
     this.lastTick = now;
     const elapsed = now - this.startedAt;
@@ -150,7 +178,8 @@ export class Mission {
     }
   }
 
-  view(now: number): MissionView {
+  view(at: number): MissionView {
+    const now = this.pausedAt ?? at;
     const { type, seconds } = this.level;
     const elapsed = this.startedAt === null ? 0 : now - this.startedAt;
     const leftMs = Math.max(0, seconds * 1000 - elapsed);
@@ -192,6 +221,11 @@ export class Mission {
   }
 
   /** Звёзды: за запас времени, а у босса — за оставшиеся сердца. */
+  /** Цель упражнения номер i (у босса у каждой фазы своя). */
+  phaseTarget(i: number): number {
+    return this.phaseTargets[Math.min(i, this.phaseTargets.length - 1)];
+  }
+
   stars(now: number): number {
     if (this.outcome !== 'won') return 0;
     const { type, seconds } = this.level;

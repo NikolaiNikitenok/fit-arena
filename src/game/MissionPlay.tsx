@@ -33,10 +33,13 @@ import { sfx } from '../audio';
 import { locale, t } from '../i18n';
 import { InviteOffer, inviteOfferDue } from '../friends/InviteOffer';
 import { markWarmup, withWarmup } from '../warmup/warmup';
+import { RestBreak, StartGate } from '../StartGate';
 
 const PREP_S = 5;
 // Без камеры: отсчёт короче (телефон уже в руке), и не чаще повтора в 0,6 с — быстрее никто не приседает.
 const MANUAL_PREP_S = 3;
+// После калибровки игрок уже в позиции: отсчёт короче.
+const CALIB_PREP_S = 3;
 const MANUAL_MIN_GAP_MS = 600;
 // Тряска сцены при ударе — не для тех, кто просил телефон меньше двигать картинку.
 const calm = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -127,6 +130,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [error, setError] = useState<string | null>(null);
   const exercise = useRef<RepExercise>(level.exercises[0]);
   const [countdown, setCountdown] = useState(0);
+  // Повторы с калибровки: засчитываются в бой, как только он начнётся.
+  const credit = useRef(0);
+  // Перерыв между упражнениями босса: с какого момента отдыхаем и когда (после «Продолжить») снова в бой.
+  const phaseRef = useRef(0);
+  const restRef = useRef<{ from: number; resumeAt: number; done: RepExercise; step: number } | null>(null);
+  const [rest, setRest] = useState<{ done: RepExercise; step: number; going: boolean } | null>(null);
+  const [restS, setRestS] = useState(0);
   // Засчитанные повторы по упражнениям — для семейного сайта.
   const repsBy = useRef<Partial<Record<Exercise, number>>>({});
   // Комбо: повторы без пауз. Вспышка, тряска, выкрики и огонь на кулаках — только ощущения, урон не меняется.
@@ -154,7 +164,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   };
   useMissionSounds(status, countdown, view, level.type === 'boss');
   const calibrating = status === 'running' && camera.calib != null;
-  useVoiceCoach(status === 'running' && countdown <= 0 && !calibrating, view.reps, Math.ceil(view.leftMs / 1000), camera.hint, level.seconds, level.type === 'trial' ? undefined : mission.current.target);
+  const waiting = status === 'running' && camera.waiting;
+  useVoiceCoach(status === 'running' && countdown <= 0 && !calibrating && !waiting && !rest, view.reps, Math.ceil(view.leftMs / 1000), camera.hint, level.seconds, level.type === 'trial' ? undefined : mission.current.target);
 
   const finish = (m: Mission, now: number) => {
     camera.stop();
@@ -202,6 +213,10 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     const m = make();
     mission.current = m;
     exercise.current = level.exercises[0];
+    credit.current = 0;
+    phaseRef.current = 0;
+    restRef.current = null;
+    setRest(null);
     repsBy.current = {};
     comboRef.current = NO_COMBO;
     setCombo(NO_COMBO);
@@ -230,6 +245,27 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       setCountdown(left);
       if (left > 0) return true;
       m.start(now);
+      // Медленные повторы калибровки — уже часть боя.
+      const n = credit.current;
+      credit.current = 0;
+      for (let k = 0; k < n; k++) countRep(m, now);
+      if (n > 0) setShout({ text: t('+{0} за калибровку', { 0: n }), key: now });
+    }
+    const r = restRef.current;
+    if (r) {
+      if (!r.resumeAt) {
+        setRestS(Math.floor((now - r.from) / 1000));
+        return true;
+      }
+      const left = Math.ceil((r.resumeAt - now) / 1000);
+      setCountdown(left);
+      if (left > 0) return true;
+      // Перерыв кончился: часы боя идут дальше, счёт нового упражнения с нуля.
+      restRef.current = null;
+      setRest(null);
+      m.resume(now);
+      exercise.current = m.exercise;
+      if (!manualRef.current) camera.switchExercise(m.exercise);
     }
     m.tick(now);
     // Пауза затянулась — серия кончилась, огонь гаснет.
@@ -239,6 +275,23 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       camera.setFlame(0);
     }
     const v = m.view(now);
+    // Упражнение босса сделано, а бой идёт дальше: перерыв до «Продолжить».
+    if (v.outcome === 'running' && m.phaseIndex > phaseRef.current) {
+      const done = level.exercises[phaseRef.current];
+      phaseRef.current = m.phaseIndex;
+      m.pause(now);
+      restRef.current = { from: now, resumeAt: 0, done, step: m.phaseIndex };
+      setRest({ done, step: m.phaseIndex, going: false });
+      setRestS(0);
+      setView(m.view(now));
+      // Серия обрывается на перерыве: огонь гаснет, комбо с нуля.
+      comboRef.current = { ...comboRef.current, n: 0 };
+      setCombo(comboRef.current);
+      setShout(null);
+      camera.setFlame(0);
+      sfx('coin');
+      return true;
+    }
     if (v.exercise !== exercise.current) {
       exercise.current = v.exercise;
       if (!manualRef.current) camera.switchExercise(v.exercise);
@@ -294,6 +347,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     setStatus('loading');
     const paint = { last: 0 };
     let firstFrame = 0;
+    let calibrated = false;
     setCountdown(PREP_S);
     try {
       await camera.start(
@@ -309,11 +363,19 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           const now = performance.now();
           // Несколько секунд на то, чтобы встать в позицию: время и повторы ещё не идут.
           firstFrame ||= now;
-          return frame(m, now, firstFrame + PREP_S * 1000, paint);
+          return frame(m, now, firstFrame + (calibrated ? CALIB_PREP_S : PREP_S) * 1000, paint);
         },
         // Перед первым подходом упражнения подстраиваем счёт под амплитуду игрока.
         // С первого экрана — без калибровки: первый повтор должен засчитаться как можно скорее.
-        { calibrate: needsCalibration(level.exercises[0]) && !autoStart },
+        // Перед стартом — кнопка «Начать»: игрок видит себя и встаёт, когда готов (с первого экрана — сразу).
+        {
+          calibrate: needsCalibration(level.exercises[0]) && !autoStart,
+          gate: !autoStart,
+          onCalibrated: (n) => {
+            calibrated = true;
+            credit.current = n;
+          },
+        },
       );
       if (manualRef.current) return camera.stop();
       setStatus('running');
@@ -336,6 +398,15 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     void start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** «Продолжить» после перерыва: 5 секунд, чтобы встать в позицию, потом часы боя идут. */
+  const resumeRest = () => {
+    const r = restRef.current;
+    if (!r || r.resumeAt) return;
+    r.resumeAt = performance.now() + (manualRef.current ? MANUAL_PREP_S : PREP_S) * 1000;
+    setCountdown(manualRef.current ? MANUAL_PREP_S : PREP_S);
+    setRest((x) => (x ? { ...x, going: true } : x));
+  };
 
   const surrender = () => {
     camera.stop();
@@ -386,7 +457,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           pet={petLook(progress, Date.now())}
         />
         )}
-        <div className={`mhud ${busy && !sport ? '' : 'hidden'}`}>
+        <div className={`mhud ${busy && !sport && !waiting ? '' : 'hidden'}`}>
           <div className="mhud-row">
             <span className="mhud-ex">{EXERCISE_LABELS[view.exercise]}</span>
             {level.type === 'boss' && (
@@ -427,11 +498,29 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           </div>
         )}
 
+        {waiting && (
+          <StartGate
+            title={`${sport ? SPORT_NAMES[level.type] : level.title} · ${level.exercises.map((e) => EXERCISE_LABELS[e]).join(' → ')}`}
+            hint={camera.hint}
+            onGo={camera.go}
+          />
+        )}
+        {status === 'running' && rest && !rest.going && (
+          <RestBreak
+            done={EXERCISE_LABELS[rest.done]}
+            next={EXERCISE_LABELS[level.exercises[rest.step]]}
+            nextGoal={mission.current.phaseTarget(rest.step)}
+            step={rest.step}
+            steps={level.exercises.length}
+            seconds={restS}
+            onGo={resumeRest}
+          />
+        )}
         {calibrating && <CalibrationOverlay exercise={level.exercises[0]} view={camera.calib!} onSkip={camera.skipCalib} />}
-        {status === 'running' && countdown > 0 && !calibrating && (
+        {status === 'running' && countdown > 0 && !calibrating && !waiting && !(rest && !rest.going) && (
           <div className="countdown">
             <div className="countdown-num">{countdown}</div>
-            <div>{t('Займи позицию')}</div>
+            <div>{rest ? t('Дальше: {0}', { 0: EXERCISE_LABELS[level.exercises[rest.step]] }) : t('Займи позицию')}</div>
           </div>
         )}
         {status === 'story' && <Dialog lines={level.story} onDone={() => setStatus('ready')} />}
@@ -512,13 +601,13 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           </div>
         )}
 
-        {status === 'running' && manual && (
-          <button className="manual-tap" onPointerDown={tap} disabled={countdown > 0}>
+        {status === 'running' && manual && !rest && (
+          <button className="manual-tap" onPointerDown={tap} disabled={countdown > 0 || !!rest}>
             <b>+1</b>
             <small>{t('жми после каждого повтора')}</small>
           </button>
         )}
-        <div className={`pip ${camera.active ? '' : 'hidden'}`}>
+        <div className={`pip ${camera.active ? '' : 'hidden'} ${waiting ? 'big' : ''}`}>
           <video ref={camera.videoRef} playsInline muted />
           <canvas ref={camera.canvasRef} />
           <div className="pip-count">{view.reps}</div>
@@ -531,8 +620,10 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       </div>
 
       <div className="hint-line">
-        {status === 'running' && manual && t('Без камеры: сделал повтор — нажми кнопку. Честно — себе же на пользу.')}
-        {status === 'running' && !manual && (camera.hint ?? (calibrating ? t('Медленно и на всю амплитуду, как можешь') : t('Отлично, продолжай!')))}
+        {status === 'running' && manual && !rest && t('Без камеры: сделал повтор — нажми кнопку. Честно — себе же на пользу.')}
+        {status === 'running' && rest && (sport ? t('Перерыв: время подхода стоит') : t('Перерыв: время боя стоит, босс ждёт'))}
+        {status === 'running' && !rest && waiting && t('Нажми «Начать», когда будешь готов')}
+        {status === 'running' && !manual && !rest && !waiting && (camera.hint ?? (calibrating ? t('Медленно и на всю амплитуду, как можешь') : t('Отлично, продолжай!')))}
         {status === 'ready' && level.exercises.length > 1 && t('Упражнения меняются по фазам: поставь телефон так, чтобы было видно всё тело.')}
         {status === 'error' && t('Не удалось запустить камеру: {0}. Можно считать повторы самому.', { 0: error })}
       </div>

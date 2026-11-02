@@ -52,11 +52,18 @@ export function useRepCamera(preload = true) {
   // Калибровка перед подходом: пока она идёт, повторы не считаются и onFrame не вызывается.
   const calibRef = useRef<{ c: Calibrator; doneAt: number; sink: ReturnType<typeof calibrationSink> } | null>(null);
   const [calib, setCalib] = useState<CalibrationView | null>(null);
+  // Кнопка «Начать»: камера уже показывает игрока, но счёт, калибровка и onFrame ждут go().
+  const gateRef = useRef<null | (() => void)>(null);
+  const [waiting, setWaiting] = useState(false);
+  // Сколько медленных повторов игрок сделал на калибровке: их засчитывает экран боя.
+  const calibDoneRef = useRef<((reps: number) => void) | undefined>(undefined);
 
   const stop = () => {
     cancelAnimationFrame(frameRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    gateRef.current = null;
+    setWaiting(false);
     setActive(false);
   };
 
@@ -70,8 +77,10 @@ export function useRepCamera(preload = true) {
   }, [preload]);
 
   /** onFrame вызывается каждый кадр; вернёт false — камера остановится.
-   *  persist: false — итог калибровки не сохраняется сам (повторная калибровка из настроек). */
-  const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean; persist?: boolean } = {}) => {
+   *  persist: false — итог калибровки не сохраняется сам (повторная калибровка из настроек).
+   *  gate: true — после включения камеры ждём go() (кнопка «Начать»): игрок видит себя и ставит телефон.
+   *  onCalibrated — сколько повторов сделано на калибровке (и при пропуске): их можно засчитать в бой. */
+  const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean; persist?: boolean; gate?: boolean; onCalibrated?: (reps: number) => void } = {}) => {
     // До первого await: на iPhone разрешение на датчик можно спросить только прямо из нажатия.
     enableOrientation();
     const [model, vision] = await Promise.all([
@@ -101,9 +110,18 @@ export function useRepCamera(preload = true) {
 
     counterRef.current = counterFor(exercise);
     setLimits({ down: counterRef.current.down, up: counterRef.current.up });
+    calibDoneRef.current = opts.onCalibrated;
     // Планке калибровка не нужна: у неё нет амплитуды.
-    calibRef.current = opts.calibrate && exercise !== 'plank' ? { c: new Calibrator(exercise), doneAt: 0, sink: calibrationSink(opts.persist ?? true) } : null;
-    setCalib(calibRef.current?.c.view ?? null);
+    const beginCalib = () => {
+      calibRef.current = opts.calibrate && exercise !== 'plank' ? { c: new Calibrator(exercise), doneAt: 0, sink: calibrationSink(opts.persist ?? true) } : null;
+      setCalib(calibRef.current?.c.view ?? null);
+    };
+    if (opts.gate) {
+      calibRef.current = null;
+      setCalib(null);
+      gateRef.current = beginCalib;
+      setWaiting(true);
+    } else beginCalib();
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
     const drawing = new vision.DrawingUtils(ctx);
@@ -130,7 +148,8 @@ export function useRepCamera(preload = true) {
         calibRef.current = null;
         setCalib(null);
       }
-      if (!calibRef.current && onFrame && !onFrame()) return stop();
+      const gated = gateRef.current != null;
+      if (!gated && !calibRef.current && onFrame && !onFrame()) return stop();
       const now = performance.now();
       if (video.readyState >= 2 && due(now)) {
         // Смена размера холста стирает его и выделяет память заново: только когда размер поменялся.
@@ -144,6 +163,13 @@ export function useRepCamera(preload = true) {
         }
         flames.step(ctx, lm, flameRef.current, now, getSettings().lowPower);
         const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight, frameRotations());
+        // До «Начать» только показываем позу и подсказку: повторы не идут.
+        if (gateRef.current) {
+          setHint(state.hint);
+          setAngle(getSettings().skeleton ? state.angle : null);
+          frameRef.current = requestAnimationFrame(loop);
+          return;
+        }
         const c = calibRef.current;
         if (c && !c.doneAt) {
           const v = c.c.update(lm ? state.angle : null, state.hint == null, now);
@@ -151,6 +177,7 @@ export function useRepCamera(preload = true) {
           if (v.result) {
             c.doneAt = now;
             c.sink.done(c.c.exercise, v.result);
+            calibDoneRef.current?.(v.reps);
             counterRef.current = new RepCounter(c.c.exercise, v.result);
             setLimits(v.result);
             lastReps = 0;
@@ -196,6 +223,7 @@ export function useRepCamera(preload = true) {
     const c = calibRef.current;
     if (!c || c.doneAt) return;
     c.sink.skip(c.c.exercise);
+    calibDoneRef.current?.(c.c.view.reps);
     // Пока шла калибровка, счётчик видел повторы: начинаем с нуля.
     counterRef.current?.reset();
     lastRepsReset.current = true;
@@ -203,10 +231,22 @@ export function useRepCamera(preload = true) {
     setCalib(null);
   };
 
+  /** Кнопка «Начать»: с этого момента идут калибровка, отсчёт и счёт. */
+  const go = () => {
+    const begin = gateRef.current;
+    if (!begin) return;
+    gateRef.current = null;
+    setWaiting(false);
+    // Пока игрок устраивался, счётчик мог увидеть «повторы»: начинаем с нуля.
+    counterRef.current?.reset();
+    lastRepsReset.current = true;
+    begin();
+  };
+
   /** Сила огня на кулаках (0 — погасить). */
   const setFlame = (tier: number) => {
     flameRef.current = tier;
   };
 
-  return { videoRef, canvasRef, start, stop, switchExercise, skipCalib, setFlame, hint, active, angle, limits, calib };
+  return { videoRef, canvasRef, start, stop, switchExercise, skipCalib, setFlame, go, hint, active, angle, limits, calib, waiting };
 }

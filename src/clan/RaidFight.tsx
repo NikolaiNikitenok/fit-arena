@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { StartGate } from '../StartGate';
 import type { RaidView } from '../../shared/clan';
 import { RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_PREP_S, raidBoss } from '../../shared/raid';
 import { itemById } from '../game/items';
@@ -105,6 +106,8 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
           }
           return true;
         },
+        // Бой ждёт кнопку «Начать»: игрок видит себя и встаёт, когда готов.
+        { gate: true },
       )
       .then(() => setPhase((p) => (p === 'loading' ? 'prep' : p)))
       .catch((e) => {
@@ -147,7 +150,8 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
             −{power.damage}
           </div>
         )}
-        {(phase === 'prep' || phase === 'loading') && (
+        {camera.waiting && <StartGate title={t('Рейд: {0} · {1}', { 0: boss.name, 1: EXERCISE_LABELS[exercise] })} hint={camera.hint} onGo={camera.go} />}
+        {(phase === 'prep' || phase === 'loading') && !camera.waiting && (
           <div className="countdown">
             <div className="countdown-num">{phase === 'loading' ? '…' : left}</div>
             <div>{phase === 'loading' ? t('Включаю камеру') : t('Займи позицию')}</div>
@@ -159,7 +163,7 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
             <div className="muted light">{phase === 'error' ? error : t('{0} повторов · {1} урона по боссу', { 0: reps, 1: dealt })}</div>
           </div>
         )}
-        <div className={`pip ${camera.active ? '' : 'hidden'}`}>
+        <div className={`pip ${camera.active ? '' : 'hidden'} ${camera.waiting ? 'big' : ''}`}>
           <video ref={camera.videoRef} playsInline muted />
           <canvas ref={camera.canvasRef} />
           <div className="pip-count">{reps}</div>
