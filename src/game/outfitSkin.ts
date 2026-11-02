@@ -33,6 +33,7 @@ const LOOKS: Record<string, Look> = {
   'prog-stone': { metal: 'stone', trim: 'silver', cloth: '#5d5670', gem: '#c4b5fd', motif: 'crystal' },
   'prog-champion': { metal: 'gold', trim: 'gold', cloth: '#b3361f', gem: '#ff8a5c', motif: 'flame' },
   'ref-brother': { metal: 'silver', trim: 'silver', cloth: '#11697a', cloth2: '#00acc1', gem: '#00e5ff' },
+  herald: { metal: 'silver', trim: 'gold', cloth: '#0d47a1', cloth2: '#29b6f6', gem: '#4fc3f7', motif: 'crystal' },
   'ref-leader': { metal: 'obsidian', trim: 'gold', cloth: '#4a2a7a', cloth2: '#2a1840', gem: '#7c4dff', motif: 'spikes' },
   'titan-slayer': { metal: 'bronze', trim: 'gold', cloth: '#3a1f1a', gem: '#ff7043', motif: 'spikes' },
   'event-ice': { metal: 'ice', trim: 'silver', cloth: '#2a6fa8', gem: '#80deea', motif: 'crystal' },

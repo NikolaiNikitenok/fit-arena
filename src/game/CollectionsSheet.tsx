@@ -23,6 +23,7 @@ export function whereToGet(i: Item, now: number): string {
   if (i.program) return t('программа Грома');
   if (i.ref) return i.id === 'ref-leader' ? t('приведи троих друзей') : t('приведи друга');
   if (i.titan) return t('победа над Титаном');
+  if (i.channel) return t('подписка на канал игры');
   if (i.pass) return t('пропуск сезона');
   if (i.holiday) {
     const w = holidayByKey(i.holiday);

@@ -14,7 +14,7 @@ export const blobBase64 = (b: Blob) =>
   });
 
 /** Сервер принимает только JPEG: открытки побед рисуются в PNG — пережимаем. */
-async function toJpeg(blob: Blob): Promise<Blob> {
+export async function toJpeg(blob: Blob): Promise<Blob> {
   if (blob.type === 'image/jpeg') return blob;
   const img = await createImageBitmap(blob);
   const c = document.createElement('canvas');

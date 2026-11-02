@@ -64,6 +64,8 @@ export interface Item {
   ref?: boolean;
   // Только за победу над Титаном (src/game/titan.ts).
   titan?: boolean;
+  // Только за подписку на канал игры (src/social/ChannelOffer.tsx).
+  channel?: boolean;
 }
 
 export const ITEMS: Item[] = [
@@ -103,6 +105,7 @@ export const ITEMS: Item[] = [
   // «Приведи друга» и Титан: в сундуках и лавке их нет.
   { id: 'ref-brother', hero: 'Rogue', name: t('Побратим'), rarity: 'epic', color: '#4dd0e1', glow: '#00e5ff', tint: 'mul:0.7,1.1,1.35', coinBonus: 0.15, price: 0, inShop: false, ref: true },
   { id: 'ref-leader', hero: 'Barbarian', name: t('Вожак стаи'), rarity: 'legendary', color: '#b388ff', glow: '#7c4dff', tint: 'mul:0.95,0.7,1.45', coinBonus: 0.25, price: 0, inShop: false, ref: true },
+  { id: 'herald', hero: 'Mage', name: t('Вестник Арены'), rarity: 'epic', color: '#29b6f6', glow: '#4fc3f7', tint: 'mul:0.7,1.0,1.45', coinBonus: 0.1, price: 0, inShop: false, channel: true },
   { id: 'titan-slayer', hero: 'Knight', name: t('Титаноборец'), rarity: 'legendary', color: '#ff7043', glow: '#ffd180', tint: 'mul:1.4,0.9,0.7', coinBonus: 0.25, price: 0, inShop: false, titan: true },
   // Облики праздников (src/game/holidayDefs.ts): у каждого праздника каждого года свой.
   ...holidayOutfits().map(({ id, key, name, hero, color, glow, tint }): Item => ({ id, hero, name, rarity: 'legendary', color, glow, tint, coinBonus: 0.25, price: 0, inShop: false, holiday: key })),
@@ -252,7 +255,7 @@ export function openChest(seed: number, owned: string[], land = seed - 1, opts: 
   };
   const r = rnd(1);
   if (r < 0.3) {
-    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && !i.holiday && !i.ref && !i.titan && i.id !== 'starter' && !owned.includes(i.id));
+    const outfits = ITEMS.filter((i) => !i.inShop && !i.pass && !i.event && !i.program && !i.paid && !i.holiday && !i.ref && !i.titan && !i.channel && i.id !== 'starter' && !owned.includes(i.id));
     const gear = GEAR.filter((g) => !owned.includes(g.id) && droppable(g) && (g.inShop ? g.minLand <= land + 2 : land >= 3));
     const pool = [...outfits.map((item) => ({ item })), ...gear.map((g) => ({ gear: g }))];
     if (pool.length) return { coins: 0, ...pool[Math.floor(rnd(2) * pool.length)] };

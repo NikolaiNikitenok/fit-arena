@@ -1,4 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
+import { ChannelOffer, channelOfferDue } from './social/ChannelOffer';
+import { setAutoPostsPref } from './social/autoPost';
 import { calibrationStatus, CalibrationStatus, resetCalibration, useCalibration } from './calibration';
 import { RecalibrateScreen } from './RecalibrateScreen';
 import { cloudState, onCloud, setLetters, setRaidNotify, setRemind } from './cloud';
@@ -33,6 +35,7 @@ const TOGGLES: Record<string, { key: ToggleKey; title: string; text: string }> =
   villageFx: { key: 'villageFx', title: t('Погода и эффекты деревни'), text: t('Дождь и снег, светлячки, пыль от разрушений, летящие монеты и салют. Выключи, если телефон греется.') },
   flyIn: { key: 'flyIn', title: t('Пролёт над деревней'), text: t('Камера плавно облетает деревню, когда ты в неё заходишь.') },
   homeList: { key: 'homeList', title: t('Главная списком'), text: t('Все разделы друг под другом, с прокруткой — как раньше. Без этого герой во весь экран, а кнопки по бокам.') },
+  autoPosts: { key: 'autoPosts', title: t('Рассказывать о победах в ленте'), text: t('Игра сама выложит в ленту победу над боссом, серию тренировок, новый уровень героя и выигранный вызов в чате.') },
   lowPower: { key: 'lowPower', title: t('Экономный режим'), text: t('Без теней и сглаживания, 3D попроще и в меньшем разрешении. Помогает, если телефон слабый или греется. На слабых телефонах включается сам.') },
 };
 
@@ -48,7 +51,15 @@ function Toggles({ keys }: { keys: ToggleKey[] }) {
               <div className="toggle-title">{tm.title}</div>
               <div className="muted">{tm.text}</div>
             </div>
-            <input type="checkbox" className="switch" checked={s[k]} onChange={(e) => setSetting(k, e.target.checked)} />
+            <input
+              type="checkbox"
+              className="switch"
+              checked={s[k]}
+              onChange={(e) => {
+                setSetting(k, e.target.checked);
+                if (k === 'autoPosts') setAutoPostsPref(e.target.checked);
+              }}
+            />
           </label>
         );
       })}
@@ -99,7 +110,9 @@ export function SettingsSheet({ progress, onReset, onIntro, onClose }: { progres
         {section === 'graphics' && <Toggles keys={GRAPHICS} />}
         {section === 'notify' && (
           <>
+            {channelOfferDue() && <ChannelOffer place="settings" />}
             <RemindRow />
+            <Toggles keys={['autoPosts']} />
             <NotifyRow field="raidNotify" set={setRaidNotify} title={t('Уведомления о рейде')} text={t('Бот напишет в субботу, когда босс клана проснётся, напомнит в воскресенье вечером о несделанных атаках и пришлёт итог рейда.')} />
             <NotifyRow field="letters" set={setLetters} title={t('Письма Мастера Грома')} text={t('Если пропадёшь на 3 или 7 дней, Гром напишет и оставит подарок; по понедельникам — сколько ты сделал за неделю. Не чаще одного сообщения в день.')} />
           </>

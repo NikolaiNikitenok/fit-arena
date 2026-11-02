@@ -206,6 +206,12 @@ export function openGroupChallenge(exercise: string): void {
   else window.open(url, '_blank');
 }
 
+/** Открыть ссылку t.me внутри Telegram (канал, бот), в браузере — новой вкладкой. */
+export function openLink(url: string): void {
+  if (tg?.openTelegramLink && tg.initData) tg.openTelegramLink(url);
+  else window.open(url, '_blank');
+}
+
 /** Откуда открыли приложение (метка src-, приглашение, кнопка бота…) — для статистики. */
 export const appSource = (): string => launchSource(startParam(), location.search, platform);
 

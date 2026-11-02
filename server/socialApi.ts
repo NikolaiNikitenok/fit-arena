@@ -9,8 +9,8 @@
 // (server/moderation.ts) посты не публикует. Посты тех, кто в чёрном списке (в любую сторону), не видны.
 import { heroLevel, heroXp, streak, type Progress } from '../src/game/progress';
 import { type Exercise, repsEquivalent } from '../src/repCounter';
-import { type FeedTab, type FriendStatus, type ProfileClan, type PostView, type ProfileView, FEED_PAGE } from '../shared/social';
-import type { FeedStore, Post } from './feed';
+import { type FeedTab, type FriendStatus, NPC_IDS, type NpcId, type ProfileClan, type PostView, type ProfileView, FEED_PAGE } from '../shared/social';
+import { type FeedStore, isNpc, type Post } from './feed';
 import { DAY_REPS_MAX } from './saves';
 
 type Reply = { status: number; body: unknown };
@@ -78,6 +78,8 @@ export interface SocialDeps {
   notify: (to: string, text: string, button: string, query: string) => void;
   // Адрес фото для админа (с подписью: видно и скрытое).
   adminPhotoUrl: (photoId: string) => string;
+  // Автопосты включены/выключены в настройках игрока (сервер сам пишет о победе в вызове чата).
+  setAutoPosts?: (id: string, on: boolean) => void;
   // Записать жалобу в общий журнал жалоб (server/reports.ts).
   report?: (from: Me, target: string, targetName: string, text: string) => void;
 }
@@ -103,7 +105,9 @@ const levelOf = (d: SocialDeps, id: string) => {
 export function postView(d: SocialDeps, p: Post, viewer: string): PostView {
   return {
     id: p.id,
-    author: { pid: d.pids.of(p.author), name: nameOf(d, p.author, p.name), level: levelOf(d, p.author), pro: d.isPro(p.author) || undefined },
+    author: isNpc(p.author)
+      ? { pid: `npc-${p.author.slice(4)}`, name: p.name, level: 0, npc: (NPC_IDS as readonly string[]).includes(p.author.slice(4)) ? (p.author.slice(4) as NpcId) : undefined }
+      : { pid: d.pids.of(p.author), name: nameOf(d, p.author, p.name), level: levelOf(d, p.author), pro: d.isPro(p.author) || undefined },
     text: p.text,
     ...(p.photo ? { photo: `/api/feed/photo/${p.photo.id}.jpg`, w: p.photo.w, h: p.photo.h } : {}),
     at: p.at,
@@ -111,6 +115,7 @@ export function postView(d: SocialDeps, p: Post, viewer: string): PostView {
     liked: p.likes.includes(viewer),
     mine: p.author === viewer,
     ...(p.hidden ? { hidden: true } : {}),
+    ...(p.card ? { card: p.card } : {}),
   };
 }
 
@@ -241,6 +246,16 @@ export function socialApi(d: SocialDeps, path: string, me: Me, body: Record<stri
       notifyFollowers(d, r, me.name);
       return { status: 200, body: { post: postView(d, r, me.id) } };
     }
+    case '/api/feed/autopref':
+      d.setAutoPosts?.(me.id, body.on !== false);
+      return { status: 200, body: { ok: true } };
+    case '/api/feed/auto': {
+      // Автопост о событии: тот же запрет модератора, но подписчикам не пишем — это не их новость.
+      if (d.mutedUntil(me.id) > now) return fail('Модератор запретил тебе писать. Публиковать посты пока нельзя');
+      const r = d.feed.addAuto(me.id, me.name, body.kind, body.text, body.card, body.photo);
+      if (typeof r === 'string') return fail(r);
+      return { status: 200, body: { post: postView(d, r, me.id) } };
+    }
     case '/api/feed/delete': {
       const p = d.feed.get(body.post);
       if (!p) return fail('Пост не найден');
@@ -256,6 +271,7 @@ export function socialApi(d: SocialDeps, path: string, me: Me, body: Record<stri
       return { status: 200, body: { post: postView(d, r, me.id) } };
     }
     case '/api/feed/report': {
+      if (isNpc(d.feed.get(body.post)?.author ?? '')) return fail('Это пост персонажа игры');
       const r = d.feed.report(String(body.post ?? ''), me.id);
       if (typeof r === 'string') return fail(r);
       d.report?.(me, r.post.author, nameOf(d, r.post.author, r.post.name), r.post.text || '(фото без текста)');

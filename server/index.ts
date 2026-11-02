@@ -32,7 +32,7 @@ import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
 import { botApi, botStatus, botUploadFiles, currentAgent, langOfFrom, menuButton, runBot, TG_PROXY, type Update, webhookReply, webhookSecret, botFile } from './bot';
 import { type Lang, tl } from '../src/i18n';
-import { dueReminders, plausibleXp, SAVE_MAX_BYTES, SaveStore } from './saves';
+import { DAY_REPS_MAX, dueReminders, plausibleXp, SAVE_MAX_BYTES, SaveStore } from './saves';
 import { raidNotices, type RaidNotice } from './raidNotices';
 import { warNotices } from './warNotices';
 import { opponent, warTick } from './wars';
@@ -62,7 +62,8 @@ import { adminCommand, type ModerationDeps, moderationApi } from './moderationAp
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
 import { villageApi } from './villageApi';
-import { agentFetch, Channel, type ChannelDeps } from './channel';
+import { agentFetch, Channel, type ChannelDeps, writePost } from './channel';
+import { NPC_NAMES, NpcFeed, type NpcSlotKind } from './npcFeed';
 import { PersonalChannel } from './personalChannel';
 import { Threads } from './threads';
 import { CHANNEL_MEDIA, mediaDir } from './channelMedia';
@@ -573,6 +574,30 @@ const channelDeps: ChannelDeps = {
   appLink: (tag = 'channel') => `https://t.me/${botUsername ?? 'ArenaNikitenokBot'}?start=src-${tag}`,
   log: (m) => console.log(m),
 };
+// Вчерашний день на Арене: сколько игроков тренировались, сколько повторов и кто больше всех (для поста Грома).
+function arenaDay(date: string): { players: number; reps: number; top: { name: string; reps: number }[] } {
+  let players = 0;
+  let reps = 0;
+  const rows: { name: string; reps: number }[] = [];
+  for (const s of saves.all()) {
+    const p = s.progress as { days?: Record<string, unknown>; manual?: Record<string, unknown> } | null;
+    const n = Math.min(DAY_REPS_MAX, Math.max(0, Math.floor((Number(p?.days?.[date]) || 0) - (Number(p?.manual?.[date]) || 0))));
+    if (!n) continue;
+    players++;
+    reps += n;
+    const name = nameOfPlayer(s.id);
+    if (name && name !== 'Боец' && name !== 'Гость') rows.push({ name, reps: n });
+  }
+  rows.sort((a, b) => b.reps - a.reps);
+  return { players, reps, top: rows.slice(0, 3) };
+}
+const npcFeed = new NpcFeed(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'npc-feed.json'), {
+  now: Date.now,
+  yesterday: arenaDay,
+  post: (p) => void feed.addNpc(p.npc, NPC_NAMES[p.npc], p.text, p.card),
+  write: (system, prompt) => writePost(channelDeps, system, prompt),
+  log: (m) => console.log(m),
+});
 const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), channelDeps);
 // Личный канал автора: черновик раз в день, публикация только по кнопке админа.
 const PERSONAL_CHANNEL = process.env.PERSONAL_CHANNEL ?? '@nikitenokN';
@@ -698,6 +723,14 @@ async function onGroupApi(path: string, req: IncomingMessage, res: ServerRespons
 }
 // Таблицы вызовов: раз в 10 минут правим сообщение в чате, если счёт изменился; через неделю — итоги новым сообщением.
 let groupsTicking = false;
+/** Победитель вызова в чате — автопост в ленту (если игрок не выключил автопосты и в вызове было хотя бы двое). */
+function groupWinnerPost(c: GroupChallenge): void {
+  const rows = groupRows(c).sort((a, b) => b.reps - a.reps);
+  const win = rows[0];
+  if (!win || win.reps <= 0 || rows.length < 2 || win.reps === rows[1].reps || saves.get(win.id)?.feedAutoOff) return;
+  const ex = tl('ru', EXERCISE_LABELS[c.exercise]).toLowerCase();
+  feed.addAuto(win.id, nameOfPlayer(win.id) ?? win.name, 'group', `Выиграл недельный вызов в чате «${c.title}» 🏆`, { title: 'Вызов чата', value: `${win.reps} · ${ex}`, sub: `обогнал ${rows.length - 1} ${rows.length - 1 === 1 ? 'соперника' : 'соперников'}` });
+}
 async function groupsTick(): Promise<void> {
   const now = Date.now();
   for (const c of groups.pending()) {
@@ -708,7 +741,10 @@ async function groupsTick(): Promise<void> {
     }
     if (c.finalPending || now > c.endsAt) {
       // Итоги: закрываем вызов, но помним, что их ещё надо доставить, пока Telegram не примет сообщение.
-      if (!c.done) groups.update(c, { done: true, finalPending: true });
+      if (!c.done) {
+        groups.update(c, { done: true, finalPending: true });
+        groupWinnerPost(c);
+      }
       if (await postGroupTable(c)) groups.update(c, { finalPending: false });
       continue;
     }
@@ -783,7 +819,7 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|loop\b|newusers\b|threads)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|loop\b|newusers\b|threads|npc\b)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
   if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, рилс-петля (8–10 с; пришли боту видео, как отжимаешься, и петля начнётся с тебя), карусели и сторис для Instagram, пост в Threads. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
@@ -791,6 +827,16 @@ const channelCommand = (chatId: number, raw: string): boolean => {
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
   const nu = startNotices.command(text);
   if (nu) return reply(nu), true;
+  // /npc daily|tip|task — пост персонажа в ленту прямо сейчас (проверить, как выглядит).
+  const npcCmd = /^\/npc(?:\s+(daily|tip|task))?\s*$/.exec(text.trim());
+  if (npcCmd) {
+    if (!npcCmd[1]) return reply('Посты персонажей в ленте: 09:00 итоги дня (Гром), 13:00 совет, 19:00 задание (Лиса). Сейчас: /npc daily, /npc tip или /npc task'), true;
+    npcFeed
+      .write(npcCmd[1] as NpcSlotKind)
+      .then((p) => reply(`✅ В ленте пост от «${NPC_NAMES[p.npc]}»:\n\n${p.text}`))
+      .catch((e: Error) => reply(`Не вышло: ${e.message}`));
+    return true;
+  }
   if (/^\/channel\s*$/.test(text.trim())) return reply(`${channel.status()}\n\n${personal.status()}\n\n${threads.status()}`), true;
   return reels.command(chatId, text, reply) || threads.command(chatId, text, reply) || personal.command(chatId, text, reply) || channel.command(chatId, text, reply);
 };
@@ -950,6 +996,7 @@ const socialDeps: SocialDeps = {
   notifyAdmins: (text) => toAdmins(text),
   notify: (to, text, button, query) => friends.notify(to, text, button, query),
   adminPhotoUrl: (photoId) => `${APP_URL.replace(/\/$/, '')}/api/feed/photo/${photoId}.jpg?a=${photoSign(photoId)}`,
+  setAutoPosts: (id, on) => saves.setFeedAuto(id, on),
   report: (from, target, targetName, text) => void reports.add({ from: from.id, fromName: from.name, target, targetName, reason: 'other', where: 'post', text }),
 };
 
@@ -1079,6 +1126,27 @@ async function shareFileId(tgId: number, img: Buffer | null): Promise<string | n
     return id;
   }
   return null;
+}
+
+/**
+ * Награда за подписку на канал игры: POST /api/channel/claim. Бот (админ канала) проверяет подписку через getChatMember.
+ * ok — подписан (облик выдаёт сама игра, один раз); no — не подписан; error — не смогли проверить.
+ */
+async function onChannelClaim(req: IncomingMessage, res: ServerResponse) {
+  const reply = (code: number, body: unknown) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
+  if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+  const body = await readJson(req).catch(() => null);
+  const signed = body && signedIn(body);
+  const tgId = /^tg:(\d+)$/.exec(signed?.login ?? '')?.[1];
+  if (!signed || !tgId || !BOT_TOKEN || CHANNEL_ID === 'off') return reply(403, { error: 'Только в Telegram' });
+  const r = await botApi(BOT_TOKEN)('getChatMember', { chat_id: CHANNEL_ID, user_id: Number(tgId) }, 15_000).catch(() => null);
+  if (!r?.ok) return reply(200, { status: 'error', error: 'Не получилось проверить подписку. Попробуй через минуту' });
+  const m = r.result as { status?: string; is_member?: boolean };
+  const member = m.status === 'creator' || m.status === 'administrator' || m.status === 'member' || (m.status === 'restricted' && !!m.is_member);
+  if (!member) return reply(200, { status: 'no' });
+  saves.markChannel(signed.id, Date.now());
+  telemetry.serverEvent('channel_sub');
+  reply(200, { status: 'ok' });
 }
 
 /** Итоги месяца: POST /api/recap ({ month }) — место среди игроков и города; POST /api/story-image ({ image }) — картинка для сторис. */
@@ -1509,6 +1577,10 @@ const http = createServer((req, res) => {
   }
   if (path === '/api/delete-me') {
     onDeleteMe(req, res).catch(() => res.writeHead(500).end());
+    return;
+  }
+  if (path === '/api/channel/claim') {
+    onChannelClaim(req, res).catch(() => res.writeHead(500).end());
     return;
   }
   if (path === '/api/recap' || path === '/api/story-image' || path === '/api/share/prepare') {
@@ -2015,6 +2087,8 @@ if (BOT_TOKEN)
 if (BOT_TOKEN && CHANNEL_ID !== 'off') setInterval(() => channel.tick(), 60_000);
 if (BOT_TOKEN && PERSONAL_CHANNEL !== 'off') setInterval(() => personal.tick(), 60_000);
 if (BOT_TOKEN && THREADS !== 'off') setInterval(() => threads.tick(), 60_000);
+// Персонажи в ленте: итоги дня, совет и вечернее задание (server/npcFeed.ts).
+setInterval(() => void npcFeed.tick().catch((e: Error) => console.log(`npc feed: ${e.message}`)), 60_000);
 // Меню команд канала — только в личке у админов, игроки видят обычные /start и /help.
 const ADMIN_COMMANDS = [
   { command: 'start', description: 'Начать игру' },
@@ -2034,6 +2108,7 @@ const ADMIN_COMMANDS = [
   { command: 'story', description: 'Сторис для Instagram и TikTok: три картинки на выбор' },
   { command: 'threads', description: 'Пост для Threads: /threads [тема], /threads_auto on|off' },
   { command: 'talk', description: 'Рилс, где рассказывает персонаж игры: /talk [тема]' },
+  { command: 'npc', description: 'Пост персонажа в ленту сейчас: /npc daily|tip|task' },
   { command: 'newusers', description: 'Новые игроки за сегодня по источникам; /newusers off — без уведомлений' },
   { command: 'loop', description: 'Короткий закольцованный рилс 8–10 с: /loop [тема]' },
   { command: 'emoji_setup', description: 'Набор значков для emoji-статуса игроков' },

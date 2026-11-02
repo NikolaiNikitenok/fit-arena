@@ -1,5 +1,6 @@
 // Копия прогресса на сервере: при входе берём более свежую (телефон или сервер), дальше отправляем каждое сохранение.
 import { useEffect, useState } from 'react';
+import { checkMilestones } from './social/autoPost';
 import { claimGift, freezeProgress, hasHero, heroLevel, heroXp, loadProgress, onProgressSaved, Progress, replaceProgress, saveProgress } from './game/progress';
 import { rememberUnlocks } from './game/unlocks';
 import { guestId, setMaxBot, tg } from './telegram';
@@ -166,10 +167,17 @@ function onSaveError(e: { status?: number; body?: { account?: string } }): boole
 }
 
 /** Запуск синхронизации. onRemote — пришла более свежая копия с сервера. */
+let showProgress: ((p: Progress) => void) | null = null;
+/** Прогресс изменился вне приключения (награда за канал): показать его на экране. Сохранён он уже. */
+export const applyProgress = (p: Progress) => showProgress?.(p);
+
 export async function startCloud(onRemote: (p: Progress) => void): Promise<void> {
+  showProgress = onRemote;
   onProgressSaved((p) => {
     // Первое улучшение ратуши: проверка экономики деревни для новичков (shared/balance.ts earlyLoot).
     if (p.village?.b) trackVillageTh2(thLevel({ b: p.village.b }), p.days);
+    // Новая серия или уровень героя — автопост в ленту (src/social/autoPost.ts).
+    checkMilestones(p);
     pending = p;
     if (cloud && !timer) timer = setTimeout(push, 1500);
   });

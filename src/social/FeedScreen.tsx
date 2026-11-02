@@ -14,6 +14,7 @@ import { PostCard } from './PostCard';
 import { preparePhoto } from './photo';
 import { markFeedSeen } from './useFeedBadge';
 import './social.css';
+import { ChannelOffer, channelOfferDue } from './ChannelOffer';
 
 const IDEAS = [t('День 1. Начинаю! 💪'), t('Мой результат сегодня'), t('Было → стало')];
 
@@ -93,6 +94,7 @@ export function FeedScreen({ onClose, onFriends, compose: composeFirst, focus }:
       </div>
 
       {error && <div className="settings-note">{error}</div>}
+      {tab === 'all' && channelOfferDue() && <ChannelOffer place="feed" />}
       {!error && posts === null && <div className="muted feed-empty">{t('Загружаем…')}</div>}
       {posts && posts.length === 0 && !error && (
         <div className="feed-empty">

@@ -62,6 +62,10 @@ export interface Save {
   tz?: number;
   // Подарок за возвращение: игра забирает его при запуске один раз (по id, Progress.gifts).
   gift?: { id: string; coins: number; vigor?: number; text: string };
+  // Игрок выключил автопосты в ленту (сервер сам пишет о победе в вызове чата).
+  feedAutoOff?: boolean;
+  // Когда забрал награду за подписку на канал игры.
+  channelAt?: number;
 }
 
 export const SAVE_MAX_BYTES = 1_000_000;
@@ -182,6 +186,21 @@ export class SaveStore {
     const s = this.saves.get(id);
     if (!s || !Number.isFinite(n) || Math.abs(n) > 14 * 60 || s.tz === n) return;
     s.tz = n;
+    this.save();
+  }
+
+  setFeedAuto(id: string, on: boolean): void {
+    const s = this.touch(id);
+    if (on === !s.feedAutoOff) return;
+    if (on) delete s.feedAutoOff;
+    else s.feedAutoOff = true;
+    this.save();
+  }
+
+  markChannel(id: string, at: number): void {
+    const s = this.touch(id);
+    if (s.channelAt) return;
+    s.channelAt = at;
     this.save();
   }
 

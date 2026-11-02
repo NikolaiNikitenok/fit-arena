@@ -1,5 +1,5 @@
 // Запросы ленты и профилей к серверу (server/socialApi.ts).
-import type { FeedReply, FeedTab, PostView, ProfileReply } from '../../shared/social';
+import type { AutoKind, FeedReply, FeedTab, PostCardData, PostView, ProfileReply } from '../../shared/social';
 import { guestId, tg, userName } from '../telegram';
 import { t, tErr } from '../i18n';
 
@@ -33,4 +33,7 @@ export const socialApi = {
   report: (id: string) => post<{ note?: string; error?: string }>('/api/feed/report', { post: id }),
   follow: (r: ProfileRef, on: boolean) => post<ProfileReply>('/api/feed/follow', { ...refBody(r), on }),
   friend: (r: ProfileRef) => post<ProfileReply>('/api/feed/friend', refBody(r)),
+  auto: (kind: AutoKind, text: string, card: Omit<PostCardData, 'kind'> | null, photo?: string) => post<{ post?: PostView; error?: string }>('/api/feed/auto', { kind, text, card, photo }),
+  autoPref: (on: boolean) => post<{ ok?: boolean }>('/api/feed/autopref', { on }),
+  channelClaim: () => post<{ status?: 'ok' | 'no' | 'error'; error?: string }>('/api/channel/claim'),
 };

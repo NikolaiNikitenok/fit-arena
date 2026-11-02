@@ -74,6 +74,8 @@ export interface Progress {
   onboarded?: boolean;
   // Набор «Новичок» за звёзды уже выдан (когда): второй раз игра его не выдаст (src/game/starter.ts).
   starterPack?: number;
+  // Когда получил облик «Вестник Арены» за подписку на канал игры (src/social/ChannelOffer.tsx).
+  channelReward?: number;
   // Предложения покупки, которые уже показали всплывающим окном (src/game/offers.ts): когда (мс).
   offers?: { starter?: number; pro?: number };
   // Пропуск сезона: опыт, забранные задания и награды, счётчики по дням сезона.
@@ -673,4 +675,14 @@ export function claimGift(p: Progress, gift: { id: string; coins: number; vigor?
   const coins = Math.max(0, Math.min(1000, Math.floor(Number(gift.coins) || 0)));
   const vigor = Math.max(0, Math.min(5, Math.floor(Number(gift.vigor) || 0)));
   return save({ ...p, coins: p.coins + coins, potions: vigor ? addPotion(p.potions, 'vigor', vigor) : p.potions, gifts: [...(p.gifts ?? []).slice(-20), gift.id] });
+}
+
+// Награда за подписку на канал: облик и немного монет, один раз.
+export const CHANNEL_REWARD = { outfit: 'herald', coins: 150 };
+
+/** Выдать награду за канал. null — уже выдана. */
+export function claimChannel(p: Progress, now: number): Progress | null {
+  if (p.channelReward) return null;
+  const items = p.items.includes(CHANNEL_REWARD.outfit) ? p.items : [...p.items, CHANNEL_REWARD.outfit];
+  return save({ ...p, items, coins: p.coins + CHANNEL_REWARD.coins, channelReward: now });
 }

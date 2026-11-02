@@ -17,12 +17,34 @@ export const PHOTO_MAX_BYTES = 900_000;
 export const HIDE_AFTER_REPORTS = 3;
 export const FEED_PAGE = 20;
 
+// Автопосты: игра сама пишет в ленту о событиях игрока (выключается в настройках), и посты персонажей.
+export const AUTO_KINDS = ['boss', 'streak', 'level', 'win', 'group', 'league'] as const;
+export type AutoKind = (typeof AUTO_KINDS)[number];
+// Сколько автопостов одного вида в сутки (победы можно выкладывать чаще) и всего.
+export const AUTO_PER_KIND: Record<AutoKind, number> = { boss: 2, streak: 1, level: 1, win: 3, group: 1, league: 1 };
+export const AUTO_PER_DAY = 6;
+export type CardKind = AutoKind | 'daily' | 'tip' | 'task';
+
+/** Карточка события вместо фото: значок по виду, крупная цифра и подпись. */
+export interface PostCardData {
+  kind: CardKind;
+  title: string;
+  value?: string;
+  sub?: string;
+}
+
+// Персонажи, которые пишут в ленту (server/npcFeed.ts): портрет — /portraits/<id>.png.
+export const NPC_IDS = ['grom', 'marfa', 'lisa'] as const;
+export type NpcId = (typeof NPC_IDS)[number];
+
 export interface AuthorView {
   // Публичный id профиля: по нему открывают профиль (сам id игрока не показываем).
   pid: string;
   name: string;
   level: number;
   pro?: boolean;
+  // Пост написал персонаж игры: профиля нет, вместо фото — портрет.
+  npc?: NpcId;
 }
 
 export interface PostView {
@@ -40,6 +62,7 @@ export interface PostView {
   mine: boolean;
   // Скрыт по жалобам: автор видит пометку, остальные — не видят.
   hidden?: boolean;
+  card?: PostCardData;
 }
 
 export type FeedTab = 'all' | 'following';

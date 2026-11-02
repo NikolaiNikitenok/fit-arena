@@ -8,6 +8,8 @@ export interface Settings {
   music: boolean;
   // «Голос Грома»: тренер вслух считает повторы и подбадривает.
   voice: boolean;
+  // Игра сама пишет в ленту о победе над боссом, серии и уровне героя.
+  autoPosts: boolean;
   // Вибрация телефона на повтор (Telegram).
   haptics: boolean;
   // Скелет поверх видео с камеры.
@@ -41,7 +43,7 @@ export interface Settings {
 }
 
 const KEY = 'fit-arena-settings';
-const DEFAULTS: Settings = { sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, warmup: true, morning: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false };
+const DEFAULTS: Settings = { autoPosts: true, sound: true, music: true, voice: true, haptics: true, skeleton: true, guide: true, warmup: true, morning: true, lowPower: false, lowPowerChosen: false, powerChecked: false, story: true, dayNight: true, villageFx: true, flyIn: true, homeList: false };
 
 let current: Settings = (() => {
   try {

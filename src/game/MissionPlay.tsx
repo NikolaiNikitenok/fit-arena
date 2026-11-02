@@ -19,7 +19,9 @@ import { heroHands, heroPower } from './power';
 import { petLook } from './pets';
 import { MissionScene3D } from './MissionScene3D';
 import { Stars } from './Stars';
-import { bossCard, ShareVictory } from './ShareCard';
+import { bossCard, makeShareCard, ShareVictory } from './ShareCard';
+import { WinPost } from '../social/WinPost';
+import { ChannelOffer, channelAfterWinDue } from '../social/ChannelOffer';
 import { HomeShortcutOffer } from '../HomeShortcut';
 import { Dialog, Remark } from './Dialog';
 import { dayKey, freeAttempt, Progress, SWAPS_PER_DAY, WinReward } from './progress';
@@ -85,6 +87,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   const [free] = useState(() => freeAttempt(progress, original));
   // После яркой победы — одно предложение: позвать друзей за легендарный облик (или ярлык на экран).
   const [invite, setInvite] = useState(false);
+  const [channelOffer, setChannelOffer] = useState(false);
   const swapCount = exercises.filter((e, i) => e !== original.exercises[i]).length;
   const canSwap = original.type !== 'trial' && !original.daily;
   const land = LANDS[level.land];
@@ -161,7 +164,10 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
     if (v.outcome === 'won') {
       const stars = m.stars(now);
       // Без камеры рекорд испытания не меняет силу врагов: самоотчёт может быть любым.
-      setInvite(inviteOfferDue(progress, stars, level.type === 'boss', dayKey(Date.now())));
+      const inviteNow = inviteOfferDue(progress, stars, level.type === 'boss', dayKey(Date.now()));
+      setInvite(inviteNow);
+      // Канал игры — один раз, начиная со второй победы, и не вместе с приглашением друзей.
+      setChannelOffer(!inviteNow && channelAfterWinDue());
       setResult({ stars, reward: onWin(stars, manualRef.current ? undefined : v.record) });
       setEpilogue(level.type === 'boss');
       setStatus('won');
@@ -517,8 +523,17 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           {t('Остановиться')}
         </button>
       )}
+      {status === 'won' && result && !epilogue && !level.daily && (
+        <WinPost
+          title={level.title}
+          levelNum={level.id}
+          reps={view.reps}
+          starsN={result.stars}
+          boss={level.type === 'boss' ? { name: LANDS[level.land].boss.name, card: () => makeShareCard(bossCard(level, progress, view.reps, result.stars)) } : undefined}
+        />
+      )}
       {status === 'won' && result && !epilogue && level.type === 'boss' && <ShareVictory card={() => bossCard(level, progress, view.reps, result.stars)} />}
-      {status === 'won' && result && !epilogue && (invite ? <InviteOffer progress={progress} today={dayKey(Date.now())} /> : <HomeShortcutOffer />)}
+      {status === 'won' && result && !epilogue && (invite ? <InviteOffer progress={progress} today={dayKey(Date.now())} /> : channelOffer ? <ChannelOffer place="win" /> : <HomeShortcutOffer />)}
       {status === 'won' && onNext && (
         <button className="primary" onClick={onNext}>
           {t('Дальше')}

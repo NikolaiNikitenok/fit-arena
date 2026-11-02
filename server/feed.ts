@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from '
 import { dirname, join } from 'node:path';
 import { hasLink } from './moderation';
 import { hasProfanity } from '../shared/profanity';
-import { FEED_PAGE, HIDE_AFTER_REPORTS, PHOTO_MAX_BYTES, POST_TEXT_MAX, POSTS_PER_DAY } from '../shared/social';
+import { AUTO_KINDS, AUTO_PER_DAY, AUTO_PER_KIND, type AutoKind, type CardKind, FEED_PAGE, HIDE_AFTER_REPORTS, PHOTO_MAX_BYTES, POST_TEXT_MAX, POSTS_PER_DAY, type PostCardData } from '../shared/social';
 
 const DAY = 86_400_000;
 // Подписок у одного игрока — не больше (подписчиков сколько угодно).
@@ -33,6 +33,28 @@ export interface Post {
   // Скрыт по жалобам, пока модератор не решит; ok — модератор оставил (жалобы больше не скрывают).
   hidden?: boolean;
   ok?: boolean;
+  // Автопост о событии игрока (вид события) и карточка события вместо фото.
+  auto?: AutoKind;
+  card?: PostCardData;
+}
+
+// Автор-персонаж: «npc:grom».
+export const isNpc = (author: string) => author.startsWith('npc:');
+const CARD_KINDS: readonly CardKind[] = [...AUTO_KINDS, 'daily', 'tip', 'task'];
+const cut = (v: unknown, n: number) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '');
+
+/** Карточка события из запроса: только известные виды, короткие строки, без мата и ссылок. */
+export function cleanCard(raw: unknown, kind: CardKind): PostCardData | string {
+  const c = (raw ?? {}) as Record<string, unknown>;
+  const card: PostCardData = { kind, title: cut(c.title, 48) };
+  const value = cut(c.value, 32);
+  const sub = cut(c.sub, 80);
+  if (value) card.value = value;
+  if (sub) card.sub = sub;
+  if (!CARD_KINDS.includes(kind) || !card.title) return 'Нет карточки';
+  const all = `${card.title} ${value} ${sub}`;
+  if (hasProfanity(all) || hasLink(all)) return 'Без мата и ссылок';
+  return card;
 }
 
 interface FeedFile {
@@ -62,6 +84,17 @@ export function jpegSize(buf: Buffer): { w: number; h: number } | null {
     i += 2 + len;
   }
   return null;
+}
+
+/** Фото поста из base64: null — фото нет, строка — ошибка. */
+function readPhoto(photo: unknown): { buf: Buffer; w: number; h: number } | null | string {
+  if (photo === undefined || photo === null || photo === '') return null;
+  if (typeof photo !== 'string') return 'Нет фото';
+  const buf = Buffer.from(photo.replace(/^data:image\/jpeg;base64,/, ''), 'base64');
+  if (buf.length > PHOTO_MAX_BYTES) return 'Фото слишком большое';
+  const size = jpegSize(buf);
+  if (!size) return 'Нужно фото в формате JPEG';
+  return { buf, ...size };
 }
 
 export class FeedStore {
@@ -111,7 +144,7 @@ export class FeedStore {
   postedToday(author: string): number {
     const now = this.now();
     let n = 0;
-    for (let i = this.posts.length - 1; i >= 0 && now - this.posts[i].at < DAY; i--) if (this.posts[i].author === author) n++;
+    for (let i = this.posts.length - 1; i >= 0 && now - this.posts[i].at < DAY; i--) if (this.posts[i].author === author && !this.posts[i].auto) n++;
     return n;
   }
 
@@ -121,18 +154,44 @@ export class FeedStore {
     if (clean.length > POST_TEXT_MAX) return `Текст длиннее ${POST_TEXT_MAX} знаков`;
     if (hasProfanity(clean)) return 'Без мата, пожалуйста: пост увидят все';
     if (hasLink(clean)) return 'Ссылки в ленте нельзя';
-    let img: { buf: Buffer; w: number; h: number } | null = null;
-    if (photo !== undefined && photo !== null && photo !== '') {
-      if (typeof photo !== 'string') return 'Нет фото';
-      const buf = Buffer.from(photo.replace(/^data:image\/jpeg;base64,/, ''), 'base64');
-      if (buf.length > PHOTO_MAX_BYTES) return 'Фото слишком большое';
-      const size = jpegSize(buf);
-      if (!size) return 'Нужно фото в формате JPEG';
-      img = { buf, ...size };
-    }
+    const img = readPhoto(photo);
+    if (typeof img === 'string') return img;
     if (!clean && !img) return 'Добавь фото или напиши пару слов';
     if (this.postedToday(author) >= POSTS_PER_DAY) return `Не больше ${POSTS_PER_DAY} постов в сутки. Возвращайся завтра`;
-    const post: Post = { id: randomBytes(8).toString('hex'), author, name, text: clean, at: this.now(), likes: [] };
+    return this.publish({ id: randomBytes(8).toString('hex'), author, name, text: clean, at: this.now(), likes: [] }, img);
+  }
+
+  /** Автопост о событии игрока: свой лимит (по виду и всего за сутки), ручные посты он не съедает. */
+  addAuto(author: string, name: string, kind: unknown, text: unknown, card: unknown, photo?: unknown): Post | string {
+    if (!(AUTO_KINDS as readonly unknown[]).includes(kind)) return 'Неизвестное событие';
+    const k = kind as AutoKind;
+    const now = this.now();
+    let sameKind = 0;
+    let total = 0;
+    for (let i = this.posts.length - 1; i >= 0 && now - this.posts[i].at < DAY; i--) {
+      const p = this.posts[i];
+      if (p.author !== author || !p.auto) continue;
+      total++;
+      if (p.auto === k) sameKind++;
+    }
+    if (sameKind >= AUTO_PER_KIND[k] || total >= AUTO_PER_DAY) return 'На сегодня хватит';
+    const clean = cut(text, 200);
+    if (hasProfanity(clean) || hasLink(clean)) return 'Без мата и ссылок';
+    const img = readPhoto(photo);
+    if (typeof img === 'string') return img;
+    const c = card === undefined || card === null ? null : cleanCard(card, k);
+    if (typeof c === 'string') return c;
+    if (!c && !img) return 'Нет карточки';
+    return this.publish({ id: randomBytes(8).toString('hex'), author, name, text: clean, at: now, likes: [], auto: k, ...(c ? { card: c } : {}) }, img);
+  }
+
+  /** Пост персонажа игры (сервер пишет сам: server/npcFeed.ts). */
+  addNpc(npc: string, name: string, text: string, card?: PostCardData): Post {
+    const clean = text.replace(/\n{3,}/g, '\n\n').trim().slice(0, POST_TEXT_MAX);
+    return this.publish({ id: randomBytes(8).toString('hex'), author: `npc:${npc}`, name, text: clean, at: this.now(), likes: [], ...(card ? { card } : {}) }, null) as Post;
+  }
+
+  private publish(post: Post, img: { buf: Buffer; w: number; h: number } | null): Post {
     if (img) {
       const id = randomBytes(10).toString('hex');
       if (this.photoDir) {
@@ -145,6 +204,13 @@ export class FeedStore {
     if (this.posts.length > POSTS_KEEP) for (const old of this.posts.slice(0, this.posts.length - POSTS_KEEP)) this.drop(old);
     this.save();
     return post;
+  }
+
+  /** Последний пост персонажа (чтобы не повторяться). */
+  npcPosts(limit = 20): Post[] {
+    const out: Post[] = [];
+    for (let i = this.posts.length - 1; i >= 0 && out.length < limit; i--) if (isNpc(this.posts[i].author)) out.push(this.posts[i]);
+    return out;
   }
 
   /** Удалить пост (автор или модератор). */

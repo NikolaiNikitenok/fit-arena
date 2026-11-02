@@ -114,3 +114,21 @@
 .clan-peek-stats > div { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: var(--r-md); background: var(--surface-2); text-align: center; }
 .clan-peek-stats b { font-size: 17px; font-weight: 900; }
 .clan-peek-stats small { font-size: 11.5px; color: var(--hint); font-weight: 800; }
+
+/* Карточка события (автопосты и посты персонажей). */
+.event-card { display: flex; align-items: center; gap: 14px; margin: 0 14px; padding: 16px; border-radius: 18px; color: #fff;
+  background: linear-gradient(135deg, var(--ec1), var(--ec2)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+.event-card-icon { flex: none; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 16px; font-size: 30px; background: rgba(0, 0, 0, .18); }
+.event-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.event-card-text small { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .85; }
+.event-card-text b { font-size: 24px; line-height: 1.15; font-weight: 800; overflow-wrap: anywhere; }
+.event-card-text span { font-size: 13px; opacity: .9; overflow-wrap: anywhere; }
+.npc-name { color: #ffd27a; }
+.win-post { width: 100%; }
+
+/* Награда за подписку на канал. */
+.channel-offer { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; background: linear-gradient(135deg, rgba(41, 182, 246, .18), rgba(94, 53, 177, .2)); box-shadow: inset 0 0 0 1px rgba(79, 195, 247, .35); }
+.channel-offer-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.channel-offer-text small { font-size: 13px; opacity: .85; line-height: 1.35; }
+.channel-offer-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.channel-offer-btns button { flex: 1; min-width: 110px; font-size: 14px; padding: 10px 12px; min-height: 0; white-space: nowrap; }

@@ -7,6 +7,7 @@ import { openProfile } from './bus';
 import { Avatar } from './Avatar';
 import { Send } from '../icons';
 import { SharePost } from './SharePost';
+import { EventCard } from './EventCard';
 
 /** «только что», «5 мин», «3 ч», «вчера», «12 окт.». */
 export function agoText(at: number, now = Date.now()): string {
@@ -26,7 +27,8 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
   const [busy, setBusy] = useState(false);
   const [pop, setPop] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const author = () => !noAuthorLink && openProfile({ pid: post.author.pid });
+  const npc = post.author.npc;
+  const author = () => !noAuthorLink && !npc && openProfile({ pid: post.author.pid });
   const like = () => {
     const on = !post.liked;
     // Сразу на экране, сервер догоняет.
@@ -54,12 +56,12 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
   return (
     <article className={`post ${post.hidden ? 'is-hidden' : ''}`}>
       <header className="post-head">
-        <button className="post-author" onClick={author} disabled={noAuthorLink}>
-          <Avatar name={post.author.name} pro={post.author.pro} pid={post.author.pid} size={38} />
+        <button className="post-author" onClick={author} disabled={noAuthorLink || !!npc}>
+          <Avatar name={post.author.name} pro={post.author.pro} pid={npc ? undefined : post.author.pid} src={npc ? `/portraits/${npc}.png` : undefined} size={38} />
           <span className="post-who">
-            <b className={post.author.pro ? 'pro-name' : ''}>{post.author.name}</b>
+            <b className={post.author.pro ? 'pro-name' : npc ? 'npc-name' : ''}>{post.author.name}</b>
             <small>
-              {t('ур. {0}', { 0: post.author.level })} · {agoText(post.at)}
+              {npc ? t('персонаж игры') : t('ур. {0}', { 0: post.author.level })} · {agoText(post.at)}
             </small>
           </span>
         </button>
@@ -75,7 +77,7 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
               {t('Удалить пост')}
             </button>
           )}
-          {menu === 'open' && !post.mine && (
+          {menu === 'open' && !post.mine && !npc && (
             <button className="small-btn ghost" disabled={busy} onClick={() => act(socialApi.report(post.id))}>
               {t('Пожаловаться')}
             </button>
@@ -96,6 +98,7 @@ export function PostCard({ post, onChange, onRemoved, noAuthorLink }: { post: Po
           <img src={post.photo} alt="" loading="lazy" decoding="async" />
         </div>
       )}
+      {post.card && <EventCard card={post.card} />}
       {post.text && <p className="post-text">{post.text}</p>}
       <footer className="post-foot">
         <button className={`post-like ${post.liked ? 'on' : ''} ${pop ? 'pop' : ''}`} onClick={like} aria-pressed={post.liked}>
