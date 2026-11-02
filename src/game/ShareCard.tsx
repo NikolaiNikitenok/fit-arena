@@ -7,6 +7,7 @@ import { Actor } from '../three/Actor';
 import { Character, CharacterProps } from '../three/Character';
 import { CharName } from '../three/kit';
 import { itemById } from './items';
+import { heroLook } from './outfitSkin';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
 import { heroHands } from './power';
@@ -60,7 +61,7 @@ function heroBits(p: Progress) {
   const days = streakOf(p, Date.now()).days;
   const name = userName();
   return {
-    hero: { model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(p) },
+    hero: { ...heroLook(item), hands: heroHands(p) },
     level,
     days,
     heroLine: `${name === t('Гость') ? t('Герой') : name} · ${heroTitle(level)}`,

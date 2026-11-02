@@ -4,6 +4,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { GEAR } from '../three/Character';
 import { parseTint } from '../three/Instanced';
 import { ANIMS_URL, charUrl, useGltf } from '../three/kit';
+import { buildRegalia, skinTexture } from '../three/skin';
 import { TroopId } from '../../shared/villageBattle';
 import { Lock } from '../icons';
 import { ResRow } from './BattleScreen';
@@ -81,13 +82,16 @@ function HeroLive({ look, size }: { look: HeroLook; size: number }) {
       if (!m.isMesh) return;
       if (gear && !(m as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(m.name)) m.visible = false;
       const mat = (m.material as THREE.MeshStandardMaterial).clone();
-      if (look.tint) mat.color.multiply(parseTint(look.tint));
+      // Облик с костюмом: своя палитра брони и ткани вместо оттенка всей модели.
+      if (look.skin && mat.map) mat.map = skinTexture(look.model, mat.map, look.skin);
+      else if (look.tint) mat.color.multiply(parseTint(look.tint));
       if (look.glow && mat.emissive) {
         mat.emissive.set(look.glow);
         mat.emissiveIntensity = 0.18;
       }
       m.material = mat;
     });
+    if (look.skin) buildRegalia(root, look.model, look.skin, true);
     const mixer = new THREE.AnimationMixer(root);
     const clip = anims.animations.find((a) => a.name === 'Idle_Combat') ?? anims.animations.find((a) => a.name === 'Idle');
     if (clip) mixer.clipAction(clip).play();
@@ -98,7 +102,7 @@ function HeroLive({ look, size }: { look: HeroLook; size: number }) {
     g.userData.tick = (tm: number) => mixer.setTime(tm);
     return g;
   };
-  return <ModelThumb id={`hero:${look.model}:${look.tint ?? ''}:${look.glow ?? ''}`} make={make} size={size} label={t('Модель: герой')} still />;
+  return <ModelThumb id={`hero:${look.model}:${look.skin?.key ?? look.tint ?? ''}:${look.glow ?? ''}`} make={make} size={size} label={t('Модель: герой')} still />;
 }
 
 /** Портрет героя в его облике (без оружия из рук — только набор модели). */

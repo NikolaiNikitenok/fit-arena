@@ -4,6 +4,7 @@ import { amountText, EXERCISE_LABELS, Exercise, repsEquivalent } from '../repCou
 import { Portrait } from './Dialog';
 import { GearFace, HeroHome, ShopTab } from './HeroHome';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
+import { outfitSkin } from './outfitSkin';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { Stars } from './Stars';
@@ -701,6 +702,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
               hero={item.hero}
               heroTint={item.tint}
               heroGlow={item.glow}
+              heroSkin={outfitSkin(item)}
               heroHands={heroHands(progress)}
               pet={petLook(progress, now)}
               focus={focus}

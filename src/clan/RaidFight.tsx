@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import type { RaidView } from '../../shared/clan';
 import { RAID_ATTACK_S, RAID_MAX_DAMAGE, RAID_PREP_S, raidBoss } from '../../shared/raid';
 import { itemById } from '../game/items';
+import { heroLook } from '../game/outfitSkin';
 import { raidCard, ShareVictory } from '../game/ShareCard';
 import { heroHands, heroPower } from '../game/power';
 import { Progress } from '../game/progress';
@@ -128,7 +129,7 @@ export function RaidFight({ raid, attack, exercise, progress, bonus, onHit, onDo
   return (
     <>
       <div className="arena mission">
-        <RaidScene raidKey={raid.key} hit={reps} pulse={reps} dead={raid.hp <= 0} hero={{ model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(progress) }} />
+        <RaidScene raidKey={raid.key} hit={reps} pulse={reps} dead={raid.hp <= 0} hero={{ ...heroLook(item), hands: heroHands(progress) }} />
         <div className="mhud">
           <div className="mhud-row">
             <span className="mhud-ex">{boss.name}</span>

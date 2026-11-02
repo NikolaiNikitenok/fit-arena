@@ -3,7 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { parseTint } from './Instanced';
-import { addOutline, outlinesOn, setRim, toonOf } from './toon';
+import { addOutline, outlinesOn, setRim, shellOutline, toonOf } from './toon';
+import { buildRegalia, skinTexture, smoothForOutline, type Skin } from './skin';
 import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
 
 // Персонажи KayKit: рыцарь, маг, варвар, разбойник и скелеты. Скелет у всех общий,
@@ -70,6 +71,8 @@ export interface CharacterProps {
   aura?: string;
   // Тёмная обводка силуэта (src/three/toon.ts). В деревне сцена обводится целиком (StylePass) — там выключена.
   outline?: boolean;
+  // Облик героя (src/three/skin.ts): цвета брони и ткани по палитре и детали по редкости. Если задан, tint не нужен.
+  skin?: Skin;
 }
 
 export interface HandGear {
@@ -86,11 +89,11 @@ export interface HandGear {
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, aura, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true }: CharacterProps) {
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, aura, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true, skin }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
-  const { root, materials, mixer } = useMemo(() => {
+  const { root, materials, mixer, regalia } = useMemo(() => {
     const root = cloneSkinned(gltf.scene) as THREE.Group;
     const gear = GEAR[model];
     const materials: THREE.MeshToonMaterial[] = [];
@@ -103,18 +106,24 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       mesh.castShadow = true;
       // Мультяшный материал (src/three/toon.ts): ступенчатый свет и ободок вместо «пластилина».
       const mat = toonOf(mesh.material as THREE.MeshStandardMaterial);
+      // Облик: палитра брони и ткани своя, лицо остаётся родным.
+      if (skin && mat.map) mat.map = skinTexture(model, mat.map, skin);
       mesh.material = mat;
       materials.push(mat);
       if (mesh.visible) visible.push(mesh);
     });
+    // Детали облика (наплечники, корона, крылья) — пока модель ещё в позе «T».
+    const regalia = skin ? buildRegalia(root, model, skin, !outlinesOn()) : null;
     // Обводка — после обхода: новые меши в дереве во время обхода не нужны. В экономном режиме без неё.
     if (outline && outlinesOn()) {
       root.updateMatrixWorld(true);
       visible.forEach((m) => addOutline(m));
+      regalia?.meshes.forEach((m) => shellOutline(m, smoothForOutline(m.geometry), 0.016));
     }
-    return { root, materials, mixer: new THREE.AnimationMixer(root) };
+    return { root, materials, mixer: new THREE.AnimationMixer(root), regalia };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gltf, model, !!hands, outline]);
+  }, [gltf, model, !!hands, outline, skin?.key]);
+  useEffect(() => () => regalia?.dispose(), [regalia]);
 
   const actions = useMemo(() => {
     const out: Partial<Record<CharAnim, THREE.AnimationAction>> = {};
@@ -128,9 +137,9 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   useEffect(() => {
     for (const m of materials) {
       if (stone) m.color.set('#8f8f8f');
-      else parseTint(tint, m.color);
+      else parseTint(skin ? undefined : tint, m.color);
     }
-  }, [tint, stone, materials]);
+  }, [tint, stone, materials, !!skin]);
 
   const current = useRef<THREE.AnimationAction | null>(null);
   const play = (name: CharAnim, timeScale = speed) => {
@@ -185,8 +194,9 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   useEffect(() => {
     for (const m of materials) setRim(m, auraColor);
   }, [auraColor, materials]);
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     mixer.update(Math.min(delta, 0.1));
+    regalia?.update(state.clock.elapsedTime);
     if (auraColor) {
       const k = 1.5 + 0.4 * Math.sin(performance.now() / 450);
       for (const m of materials) setRim(m, auraColor, k);

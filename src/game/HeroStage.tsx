@@ -9,6 +9,7 @@ import { itemById, RARITY_COLORS } from './items';
 import { heroHands } from './power';
 import type { Progress } from './progress';
 import { heroAura } from './collections';
+import { outfitSkin } from './outfitSkin';
 import { HeroDiorama, Motes } from './HeroDiorama';
 import { getSettings } from '../settings';
 import type { World } from './lands';
@@ -71,6 +72,7 @@ export function HeroStage({ progress, world, far }: { progress: Progress; world?
   // Питомец стоит рядом с героем и радуется вместе с ним.
   const pet = petLook(progress, Date.now());
   const aura = heroAura(progress);
+  const skin = outfitSkin(item);
   return (
     <Canvas3D sharp camera={{ position: far ? [0, 2.9, 14.5] : [0, 1.4, 5.8], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, far ? 0.9 : 1.0, 0)}>
       <pointLight position={[-2.5, 1.5, -1.5]} intensity={4} color={item.glow ?? RARITY_COLORS[item.rarity]} />
@@ -96,7 +98,7 @@ export function HeroStage({ progress, world, far }: { progress: Progress; world?
       {aura && <Aura color={aura} />}
       <Suspense fallback={null}>
         <Turntable>
-          <Character model={item.hero} tint={item.tint} aura={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
+          <Character model={item.hero} skin={skin} tint={skin ? undefined : item.tint} aura={item.glow} hands={heroHands(progress)} anim="idle" pulse={pulse} pulseAnim="jump" onClick={() => setPulse((p) => p + 1)} />
         </Turntable>
         {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad} hop={pulse} lively outline position={[0.95, 0, 0.7]} rotation={-0.45} scale={1.35} onClick={() => setPulse((p) => p + 1)} />}
       </Suspense>

@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
 import { CharAnim, Character, CharacterProps } from '../three/Character';
+import type { Skin } from '../three/skin';
 import { CharName } from '../three/kit';
 import { Pet } from '../three/Pet';
 import type { PetLook } from './pets';
@@ -30,6 +31,8 @@ interface Props {
   hero: CharName;
   heroTint?: string;
   heroGlow?: string;
+  // Костюм облика (src/three/skin.ts): если есть, оттенок героя не нужен.
+  heroSkin?: Skin;
   heroHands?: CharacterProps['hands'];
   // Питомец рядом с героем: подпрыгивает на каждый повтор.
   pet?: PetLook;
@@ -98,7 +101,7 @@ export function MissionScene3D(props: Props) {
   );
 }
 
-function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow, heroHands, pet }: Props) {
+function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow, heroSkin, heroHands, pet }: Props) {
   const world = level.world;
   const layout = layoutFor(world);
   const index = layout.nodes.findIndex((n) => n.id === level.id);
@@ -123,7 +126,8 @@ function Stage({ level, land, view, live, elapsedShare, hero, heroTint, heroGlow
       {pet && <Pet id={pet.id} stage={pet.stage} sad={pet.sad || view.outcome === 'lost'} hop={view.reps} lively={view.outcome === 'won'} run={running === 'run'} position={petAt(rotation)} rotation={rotation} scale={0.6} />}
       <Character
         model={hero}
-        tint={heroTint}
+        tint={heroSkin ? undefined : heroTint}
+        skin={heroSkin}
         aura={heroGlow}
         hands={heroHands}
         anim={heroBase(view, running)}

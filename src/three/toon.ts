@@ -233,3 +233,34 @@ export function addOutline(mesh: THREE.Mesh, thickness = 0.016): () => void {
   ol.raycast = () => {};
   return () => ol.removeFromParent();
 }
+
+/** Обводка детали, у которой грани с острыми рёбрами (регалии облика): оболочка по сглаженным нормалям
+ *  отдельной геометрии outlineGeo (вершины сшиты), чтобы раздутые грани не расходились щелями. */
+export function shellOutline(mesh: THREE.Mesh, outlineGeo: THREE.BufferGeometry, thickness = 0.014): () => void {
+  mesh.updateWorldMatrix(true, false);
+  mesh.getWorldScale(scale);
+  const local = thickness / Math.max(1e-4, (scale.x + scale.y + scale.z) / 3);
+  const skinned = mesh as THREE.SkinnedMesh;
+  let ol: THREE.Mesh;
+  if (skinned.isSkinnedMesh) {
+    // Скелетный меш: оболочка — сосед на том же скелете.
+    const sk = new THREE.SkinnedMesh(outlineGeo, outlineOf(local));
+    sk.position.copy(skinned.position);
+    sk.quaternion.copy(skinned.quaternion);
+    sk.scale.copy(skinned.scale);
+    sk.frustumCulled = skinned.frustumCulled;
+    skinned.parent?.add(sk);
+    sk.bind(skinned.skeleton, skinned.bindMatrix);
+    ol = sk;
+  } else {
+    ol = new THREE.Mesh(outlineGeo, outlineOf(local));
+    mesh.add(ol);
+  }
+  ol.name = `${mesh.name}-outline`;
+  ol.castShadow = false;
+  ol.raycast = () => {};
+  return () => {
+    ol.removeFromParent();
+    outlineGeo.dispose();
+  };
+}

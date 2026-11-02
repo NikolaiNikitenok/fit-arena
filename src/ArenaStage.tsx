@@ -1,6 +1,7 @@
 import { type ReactNode, type RefObject, useMemo } from 'react';
 import { Arena3D, botLook, rivalLook } from './arena/Arena3D';
 import { itemById } from './game/items';
+import { heroLook } from './game/outfitSkin';
 import { heroHands } from './game/power';
 import { loadProgress } from './game/progress';
 import type { CharName } from './three/kit';
@@ -36,7 +37,7 @@ export function ArenaStage({ me, opponent, seconds, camera, overlay, banner, opp
   const hero = useMemo(() => {
     const progress = loadProgress();
     const item = itemById(progress.equipped);
-    return { model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(progress) };
+    return { ...heroLook(item), hands: heroHands(progress) };
   }, []);
   const rival = opponentLook ?? (botLevel != null ? botLook(botLevel) : rivalLook(opponent.name, hero.model));
   const won = result === 'win' || (over && opponent.hp === 0);

@@ -596,7 +596,7 @@ export function Troops({ view, ids, lv, lite }: { view: React.MutableRefObject<B
   return <group ref={group} />;
 }
 
-export type HeroLook = Pick<CharacterProps, 'model' | 'tint' | 'glow' | 'hands'>;
+export type HeroLook = Pick<CharacterProps, 'model' | 'tint' | 'glow' | 'hands' | 'skin'>;
 export const HERO_HEIGHT = 2;
 // Герой без своего снаряжения (повтор чужого набега).
 export const DEFAULT_HERO: HeroLook = { model: 'Knight', glow: '#ff8a5c', tint: 'mul:0.95,0.85,0.8' };

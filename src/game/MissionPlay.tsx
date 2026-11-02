@@ -11,6 +11,7 @@ import { needsCalibration } from '../calibration';
 import { CalibrationOverlay } from '../CalibrationOverlay';
 import { unlockVoice, useVoiceCoach } from '../voice';
 import { gearIcon, gearText, itemById, potionById } from './items';
+import { outfitSkin } from './outfitSkin';
 import { LANDS, WORLD_NAMES } from './lands';
 import { LevelDef } from './levels';
 import { Mission, MissionView } from './mission';
@@ -357,6 +358,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           hero={item.hero}
           heroTint={item.tint}
           heroGlow={item.glow}
+          heroSkin={outfitSkin(item)}
           heroHands={heroHands(progress)}
           pet={petLook(progress, Date.now())}
         />

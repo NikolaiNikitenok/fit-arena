@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Actor } from '../three/Actor';
 import { Character, CharacterProps } from '../three/Character';
+import type { Skin } from '../three/skin';
 import { Pet } from '../three/Pet';
 import type { PetLook } from './pets';
 import { CharName } from '../three/kit';
@@ -122,6 +123,8 @@ export interface WorldMapProps {
   hero: CharName;
   heroTint?: string;
   heroGlow?: string;
+  // Костюм облика (src/three/skin.ts).
+  heroSkin?: Skin;
   heroHands?: CharacterProps['hands'];
   // Питомец стоит у ног героя на его уровне.
   pet?: PetLook;
@@ -166,7 +169,7 @@ export function WorldMap3D(props: WorldMapProps) {
   );
 }
 
-function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, heroHands, pet, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
+function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow, heroSkin, heroHands, pet, focusLand, openedChests, onSelect, onMerchant, onChest }: WorldMapProps & { layout: WorldLayout }) {
   const unlocked = (id: number) => id <= currentId;
   const heroIndex = levels.findIndex((l) => l.id === currentId);
   // Жители и враги стоят только в ближних землях; в экономном режиме — только в той, что на экране.
@@ -263,7 +266,7 @@ function MapContent({ layout, levels, stars, currentId, hero, heroTint, heroGlow
       })}
 
       {heroIndex >= 0 && (
-        <Character model={hero} tint={heroTint} glow={heroGlow} hands={heroHands} anim="idle" position={[layout.nodes[heroIndex].x, 0.15, layout.nodes[heroIndex].z]} scale={0.42} />
+        <Character model={hero} skin={heroSkin} tint={heroSkin ? undefined : heroTint} glow={heroSkin ? undefined : heroGlow} hands={heroHands} anim="idle" position={[layout.nodes[heroIndex].x, 0.15, layout.nodes[heroIndex].z]} scale={0.42} />
       )}
       {heroIndex >= 0 && pet && (
         <Pet id={pet.id} stage={pet.stage} sad={pet.sad} lively position={[layout.nodes[heroIndex].x + 0.42, 0.15, layout.nodes[heroIndex].z + 0.22]} rotation={-0.3} scale={0.65} />

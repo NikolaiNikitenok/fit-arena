@@ -8,6 +8,7 @@ import { useRaidSounds } from '../gameSounds';
 import { Chest, Coin, Heart, Swords } from '../icons';
 import { Dialog, Remark } from './Dialog';
 import { gearText, itemById, RARITY_COLORS, RARITY_NAMES } from './items';
+import { heroLook } from './outfitSkin';
 import { heroHands, heroPower } from './power';
 import type { Progress } from './progress';
 import { portraitUrl } from './npcs';
@@ -137,7 +138,7 @@ export function EventScreen({ progress, onFinish, onStart, onClose }: Props) {
   return (
     <>
       <div className="arena mission event-arena" style={{ ['--eg' as string]: boss.glow }}>
-        <EventScene boss={boss} dead={won} hero={{ model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(progress) }} />
+        <EventScene boss={boss} dead={won} hero={{ ...heroLook(item), hands: heroHands(progress) }} />
         {phase === 'intro' && <Dialog lines={eventIntro(boss)} onDone={() => setPhase('lobby')} />}
         {phase !== 'intro' && (
           <div className="result event-lobby">
@@ -335,7 +336,7 @@ function EventFight({ boss, progress, exercise, hpLeft, hpMax, onDone }: { boss:
   return (
     <>
       <div className="arena mission">
-        <EventScene boss={boss} hit={reps} pulse={reps} dead={hpNow <= 0} angry={angry} hero={{ model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(progress) }} />
+        <EventScene boss={boss} hit={reps} pulse={reps} dead={hpNow <= 0} angry={angry} hero={{ ...heroLook(item), hands: heroHands(progress) }} />
         <div className="mhud">
           <div className="mhud-row">
             <span className="mhud-ex">{boss.name}</span>

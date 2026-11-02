@@ -71,6 +71,7 @@ import { canPlaceDecor, claimTheme, DECOR, DECOR_ERRORS, DECOR_GROUPS, DECOR_KIN
 import { cancelResearch, finishResearchNow, labLevel, RESEARCH_ERRORS, startResearch, troopLevel, troopLevels } from '../../shared/villageLab';
 import { preloadTroops, type HeroLook } from './troops3d';
 import { itemById } from '../game/items';
+import { heroLook as outfitLook } from '../game/outfitSkin';
 import { heroHands } from '../game/power';
 import './village.css';
 import { Sheet } from '../Sheet';
@@ -410,7 +411,7 @@ export function VillageScreen({ progress, setProgress, onPlaying, onDungeon }: P
   if (battle) {
     const heroLvl = heroLevel(heroXp(progress)).level;
     const item = itemById(progress.equipped);
-    const heroLook: HeroLook = { model: item.hero, tint: item.tint, glow: item.glow, hands: heroHands(progress) };
+    const heroLook: HeroLook = { ...outfitLook(item), hands: heroHands(progress) };
     const army: BattleArmy =
       battle.kind === 'replay'
         ? battle.entry.army

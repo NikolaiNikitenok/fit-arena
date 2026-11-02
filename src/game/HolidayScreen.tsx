@@ -9,6 +9,7 @@ import { Portrait } from './Dialog';
 import { daysUntil, fmtDays, fmtLeft } from './event';
 import { claimHoliday, HOLIDAY_GOAL, HOLIDAY_STEPS, holidayAt, holidayOf, holidayOutfit, holidaysSoFar, holidayTitleName, holidayTokens, type HolidayStep, type HolidayWindow, tokenWord } from './holidays';
 import { OutfitFace } from './EventScreen';
+import { heroLook } from './outfitSkin';
 import type { Progress } from './progress';
 import { say } from './story';
 import { sfx } from '../audio';
@@ -43,7 +44,7 @@ function OutfitStage({ w }: { w: HolidayWindow }) {
       </mesh>
       <Suspense fallback={null}>
         <Spin>
-          <Character model={item.hero} tint={item.tint} aura={item.glow} anim="idle" />
+          <Character {...heroLook(item)} aura={item.glow} anim="idle" />
         </Spin>
       </Suspense>
     </Canvas3D>
