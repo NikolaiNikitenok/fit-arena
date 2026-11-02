@@ -1,0 +1,34 @@
+/* Знакомство-чат с тренером. */
+.ic { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--sp-bg); color: var(--sp-text); overflow: hidden; isolation: isolate; }
+.ic > *:not(.sp-gas) { position: relative; z-index: 1; }
+.ic .sp-gas span { opacity: .18; }
+.ic-head { display: flex; align-items: center; gap: 12px; padding: calc(14px + env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid var(--sp-line); background: rgba(15, 17, 21, .7); backdrop-filter: blur(10px); }
+.ic-head b { display: block; font-size: 16px; }
+.ic-head small { font-size: 12px; color: var(--sp-accent); }
+.ic-ava { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: #0f1115; background: linear-gradient(135deg, #22d3ee, #4ade80); box-shadow: 0 0 16px rgba(74, 222, 128, .35); }
+.ic-feed { flex: 1; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 8px; }
+.ic-msg { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 86%; animation: ic-in .3s ease-out; }
+.ic-msg.me { align-self: flex-end; align-items: flex-end; }
+@keyframes ic-in { from { opacity: 0; transform: translateY(8px); } }
+.ic-bubble { padding: 10px 14px; border-radius: 18px 18px 18px 6px; background: var(--sp-card); border: 1px solid var(--sp-line); font-size: 15px; line-height: 1.4; }
+.ic-msg.me .ic-bubble { border-radius: 18px 18px 6px 18px; background: linear-gradient(135deg, #16a34a, #0891b2); border-color: transparent; color: #fff; font-weight: 600; }
+.ic-typing { display: flex; gap: 4px; padding: 14px; }
+.ic-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--sp-muted); animation: ic-dot 1s infinite; }
+.ic-typing i:nth-child(2) { animation-delay: .15s; }
+.ic-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes ic-dot { 30% { transform: translateY(-4px); opacity: 1; } 0%, 60%, 100% { opacity: .4; } }
+.ic-phone { width: 220px; height: 300px; border-radius: 26px; border: 3px solid #2a2f3a; overflow: hidden; position: relative; background: var(--sp-bg); box-shadow: 0 10px 30px rgba(0, 0, 0, .4); }
+.ic-phone.adv img { width: 100%; height: 100%; object-fit: cover; object-position: 40% 50%; }
+.ic-mini { gap: 10px; padding: 12px 10px; justify-content: flex-start; padding-top: 22px; }
+.ic-mini .sp-snake .sp-ring-mid b { font-size: 38px; }
+.ic-mini .sp-ring-mid small { font-size: 11px; }
+.ic-mini .sp-steps { gap: 5px; }
+.ic-mini .sp-step { padding: 5px 8px; gap: 6px; grid-template-columns: 20px 1fr auto; font-size: 12px; border-radius: 10px; }
+.ic-mini .sp-step-dot { width: 18px; height: 18px; font-size: 10px; }
+.ic-foot { padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; background: linear-gradient(transparent, rgba(15, 17, 21, .9) 30%); }
+.ic-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; animation: ic-in .3s ease-out; }
+.ic-chips button { padding: 10px 16px; border-radius: 999px; font-size: 15px; font-weight: 700; color: var(--sp-text); background: rgba(255, 255, 255, .06); border: 1px solid rgba(74, 222, 128, .45); }
+.ic-chips button.primary { color: #0f1115; background: linear-gradient(135deg, #4ade80, #22d3ee); border-color: transparent; }
+.ic-chips button:active { transform: scale(.96); }
+.ic-login { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ic-privacy { align-self: center; font-size: 12px; opacity: .6; }

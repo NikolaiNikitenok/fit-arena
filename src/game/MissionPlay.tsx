@@ -19,6 +19,7 @@ import { heroHands, heroPower } from './power';
 import { petLook } from './pets';
 import { MissionScene3D } from './MissionScene3D';
 import { SportStage } from '../sport/SportStage';
+import { SPORT_NAMES } from '../sport/names';
 import { Stars } from './Stars';
 import { bossCard, makeShareCard, ShareVictory } from './ShareCard';
 import { WinPost } from '../social/WinPost';
@@ -53,15 +54,6 @@ const TYPE_NAMES: Record<LevelDef['type'], string> = {
   boss: t('Босс'),
 };
 // Стиль «Спорт»: без сказочных названий — обычный подход, контрольный подход, тест силы.
-const SPORT_NAMES: Record<LevelDef['type'], string> = {
-  trial: t('Тест силы'),
-  build: t('Подход'),
-  chase: t('Подход на темп'),
-  climb: t('Подход'),
-  defend: t('Подход'),
-  rescue: t('Подход'),
-  boss: t('Контрольный подход'),
-};
 
 // Звёзды уровня: в отдельном модуле, чтобы карта не тянула за собой экран миссии.
 export { Stars };
@@ -376,7 +368,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
             leftMs={view.leftMs}
             totalMs={level.seconds * 1000}
             live={status === 'running'}
-            step={level.type === 'boss' && view.phase != null && level.exercises.length > 1 ? `${view.phase + 1}/${level.exercises.length}` : undefined}
+            steps={view.steps}
+            calm={settings.lowPower}
           />
         ) : (
         <MissionScene3D

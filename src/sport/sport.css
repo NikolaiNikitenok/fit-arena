@@ -87,3 +87,63 @@
 .sp-row-text small { font-size: 13px; color: var(--sp-muted); }
 .sp-daily { border-radius: 18px; background: var(--sp-card); border: 1px solid var(--sp-line); }
 .sp-row .hb-dot { position: static; margin-left: auto; }
+
+/* Живой экран тренировки: газовый фон, «змейка», раскрывающийся список упражнений. */
+.sp-stage { overflow: hidden; isolation: isolate; }
+.sp-stage > *:not(.sp-gas) { position: relative; z-index: 1; }
+.sp-stage > .sp-top { position: absolute; }
+.sp-gas { position: absolute; inset: -20%; z-index: 0; pointer-events: none; }
+.sp-gas span { position: absolute; width: 60%; height: 50%; border-radius: 50%; filter: blur(60px); opacity: .32; animation: sp-drift 18s ease-in-out infinite alternate; }
+.sp-gas span:nth-child(1) { left: 5%; top: 10%; background: #0ea5e9; }
+.sp-gas span:nth-child(2) { right: 0; top: 35%; background: #22c55e; animation-duration: 23s; animation-delay: -6s; }
+.sp-gas span:nth-child(3) { left: 25%; bottom: 0; background: #6366f1; animation-duration: 27s; animation-delay: -11s; opacity: .24; }
+.sp-gas.calm span { animation: none; filter: blur(40px); }
+.sp-stage.live .sp-gas span { opacity: .42; }
+@keyframes sp-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12%, -8%) scale(1.15); }
+  100% { transform: translate(-10%, 10%) scale(.95); }
+}
+.sp-live { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #f43f5e; box-shadow: 0 0 10px #f43f5e; vertical-align: middle; animation: sp-blink 1.2s ease-in-out infinite; }
+@keyframes sp-blink { 50% { opacity: .3; } }
+.sp-snake { position: relative; }
+.sp-snake svg { transform: rotate(-90deg); display: block; overflow: visible; }
+.sp-orbit { fill: none; stroke: rgba(255, 255, 255, .14); stroke-width: 1.5; stroke-dasharray: 2 9; transform-origin: 110px 110px; animation: sp-spin 30s linear infinite; }
+.sp-stage.live .sp-orbit { stroke: rgba(74, 222, 128, .35); animation-duration: 9s; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
+.sp-snake-body { fill: none; stroke: url(#sp-snake-grad); stroke-width: 14; stroke-linecap: round; transition: stroke-dashoffset .45s cubic-bezier(.2, .9, .3, 1.2); filter: drop-shadow(0 0 8px rgba(74, 222, 128, .55)); }
+.sp-snake-head { fill: #ecfccb; filter: drop-shadow(0 0 10px #bef264) drop-shadow(0 0 20px #4ade80); animation: sp-head .6s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes sp-head { 0% { transform: scale(1.9); } 100% { transform: scale(1); } }
+.sp-bump b { animation: sp-bump .35s ease-out; }
+@keyframes sp-bump { 0% { transform: scale(1.18); text-shadow: 0 0 24px rgba(190, 242, 100, .8); } 100% { transform: scale(1); } }
+.sp-snake .sp-ring-mid b { font-size: 84px; }
+.sp-steps { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 8px; }
+.sp-step { position: relative; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(23, 26, 33, .72); border: 1px solid var(--sp-line); backdrop-filter: blur(8px); overflow: hidden;
+  opacity: 0; transform: translateY(10px) scaleY(.6); animation: sp-unfold .45s cubic-bezier(.2, .9, .3, 1.1) forwards; }
+@keyframes sp-unfold { to { opacity: 1; transform: none; } }
+.sp-step-dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 12px; font-weight: 800; background: var(--sp-line); color: var(--sp-muted); }
+.sp-step-name { font-weight: 700; }
+.sp-step-count { font-weight: 800; color: var(--sp-muted); }
+.sp-step.now { border-color: rgba(74, 222, 128, .5); box-shadow: 0 0 18px rgba(74, 222, 128, .18) inset, 0 0 14px rgba(74, 222, 128, .2); }
+.sp-step.now .sp-step-dot { background: var(--sp-accent); color: #0f1115; }
+.sp-step.now .sp-step-count { color: var(--sp-text); }
+.sp-step.done { opacity: .6; }
+.sp-step.done .sp-step-dot { background: rgba(74, 222, 128, .2); color: var(--sp-accent); }
+.sp-step-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--sp-line); }
+.sp-step-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #22d3ee, #4ade80); box-shadow: 0 0 8px #4ade80; transition: width .35s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .sp-gas span, .sp-orbit, .sp-live { animation: none; }
+}
+
+/* Список уровней «Спорт». */
+.sp-levels .style-switch button:disabled { opacity: .35; }
+.sp-lvl { display: grid; grid-template-columns: 40px 1fr auto; }
+.sp-lvl-num { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; font-weight: 800; background: rgba(255, 255, 255, .06); }
+.sp-lvl.now { border-color: rgba(74, 222, 128, .55); box-shadow: 0 0 16px rgba(74, 222, 128, .18); }
+.sp-lvl.now .sp-lvl-num { background: var(--sp-accent); color: #0f1115; }
+.sp-lvl-end { display: flex; align-items: center; gap: 4px; color: var(--sp-muted); }
+.sp-lvl-stars { color: #facc15; letter-spacing: 1px; }
+.sp-lvl-go { padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 800; color: #0f1115; background: var(--sp-accent); }
+.sp-levels .sp-home-head small { text-transform: none; }
+.sp-lvl.now { background: rgba(74, 222, 128, .07); }
+.sp-home .primary.sp-cta, .sp-levels .style-switch button.on { color: #0f1115; background: linear-gradient(135deg, #4ade80, #22d3ee); box-shadow: 0 8px 24px rgba(34, 211, 238, .25); }

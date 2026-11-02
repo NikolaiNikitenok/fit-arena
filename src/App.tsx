@@ -11,7 +11,6 @@ import { rememberUnlocks, UNLOCK_AT } from './game/unlocks';
 import { linkUnlocks } from './game/unlockLinks';
 import { markFirstOpen, track } from './telemetry';
 import { onGift } from './cloud';
-import { StylePick } from './sport/StylePick';
 import { useSettings } from './settings';
 import { GroupJoin } from './group/GroupChallenge';
 import { House } from './village/icons';
@@ -71,6 +70,10 @@ export function App() {
   const [exercise, setExercise] = useState<RepExercise>('pushup');
   const [playing, setPlaying] = useState(false);
   const settings = useSettings();
+  // В «Спорте» деревни нет: ссылка на неё ведёт на главную.
+  useEffect(() => {
+    if (settings.style === 'sport' && tab === 'village') setTab('hero');
+  }, [settings.style, tab]);
   useBusy(playing);
   const full = (tab === 'map' || tab === 'village') && !playing;
   // Вкладки, которые ещё не открыты уровнями карты (src/game/unlocks.ts): сколько уровней осталось.
@@ -156,13 +159,12 @@ export function App() {
 
       <UpdateBanner />
       <WarmupHost />
-      {!settings.styleChosen && !playing && <StylePick />}
 
       {lockToast && !playing && <div className="toast global">{lockToast}</div>}
 
       {!playing && (
         <nav className="bottom-nav">
-          {NAV.map((n) => {
+          {NAV.filter((n) => settings.style !== 'sport' || n.tab !== 'village').map((n) => {
             const left = locks[n.tab] ?? 0;
             // Закрытая вкладка видна с замком и уровнем карты, после которого откроется.
             const at = left && (n.tab === 'village' || n.tab === 'clan' || n.tab === 'duel') ? UNLOCK_AT[n.tab] : 0;

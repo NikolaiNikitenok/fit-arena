@@ -2,13 +2,14 @@
 // «Тренировка дня» и спокойный список разделов. Те же действия и замки, что у HeroHome.
 import type { ComponentProps, ReactNode } from 'react';
 import { amountText, EXERCISE_LABELS } from '../repCounter';
-import { Album, Bag, Check, Cog, Dumbbell, Feed, Flame, Kettlebell, Lock, PassShield, Plan, Star, Swords, Users } from '../icons';
+import { Check, Cog, Dumbbell, Feed, Flame, Kettlebell, Lock, Plan, Star, Swords, Users } from '../icons';
 import { dayKey, heroLevel, heroXp, streakOf } from '../game/progress';
 import { UNLOCK_AT, type Feature } from '../game/unlocks';
 import type { HeroHome } from '../game/HeroHome';
 import { useFeedBadge } from '../social/useFeedBadge';
 import { locale, t } from '../i18n';
 import { Ring } from './SportStage';
+import { useSettings } from '../settings';
 import './sport.css';
 
 type Props = ComponentProps<typeof HeroHome>;
@@ -23,8 +24,9 @@ export function weekReps(days: Record<string, number>, now: number): { date: str
 }
 
 export function SportHome(props: Props) {
-  const { progress, lives, current, onTrain, onSettings, daily, dailyDone, onDaily, onClaimDaily, onStrength, onAchievements, onPrograms, onGym, onFeed, onFriends, onPass, onShop, onDungeon, lockLeft, onLocked } = props;
+  const { progress, lives, current, onTrain, onSettings, daily, dailyDone, onDaily, onClaimDaily, onStrength, onAchievements, onPrograms, onGym, onFeed, onFriends, lockLeft, onLocked } = props;
   const now = Date.now();
+  const dayGoal = useSettings().dayGoal;
   const feedDot = useFeedBadge();
   const week = weekReps(progress.days, now);
   const today = week[6].reps;
@@ -32,9 +34,9 @@ export function SportHome(props: Props) {
   const series = streakOf(progress, now).days;
   const lvl = heroLevel(heroXp(progress)).level;
   const total = week.reduce((s, d) => s + d.reps, 0);
-  // Цель дня — как у задания дня, а если оно уже сделано, то средний активный день недели.
+  // Цель дня — из знакомства-чата, а без неё — средний активный день недели.
   const active = week.filter((d) => d.reps > 0);
-  const goal = Math.max(30, Math.round(active.length ? active.reduce((s, d) => s + d.reps, 0) / active.length : 50));
+  const goal = dayGoal ?? Math.max(30, Math.round(active.length ? active.reduce((s, d) => s + d.reps, 0) / active.length : 50));
   const dailyLeft = Math.max(0, daily.target - dailyDone);
   const dailyClaimed = progress.dailyDone === daily.date;
   const g = (f: Feature, fn: () => void) => (lockLeft(f) ? { lock: UNLOCK_AT[f], onClick: () => onLocked(f) } : { lock: 0, onClick: fn });
@@ -45,9 +47,6 @@ export function SportHome(props: Props) {
     { icon: <Star size={20} />, title: t('Достижения'), sub: t('цели и награды'), lock: 0, onClick: onAchievements },
     { icon: <Feed size={20} />, title: t('Лента'), sub: t('результаты других игроков'), dot: feedDot, lock: 0, onClick: onFeed },
     { icon: <Users size={20} />, title: t('Друзья'), sub: t('вызовы и совместные тренировки'), lock: 0, onClick: onFriends },
-    { icon: <PassShield size={20} />, title: t('Сезон'), sub: t('награды за активность'), ...g('pass', onPass) },
-    { icon: <Bag size={20} />, title: t('Магазин'), sub: t('облики и бонусы'), ...g('shop', () => onShop()) },
-    { icon: <Album size={20} />, title: t('Головоломка'), sub: t('три в ряд на заряде от тренировок'), ...g('dungeon', onDungeon) },
   ];
   return (
     <div className="sp-home">

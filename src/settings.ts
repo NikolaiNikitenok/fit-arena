@@ -44,6 +44,9 @@ export interface Settings {
   // (решение владельца, 2026-11-02: взрослым нужен минимализм). Спрашиваем один раз (styleChosen).
   style: 'adventure' | 'sport';
   styleChosen: boolean;
+  // Ответы из знакомства-чата (src/sport/IntroChat.tsx): цель игрока и цель дня в повторах.
+  goal?: 'strength' | 'shape' | 'habit' | 'compete';
+  dayGoal?: number;
 }
 
 const KEY = 'fit-arena-settings';

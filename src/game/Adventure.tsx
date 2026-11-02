@@ -75,7 +75,10 @@ import { pl, t } from '../i18n';
 import { type Feature, freshUnlocks, levelsToUnlock, markUnlockSeen, nextLocked, rememberUnlocks } from './unlocks';
 import { linkUnlocks } from './unlockLinks';
 import { lockedText, UnlockSheet } from './UnlockSheet';
-import { getSettings } from '../settings';
+import { getSettings, useSettings } from '../settings';
+import { StylePick } from '../sport/StylePick';
+import { SportLevels } from '../sport/SportLevels';
+import { SPORT_HIDDEN } from '../sport/hidden';
 import { MorningOffer } from '../warmup/MorningOffer';
 import { isBannerOpen, unseenEntries } from '../updates/updates';
 import { markMorning, morningDue, morningWorkout } from '../warmup/morning';
@@ -96,6 +99,7 @@ const TitanScreen = lazy(() => import('./TitanScreen').then((m) => ({ default: m
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
 const DungeonScreen = lazy(() => import('./match3/DungeonScreen').then((m) => ({ default: m.DungeonScreen })));
 const PetHatch = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetHatch })));
+const IntroChat = lazy(() => import('../sport/IntroChat').then((m) => ({ default: m.IntroChat })));
 const Onboarding = lazy(() => import('./Onboarding').then((m) => ({ default: m.Onboarding })));
 const SettingsSheet = lazy(() => import('../SettingsSheet').then((m) => ({ default: m.SettingsSheet })));
 const WorldMap3D = lazy(() => import('./WorldMap3D').then((m) => ({ default: m.WorldMap3D })));
@@ -317,11 +321,18 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   // Пора ли предложить покупку (src/game/offers.ts): только на главной, когда сервер уже ответил (знаем, есть ли Pro
   // и куплен ли набор), не посреди боя и не поверх других окон — иначе окно засчитается, а его никто не увидит.
   const cloudReady = useCloudReady();
+  // Стиль игры: новичок выбирает его в знакомстве-чате с тренером (src/sport/IntroChat.tsx); в «Спорте» Гром не появляется.
+  const look = useSettings();
+  const intro = newcomer && (!look.styleChosen || look.style === 'sport');
+  const sportLook = look.style === 'sport';
+  // В «Спорте» нет питомцев и разделов-игр (деревня, подземелье, лавка…): их объявления не показываем.
+  const eggDue = !sportLook && !eggLater && canHatch(progress);
+  const freshShown = freshUnlocks(progress).filter((f) => !sportLook || !SPORT_HIDDEN.includes(f));
   // Утренняя зарядка: раньше предложения покупки, и одно окно за раз.
   const [morning, setMorning] = useState(false);
   const morningRef = useRef(false);
   const busyScreen =
-    !!playing || !!dungeon || gym || !!programs || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || (!eggLater && canHatch(progress)) || freshUnlocks(progress).length > 0;
+    !!playing || !!dungeon || gym || !!programs || !!selected || !!shop || settings || achOpen || passOpen || eventOpen || petsOpen || holidayOpen || collectionsOpen || cityOpen || titanOpen || strength || starterGot || !!levelUp || newcomer || eggDue || freshShown.length > 0;
   useEffect(() => {
     if (tab !== 'hero' || busyScreen || offer || morningRef.current) return;
     if (!morningDue(latest.current, Date.now(), getSettings().morning)) return;
@@ -447,7 +458,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   if (programs) return <Screen><ProgramsScreen progress={progress} update={update} model={item.hero} quick={programs.quick} onClose={() => setPrograms(null)} /></Screen>;
 
   // Объявление Грома о разделах, открытых пройденными уровнями.
-  const fresh = freshUnlocks(progress);
+  const fresh = freshShown;
   const openFeature = (f: Feature) => {
     if (f === 'duel') return onDuel ? onDuel() : onFriends();
     if (f === 'village' || f === 'clan') return onTab(f);
@@ -464,7 +475,18 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
   // Листы докачиваются тихо, поверх уже видного экрана.
   const sheets = (
     <Suspense fallback={null}>
-      {(newcomer || replayOnb) && (
+      {intro && (
+        <IntroChat
+          onDone={(style, start) => {
+            if (style !== 'sport') return;
+            setProgress(finishOnboarding(latest.current));
+            if (start) setPlaying(LEVELS[0], true);
+          }}
+        />
+      )}
+      {/* Игрокам, пришедшим до знакомства-чата, — один раз предложить стиль. */}
+      {!newcomer && !look.styleChosen && tab === 'hero' && !busyScreen && <StylePick />}
+      {((newcomer && !intro) || replayOnb) && (
         <Onboarding
           replay={replayOnb}
           onDone={(start) => {
@@ -518,7 +540,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onClose={() => setOffer(null)}
         />
       )}
-      {tab === 'hero' && !newcomer && fresh.length > 0 && !(!eggLater && canHatch(progress)) && (
+      {tab === 'hero' && !newcomer && fresh.length > 0 && !eggDue && (
         <UnlockSheet
           features={fresh}
           next={(() => {
@@ -532,7 +554,7 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           }}
         />
       )}
-      {tab === 'hero' && !newcomer && !eggLater && canHatch(progress) && (
+      {tab === 'hero' && !newcomer && eggDue && (
         <PetHatch
           onDone={(name) => {
             setProgress(saveProgress(hatchEgg(latest.current, name)));
@@ -665,6 +687,15 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           onClan={() => onTab('clan')}
           onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />
+        {sheets}
+      </>
+    );
+
+  // «Спорт»: вместо 3D-карты мира — строгий список уровней.
+  if (sportLook)
+    return (
+      <>
+        <SportLevels progress={progress} currentId={current} lives={<LivesPill progress={progress} />} onPlay={(l) => setPlaying(l)} />
         {sheets}
       </>
     );

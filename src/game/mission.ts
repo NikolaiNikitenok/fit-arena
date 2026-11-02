@@ -21,6 +21,8 @@ export interface MissionView {
   // Босс: сердца игрока и фаза.
   hearts?: number;
   phase?: number;
+  // Босс из нескольких упражнений: каждое со своей целью и сколько уже сделано (строгий экран «Спорт»).
+  steps?: { exercise: RepExercise; target: number; done: number }[];
   // Спасение: сколько жителей расколдовано.
   saved?: number;
   savedOf?: number;
@@ -177,6 +179,11 @@ export class Mission {
           label: t('Фаза {0} из {1}', { 0: Math.min(this.phase + 1, this.phaseTargets.length), 1: this.phaseTargets.length }),
           hearts: this.hearts,
           phase: this.phase,
+          steps: this.phaseTargets.map((target, i) => ({
+            exercise: this.level.exercises[Math.min(i, this.level.exercises.length - 1)],
+            target,
+            done: i < this.phase ? target : i === this.phase ? this.phaseReps : 0,
+          })),
         };
       }
       default:
