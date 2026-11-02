@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { staticFace } from './three/face';
 import type { Exercise } from './repCounter';
 import { CharName, charUrl, useGltf } from './three/kit';
 import { Canvas3D } from './three/Canvas3D';
@@ -145,6 +146,7 @@ function Athlete({ exercise, model }: { exercise: Exercise; model: CharName }) {
       mesh.castShadow = true;
       mesh.frustumCulled = false;
     });
+    staticFace(root, model);
     const bones = {} as Record<BoneName, THREE.Object3D>;
     // GLTFLoader убирает точки из имён узлов: upperarm.l → upperarml.
     for (const n of BONES) bones[n] = root.getObjectByName(n.replace('.', ''))!;

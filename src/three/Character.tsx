@@ -6,13 +6,14 @@ import { parseTint } from './Instanced';
 import { addOutline, outlinesOn, setRim, shellOutline, toonOf } from './toon';
 import { buildRegalia, skinTexture, smoothForOutline, type Skin } from './skin';
 import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
+import { buildFace, moodOf, openVisor } from './face';
 
 // Персонажи KayKit: рыцарь, маг, варвар, разбойник и скелеты. Скелет у всех общий,
 // поэтому анимации лежат в одном файле и подходят любому персонажу.
 
 export type CharAnim =
   | 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'punch' | 'cast' | 'hit' | 'death' | 'dead'
-  | 'cheer' | 'sit' | 'lie' | 'taunt' | 'awaken' | 'interact' | 'block' | 'shamble' | 'shoot' | 'chop2' | 'casting';
+  | 'cheer' | 'sit' | 'lie' | 'taunt' | 'awaken' | 'interact' | 'block' | 'shamble' | 'shoot' | 'chop2' | 'casting' | 'ready' | 'idle2' | 'aim2';
 
 const CLIPS: Record<CharAnim, string> = {
   idle: 'Idle',
@@ -36,6 +37,9 @@ const CLIPS: Record<CharAnim, string> = {
   shoot: '1H_Ranged_Shoot',
   chop2: '2H_Melee_Attack_Chop',
   casting: 'Spellcasting',
+  ready: 'Idle_Combat',
+  idle2: '2H_Melee_Idle',
+  aim2: '2H_Ranged_Aiming',
 };
 const ONCE: CharAnim[] = ['jump', 'attack', 'punch', 'cast', 'hit', 'death', 'awaken', 'interact', 'block', 'shoot', 'chop2'];
 
@@ -93,8 +97,9 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   const gltf = useGltf(charUrl(model));
   const anims = useGltf(ANIMS_URL);
 
-  const { root, materials, mixer, regalia } = useMemo(() => {
+  const { root, materials, mixer, regalia, face } = useMemo(() => {
     const root = cloneSkinned(gltf.scene) as THREE.Group;
+    root.updateMatrixWorld(true);
     const gear = GEAR[model];
     const materials: THREE.MeshToonMaterial[] = [];
     const visible: THREE.Mesh[] = [];
@@ -104,6 +109,8 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       if (gear && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(mesh.name)) mesh.visible = false;
       if (hands && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && WEAPONISH.test(mesh.name)) mesh.visible = false;
       mesh.castShadow = true;
+      // Подбородник шлема ниже — видно рот.
+      if (mesh.name === 'Knight_Helmet') openVisor(mesh);
       // Мультяшный материал (src/three/toon.ts): ступенчатый свет и ободок вместо «пластилина».
       const mat = toonOf(mesh.material as THREE.MeshStandardMaterial);
       // Облик: палитра брони и ткани своя, лицо остаётся родным.
@@ -114,16 +121,20 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
     });
     // Детали облика (наплечники, корона, крылья) — пока модель ещё в позе «T».
     const regalia = skin ? buildRegalia(root, model, skin, !outlinesOn()) : null;
+    // Рот, блики в глазах и моргание (src/three/face.ts). Его материал красится как тело: оттенок, камень, вспышка.
+    const face = buildFace(root, model);
+    if (face) materials.push(...face.materials);
     // Обводка — после обхода: новые меши в дереве во время обхода не нужны. В экономном режиме без неё.
     if (outline && outlinesOn()) {
       root.updateMatrixWorld(true);
       visible.forEach((m) => addOutline(m));
       regalia?.meshes.forEach((m) => shellOutline(m, smoothForOutline(m.geometry), 0.016));
     }
-    return { root, materials, mixer: new THREE.AnimationMixer(root), regalia };
+    return { root, materials, mixer: new THREE.AnimationMixer(root), regalia, face };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gltf, model, !!hands, outline, skin?.key]);
   useEffect(() => () => regalia?.dispose(), [regalia]);
+  useEffect(() => () => face?.dispose(), [face]);
 
   const actions = useMemo(() => {
     const out: Partial<Record<CharAnim, THREE.AnimationAction>> = {};
@@ -142,7 +153,21 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   }, [tint, stone, materials, !!skin]);
 
   const current = useRef<THREE.AnimationAction | null>(null);
-  const play = (name: CharAnim, timeScale = speed) => {
+  const mood = useRef<string>(anim);
+  // Двуручное оружие держим двумя руками: стойка и удар свои. Арбалет — у плеча.
+  // Одноручное — в боевой стойке: в обычной клинок торчит вбок из кулака. Маг без снаряжения держит свой посох.
+  const held = hands ? hands.weapon?.mesh : GEAR[model]?.find((m) => /^(1H|2H)_/.test(m));
+  const twoHand = held?.startsWith('2H_') ? (held.includes('Crossbow') ? 'aim2' : 'idle2') : null;
+  const gripped = (name: CharAnim): CharAnim => {
+    if (twoHand) {
+      if (name === 'idle' || name === 'ready') return twoHand;
+      if (name === 'attack' && twoHand === 'idle2') return 'chop2';
+    } else if (hands?.weapon && name === 'idle') return 'ready';
+    return name;
+  };
+  const play = (wanted: CharAnim, timeScale = speed) => {
+    const name = gripped(wanted);
+    mood.current = name;
     const next = actions[name] ?? actions.idle;
     if (!next) return;
     const once = ONCE.includes(name) || name === 'death';
@@ -169,7 +194,7 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   const once = (name: CharAnim) => {
     play(name, 1.6);
     const back = (e: { action: THREE.AnimationAction }) => {
-      if (e.action === actions[name] && current.current === e.action) play(base.current);
+      if (e.action === actions[gripped(name)] && current.current === e.action) play(base.current);
     };
     mixer.addEventListener('finished', back);
     return () => mixer.removeEventListener('finished', back);
@@ -197,6 +222,7 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   useFrame((state, delta) => {
     mixer.update(Math.min(delta, 0.1));
     regalia?.update(state.clock.elapsedTime);
+    face?.update(state.clock.elapsedTime, delta, moodOf(mood.current), !!stone);
     if (auraColor) {
       const k = 1.5 + 0.4 * Math.sin(performance.now() / 450);
       for (const m of materials) setRim(m, auraColor, k);

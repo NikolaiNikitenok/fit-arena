@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { staticFace } from '../three/face';
 import { CharName, charUrl, useGltf } from '../three/kit';
 import { Canvas3D } from '../three/Canvas3D';
 import type { MoveId } from './warmup';
@@ -188,6 +189,8 @@ function Athlete({ move, model, startAt, pausedAt }: { move: FigureMove; model: 
       mesh.castShadow = true;
       mesh.frustumCulled = false;
     });
+    // Рот и блики в глазах — пока голова родного размера (лицо меряется в позе «T»).
+    staticFace(root, model);
     const bones = {} as Record<BoneName, THREE.Object3D>;
     // GLTFLoader убирает точки из имён узлов: upperarm.l → upperarml.
     for (const n of BONES) bones[n] = root.getObjectByName(n.replace('.', ''))!;

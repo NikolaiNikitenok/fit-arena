@@ -41,6 +41,8 @@ const KEEP = new Set([
   'Sit_Floor_Idle', 'Lie_Idle', 'Taunt', 'Skeletons_Awaken_Standing', 'Interact', 'PickUp', 'Block',
   // Отряды деревни в бою: выстрел лучника, удар великана двуручным топором, лечение целителя.
   '1H_Ranged_Shoot', '2H_Melee_Attack_Chop', 'Spellcasting',
+  // Хват оружия: двуручное держим двумя руками, арбалет — у плеча.
+  '2H_Melee_Idle', '2H_Ranged_Aiming',
 ]);
 
 function dropAnimation(a) {

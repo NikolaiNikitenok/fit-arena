@@ -5,6 +5,7 @@ import { GEAR } from '../three/Character';
 import { parseTint } from '../three/Instanced';
 import { ANIMS_URL, charUrl, useGltf } from '../three/kit';
 import { buildRegalia, skinTexture } from '../three/skin';
+import { openVisor, staticFace } from '../three/face';
 import { TroopId } from '../../shared/villageBattle';
 import { Lock } from '../icons';
 import { ResRow } from './BattleScreen';
@@ -81,6 +82,10 @@ function HeroLive({ look, size }: { look: HeroLook; size: number }) {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       if (gear && !(m as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(m.name)) m.visible = false;
+      if (m.name === 'Knight_Helmet') {
+        root.updateMatrixWorld(true);
+        openVisor(m);
+      }
       const mat = (m.material as THREE.MeshStandardMaterial).clone();
       // Облик с костюмом: своя палитра брони и ткани вместо оттенка всей модели.
       if (look.skin && mat.map) mat.map = skinTexture(look.model, mat.map, look.skin);
@@ -92,6 +97,7 @@ function HeroLive({ look, size }: { look: HeroLook; size: number }) {
       m.material = mat;
     });
     if (look.skin) buildRegalia(root, look.model, look.skin, true);
+    staticFace(root, look.model);
     const mixer = new THREE.AnimationMixer(root);
     const clip = anims.animations.find((a) => a.name === 'Idle_Combat') ?? anims.animations.find((a) => a.name === 'Idle');
     if (clip) mixer.clipAction(clip).play();
