@@ -43,6 +43,8 @@ export function OutfitPreview({
   onBuy,
   onEquip,
   onClose,
+  action,
+  note,
 }: {
   item: Item;
   hands?: { weapon?: HandGear; offhand?: HandGear };
@@ -52,6 +54,9 @@ export function OutfitPreview({
   onBuy: () => void;
   onEquip: () => void;
   onClose: () => void;
+  // Свои кнопки вместо «Купить/Надеть» (награда пропуска) и подпись над ними.
+  action?: ReactNode;
+  note?: ReactNode;
 }) {
   const [pulse, setPulse] = useState(0);
   const color = RARITY_COLORS[item.rarity];
@@ -90,7 +95,10 @@ export function OutfitPreview({
             </span>
           ))}
         </div>
-        {owned ? (
+        {note && <div className="op-note">{note}</div>}
+        {action ? (
+          action
+        ) : owned ? (
           <button className="primary op-btn" disabled={equipped} onClick={onEquip}>
             {equipped ? t('Надето') : t('Надеть')}
           </button>
@@ -99,7 +107,7 @@ export function OutfitPreview({
             {t('Купить за')} <Coin size={16} /> {item.price}
           </button>
         ) : null}
-        {!owned && item.inShop && coins < item.price && <div className="muted op-hint">{t('Не хватает {0} монет', { 0: item.price - coins })}</div>}
+        {!action && !owned && item.inShop && coins < item.price && <div className="muted op-hint">{t('Не хватает {0} монет', { 0: item.price - coins })}</div>}
       </div>
     </Sheet>
   );

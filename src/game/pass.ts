@@ -1,6 +1,7 @@
 // Пропуск сезона: задания дают опыт пропуска, опыт открывает ступени щита.
 // Серая дорожка бесплатная, золотая — у владельцев Pro Pass (статус приходит с сервера).
 // Сезон тот же, что у дуэлей: 4 недели. Задания одинаковые у всех и зависят только от даты.
+import { passOutfitIds } from './passOutfits';
 import { EXERCISE_LABELS, type Exercise, type RepExercise } from '../repCounter';
 import { seasonEndsAt } from '../../shared/rating';
 import { bossDrop, Gear, gearById, itemById, openChest, PotionId, potionById } from './items';
@@ -145,16 +146,18 @@ const POTION_CYCLE: PotionId[] = ['vigor', 'might', 'swap'];
 export const PASS_GEAR: Record<number, string> = { 5: 'pass-dagger', 10: 'pass-wand', 15: 'pass-crossbow', 20: 'pass-axe', 25: 'pass-sword', 28: 'pass-shield' };
 
 /** Награды ступени: серый щит — бесплатно, золотой — Pro. Монеты растут к концу сезона. */
-export function passRewards(tier: number): { free: PassReward; pro: PassReward } {
+export function passRewards(tier: number, season = 1): { free: PassReward; pro: PassReward } {
   const potion = POTION_CYCLE[tier % 3];
+  // У каждого сезона свои облики (src/game/passOutfits.ts).
+  const outfit = passOutfitIds(season);
   const free: PassReward =
-    tier === PASS_TIERS ? { kind: 'outfit', id: 'pass-silver' }
+    tier === PASS_TIERS ? { kind: 'outfit', id: outfit.free }
     : tier % 10 === 0 ? { kind: 'gear' }
     : tier % 5 === 0 ? { kind: 'chest' }
     : tier % 3 === 0 ? { kind: 'potion', id: potion, n: 1 }
     : { kind: 'coins', n: 40 + tier * 4 };
   const pro: PassReward =
-    tier === PASS_TIERS ? { kind: 'outfit', id: 'pass-gold' }
+    tier === PASS_TIERS ? { kind: 'outfit', id: outfit.pro }
     : PASS_GEAR[tier] ? { kind: 'passGear', id: PASS_GEAR[tier] }
     : tier % 5 === 0 ? { kind: 'gear' }
     : tier % 4 === 0 ? { kind: 'chest' }
@@ -193,7 +196,7 @@ export function claimPassTier(p: Progress, track: Track, tier: number, pro: bool
   if (track === 'pro' && !pro) return null;
   if (pass.free.includes(tier) && track === 'free') return null;
   if (pass.pro.includes(tier) && track === 'pro') return null;
-  const r = passRewards(tier)[track];
+  const r = passRewards(tier, pass.season)[track];
   let next: Progress = { ...p };
   let label = rewardLabel(r);
   let gear: Gear | undefined;

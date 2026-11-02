@@ -2,6 +2,7 @@
 // тренировка остаётся честной.
 import type { CharName } from '../three/kit';
 import { holidayOutfits } from './holidayDefs';
+import { passOutfits } from './passOutfits';
 import { t } from '../i18n';
 
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
@@ -49,6 +50,8 @@ export interface Item {
   inShop: boolean;
   // Только из пропуска сезона: в сундуках не выпадает.
   pass?: boolean;
+  // Сезон пропуска, за который облик дают (src/game/passOutfits.ts).
+  season?: number;
   // Только за босса события выходных: в сундуках и в лавке его нет.
   event?: boolean;
   // Только за пройденную программу тренировок (src/game/programs.ts).
@@ -103,6 +106,8 @@ export const ITEMS: Item[] = [
   { id: 'titan-slayer', hero: 'Knight', name: t('Титаноборец'), rarity: 'legendary', color: '#ff7043', glow: '#ffd180', tint: 'mul:1.4,0.9,0.7', coinBonus: 0.25, price: 0, inShop: false, titan: true },
   // Облики праздников (src/game/holidayDefs.ts): у каждого праздника каждого года свой.
   ...holidayOutfits().map(({ id, key, name, hero, color, glow, tint }): Item => ({ id, hero, name, rarity: 'legendary', color, glow, tint, coinBonus: 0.25, price: 0, inShop: false, holiday: key })),
+  // Облики пропуска со второго сезона: у каждого сезона своя пара.
+  ...passOutfits().map(({ id, name, hero, color, glow, track, season }): Item => ({ id, hero, name, rarity: track === 'pro' ? 'legendary' : 'epic', color, glow, coinBonus: track === 'pro' ? 0.3 : 0.15, price: 0, inShop: false, pass: true, season })),
 ];
 
 export const itemById = (id: string): Item => ITEMS.find((i) => i.id === id) ?? ITEMS[0];

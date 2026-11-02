@@ -709,7 +709,7 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .pass-reward.locked .pass-reward-icon, .pass-reward.pro .pass-reward-icon { opacity: .75; }
 .pass-reward:disabled { cursor: default; }
 .pass-reward.ready:active { transform: scale(.97); }
-.pass-outfit { width: 36px; height: 36px; border-radius: 10px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+.pass-outfit { width: 46px; height: 46px; border-radius: 10px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
 .pass-outfit img { width: 120%; height: 120%; object-fit: cover; object-position: 50% 8%; }
 
 .pass-quests { display: flex; flex-direction: column; gap: 8px; }
@@ -901,3 +901,16 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .outfit-preview .op-perk { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1.5px solid; background: rgba(255,255,255,.04); }
 .outfit-preview .op-btn { margin-top: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .outfit-preview .op-hint { text-align: center; font-size: 13px; }
+.outfit-preview .op-note { font-size: 14px; color: var(--muted, #a8adc0); }
+/* Обзор награды пропуска. */
+.pass-reward.showcase { cursor: pointer; }
+.pass-sheet { text-align: center; }
+.pass-sheet .op-name { font-size: 22px; font-weight: 900; margin-top: 6px; }
+.pass-sheet .op-meta { font-weight: 800; }
+.pass-sheet .op-note, .outfit-preview .op-note { font-size: 14px; opacity: .75; }
+.pass-sheet-icon { width: 120px; height: 120px; margin: 8px auto 0; display: grid; place-items: center; border-radius: 28px; background: radial-gradient(circle at 50% 40%, rgba(255,255,255,.14), rgba(255,255,255,.03)); transform: scale(1); }
+.pass-sheet-icon.gold { background: radial-gradient(circle at 50% 40%, rgba(255,196,0,.35), rgba(255,196,0,.05)); }
+.pass-sheet-icon > * { transform: scale(2.2); }
+.pass-sheet-text { margin: 10px 0 14px; opacity: .9; }
+.pass-sheet-state { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border-radius: var(--r-md); background: rgba(255,255,255,.06); font-weight: 800; margin-top: 6px; }
+.pass-sheet .op-btn, .pass-sheet .primary { width: 100%; }

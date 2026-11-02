@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Chest, Coin, Flask, Lock, PassShield, Star, Swords } from '../icons';
-import { gearIcon, itemById, potionById } from './items';
-import { portraitUrl } from './npcs';
+import { gearById, gearIcon, gearText, itemById, potionById, RARITY_COLORS, RARITY_NAMES } from './items';
+import { heroHands } from './power';
+import { OutfitPreview } from './OutfitPreview';
+import { Sheet } from '../Sheet';
+import { HeroThumb } from '../village/TroopInfo';
+import { heroLook } from './outfitSkin';
 import { claimPassTier, claimQuest, PASS_TIERS, questXp, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';
 import { sfx } from '../audio';
@@ -38,6 +42,8 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
   const readyQuests = quests.filter((q) => !pass.quests.includes(q.id) && questValue(progress, q, now) >= q.target).length;
   const [tab, setTab] = useState<'rewards' | 'quests'>(readyQuests ? 'quests' : 'rewards');
   const [toast, setToast] = useState<string | null>(null);
+  // Обзор награды: ступень и дорожка.
+  const [view, setView] = useState<{ tier: number; track: Track } | null>(null);
   const current = useRef<HTMLDivElement>(null);
   const show = (text: string) => {
     setToast(text);
@@ -119,15 +125,15 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
             <span className="gold-text">{t('Золотой щит')}</span>
           </div>
           {Array.from({ length: PASS_TIERS }, (_, i) => i + 1).map((tier) => {
-            const r = passRewards(tier);
+            const r = passRewards(tier, pass.season);
             const open = tier <= tm.tier;
             return (
               <div key={tier} ref={tier === Math.min(PASS_TIERS, tm.tier + 1) ? current : undefined} className={`pass-row ${open ? 'open' : ''} ${tier === tm.tier + 1 ? 'next' : ''}`}>
-                <RewardCard reward={r.free} state={pass.free.includes(tier) ? 'got' : open ? 'ready' : 'locked'} onClaim={() => claimTier('free', tier)} />
+                <RewardCard reward={r.free} state={pass.free.includes(tier) ? 'got' : open ? 'ready' : 'locked'} onClaim={() => claimTier('free', tier)} onOpen={() => setView({ tier, track: 'free' })} />
                 <div className="pass-node">
                   <PassShield size={30} gold={open} dim={!open} label={tier} />
                 </div>
-                <RewardCard reward={r.pro} gold state={pass.pro.includes(tier) ? 'got' : !pro ? 'pro' : open ? 'ready' : 'locked'} onClaim={() => claimTier('pro', tier)} />
+                <RewardCard reward={r.pro} gold state={pass.pro.includes(tier) ? 'got' : !pro ? 'pro' : open ? 'ready' : 'locked'} onClaim={() => claimTier('pro', tier)} onOpen={() => setView({ tier, track: 'pro' })} />
               </div>
             );
           })}
@@ -139,6 +145,26 @@ export function PassScreen({ progress, setProgress, pro, land, onClose }: Props)
           <QuestGroup title={t('Задания сезона')} note={t('до конца сезона {0}', { 0: fmtLeft(passEndsAt(now) - now) })} quests={quests.filter((q) => q.kind === 'season')} progress={progress} now={now} claimed={pass.quests} pro={pro} onClaim={claim} />
         </div>
       )}
+      {view &&
+        (() => {
+          const reward = passRewards(view.tier, pass.season)[view.track];
+          const got = (view.track === 'free' ? pass.free : pass.pro).includes(view.tier);
+          const state: RewardState = got ? 'got' : view.track === 'pro' && !pro ? 'pro' : view.tier <= tm.tier ? 'ready' : 'locked';
+          return (
+            <RewardSheet
+              reward={reward}
+              tier={view.tier}
+              track={view.track}
+              state={state}
+              progress={progress}
+              onClaim={() => {
+                claimTier(view.track, view.tier);
+                setView(null);
+              }}
+              onClose={() => setView(null)}
+            />
+          );
+        })()}
       {toast && <div className="toast global">{toast}</div>}
     </div>
   );
@@ -158,9 +184,10 @@ function RewardIcon({ reward }: { reward: PassReward }) {
       return <img className="pass-gear-icon" src={gearIcon(reward.id)} alt="" draggable={false} />;
     case 'outfit': {
       const item = itemById(reward.id);
+      // Сам облик в 3D, а не общий портрет героя.
       return (
         <span className="pass-outfit" style={{ background: `radial-gradient(circle at 50% 35%, ${item.color}, #1b1d26 80%)`, boxShadow: item.glow ? `0 0 12px ${item.glow}` : undefined }}>
-          <img src={portraitUrl('hero')} alt="" draggable={false} />
+          <HeroThumb look={heroLook(item)} size={46} />
         </span>
       );
     }
@@ -257,9 +284,14 @@ function ProBuy({ pro, now, onPaid }: { pro: boolean; now: number; onPaid: (text
   );
 }
 
-function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassReward; gold?: boolean; state: 'got' | 'ready' | 'locked' | 'pro'; onClaim: () => void }) {
+type RewardState = 'got' | 'ready' | 'locked' | 'pro';
+
+// Облик и уникальное оружие стоит рассмотреть: по нажатию — обзор. Готовые монеты, зелья и сундуки забираются сразу.
+const showcase = (r: PassReward) => r.kind === 'outfit' || r.kind === 'passGear';
+
+function RewardCard({ reward, gold = false, state, onClaim, onOpen }: { reward: PassReward; gold?: boolean; state: RewardState; onClaim: () => void; onOpen: () => void }) {
   return (
-    <button className={`pass-reward ${gold ? 'gold' : ''} ${state}`} disabled={state !== 'ready'} onClick={onClaim}>
+    <button className={`pass-reward ${gold ? 'gold' : ''} ${state} ${showcase(reward) ? 'showcase' : ''}`} onClick={state === 'ready' && !showcase(reward) ? onClaim : onOpen}>
       <span className="pass-reward-icon">
         <RewardIcon reward={reward} />
       </span>
@@ -280,6 +312,62 @@ function RewardCard({ reward, gold = false, state, onClaim }: { reward: PassRewa
         )}
       </span>
     </button>
+  );
+}
+
+/** Что даёт награда, без цифр, которые решаются при получении. */
+function rewardText(r: PassReward): string {
+  switch (r.kind) {
+    case 'coins':
+      return t('Монеты сразу в кошелёк.');
+    case 'potion':
+      return potionById(r.id).text;
+    case 'chest':
+      return t('Монеты и случайная вещь: облик, снаряжение или зелье. Чем дальше по карте, тем лучше добыча.');
+    case 'gear':
+      return t('Случайное оружие или щит для твоей земли — сильнее, чем в лавке рядом.');
+    case 'passGear': {
+      const g = gearById(r.id);
+      return g ? t('Только в пропуске. {0}', { 0: gearText(g) }) : '';
+    }
+    case 'outfit':
+      return '';
+  }
+}
+
+function stateText(state: RewardState, tier: number): string {
+  return state === 'got' ? t('Уже получено') : state === 'pro' ? t('Награда золотого щита: нужен Pro Pass') : state === 'locked' ? t('Откроется на ступени {0}', { 0: tier }) : '';
+}
+
+/** Обзор награды пропуска: облик — герой в нём на подставке, остальное — крупно с описанием. */
+function RewardSheet({ reward, tier, track, state, progress, onClaim, onClose }: { reward: PassReward; tier: number; track: Track; state: RewardState; progress: Progress; onClaim: () => void; onClose: () => void }) {
+  const where = t('{0} · ступень {1}', { 0: track === 'pro' ? t('Золотой щит') : t('Серый щит'), 1: tier });
+  const action =
+    state === 'ready' ? (
+      <button className="primary op-btn" onClick={onClaim}>
+        {t('Забрать')}
+      </button>
+    ) : (
+      <div className="pass-sheet-state">
+        {state === 'got' ? <Check size={14} /> : <Lock size={13} />} {stateText(state, tier)}
+      </div>
+    );
+  if (reward.kind === 'outfit') {
+    const item = itemById(reward.id);
+    return <OutfitPreview item={item} hands={heroHands(progress)} owned={false} equipped={false} coins={0} onBuy={() => {}} onEquip={() => {}} onClose={onClose} note={where} action={action} />;
+  }
+  const g = reward.kind === 'passGear' ? gearById(reward.id) : undefined;
+  return (
+    <Sheet onClose={onClose} className="pass-sheet">
+      <div className={`pass-sheet-icon ${track === 'pro' ? 'gold' : ''}`}>
+        <RewardIcon reward={reward} />
+      </div>
+      <div className="op-name">{rewardLabel(reward)}</div>
+      {g && <div className="op-meta" style={{ color: RARITY_COLORS[g.rarity] }}>{RARITY_NAMES[g.rarity]}</div>}
+      <div className="op-note">{where}</div>
+      <p className="pass-sheet-text">{rewardText(reward)}</p>
+      {action}
+    </Sheet>
   );
 }
 
