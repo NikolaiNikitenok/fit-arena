@@ -111,7 +111,7 @@
 .sp-orbit { fill: none; stroke: rgba(255, 255, 255, .14); stroke-width: 1.5; stroke-dasharray: 2 9; transform-origin: 110px 110px; animation: sp-spin 30s linear infinite; }
 .sp-stage.live .sp-orbit { stroke: rgba(74, 222, 128, .35); animation-duration: 9s; }
 @keyframes sp-spin { to { transform: rotate(360deg); } }
-.sp-snake-body { fill: none; stroke: url(#sp-snake-grad); stroke-width: 14; stroke-linecap: round; transition: stroke-dashoffset .45s cubic-bezier(.2, .9, .3, 1.2); filter: drop-shadow(0 0 8px rgba(74, 222, 128, .55)); }
+.sp-snake-body { fill: none; stroke-width: 14; stroke-linecap: round; transition: stroke-dashoffset .45s cubic-bezier(.2, .9, .3, 1.2); filter: drop-shadow(0 0 8px rgba(74, 222, 128, .55)); }
 .sp-snake-head { fill: #ecfccb; filter: drop-shadow(0 0 10px #bef264) drop-shadow(0 0 20px #4ade80); animation: sp-head .6s ease-out; transform-box: fill-box; transform-origin: center; }
 @keyframes sp-head { 0% { transform: scale(1.9); } 100% { transform: scale(1); } }
 .sp-bump b { animation: sp-bump .35s ease-out; }

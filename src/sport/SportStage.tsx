@@ -1,9 +1,11 @@
 // Стиль «Спорт» (src/settings.ts style): строгий экран подхода вместо 3D-сцены — счётчик в кольце прогресса,
 // таймер, темп и цель. Те же данные, что у сцены приключения (MissionView), только без сказки.
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
+import { Fireflies, Ripple, Sparks } from './fx';
 import { EXERCISE_LABELS, type RepExercise } from '../repCounter';
 import { t } from '../i18n';
 import './sport.css';
+import './fx.css';
 
 const R = 92;
 const C = 2 * Math.PI * R;
@@ -30,39 +32,76 @@ export function Ring({ share, value, caption, color = 'var(--sp-accent)', size =
   );
 }
 
-/** Живой фон «газ»: несколько размытых пятен медленно плывут за экраном. В экономном режиме стоят на месте. */
+/** Живой фон «газ»: размытые цветные пятна плывут, поверх — медленный перелив и светлячки.
+ *  В экономном режиме (calm) всё стоит на месте. */
 export function Gas({ calm }: { calm?: boolean }) {
   return (
     <div className={`sp-gas ${calm ? 'calm' : ''}`} aria-hidden>
       <span />
       <span />
       <span />
+      <span />
+      <em className="sp-sheen" />
+      {!calm && <Fireflies />}
     </div>
   );
 }
 
-/** «Змейка»: светящаяся дуга прогресса с яркой головой, вокруг медленно крутится пунктирная орбита.
- *  На каждый повтор кольцо коротко вспыхивает (key = reps перезапускает анимацию). */
-export function Snake({ share, reps, children, size = 250 }: { share: number; reps: number; children: ReactNode; size?: number }) {
+const TICKS = 60;
+
+/** «Змейка»: светящаяся дуга прогресса с переливом и яркой головой; вокруг — шкала делений, которые
+ *  загораются по мере прогресса, и медленная орбита. На каждый повтор — искры из головы и волна от кольца. */
+export function Snake({ share, reps, children, size = 250, calm }: { share: number; reps: number; children: ReactNode; size?: number; calm?: boolean }) {
+  const id = useId().replace(/[^a-zA-Z0-9]/g, '');
   const p = Math.max(0, Math.min(1, share));
   const a = p * 2 * Math.PI;
   const hx = 110 + R * Math.cos(a);
   const hy = 110 + R * Math.sin(a);
+  // Голова на экране (svg повёрнут на −90°): для искр в процентах контейнера.
+  const k = (R / 220) * 100;
+  const sx = 50 + k * Math.sin(a);
+  const sy = 50 - k * Math.cos(a);
+  const lit = Math.round(p * TICKS);
+  const full = p >= 1;
   return (
-    <div className="sp-snake" style={{ width: size, height: size }}>
+    <div className={`sp-snake ${full ? 'full' : ''} ${calm ? 'calm' : ''}`} style={{ width: size, height: size }}>
+      <span className="sp-aura" aria-hidden />
+      <Ripple burst={calm ? 0 : reps} />
       <svg viewBox="0 0 220 220" width={size} height={size} aria-hidden>
         <defs>
-          <linearGradient id="sp-snake-grad" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={`g${id}`} gradientUnits="userSpaceOnUse" x1="20" y1="20" x2="200" y2="200">
             <stop offset="0%" stopColor="#22d3ee" />
-            <stop offset="55%" stopColor="#4ade80" />
-            <stop offset="100%" stopColor="#bef264" />
+            <stop offset="45%" stopColor="#4ade80" />
+            <stop offset="75%" stopColor="#bef264" />
+            <stop offset="100%" stopColor="#a78bfa" />
+            {!calm && <animateTransform attributeName="gradientTransform" type="rotate" from="0 110 110" to="360 110 110" dur="6s" repeatCount="indefinite" />}
           </linearGradient>
+          <filter id={`b${id}`} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="6" />
+          </filter>
         </defs>
-        <circle cx="110" cy="110" r={R + 13} className="sp-orbit" />
+        <g className="sp-ticks">
+          {Array.from({ length: TICKS }, (_, i) => {
+            const t2 = (i / TICKS) * 2 * Math.PI;
+            const r1 = R + 17;
+            const r2 = R + (i % 5 === 0 ? 24 : 21);
+            return (
+              <line key={i} x1={110 + r1 * Math.cos(t2)} y1={110 + r1 * Math.sin(t2)} x2={110 + r2 * Math.cos(t2)} y2={110 + r2 * Math.sin(t2)} className={i < lit ? 'on' : ''} style={{ transitionDelay: `${(i % 6) * 20}ms` }} />
+            );
+          })}
+        </g>
+        <circle cx="110" cy="110" r={R + 31} className="sp-orbit" />
         <circle cx="110" cy="110" r={R} className="sp-ring-track" />
-        <circle cx="110" cy="110" r={R} className="sp-snake-body" style={{ strokeDasharray: C, strokeDashoffset: C * (1 - p) }} />
-        {p > 0 && <circle key={reps} cx={hx} cy={hy} r="9" className="sp-snake-head" />}
+        {!calm && <circle cx="110" cy="110" r={R} className="sp-snake-bloom" stroke={`url(#g${id})`} filter={`url(#b${id})`} style={{ strokeDasharray: C, strokeDashoffset: C * (1 - p) }} />}
+        <circle cx="110" cy="110" r={R} className="sp-snake-body" stroke={`url(#g${id})`} style={{ strokeDasharray: C, strokeDashoffset: C * (1 - p) }} />
+        {p > 0 && (
+          <g key={reps} className="sp-snake-head-g">
+            <circle cx={hx} cy={hy} r="16" className="sp-snake-halo" />
+            <circle cx={hx} cy={hy} r="8" className="sp-snake-head" />
+          </g>
+        )}
       </svg>
+      {!calm && <Sparks burst={reps} x={sx} y={sy} />}
       <div key={reps} className="sp-ring-mid sp-bump">
         {children}
       </div>
@@ -102,14 +141,21 @@ export function StepList({ steps }: { steps: SportStep[] }) {
   );
 }
 
+const MILESTONES = [0.25, 0.5, 0.75];
+const MILESTONE_TEXT = [t('Четверть!'), t('Половина!'), t('Финишная прямая!')];
+
 export function SportStage({ exercise, reps, target, share, leftMs, totalMs, live, steps, calm }: { exercise: RepExercise; reps: number; target: number; share: number; leftMs: number; totalMs: number; live: boolean; steps?: SportStep[]; calm?: boolean }) {
   const spent = Math.max(1, totalMs - leftMs);
   const pace = live && reps > 0 ? Math.round((reps / spent) * 60_000) : null;
   const cur = steps?.find((s) => s.done < s.target);
   const shown = cur ? cur.done : reps;
   const goal = cur ? cur.target : target;
+  const ringShare = cur ? cur.done / Math.max(1, cur.target) : share;
+  // Отметки 25/50/75%: короткая надпись над кольцом.
+  const passed = MILESTONES.filter((m) => share >= m).length;
+  const hurry = live && leftMs < 10_000;
   return (
-    <div className={`sp-stage ${live ? 'live' : ''}`}>
+    <div className={`sp-stage ${live ? 'live' : ''} ${share >= 1 ? 'won' : ''} ${hurry ? 'hurry' : ''}`}>
       <Gas calm={calm} />
       <div className="sp-top">
         <span className="sp-ex">
@@ -118,7 +164,15 @@ export function SportStage({ exercise, reps, target, share, leftMs, totalMs, liv
         </span>
         <span className="sp-clock">{clock(leftMs)}</span>
       </div>
-      <Snake share={cur ? cur.done / Math.max(1, cur.target) : share} reps={reps}>
+      <div className="sp-time" aria-hidden>
+        <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, leftMs / Math.max(1, totalMs)))})` }} />
+      </div>
+      {passed > 0 && share < 1 && (
+        <div key={passed} className="sp-mile">
+          {MILESTONE_TEXT[passed - 1]}
+        </div>
+      )}
+      <Snake share={ringShare} reps={reps} calm={calm}>
         <b>{shown}</b>
         <small>{t('из {0}', { 0: goal })}</small>
       </Snake>

@@ -163,7 +163,7 @@ export function App() {
       {lockToast && !playing && <div className="toast global">{lockToast}</div>}
 
       {!playing && (
-        <nav className="bottom-nav">
+        <nav className={`bottom-nav ${settings.style === 'sport' ? 'sport' : ''}`}>
           {NAV.filter((n) => settings.style !== 'sport' || n.tab !== 'village').map((n) => {
             const left = locks[n.tab] ?? 0;
             // Закрытая вкладка видна с замком и уровнем карты, после которого откроется.

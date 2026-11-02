@@ -1,7 +1,7 @@
 // Знакомство в виде чата с тренером (решение владельца, 2026-11-02): новичок отвечает готовыми фразами —
 // цель, уровень, сколько времени, — видит, как выглядят оба стиля, и выбирает «Спорт» или «Приключение».
 // «Спорт» сразу ведёт на первый подход, «Приключение» передаёт игрока Мастеру Грому (Onboarding.tsx).
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Dumbbell } from '../icons';
 import { markFirstOpen, track } from '../telemetry';
 import { preloadPose } from '../useRepCamera';
@@ -16,6 +16,7 @@ import { t } from '../i18n';
 import { Gas, Snake, StepList } from './SportStage';
 import './sport.css';
 import './intro.css';
+import './fx.css';
 import { dayGoalFor } from './dayGoal';
 
 export type IntroGoal = NonNullable<Settings['goal']>;
@@ -199,7 +200,7 @@ export function IntroChat({ onDone }: { onDone: (style: Settings['style'], start
 
   return (
     <div className="ic">
-      <Gas calm />
+      <Gas />
       <header className="ic-head">
         <span className="ic-ava">
           <Dumbbell size={20} />
@@ -230,8 +231,8 @@ export function IntroChat({ onDone }: { onDone: (style: Settings['style'], start
       <footer className="ic-foot">
         {chips.length > 0 && (
           <div className="ic-chips">
-            {chips.map((c) => (
-              <button key={c.label} className={c.primary ? 'primary' : ''} onClick={c.act}>
+            {chips.map((c, i) => (
+              <button key={c.label} className={c.primary ? 'primary fx-shine' : ''} style={{ '--i': `${i * 0.07}s` } as CSSProperties} onClick={c.act}>
                 {c.label}
               </button>
             ))}

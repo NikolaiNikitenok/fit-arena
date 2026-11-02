@@ -1,6 +1,6 @@
 // Главная в стиле «Спорт»: вместо героя на сцене — сводка дня (повторы, серия, неделя), одна кнопка
 // «Тренировка дня» и спокойный список разделов. Те же действия и замки, что у HeroHome.
-import type { ComponentProps, ReactNode } from 'react';
+import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { amountText, EXERCISE_LABELS } from '../repCounter';
 import { Check, Cog, Dumbbell, Feed, Flame, Kettlebell, Lock, Plan, Star, Swords, Users } from '../icons';
 import { dayKey, heroLevel, heroXp, streakOf } from '../game/progress';
@@ -8,7 +8,9 @@ import { UNLOCK_AT, type Feature } from '../game/unlocks';
 import type { HeroHome } from '../game/HeroHome';
 import { useFeedBadge } from '../social/useFeedBadge';
 import { locale, t } from '../i18n';
-import { Ring } from './SportStage';
+import { Gas, Snake } from './SportStage';
+import { CountUp } from './fx';
+import './fx.css';
 import { useSettings } from '../settings';
 import './sport.css';
 
@@ -26,7 +28,7 @@ export function weekReps(days: Record<string, number>, now: number): { date: str
 export function SportHome(props: Props) {
   const { progress, lives, current, onTrain, onSettings, daily, dailyDone, onDaily, onClaimDaily, onStrength, onAchievements, onPrograms, onGym, onFeed, onFriends, lockLeft, onLocked } = props;
   const now = Date.now();
-  const dayGoal = useSettings().dayGoal;
+  const { dayGoal, lowPower: calm } = useSettings();
   const feedDot = useFeedBadge();
   const week = weekReps(progress.days, now);
   const today = week[6].reps;
@@ -50,7 +52,8 @@ export function SportHome(props: Props) {
   ];
   return (
     <div className="sp-home">
-      <header className="sp-home-head">
+      <Gas calm={calm} />
+      <header className="sp-home-head fx-in">
         <div>
           <small>{new Date(now).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })}</small>
           <h1>{t('Сегодня')}</h1>
@@ -63,8 +66,13 @@ export function SportHome(props: Props) {
         </div>
       </header>
 
-      <section className="sp-today">
-        <Ring share={today / goal} value={today} caption={t('из {0} повт.', { 0: goal })} size={150} />
+      <section className="sp-today fx-in fx-edge" style={{ '--i': '.08s' } as CSSProperties}>
+        <Snake share={today / goal} reps={today} size={150} calm>
+          <b>
+            <CountUp value={today} />
+          </b>
+          <small>{t('из {0} повт.', { 0: goal })}</small>
+        </Snake>
         <div className="sp-today-stats">
           <span>
             <small>{t('Серия')}</small>
@@ -72,7 +80,9 @@ export function SportHome(props: Props) {
           </span>
           <span>
             <small>{t('За неделю')}</small>
-            <b>{total}</b>
+            <b>
+              <CountUp value={total} ms={1200} />
+            </b>
           </span>
           <span>
             <small>{t('Уровень')}</small>
@@ -81,16 +91,16 @@ export function SportHome(props: Props) {
         </div>
       </section>
 
-      <div className="sp-week" aria-label={t('Повторы за неделю')}>
+      <div className="sp-week fx-in" style={{ '--i': '.16s' } as CSSProperties} aria-label={t('Повторы за неделю')}>
         {week.map((d, i) => (
           <div key={d.date} className={`sp-week-day ${i === 6 ? 'today' : ''}`}>
-            <span style={{ height: `${Math.max(4, (d.reps / best) * 100)}%` }} />
+            <span style={{ height: `${Math.max(4, (d.reps / best) * 100)}%`, '--i': `${0.3 + i * 0.06}s` } as CSSProperties} />
             <small>{new Date(`${d.date}T12:00:00`).toLocaleDateString(locale(), { weekday: 'narrow' })}</small>
           </div>
         ))}
       </div>
 
-      <button className="primary sp-cta" onClick={onTrain}>
+      <button className="primary sp-cta fx-in fx-shine fx-flow" style={{ '--i': '.24s' } as CSSProperties} onClick={onTrain}>
         <Swords size={22} />
         <span>
           {t('Тренировка дня')}
@@ -98,7 +108,7 @@ export function SportHome(props: Props) {
         </span>
       </button>
 
-      <button className="sp-row sp-daily" onClick={dailyLeft === 0 && !dailyClaimed ? onClaimDaily : onDaily} disabled={dailyClaimed}>
+      <button className="sp-row sp-daily fx-in" style={{ '--i': '.3s' } as CSSProperties} onClick={dailyLeft === 0 && !dailyClaimed ? onClaimDaily : onDaily} disabled={dailyClaimed}>
         <span className="sp-row-icon">{dailyClaimed ? <Check size={20} /> : <Dumbbell size={20} />}</span>
         <span className="sp-row-text">
           <b>{t('Задание дня')}</b>
@@ -112,7 +122,7 @@ export function SportHome(props: Props) {
         </span>
       </button>
 
-      <div className="sp-list">
+      <div className="sp-list fx-in" style={{ '--i': '.36s' } as CSSProperties}>
         {rows.map((r) => (
           <button key={r.title} className={`sp-row ${r.lock ? 'locked' : ''}`} onClick={r.onClick}>
             <span className="sp-row-icon">{r.lock ? <Lock size={18} /> : r.icon}</span>

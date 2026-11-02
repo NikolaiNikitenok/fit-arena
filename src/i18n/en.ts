@@ -3962,4 +3962,6 @@ export const EN: Record<string, string> = {
   "Старт": "Start",
   "Новичков встречает тренер в чате: спросит цель, уровень и время, покажет оба стиля и поставит цель дня.": "Newcomers meet a coach in a chat: goal, level and time, a look at both styles and a daily goal.",
   "Тренировка в «Спорте» — светящаяся «змейка» прогресса и список упражнений; вместо карты — список уровней.": "In «Sport», workouts get a glowing progress «snake» and an exercise list; the map becomes a list of levels.",
+  "Четверть!": "Quarter!",
+  "Финишная прямая!": "Home stretch!",
 };

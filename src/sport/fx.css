@@ -1,0 +1,151 @@
+/* «Спорт» — эффекты: перелив, светлячки, искры, ауры, бегущие рамки. Тяжёлое выключается в .calm и при
+   prefers-reduced-motion. */
+@property --sp-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+/* Газ: четвёртое пятно и медленный перелив поверх. */
+.sp-gas span:nth-child(4) { right: 10%; top: -5%; width: 45%; height: 40%; background: #a855f7; opacity: .16; animation-duration: 31s; animation-delay: -3s; }
+.sp-sheen { position: absolute; inset: 0; background: conic-gradient(from var(--sp-a), transparent 0deg, rgba(34, 211, 238, .07) 60deg, transparent 120deg, rgba(74, 222, 128, .06) 220deg, transparent 300deg); animation: sp-turn 24s linear infinite; mix-blend-mode: screen; }
+.sp-gas.calm .sp-sheen { animation: none; }
+@keyframes sp-turn { to { --sp-a: 360deg; } }
+
+/* Светлячки. */
+.fx-flies { position: absolute; inset: 0; overflow: hidden; }
+.fx-flies i { position: absolute; bottom: -10px; width: var(--sz); height: var(--sz); border-radius: 50%; background: #d9f99d; box-shadow: 0 0 6px #bef264, 0 0 14px #4ade80; opacity: 0;
+  animation: fx-rise var(--d) linear infinite; animation-delay: var(--delay); }
+@keyframes fx-rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: .9; }
+  50% { transform: translate(var(--x), -50vh); opacity: .6; }
+  90% { opacity: .8; }
+  100% { transform: translate(calc(var(--x) * -1), -105vh); opacity: 0; }
+}
+
+/* Искры. */
+.fx-sparks { position: absolute; width: 0; height: 0; z-index: 3; pointer-events: none; }
+.fx-sparks i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--h) 95% 70%); box-shadow: 0 0 8px hsl(var(--h) 95% 60%), 0 0 16px hsl(var(--h) 95% 55%);
+  animation: fx-spark .75s cubic-bezier(.15, .8, .3, 1) forwards; transform: scale(var(--s)); }
+@keyframes fx-spark {
+  0% { transform: translate(0, 0) scale(var(--s)); opacity: 1; }
+  70% { opacity: .9; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+/* Волна от кольца. */
+.fx-ripple { position: absolute; inset: 8%; border-radius: 50%; border: 2px solid rgba(74, 222, 128, .7); box-shadow: 0 0 22px rgba(74, 222, 128, .5), inset 0 0 22px rgba(34, 211, 238, .35); animation: fx-ripple .9s ease-out forwards; pointer-events: none; }
+@keyframes fx-ripple { from { transform: scale(.82); opacity: .95; } to { transform: scale(1.32); opacity: 0; } }
+
+/* Змейка. */
+.sp-snake { position: relative; }
+.sp-aura { position: absolute; inset: 14%; border-radius: 50%; background: radial-gradient(circle, rgba(74, 222, 128, .28), rgba(34, 211, 238, .12) 45%, transparent 70%); filter: blur(10px); animation: sp-breathe 3.2s ease-in-out infinite; }
+.sp-stage.live .sp-aura { animation-duration: 1.4s; }
+.sp-snake.full .sp-aura { inset: -6%; background: radial-gradient(circle, rgba(190, 242, 100, .55), rgba(74, 222, 128, .25) 45%, transparent 70%); animation-duration: .9s; }
+.sp-snake.calm .sp-aura { animation: none; }
+@keyframes sp-breathe { 50% { transform: scale(1.12); opacity: .7; } }
+.sp-snake .sp-snake-body { fill: none; stroke-width: 14; stroke-linecap: round; filter: none; transition: stroke-dashoffset .5s cubic-bezier(.2, .9, .3, 1.15); }
+.sp-snake-bloom { fill: none; stroke-width: 22; stroke-linecap: round; opacity: .75; transition: stroke-dashoffset .5s cubic-bezier(.2, .9, .3, 1.15); }
+.sp-snake-halo { fill: rgba(190, 242, 100, .25); animation: sp-halo .8s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+@keyframes sp-halo { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+.sp-ticks line { stroke: rgba(255, 255, 255, .12); stroke-width: 2; stroke-linecap: round; transition: stroke .4s ease, filter .4s ease; }
+.sp-ticks line.on { stroke: #bef264; filter: drop-shadow(0 0 3px #4ade80); }
+.sp-orbit { stroke-dasharray: 1 7; }
+
+/* Шкала времени под заголовком и спешка в последние 10 секунд. */
+.sp-time { position: absolute; top: 58px; left: 16px; right: 16px; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; z-index: 1; }
+.sp-time span { display: block; height: 100%; transform-origin: left; background: linear-gradient(90deg, #22d3ee, #4ade80, #bef264); box-shadow: 0 0 10px #4ade80; transition: transform 1s linear; }
+.sp-stage.hurry .sp-time span { background: linear-gradient(90deg, #f97316, #f43f5e); box-shadow: 0 0 12px #f43f5e; }
+.sp-stage.hurry .sp-clock { color: #fb7185; animation: sp-tick 1s steps(1) infinite; }
+@keyframes sp-tick { 50% { opacity: .55; } }
+.sp-clock { text-shadow: 0 0 18px rgba(255, 255, 255, .15); }
+
+/* Отметки 25/50/75%. */
+.sp-mile { position: absolute; top: 92px; left: 50%; z-index: 2; padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 14px; letter-spacing: .02em; color: #0f1115;
+  background: linear-gradient(90deg, #4ade80, #22d3ee); box-shadow: 0 0 24px rgba(74, 222, 128, .55); animation: sp-mile 2.2s ease forwards; }
+@keyframes sp-mile {
+  0% { transform: translate(-50%, 10px) scale(.7); opacity: 0; }
+  12% { transform: translate(-50%, 0) scale(1.06); opacity: 1; }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { transform: translate(-50%, -14px); opacity: 0; }
+}
+
+/* Победа: кольцо вспыхивает, фон теплеет. */
+.sp-stage.won .sp-gas span { opacity: .55; }
+.sp-stage.won .sp-snake-body { stroke-width: 16; }
+.sp-stage.won .sp-ring-mid b { color: #ecfccb; text-shadow: 0 0 28px rgba(190, 242, 100, .9); }
+
+/* Карточки статистики: стекло и тонкая светящаяся кромка. */
+.sp-stats > span { background: rgba(23, 26, 33, .55); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
+.sp-ring-mid b { background: linear-gradient(180deg, #fff 30%, #c7f9d4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sp-stage.won .sp-ring-mid b { background: none; color: #ecfccb; }
+
+/* Бегущая светящаяся рамка (главная, текущий уровень, лидер дуэли). */
+.fx-edge { position: relative; isolation: isolate; }
+.fx-edge::before { content: ''; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; padding: 1px;
+  background: conic-gradient(from var(--sp-a), transparent 0 70%, #22d3ee 80%, #4ade80 88%, #bef264 94%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: sp-turn 5s linear infinite; }
+
+/* Появление по очереди. */
+.fx-in { opacity: 0; transform: translateY(14px); animation: fx-in .6s cubic-bezier(.2, .9, .3, 1) forwards; animation-delay: var(--i, 0s); }
+@keyframes fx-in { to { opacity: 1; transform: none; } }
+
+/* Блик, пробегающий по кнопке. */
+.fx-shine { position: relative; overflow: hidden; }
+.fx-shine::after { content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; transform: skewX(-20deg); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); animation: fx-shine 4.5s ease-in-out infinite; animation-delay: 1.2s; pointer-events: none; }
+@keyframes fx-shine { 0%, 70% { left: -60%; } 100% { left: 130%; } }
+.fx-flow { background-size: 220% 100% !important; animation: fx-flow 6s ease-in-out infinite; }
+@keyframes fx-flow { 50% { background-position: 100% 0; } }
+
+/* Главная. */
+.sp-home { position: relative; isolation: isolate; overflow: hidden; }
+.sp-home > .sp-gas { position: fixed; }
+.sp-home > *:not(.sp-gas) { position: relative; z-index: 1; }
+.sp-home .sp-today, .sp-home .sp-week, .sp-home .sp-list, .sp-home .sp-daily, .sp-home .sp-icon-btn { background: rgba(23, 26, 33, .62); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 10px 30px rgba(0, 0, 0, .25); }
+.sp-home-head h1 { background: linear-gradient(90deg, #fff, #c7f9d4 40%, #a5f3fc 60%, #fff); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: fx-flow 8s ease-in-out infinite; }
+.sp-today .sp-ring-mid b { font-size: 46px; }
+.sp-week-day span { position: relative; overflow: hidden; transform-origin: bottom; animation: fx-grow .9s cubic-bezier(.2, .9, .3, 1.2) both; animation-delay: var(--i, 0s); background: linear-gradient(180deg, rgba(74, 222, 128, .55), rgba(34, 211, 238, .25)); }
+.sp-week-day.today span { background: linear-gradient(180deg, #bef264, #4ade80 50%, #22d3ee); box-shadow: 0 0 16px rgba(74, 222, 128, .6); }
+.sp-week-day.today span::after { content: ''; position: absolute; left: 0; right: 0; height: 40%; top: -40%; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .7), transparent); animation: fx-scan 2.6s ease-in-out infinite; }
+.sp-week-day.today small { color: var(--sp-accent); font-weight: 800; }
+@keyframes fx-grow { from { transform: scaleY(0); } }
+@keyframes fx-scan { 0% { top: -40%; } 60%, 100% { top: 110%; } }
+.sp-row-icon { transition: transform .2s ease, box-shadow .2s ease; }
+.sp-row:active .sp-row-icon { transform: scale(.9); box-shadow: 0 0 14px rgba(74, 222, 128, .5); }
+.sp-list .sp-row:not(.locked) .sp-row-icon { box-shadow: inset 0 0 0 1px rgba(74, 222, 128, .18); }
+
+/* Уровни. */
+.sp-lvl.now .sp-lvl-num { box-shadow: 0 0 16px rgba(74, 222, 128, .7); animation: sp-breathe 2s ease-in-out infinite; }
+.sp-lvl-stars { text-shadow: 0 0 8px rgba(250, 204, 21, .7); }
+.sp-lvl-go { animation: sp-breathe 1.6s ease-in-out infinite; box-shadow: 0 0 14px rgba(74, 222, 128, .6); }
+
+/* Дуэль. */
+.sp-duel { overflow: hidden; isolation: isolate; }
+.sp-duel > *:not(.sp-gas) { position: relative; z-index: 1; }
+.sp-duel > .sp-top { position: absolute; }
+.sp-side b { transition: text-shadow .3s ease, transform .3s ease; }
+.sp-side.lead b { transform: scale(1.08); }
+.sp-side.me.lead b { text-shadow: 0 0 26px rgba(74, 222, 128, .8); }
+.sp-side.rival.lead b { text-shadow: 0 0 26px rgba(96, 165, 250, .8); }
+.sp-lead { position: relative; overflow: visible; height: 12px; box-shadow: 0 0 16px rgba(96, 165, 250, .35); background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.sp-lead > span { position: relative; border-radius: 6px 0 0 6px; background: linear-gradient(90deg, #22d3ee, #4ade80, #bef264); background-size: 200% 100%; animation: fx-flow 3s ease-in-out infinite; box-shadow: 0 0 16px rgba(74, 222, 128, .6); }
+.sp-lead > span::after { content: ''; position: absolute; right: -7px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff, 0 0 22px #bef264, 0 0 36px #4ade80; animation: sp-breathe 1s ease-in-out infinite; }
+
+/* Чат. */
+.ic-ava { position: relative; }
+.ic-ava::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(74, 222, 128, .6); animation: fx-ping 2.4s ease-out infinite; }
+@keyframes fx-ping { from { transform: scale(.9); opacity: 1; } to { transform: scale(1.45); opacity: 0; } }
+.ic-chips button { opacity: 0; animation: fx-pop .45s cubic-bezier(.2, .9, .3, 1.4) forwards; animation-delay: var(--i, 0s); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+@keyframes fx-pop { from { opacity: 0; transform: translateY(10px) scale(.85); } to { opacity: 1; transform: none; } }
+.ic-bubble { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background: rgba(23, 26, 33, .7); }
+.ic-msg.me .ic-bubble { box-shadow: 0 6px 22px rgba(8, 145, 178, .35); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-sheen, .fx-flies, .fx-sparks, .fx-ripple, .fx-edge::before, .fx-shine::after, .sp-aura, .sp-week-day.today span::after { animation: none !important; }
+  .fx-flies, .fx-sparks { display: none; }
+}
+.sp-pop { animation: sp-pop .35s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes sp-pop { from { transform: scale(1.35); filter: brightness(1.8); } }
+.sp-stage > .sp-time, .sp-stage > .sp-mile, .sp-duel > .fx-sparks { position: absolute; }
+.fx-in.fx-flow { animation: fx-in .6s cubic-bezier(.2, .9, .3, 1) var(--i, 0s) forwards, fx-flow 6s ease-in-out infinite; }
+.bottom-nav.sport { background: rgba(12, 14, 18, .82); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top-color: rgba(255, 255, 255, .06); }
+.bottom-nav.sport button.active { color: #4ade80; }
+.bottom-nav.sport button.active .icon { filter: drop-shadow(0 0 8px rgba(74, 222, 128, .7)); }

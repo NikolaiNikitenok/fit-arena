@@ -7,6 +7,9 @@ import { Check, Lock } from '../icons';
 import { t } from '../i18n';
 import { SPORT_NAMES } from './names';
 import './sport.css';
+import './fx.css';
+import { Gas } from './SportStage';
+import { useSettings } from '../settings';
 
 const BLOCKS = [
   { from: 1, to: 100 },
@@ -20,31 +23,33 @@ export function SportLevels({ progress, currentId, lives, onPlay }: { progress: 
   useEffect(() => {
     cur.current?.scrollIntoView({ block: 'center' });
   }, [block]);
+  const calm = useSettings().lowPower;
   const b = BLOCKS[block];
   const list = LEVELS.filter((l) => l.id >= b.from && l.id <= b.to);
   return (
     <div className="sp-home sp-levels">
-      <header className="sp-home-head">
+      <Gas calm={calm} />
+      <header className="sp-home-head fx-in">
         <div>
           <small>{t('Пройдено {0} из {1}', { 0: Object.keys(progress.stars).length, 1: LEVELS.length })}</small>
           <h1>{t('Уровни')}</h1>
         </div>
         <div className="sp-home-tools">{lives}</div>
       </header>
-      <div className="style-switch">
+      <div className="style-switch fx-in" style={{ '--i': '.08s' } as React.CSSProperties}>
         {BLOCKS.map((x, i) => (
           <button key={i} className={i === block ? 'on' : ''} disabled={!isUnlocked(progress, x.from)} onClick={() => setBlock(i)}>
             {`${x.from}–${x.to}`}
           </button>
         ))}
       </div>
-      <div className="sp-list">
+      <div key={block} className="sp-list fx-in" style={{ '--i': '.16s' } as React.CSSProperties}>
         {list.map((l) => {
           const open = isUnlocked(progress, l.id);
           const stars = progress.stars[l.id] ?? 0;
           const now = l.id === currentId;
           return (
-            <button key={l.id} ref={now ? cur : undefined} className={`sp-row sp-lvl ${now ? 'now' : ''} ${open ? '' : 'locked'}`} disabled={!open} onClick={() => onPlay(l)}>
+            <button key={l.id} ref={now ? cur : undefined} className={`sp-row sp-lvl ${now ? 'now fx-edge' : ''} ${open ? '' : 'locked'}`} disabled={!open} onClick={() => onPlay(l)}>
               <span className="sp-lvl-num">{l.id}</span>
               <span className="sp-row-text">
                 <b>{SPORT_NAMES[l.type]}</b>
