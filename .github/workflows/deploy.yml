@@ -44,6 +44,10 @@ jobs:
           echo "$DEPLOY_KEY" > ~/.ssh_key
           SSH="ssh -i $HOME/.ssh_key -o StrictHostKeyChecking=accept-new"
           rsync -az --delete -e "$SSH" dist/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/arena/"
+          # «Свобода» (habit.nikitenok.ru): статический сайт из папки habit/, если сервер настроен (deploy/setup-habit.sh).
+          if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -w /var/www/habit; then
+            rsync -az --delete -e "$SSH" habit/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/habit/"
+          fi
           # Сервер матчей: выкладываем и перезапускаем, если он уже настроен на сервере.
           if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -d /opt/arena-server; then
             rsync -az -e "$SSH" dist-server/ "$DEPLOY_USER@$DEPLOY_HOST:/opt/arena-server/"
