@@ -59,7 +59,7 @@ import { deletePlayer } from './deleteMe';
 import { alertText, FEEDBACK_THANKS, feedbackLimit, feedbackText } from './adminBot';
 import { ModerationStore } from './moderation';
 import { ReportStore } from './reports';
-import { habitApi, HabitStore } from './habit';
+import { habitApi, HabitLinks, HabitStore } from './habit';
 import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
@@ -110,6 +110,14 @@ const activityLimit = new RateLimit();
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
 const familyHabits = new FamilyHabits();
 const habits = new HabitStore(process.env.HABIT_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'habit.json'));
+// Вход в «Свободу» через Nikitenok ID (id/): секрет клиента habit кладёт deploy/setup-id.sh в .nid-habit-secret.
+const NID_HABIT_SECRET = (process.env.NID_HABIT_SECRET ?? (() => { try { return readFileSync(join(__dirname, '.nid-habit-secret'), 'utf8'); } catch { return ''; } })()).trim();
+const habitNid = NID_HABIT_SECRET
+  ? {
+      cfg: { internal: process.env.NID_INTERNAL ?? 'http://127.0.0.1:8095', issuer: process.env.NID_ISSUER ?? 'https://id.nikitenok.ru', clientId: 'habit', secret: NID_HABIT_SECRET, redirectUri: 'https://habit.nikitenok.ru/' },
+      links: new HabitLinks(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'habit-nid.json')),
+    }
+  : null;
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
@@ -1527,7 +1535,8 @@ const http = createServer((req, res) => {
   }
   // «Свобода» (habit.nikitenok.ru): вход через Family и копия прогресса (server/habit.ts).
   if (path.startsWith('/api/habit/')) {
-    habitApi(path, req, res, habits, process.env.FAMILY_WEBHOOK_SECRET ?? '', (sum) => familyHabits.push(sum)).catch(() => res.writeHead(500).end());
+    // Сводку в Family шлём только для людей Family; вошедшие лишь через ID (pid 'nid:…') Family неизвестны.
+    habitApi(path, req, res, habits, process.env.FAMILY_WEBHOOK_SECRET ?? '', (sum) => { if (!sum.pid.startsWith('nid:')) familyHabits.push(sum); }, Date.now, habitNid).catch(() => res.writeHead(500).end());
     return;
   }
   if (path.startsWith('/api/pro/')) {

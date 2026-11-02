@@ -6,10 +6,16 @@
 // sig — hex HMAC-SHA256(key, payload), key = HMAC-SHA256(FAMILY_WEBHOOK_SECRET, "habit-sso") в hex.
 // Сайт обменивает эту ссылку на долгую сессию (тот же формат, с меткой "s" и сроком 180 дней)
 // и дальше хранит прогресс на сервере за этим pid. Отдельный секрет не нужен: ключ выводится из общего с Family.
-import { createHmac, timingSafeEqual } from 'node:crypto';
+//
+// Второй вход — Nikitenok ID (id.nikitenok.ru, папка id/): сайт присылает код из /authorize, сервер меняет его
+// на id_token у ID (по секрету клиента habit) и заводит ту же сессию. pid такого человека — 'nid:<nid>',
+// а если в момент входа он уже был вошедшим через Family, его nid навсегда привязывается к прежнему Family-pid
+// (HabitLinks), и прогресс с сериями в Family остаются на месте.
+import { createHmac, createPublicKey, timingSafeEqual, type JsonWebKeyInput, type KeyObject } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname } from 'node:path';
+import { verifyJwt } from '../id/server/jwt';
 
 export const HABIT_ORIGINS = ['https://habit.nikitenok.ru'];
 export const SSO_MAX_SEC = 10 * 60;
@@ -121,6 +127,70 @@ export class HabitStore {
   }
 }
 
+/** nid из Nikitenok ID → прежний Family-pid человека (если он перешёл на ID, будучи вошедшим через Family). */
+export class HabitLinks {
+  private data: Record<string, string> = {};
+  constructor(private readonly file: string | null) {
+    if (!file) return;
+    try {
+      this.data = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      this.data = {};
+    }
+  }
+  get(nid: string): string | null {
+    return this.data[nid] ?? null;
+  }
+  set(nid: string, pid: string): void {
+    this.data[nid] = pid;
+    if (!this.file) return;
+    try {
+      mkdirSync(dirname(this.file), { recursive: true });
+      writeFileSync(this.file + '.tmp', JSON.stringify(this.data));
+      renameSync(this.file + '.tmp', this.file);
+    } catch (e) {
+      console.error('habit links', e);
+    }
+  }
+}
+
+export interface NidConfig {
+  /** Адрес ID изнутри сервера, например http://127.0.0.1:8095. */
+  internal: string;
+  /** Адрес ID снаружи — он же iss в токенах. */
+  issuer: string;
+  clientId: string;
+  secret: string;
+  redirectUri: string;
+  fetch?: typeof fetch;
+}
+
+let jwksCache: { at: number; keys: { kid: string; publicKey: KeyObject }[] } | null = null;
+async function nidKeys(cfg: NidConfig, nowMs: number, force = false): Promise<{ kid: string; publicKey: KeyObject }[]> {
+  if (!force && jwksCache && nowMs - jwksCache.at < 3600_000) return jwksCache.keys;
+  const r = await (cfg.fetch ?? fetch)(`${cfg.internal}/.well-known/jwks.json`);
+  const j = (await r.json()) as { keys: (JsonWebKeyInput['key'] & { kid: string })[] };
+  const keys = j.keys.map((k) => ({ kid: k.kid, publicKey: createPublicKey({ key: k, format: 'jwk' }) }));
+  jwksCache = { at: nowMs, keys };
+  return keys;
+}
+
+/** Код из Nikitenok ID → кто вошёл. Подпись id_token проверяем, хотя он и пришёл напрямую от ID. */
+export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: string, nowMs: number): Promise<{ nid: string; name: string } | null> {
+  const r = await (cfg.fetch ?? fetch)(`${cfg.internal}/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: cfg.redirectUri, client_id: cfg.clientId, client_secret: cfg.secret, ...(verifier ? { code_verifier: verifier } : {}) }).toString(),
+  });
+  if (!r.ok) return null;
+  const t = (await r.json()) as { id_token?: string };
+  if (typeof t.id_token !== 'string') return null;
+  let c = verifyJwt(await nidKeys(cfg, nowMs), t.id_token, nowMs / 1000);
+  if (!c) c = verifyJwt(await nidKeys(cfg, nowMs, true), t.id_token, nowMs / 1000);
+  if (!c || c.iss !== cfg.issuer || c.aud !== cfg.clientId || typeof c.sub !== 'string' || !/^nid_[0-9a-f]{8,40}$/.test(c.sub)) return null;
+  return { nid: c.sub, name: cleanName(c.name) };
+}
+
 function readBody(req: IncomingMessage, max: number): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -164,7 +234,12 @@ export function summarize(pid: string, state: Record<string, unknown>, nowMs: nu
 }
 
 /** /api/habit/login | load | save | logout-delete. Вызывать для путей /api/habit/*. */
-export async function habitApi(path: string, req: IncomingMessage, res: ServerResponse, store: HabitStore, secret: string, onSaved: (s: HabitSummary) => void = () => {}, now = Date.now): Promise<void> {
+export interface HabitNid {
+  cfg: NidConfig;
+  links: HabitLinks;
+}
+
+export async function habitApi(path: string, req: IncomingMessage, res: ServerResponse, store: HabitStore, secret: string, onSaved: (s: HabitSummary) => void = () => {}, now = Date.now, nid: HabitNid | null = null): Promise<void> {
   const origin = String(req.headers.origin ?? '');
   const cors: Record<string, string> = HABIT_ORIGINS.includes(origin)
     ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400', Vary: 'Origin' }
@@ -172,15 +247,40 @@ export async function habitApi(path: string, req: IncomingMessage, res: ServerRe
   const send = (code: number, body?: unknown): void => void res.writeHead(code, { ...cors, 'Content-Type': 'application/json' }).end(body === undefined ? '' : JSON.stringify(body));
   if (req.method === 'OPTIONS') return void res.writeHead(204, cors).end();
   if (req.method !== 'POST') return send(405);
-  if (!secret) return send(503, { error: 'off' });
-  const key = habitKey(secret);
+  // Ключ сессий выводится из секрета Family, а без Family — из секрета клиента Nikitenok ID.
+  const root = secret || (nid ? 'nid:' + nid.cfg.secret : '');
+  if (!root) return send(503, { error: 'off' });
+  const key = habitKey(root);
   let body: Record<string, unknown>;
   try {
     body = await readBody(req, HABIT_MAX_BYTES + 10_000);
   } catch {
     return send(413);
   }
+  if (path === '/api/habit/nid') {
+    if (!nid) return send(503, { error: 'off' });
+    if (typeof body.code !== 'string' || body.code.length > 200) return send(400);
+    let got: { nid: string; name: string } | null = null;
+    try {
+      got = await exchangeNidCode(nid.cfg, body.code, typeof body.verifier === 'string' ? body.verifier.slice(0, 200) : '', now());
+    } catch (e) {
+      console.error('habit nid', e);
+      return send(502, { error: 'id unavailable' });
+    }
+    if (!got) return send(401, { error: 'bad code' });
+    // Уже вошёл через Family на этом устройстве — привязываем nid к его Family-pid (один раз).
+    const before = verifySession(key, String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, ''), now());
+    let pid = nid.links.get(got.nid);
+    if (!pid && before && !before.pid.startsWith('nid:')) {
+      pid = before.pid;
+      nid.links.set(got.nid, pid);
+    }
+    const who: Who = { pid: pid ?? `nid:${got.nid}`, name: got.name || before?.name || '' };
+    const saved = store.get(who.pid);
+    return send(200, { session: makeSession(key, who, now()), name: who.name || saved?.name || '', state: saved?.state ?? null, savedAt: saved?.savedAt ?? 0, via: 'nid', family: !who.pid.startsWith('nid:') });
+  }
   if (path === '/api/habit/login') {
+    if (!secret) return send(503, { error: 'off' });
     const who = verifySso(key, body.token, now());
     if (!who) return send(401, { error: 'bad token' });
     const saved = store.get(who.pid);

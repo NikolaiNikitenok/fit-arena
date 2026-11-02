@@ -21,6 +21,8 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       GH_ACTIONS_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
       THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+      ID_BOT_TOKEN: ${{ secrets.ID_BOT_TOKEN }}
+      ID_BOT_USERNAME: ${{ secrets.ID_BOT_USERNAME }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +36,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run build:server
+      - run: npm run build:id
       # Последние изменения для рубрики новостей в канале: «hash|дата|тема», от новых к старым.
       - run: git log -n 80 --no-merges --since="30 days ago" --format='%h|%cI|%s' > dist-server/changelog.txt
       - name: Upload to server
@@ -47,6 +50,23 @@ jobs:
           # «Свобода» (habit.nikitenok.ru): статический сайт из папки habit/, если сервер настроен (deploy/setup-habit.sh).
           if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -w /var/www/habit; then
             rsync -az --delete -e "$SSH" habit/ "$DEPLOY_USER@$DEPLOY_HOST:/var/www/habit/"
+          fi
+          # Nikitenok ID (id.nikitenok.ru, папка id/): если сервер настроен (deploy/setup-id.sh). Данные в data/ не трогаем.
+          if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -w /opt/nikitenok-id/data; then
+            rsync -az -e "$SSH" dist-id/ "$DEPLOY_USER@$DEPLOY_HOST:/opt/nikitenok-id/"
+            # Бот для виджета входа Telegram (BotFather: /setdomain id.nikitenok.ru) и тот же Яндекс, что у Арены.
+            # Имя бота по умолчанию — @NikitenokID_Bot (id/server/index.ts), секрет ID_BOT_USERNAME нужен, только если бот сменится.
+            if [ -n "$ID_BOT_TOKEN" ]; then
+              printf '%s' "$ID_BOT_TOKEN" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/nikitenok-id/data/.tg-bot-token'
+            fi
+            if [ -n "$ID_BOT_USERNAME" ]; then
+              printf '%s' "$ID_BOT_USERNAME" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/nikitenok-id/data/.tg-bot-username'
+            fi
+            if [ -n "$YANDEX_CLIENT_ID" ] && [ -n "$YANDEX_CLIENT_SECRET" ]; then
+              printf '%s' "$YANDEX_CLIENT_ID" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/nikitenok-id/data/.yandex-id'
+              printf '%s' "$YANDEX_CLIENT_SECRET" | $SSH "$DEPLOY_USER@$DEPLOY_HOST" 'umask 077; cat > /opt/nikitenok-id/data/.yandex-secret'
+            fi
+            $SSH "$DEPLOY_USER@$DEPLOY_HOST" sudo -n /usr/bin/systemctl restart nikitenok-id
           fi
           # Сервер матчей: выкладываем и перезапускаем, если он уже настроен на сервере.
           if $SSH "$DEPLOY_USER@$DEPLOY_HOST" test -d /opt/arena-server; then
