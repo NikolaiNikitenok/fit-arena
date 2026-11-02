@@ -58,13 +58,16 @@ const COL = {
 };
 
 // Поверхность лица: лучом спереди по голове в позе «T». Кэш на модель, точки — по сетке 0.01.
-interface Surface {
+export interface Surface {
   z: (x: number, y: number) => number;
   skin: THREE.Color;
+  // Голова в позе «T»: макушка и затылок (координаты модели).
+  top: number;
+  back: number;
 }
 const surfaces = new Map<string, Surface>();
 
-function surfaceOf(model: CharName, head: THREE.SkinnedMesh): Surface {
+export function surfaceOf(model: CharName, head: THREE.SkinnedMesh): Surface {
   const have = surfaces.get(model);
   if (have) return have;
   const pos = head.geometry.attributes.position;
@@ -123,8 +126,10 @@ function surfaceOf(model: CharName, head: THREE.SkinnedMesh): Surface {
       // Холст недоступен — остаётся обычный цвет кожи.
     }
   }
+  geo.computeBoundingBox();
+  const box = geo.boundingBox!;
   geo.dispose();
-  const s = { z, skin };
+  const s = { z, skin, top: box.max.y, back: box.min.z };
   surfaces.set(model, s);
   return s;
 }

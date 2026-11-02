@@ -7,6 +7,7 @@ import { addOutline, outlinesOn, setRim, shellOutline, toonOf } from './toon';
 import { buildRegalia, skinTexture, smoothForOutline, type Skin } from './skin';
 import { ANIMS_URL, CharName, charUrl, useGltf } from './kit';
 import { buildFace, moodOf, openVisor } from './face';
+import { type Appearance, buildFeatures, graftHat, graftHead, HAT_SOURCE, HATS, personTexture, proportions } from './appearance';
 
 // Персонажи KayKit: рыцарь, маг, варвар, разбойник и скелеты. Скелет у всех общий,
 // поэтому анимации лежат в одном файле и подходят любому персонажу.
@@ -77,6 +78,8 @@ export interface CharacterProps {
   outline?: boolean;
   // Облик героя (src/three/skin.ts): цвета брони и ткани по палитре и детали по редкости. Если задан, tint не нужен.
   skin?: Skin;
+  // Внешность героя (src/three/appearance.ts): чужая голова и убор, кожа, волосы, причёска, борода, рост.
+  person?: Appearance;
 }
 
 export interface HandGear {
@@ -93,20 +96,46 @@ export interface HandGear {
 
 const WEAPONISH = /Sword|Shield|Axe|Staff|Wand|Knife|Crossbow|Spellbook|Mug|Throwable/;
 
-export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, aura, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true, skin }: CharacterProps) {
+export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack', hit = 0, hitAnim, tint, glow, aura, stone, speed = 1, scale = 1, position, rotation = 0, onClick, hands, outline = true, skin, person }: CharacterProps) {
   const gltf = useGltf(charUrl(model));
+  const headModel = person?.head ?? model;
+  const hatId = person?.hat && person.hat !== 'own' && person.hat !== 'none' && person.hat !== HATS[model] ? person.hat : undefined;
+  const headGltf = useGltf(charUrl(headModel));
+  const hatGltf = useGltf(charUrl(hatId ? HAT_SOURCE[hatId] : model));
   const anims = useGltf(ANIMS_URL);
 
-  const { root, materials, mixer, regalia, face } = useMemo(() => {
+  const { root, materials, mixer, regalia, face, features, shape } = useMemo(() => {
     const root = cloneSkinned(gltf.scene) as THREE.Group;
     root.updateMatrixWorld(true);
     const gear = GEAR[model];
+    // Внешность: чужая голова и убор садятся на те же кости до обхода — материалы и обводка у них общие с телом.
+    const source = new Map<THREE.Object3D, CharName>();
+    const keep = new Set<string>();
+    const ownHat = HATS[model];
+    if (person && headModel !== model) {
+      const own = root.getObjectByName(`${model}_Head`);
+      own?.parent?.remove(own);
+      const head = graftHead(root, headGltf.scene, headModel);
+      if (head) source.set(head, headModel);
+    }
+    if (person && person.hat && person.hat !== 'own' && person.hat !== ownHat && ownHat) {
+      const own = root.getObjectByName(ownHat);
+      own?.parent?.remove(own);
+    }
+    if (hatId && hatId !== ownHat) {
+      const hat = graftHat(root, hatGltf.scene, hatId);
+      if (hat) {
+        hat.traverse((o) => source.set(o, HAT_SOURCE[hatId]));
+        keep.add(hat.name);
+      }
+    }
+    const hatOn = person?.hat && person.hat !== 'own' ? person.hat !== 'none' : !!ownHat;
     const materials: THREE.MeshToonMaterial[] = [];
     const visible: THREE.Mesh[] = [];
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
-      if (gear && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(mesh.name)) mesh.visible = false;
+      if (gear && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !gear.includes(mesh.name) && !keep.has(mesh.name)) mesh.visible = false;
       if (hands && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && WEAPONISH.test(mesh.name)) mesh.visible = false;
       mesh.castShadow = true;
       // Подбородник шлема ниже — видно рот.
@@ -114,7 +143,8 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
       // Мультяшный материал (src/three/toon.ts): ступенчатый свет и ободок вместо «пластилина».
       const mat = toonOf(mesh.material as THREE.MeshStandardMaterial);
       // Облик: палитра брони и ткани своя, лицо остаётся родным.
-      if (skin && mat.map) mat.map = skinTexture(model, mat.map, skin);
+      if (skin && mat.map) mat.map = skinTexture(source.get(mesh) ?? model, mat.map, skin);
+      if (person && mat.map) mat.map = personTexture(mat.map, person);
       mesh.material = mat;
       materials.push(mat);
       if (mesh.visible) visible.push(mesh);
@@ -122,17 +152,21 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
     // Детали облика (наплечники, корона, крылья) — пока модель ещё в позе «T».
     const regalia = skin ? buildRegalia(root, model, skin, !outlinesOn()) : null;
     // Рот, блики в глазах и моргание (src/three/face.ts). Его материал красится как тело: оттенок, камень, вспышка.
-    const face = buildFace(root, model);
+    const face = buildFace(root, headModel);
     if (face) materials.push(...face.materials);
+    const features = person ? buildFeatures(root, headModel, person, hatOn) : null;
+    const shape = person ? proportions(root, person) : null;
     // Обводка — после обхода: новые меши в дереве во время обхода не нужны. В экономном режиме без неё.
     if (outline && outlinesOn()) {
       root.updateMatrixWorld(true);
       visible.forEach((m) => addOutline(m));
       regalia?.meshes.forEach((m) => shellOutline(m, smoothForOutline(m.geometry), 0.016));
+      features?.meshes.forEach((m) => m.name === 'feature-hair' && shellOutline(m, smoothForOutline(m.geometry), 0.014));
     }
-    return { root, materials, mixer: new THREE.AnimationMixer(root), regalia, face };
+    return { root, materials, mixer: new THREE.AnimationMixer(root), regalia, face, features, shape };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gltf, model, !!hands, outline, skin?.key]);
+  }, [gltf, headGltf, hatGltf, model, !!hands, outline, skin?.key, person?.key]);
+  useEffect(() => () => features?.dispose(), [features]);
   useEffect(() => () => regalia?.dispose(), [regalia]);
   useEffect(() => () => face?.dispose(), [face]);
 
@@ -221,6 +255,7 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
   }, [auraColor, materials]);
   useFrame((state, delta) => {
     mixer.update(Math.min(delta, 0.1));
+    shape?.();
     regalia?.update(state.clock.elapsedTime);
     face?.update(state.clock.elapsedTime, delta, moodOf(mood.current), !!stone);
     if (auraColor) {
@@ -240,7 +275,7 @@ export function Character({ model, anim = 'idle', pulse = 0, pulseAnim = 'attack
     <group
       position={position}
       rotation={[0, rotation, 0]}
-      scale={scale}
+      scale={scale * (person?.height ?? 1)}
       onClick={
         onClick &&
         ((e) => {
