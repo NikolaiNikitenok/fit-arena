@@ -126,9 +126,14 @@ describe('OIDC: полный вход', () => {
     expect(r1.status).toBe(302);
     const login = r1.headers.get('location')!;
     expect(login).toMatch(/^\/login\?return=/);
-    const page = await (await get(login)).text();
-    expect(page).toContain('data-telegram-login="NikitenokIdBot"');
-    expect(page).toContain('«Свобода»');
+    const lp = await get(login);
+    const page = await lp.text();
+    const nonce = /script-src 'nonce-([^']+)'/.exec(lp.headers.get('content-security-policy') ?? '')![1];
+    expect(page).toContain(`nonce="${nonce}"`);
+    expect(page).not.toContain('{{nonce}}');
+    expect(page).toContain('id="tg-login" data-bot="123456"');
+    expect(r1.headers.get('content-security-policy') ?? '').toBe('');
+    expect(page).toContain('Вход для продолжения в');
 
     const q = new URLSearchParams({ ...tgParams('42', 'Коля'), return: auth });
     const r2 = await get('/auth/telegram?' + q);
