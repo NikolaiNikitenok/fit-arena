@@ -81,6 +81,16 @@ export const QUICK_TASKS = [
   '📸 Сфотографируй что-нибудь красивое вокруг',
   '🗂️ Удали 20 ненужных фото из телефона',
   '🧠 Вспомни 10 городов на букву «К»',
+  '🫖 Приготовь что-нибудь вкусное и полезное',
+  '🛏️ Заправь кровать идеально ровно',
+  '🧴 Сделай массаж рук с кремом',
+  '🗓️ Распиши план на завтра',
+  '🐾 Погладь кота или поиграй с собакой',
+  '🎧 Послушай один выпуск подкаста',
+  '📚 Выучи 5 слов на иностранном языке',
+  '🪥 Пожуй жвачку без сахара',
+  '🪟 Протри одно окно или зеркало',
+  '🧘 Посиди 3 минуты с закрытыми глазами',
 ];
 
 /** Мини-зарядка: упражнения по 30 секунд. */
@@ -113,4 +123,100 @@ export const GROUNDING = [
   { n: 3, text: 'Назови 3 звука, которые слышишь' },
   { n: 2, text: 'Назови 2 запаха вокруг тебя' },
   { n: 1, text: 'Назови 1 вкус, который чувствуешь' },
+];
+
+/** Что обычно провоцирует тягу. */
+export const TRIGGERS = [
+  { key: 'bored', emoji: '😐', name: 'Скука' },
+  { key: 'stress', emoji: '😤', name: 'Стресс' },
+  { key: 'food', emoji: '🍽️', name: 'После еды' },
+  { key: 'coffee', emoji: '☕', name: 'Кофе / чай' },
+  { key: 'alcohol', emoji: '🍷', name: 'Алкоголь' },
+  { key: 'friends', emoji: '👥', name: 'Компания' },
+  { key: 'tired', emoji: '🥱', name: 'Усталость' },
+  { key: 'morning', emoji: '🌅', name: 'Утро' },
+  { key: 'evening', emoji: '🌙', name: 'Вечер' },
+  { key: 'phone', emoji: '📱', name: 'Залип в телефоне' },
+  { key: 'sad', emoji: '😔', name: 'Грусть' },
+  { key: 'other', emoji: '❔', name: 'Другое' },
+];
+
+/** Совет под конкретный триггер — для плана после знакомства и для окна тяги. */
+export const TRIGGER_TIPS = {
+  bored: 'Держи под рукой «скучный» план: игра на 1 минуту, короткая прогулка, дело на 5 минут.',
+  stress: 'При стрессе сначала дыхание: 2 минуты медленного выдоха снимают остроту лучше привычки.',
+  food: 'После еды сразу вставай из-за стола: почисти зубы, выпей воды, пройдись.',
+  coffee: 'Смени ритуал: пей кофе в другом месте или с кем-то, кто не курит. Можно перейти на чай.',
+  alcohol: 'Алкоголь ослабляет контроль. Первые недели лучше обойтись без него или пить заметно меньше.',
+  friends: 'Предупреди друзей, что бросаешь. В перерывах держи в руках воду или жвачку.',
+  tired: 'Усталость маскируется под тягу. Попробуй 10 минут отдыха с закрытыми глазами или стакан воды.',
+  morning: 'Утром начни с воды и зарядки до того, как проснётся привычка.',
+  evening: 'Вечером запланируй занятие на руки: душ, книга, игра, прогулка.',
+  phone: 'Залипание в телефоне подпитывает тягу. Положи его в другую комнату на 15 минут.',
+  sad: 'Грусть пройдёт, а привычка вернёт её с прибавкой. Напиши близкому человеку.',
+  other: 'Заметь, что именно было перед тягой. Так ты найдёшь свой триггер.',
+};
+
+/** Все занятия. tags — для каких триггеров особенно подходит. */
+export const ACTIVITIES = [
+  { key: 'wave', emoji: '🌊', title: 'Переждать волну', text: '5 минут — и тяга спадёт', group: 'calm', tags: ['stress', 'sad', 'other', 'alcohol'] },
+  { key: 'breathe', emoji: '🫁', title: 'Квадратное дыхание', text: '4-4-4-4, 2 минуты', group: 'calm', tags: ['stress', 'tired', 'friends'] },
+  { key: 'breathe478', emoji: '🌬️', title: 'Дыхание 4-7-8', text: 'Успокаивает за минуту', group: 'calm', tags: ['stress', 'evening', 'sad'] },
+  { key: 'ground', emoji: '🧭', title: '5-4-3-2-1', text: 'Вернуться в «здесь и сейчас»', group: 'calm', tags: ['stress', 'sad'] },
+  { key: 'bubbles', emoji: '🫧', title: 'Лопай пузыри', text: 'Игра на 45 секунд', group: 'play', tags: ['bored', 'phone', 'coffee'] },
+  { key: 'memory', emoji: '🃏', title: 'Найди пары', text: 'Тренировка памяти', group: 'play', tags: ['bored', 'evening'] },
+  { key: 'reaction', emoji: '⚡', title: 'Реакция', text: 'Жми, когда станет зелёным', group: 'play', tags: ['bored', 'tired', 'coffee'] },
+  { key: 'math', emoji: '🧮', title: 'Счёт в уме', text: 'Спринт на 60 секунд', group: 'play', tags: ['bored', 'morning', 'phone'] },
+  { key: 'workout', emoji: '🔥', title: 'Мини-зарядка', text: '5 упражнений по 30 секунд', group: 'move', tags: ['bored', 'morning', 'tired', 'food'] },
+  { key: 'walk', emoji: '🚶', title: 'Прогулка', text: '10 минут на воздухе', group: 'move', tags: ['food', 'coffee', 'stress', 'phone'] },
+  { key: 'task', emoji: '🎲', title: 'Быстрое дело', text: 'Случайное занятие на 5 минут', group: 'do', tags: ['bored', 'food', 'evening'] },
+  { key: 'reasons', emoji: '❤️', title: 'Мои причины', text: 'Зачем я это делаю', group: 'do', tags: ['alcohol', 'friends', 'sad'] },
+  { key: 'letter', emoji: '✉️', title: 'Письмо себе', text: 'Что ты написал в начале пути', group: 'do', tags: ['sad', 'alcohol', 'evening'] },
+];
+export const GROUPS = [
+  { key: 'calm', title: 'Успокоиться' },
+  { key: 'play', title: 'Занять голову и руки' },
+  { key: 'move', title: 'Подвигаться' },
+  { key: 'do', title: 'Сделать что-то' },
+];
+
+export const MOODS = [
+  { v: 1, emoji: '😣', name: 'Тяжело' },
+  { v: 2, emoji: '😕', name: 'Так себе' },
+  { v: 3, emoji: '😐', name: 'Нормально' },
+  { v: 4, emoji: '🙂', name: 'Хорошо' },
+  { v: 5, emoji: '😄', name: 'Отлично' },
+];
+
+/** Причины-подсказки для знакомства. */
+export const REASON_IDEAS = [
+  'Здоровье', 'Ради семьи', 'Сэкономить деньги', 'Больше энергии', 'Свобода от зависимости',
+  'Пример для детей', 'Лучше выглядеть', 'Спорт', 'Ясная голова', 'Доказать себе',
+];
+
+/** Горячие линии помощи (Россия). */
+export const HELPLINES = {
+  smoke: { name: 'Линия помощи в отказе от курения', phone: '88002000200', label: '8-800-200-0-200' },
+  vape: { name: 'Линия помощи в отказе от курения', phone: '88002000200', label: '8-800-200-0-200' },
+};
+
+/** Награды. check(ctx) → true, когда получена. ctx: { maxMs, wins, checkStreak, saved, kinds, slipsBack, habits } */
+const Dd = 864e5;
+export const BADGES = [
+  { id: 'start', emoji: '🌱', title: 'Первый шаг', text: 'Начал путь', check: (c) => c.habits > 0 },
+  { id: 'day1', emoji: '☀️', title: 'Сутки', text: '24 часа без привычки', check: (c) => c.maxMs >= Dd },
+  { id: 'day3', emoji: '🔥', title: 'Три дня', text: 'Самое трудное позади', check: (c) => c.maxMs >= 3 * Dd },
+  { id: 'week', emoji: '🏅', title: 'Неделя', text: '7 дней свободы', check: (c) => c.maxMs >= 7 * Dd },
+  { id: 'month', emoji: '🏆', title: 'Месяц', text: '30 дней свободы', check: (c) => c.maxMs >= 30 * Dd },
+  { id: 'q', emoji: '💎', title: '100 дней', text: 'Сто дней — это уже ты', check: (c) => c.maxMs >= 100 * Dd },
+  { id: 'year', emoji: '👑', title: 'Год', text: 'Целый год', check: (c) => c.maxMs >= 365 * Dd },
+  { id: 'win1', emoji: '💪', title: 'Первая победа', text: 'Переждал тягу', check: (c) => c.wins >= 1 },
+  { id: 'win10', emoji: '🛡️', title: 'Щит', text: '10 побед над тягой', check: (c) => c.wins >= 10 },
+  { id: 'win50', emoji: '⚔️', title: 'Воин', text: '50 побед над тягой', check: (c) => c.wins >= 50 },
+  { id: 'ci3', emoji: '📅', title: 'Режим', text: '3 отметки подряд', check: (c) => c.checkStreak >= 3 },
+  { id: 'ci7', emoji: '🗓️', title: 'Неделя отметок', text: '7 отметок подряд', check: (c) => c.checkStreak >= 7 },
+  { id: 'kinds5', emoji: '🧩', title: 'Исследователь', text: 'Попробовал 5 разных занятий', check: (c) => c.kinds >= 5 },
+  { id: 'save1k', emoji: '💰', title: 'Копилка', text: 'Сэкономил 1 000 ₽', check: (c) => c.saved >= 1000 },
+  { id: 'save10k', emoji: '🏦', title: 'Банкир', text: 'Сэкономил 10 000 ₽', check: (c) => c.saved >= 10000 },
+  { id: 'back', emoji: '🔁', title: 'Снова в строю', text: 'Оступился и продолжил', check: (c) => c.slipsBack >= 1 },
 ];
