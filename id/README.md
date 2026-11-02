@@ -10,7 +10,7 @@
 - Приложения-клиенты описаны в `data/clients.json` на сервере. Сейчас подключена «Свобода» (`server/habit.ts`, `habit/cloud.js`).
 
 Код: `id/server/` (`app.ts` — маршруты, `store.ts`, `jwt.ts`, `providers.ts`, `pages.ts`). Тесты: `npx vitest run id/ server/habitNid.test.ts`.
-Сборка: `npm run build:id` → `dist-id/id.cjs`. Локально: `PORT=8095 ISSUER=http://127.0.0.1:8095 DATA_DIR=./tmp-id node dist-id/id.cjs`.
+Сборка: `npm run build:id` → `dist-id/id.cjs`. Локально: `PORT=8096 ISSUER=http://127.0.0.1:8096 DATA_DIR=./tmp-id node dist-id/id.cjs`.
 
-Сервер, один раз: `sudo bash deploy/setup-id.sh` (сервис `nikitenok-id` на 127.0.0.1:8095, блок Caddy, секрет клиента habit, ночные копии в /var/backups/nikitenok). Дальше автодеплой при пуше в main.
+Сервер, один раз: `sudo bash deploy/setup-id.sh` (сервис `nikitenok-id` на 127.0.0.1:8096, блок Caddy, секрет клиента habit, ночные копии в /var/backups/nikitenok). Дальше автодеплой при пуше в main.
 Нужен Node.js 22.13+ (встроенный `node:sqlite`).

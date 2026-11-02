@@ -4,7 +4,7 @@
 # Что делает (повторный запуск ничего не ломает):
 #   1. /opt/nikitenok-id (код, его выкладывает автодеплой) и /opt/nikitenok-id/data (база, ключ подписи, копии) — владелец deploy.
 #   2. clients.json с приложением «Свобода» (habit) и его секрет в /opt/arena-server/.nid-habit-secret.
-#   3. Сервис systemd nikitenok-id на 127.0.0.1:8095 и право deploy его перезапускать.
+#   3. Сервис systemd nikitenok-id на 127.0.0.1:8096 и право deploy его перезапускать.
 #   4. Блок Caddy для id.nikitenok.ru (остальные сайты не трогает).
 #   5. Ночные резервные копии данных Арены и Nikitenok ID в /var/backups/nikitenok (14 дней).
 set -euo pipefail
@@ -12,7 +12,7 @@ set -euo pipefail
 DOMAIN=id.nikitenok.ru
 APP=/opt/nikitenok-id
 DATA=$APP/data
-PORT=8095
+PORT=8096
 DEPLOY_USER=deploy
 CADDYFILE=/etc/caddy/Caddyfile
 ARENA=/opt/arena-server
@@ -22,6 +22,11 @@ NODE_OK=$(node -e 'const [a,b]=process.versions.node.split(".").map(Number);cons
 if [ "$NODE_OK" != 1 ]; then
   echo "Нужен Node.js 22.13 или новее (сейчас $(node -v)). Обнови: curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs"
   exit 1
+fi
+
+# Порт должен быть свободен (8095 занят serverbot): иначе Caddy отдаст наружу чужой сервис.
+if ss -ltnp "sport = :$PORT" | grep -q LISTEN && ! systemctl is-active -q nikitenok-id; then
+  echo "Порт $PORT уже занят другим сервисом:"; ss -ltnp "sport = :$PORT"; exit 1
 fi
 
 mkdir -p "$DATA"

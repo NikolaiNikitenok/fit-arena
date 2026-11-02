@@ -114,7 +114,7 @@ const habits = new HabitStore(process.env.HABIT_FILE ?? join(dirname(process.env
 const NID_HABIT_SECRET = (process.env.NID_HABIT_SECRET ?? (() => { try { return readFileSync(join(__dirname, '.nid-habit-secret'), 'utf8'); } catch { return ''; } })()).trim();
 const habitNid = NID_HABIT_SECRET
   ? {
-      cfg: { internal: process.env.NID_INTERNAL ?? 'http://127.0.0.1:8095', issuer: process.env.NID_ISSUER ?? 'https://id.nikitenok.ru', clientId: 'habit', secret: NID_HABIT_SECRET, redirectUri: 'https://habit.nikitenok.ru/' },
+      cfg: { internal: process.env.NID_INTERNAL ?? 'http://127.0.0.1:8096', issuer: process.env.NID_ISSUER ?? 'https://id.nikitenok.ru', clientId: 'habit', secret: NID_HABIT_SECRET, redirectUri: 'https://habit.nikitenok.ru/' },
       links: new HabitLinks(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'habit-nid.json')),
     }
   : null;
