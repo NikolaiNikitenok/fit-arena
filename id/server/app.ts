@@ -107,17 +107,23 @@ export function createIdApp(cfg: IdConfig) {
   const csrfOf = (sid: string) => sign('csrf:' + sid).slice(0, 32);
 
   function send(res: ServerResponse, code: number, body: string, type = 'text/html; charset=utf-8', extra: Record<string, string | string[]> = {}): void {
+    const html = type.startsWith('text/html');
+    // Свой nonce на каждый ответ: на странице входа он разрешает скрипт кнопки Telegram и ничего больше.
+    const nonce = html ? randomBytes(16).toString('base64') : '';
     res.writeHead(code, {
       'Content-Type': type,
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
-      ...(type.startsWith('text/html')
-        ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src https://telegram.org; frame-src https://oauth.telegram.org; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" }
+      ...(html
+        ? {
+            'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' https://telegram.org; frame-src https://oauth.telegram.org; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
+            'X-Frame-Options': 'DENY',
+          }
         : {}),
       ...extra,
     });
-    res.end(body);
+    res.end(html ? body.replaceAll('{{nonce}}', nonce) : body);
   }
   const json = (res: ServerResponse, code: number, body: unknown, extra: Record<string, string> = {}) => send(res, code, JSON.stringify(body), 'application/json', extra);
   const redirect = (res: ServerResponse, to: string, setCookie: string[] = []) => {
@@ -265,7 +271,7 @@ export function createIdApp(cfg: IdConfig) {
     const link = url.searchParams.get('link') === '1';
     if (link && !current(req)) return redirect(res, `/login?return=${encodeURIComponent(ret)}`);
     const app = clients.get(url.searchParams.get('app') ?? '');
-    send(res, error ? 400 : 200, loginPage({ issuer: cfg.issuer, ret, link, appName: app?.name, telegramBot: cfg.telegram?.bot, yandex: Boolean(cfg.yandex), error }));
+    send(res, error ? 400 : 200, loginPage({ issuer: cfg.issuer, ret, link, appName: app?.name, telegramBot: cfg.telegram?.bot, telegramBotId: cfg.telegram?.token.split(':')[0], yandex: Boolean(cfg.yandex), error }));
   }
 
   function telegramRoute(req: IncomingMessage, res: ServerResponse, url: URL): void {
@@ -314,6 +320,7 @@ export function createIdApp(cfg: IdConfig) {
     send(res, 200, accountPage({
       name: acc.name,
       nid: acc.nid,
+      created: acc.created,
       identities: cfg.store.identities(s.nid),
       sessions: cfg.store.sessionCount(s.nid),
       csrf: csrfOf(s.sid),
