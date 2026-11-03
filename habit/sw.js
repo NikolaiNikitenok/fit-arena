@@ -1,18 +1,19 @@
 // Кэш для работы без сети и показ уведомлений.
-const CACHE = 'svoboda-v5';
+const CACHE = 'svoboda-v6';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'arena.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 // Сначала сеть (чтобы обновления приходили сразу), без сети — из кэша.
+// cache: 'no-cache' — сверяемся с сервером, иначе браузер отдаёт старые файлы из своего HTTP-кэша.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: 'no-cache' })
       .then((res) => {
         // Возврат из Nikitenok ID (/?code=…) не кэшируем: одноразовые адреса.
         if (!new URL(e.request.url).search) {

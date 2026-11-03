@@ -1132,7 +1132,15 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { render(); checkNotify(); pull().then(() => render()); } });
 
 // ---------- Старт ----------
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator) {
+  // Новая версия приложения: проверяем при каждом возвращении и перезагружаемся, когда она встала.
+  const hadSw = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSw && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+}
 onAccount(() => { $('.onboard')?.remove(); render(); });
 (async () => {
   if (hasNidReturn()) {
