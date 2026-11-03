@@ -59,7 +59,7 @@ export function openActivity(key, { onFinish, onClose } = {}) {
     ], '🚶', 'Прогулка засчитана', 'Движение и свежий воздух снимают тягу лучше всего.'),
     breathe: () => breathe('Квадратное дыхание', [['Вдох', 4, 'grow'], ['Задержка', 4, 'hold'], ['Выдох', 4, 'shrink'], ['Пауза', 4, 'rest']], 8),
     breathe478: () => breathe('Дыхание 4-7-8', [['Вдох носом', 4, 'grow'], ['Задержка', 7, 'hold'], ['Выдох ртом', 8, 'shrink']], 4),
-    ground, bubbles, memory, reaction, math, workout, task, reasons, letter,
+    ground, bubbles, memory, reaction, math, workout, task, reasons, letter, arena,
   };
   (A[key] || A.wave)();
 
@@ -317,6 +317,30 @@ export function openActivity(key, { onFinish, onClose } = {}) {
     show();
     $('[data-other]', body).onclick = show;
     $('[data-done]', body).onclick = () => finish('Готово!', 'Маленькое дело — и мысли уже о другом.');
+  }
+
+  // Игра с тренировками по камере: рассказать коротко и отправить в браузер или в Telegram-бота.
+  function arena() {
+    const ARENA = 'https://arena.nikitenok.ru/';
+    const BOT = 'https://t.me/ArenaNikitenokBot';
+    body.innerHTML = `<div class="arena-promo">
+        <img src="arena.png" alt="" width="88" height="88" class="arena-logo pop-in">
+        <h2>NikitenokArena</h2>
+        <p class="arena-lead">Тяга — это энергия. Потрать её на себя: игра, где каждое твоё движение — удар по врагу.</p>
+        <ul class="arena-feats">
+          <li><span>📷</span><div><b>Считает по камере</b><small>Отжимания, приседания, пресс и планка — без датчиков, просто поставь телефон</small></div></li>
+          <li><span>⚔️</span><div><b>Приключения и дуэли</b><small>Сотни уровней, боссы, бои с живыми соперниками</small></div></li>
+          <li><span>🛡️</span><div><b>Кланы и деревня</b><small>Рейды с друзьями, своё поселение и награды</small></div></li>
+          <li><span>📈</span><div><b>Видно, как растёшь</b><small>Серии, рекорды и статистика тренировок</small></div></li>
+        </ul>
+        <p class="muted tiny">Пара подходов — и желание сорваться обычно проходит.</p>
+        <a class="btn primary wide" href="${ARENA}" target="_blank" rel="noopener" data-go>🎮 Перейти в игру</a>
+        <a class="btn tg wide" href="${BOT}" target="_blank" rel="noopener" data-go>✈️ Открыть бота в Telegram</a>
+      </div>`;
+    body.querySelectorAll('[data-go]').forEach((a) => a.addEventListener('click', () => {
+      // Вернёшься — спросим, как тяга.
+      setTimeout(() => finish('Отличный выбор 💪', 'Тренировка — лучший способ переждать тягу. Возвращайся, когда закончишь.'), 400);
+    }));
   }
 
   function reasons() {

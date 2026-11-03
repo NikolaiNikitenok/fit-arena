@@ -1,6 +1,6 @@
 // Кэш для работы без сети и показ уведомлений.
-const CACHE = 'svoboda-v4';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'svoboda-v5';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'arena.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

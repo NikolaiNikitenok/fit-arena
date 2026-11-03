@@ -168,6 +168,7 @@ export const ACTIVITIES = [
   { key: 'reaction', emoji: '⚡', title: 'Реакция', text: 'Жми, когда станет зелёным', group: 'play', tags: ['bored', 'tired', 'coffee'] },
   { key: 'math', emoji: '🧮', title: 'Счёт в уме', text: 'Спринт на 60 секунд', group: 'play', tags: ['bored', 'morning', 'phone'] },
   { key: 'workout', emoji: '🔥', title: 'Мини-зарядка', text: '5 упражнений по 30 секунд', group: 'move', tags: ['bored', 'morning', 'tired', 'food'] },
+  { key: 'arena', emoji: '🏟️', title: 'NikitenokArena', text: 'Игра: камера считает отжимания и приседания', group: 'move', tags: ['bored', 'phone', 'morning', 'tired', 'evening', 'friends', 'other'] },
   { key: 'walk', emoji: '🚶', title: 'Прогулка', text: '10 минут на воздухе', group: 'move', tags: ['food', 'coffee', 'stress', 'phone'] },
   { key: 'task', emoji: '🎲', title: 'Быстрое дело', text: 'Случайное занятие на 5 минут', group: 'do', tags: ['bored', 'food', 'evening'] },
   { key: 'reasons', emoji: '❤️', title: 'Мои причины', text: 'Зачем я это делаю', group: 'do', tags: ['alcohol', 'friends', 'sad'] },
