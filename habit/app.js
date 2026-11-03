@@ -114,7 +114,7 @@ function habitCard(h) {
     </a>`;
   }
   const ms = elapsed(h);
-  const { next, pct } = nextMilestone(ms);
+  const { next } = nextMilestone(ms);
   return `
     <a class="habit card" href="#/h/${h.id}">
       <div class="habit-top">
@@ -122,20 +122,84 @@ function habitCard(h) {
         <div class="habit-name">${esc(h.name)}<small>свободен уже</small></div>
         ${h.cravings ? `<span class="wins-pill">💪 ${h.cravings}</span>` : ''}
       </div>
-      <div class="timer" data-timer="${h.id}">${timerHtml(ms)}</div>
-      <div class="bar"><i style="width:${(pct * 100).toFixed(1)}%" data-bar="${h.id}"></i></div>
+      <div class="timer" data-timer="${h.id}">${timerHtml(h, ms)}</div>
       <div class="habit-foot">
         <span>${next ? `До «${next.title}»: <b data-left="${h.id}">${shortDur(next.at - ms)}</b>` : 'Все этапы пройдены 🏆'}</span>
         ${h.costPerDay ? `<span class="saved" data-saved="${h.id}">+${money(savedOf(h))}</span>` : ''}
       </div>
     </a>`;
 }
-function timerHtml(ms) {
+// Таймер: кольцо (дуга — путь до следующего этапа, 60 рисок — секунды), крупно — главная единица,
+// рядом часы с точностью до секунды и звание, которое растёт вместе со сроком.
+const TIERS = [
+  { at: 0, ico: '🌱', name: 'Росток' },
+  { at: DAY, ico: '🌿', name: 'Набираю силу' },
+  { at: 7 * DAY, ico: '🌳', name: 'Крепкий' },
+  { at: 30 * DAY, ico: '🔥', name: 'Стальной' },
+  { at: 90 * DAY, ico: '💎', name: 'Алмазный' },
+  { at: 365 * DAY, ico: '👑', name: 'Легенда' },
+];
+const tierOf = (ms) => TIERS.reduce((t, x, i) => (ms >= x.at ? i : t), 0);
+function timerParts(ms) {
   const p = parts(ms);
-  return `<span><b>${p.d}</b><small>${plural(p.d, 'день', 'дня', 'дней')}</small></span>
-    <span><b>${pad(p.h)}</b><small>час</small></span>
-    <span><b>${pad(p.m)}</b><small>мин</small></span>
-    <span><b>${pad(p.s)}</b><small>сек</small></span>`;
+  if (p.d > 0) return { n: p.d, unit: plural(p.d, 'день', 'дня', 'дней'), clock: [[pad(p.h), 'ч'], [pad(p.m), 'мин'], [pad(p.s), 'сек']], s: p.s };
+  if (p.h > 0) return { n: p.h, unit: plural(p.h, 'час', 'часа', 'часов'), clock: [[pad(p.m), 'мин'], [pad(p.s), 'сек']], s: p.s };
+  return { n: p.m, unit: plural(p.m, 'минута', 'минуты', 'минут'), clock: [[pad(p.s), 'сек']], s: p.s };
+}
+const R = 78;
+const knobAt = (pct) => { const a = Math.min(1, Math.max(0, pct)) * 2 * Math.PI; return [(100 + R * Math.sin(a)).toFixed(2), (100 - R * Math.cos(a)).toFixed(2)]; };
+const TICKS = Array.from({ length: 60 }, (_, i) => {
+  const a = (i * Math.PI) / 30, r1 = i % 5 ? 92 : 89;
+  const f = (r, fn) => (100 + r * fn(a)).toFixed(2);
+  return `<line x1="${f(r1, Math.sin)}" y1="${(100 - r1 * Math.cos(a)).toFixed(2)}" x2="${f(97, Math.sin)}" y2="${(100 - 97 * Math.cos(a)).toFixed(2)}"/>`;
+});
+function totalLine(ms) {
+  const hrs = Math.floor(ms / 36e5), min = Math.floor(ms / 6e4);
+  if (hrs < 1) return 'Каждая минута — твоя победа';
+  return `Это ${num(hrs)} ${plural(hrs, 'час', 'часа', 'часов')} и ${num(min)} ${plural(min, 'минута', 'минуты', 'минут')} свободы`;
+}
+function timerHtml(h, ms, big = false) {
+  const v = timerParts(ms);
+  const nm = nextMilestone(ms);
+  const t = TIERS[tierOf(ms)];
+  const [kx, ky] = knobAt(nm.pct);
+  const ring = `<div class="fr-wrap">
+      <svg class="fr" viewBox="0 0 200 200" aria-hidden="true">
+        <defs><linearGradient id="rg-${h.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="s1"/><stop offset="1" class="s2"/></linearGradient></defs>
+        <g class="ticks">${TICKS.map((l, i) => (i <= v.s ? l.replace('<line', '<line class="on"') : l)).join('')}</g>
+        <circle class="track" cx="100" cy="100" r="${R}"/>
+        <circle class="arc" cx="100" cy="100" r="${R}" pathLength="100" stroke="url(#rg-${h.id})" stroke-dasharray="${(nm.pct * 100).toFixed(2)} 100" transform="rotate(-90 100 100)"/>
+        <circle class="knob" r="7" cx="${kx}" cy="${ky}"/>
+      </svg>
+      <div class="fr-in"><b class="t-n">${v.n}</b><small class="t-u">${v.unit}</small></div>
+    </div>`;
+  const clock = `<div class="clock">${v.clock.map(([n, l], i) => `${i ? '<i>:</i>' : ''}<span><b data-c="${i}">${n}</b><small>${l}</small></span>`).join('')}</div>`;
+  const rank = `<div class="rank"><span class="rank-ico">${t.ico}</span>${t.name}</div>`;
+  const shape = `${v.clock.length}`;
+  if (!big) return `<div class="tm" data-tier="${tierOf(ms)}" data-shape="${shape}">${ring}<div class="t-side">${clock}${rank}</div></div>`;
+  return `<div class="tm" data-tier="${tierOf(ms)}" data-shape="${shape}">${ring}${clock}${rank}
+    <p class="t-total" data-total>${totalLine(ms)}</p>
+    <p class="t-next">${nm.next ? `До этапа «${nm.next.title}» — <b data-left="${h.id}">${shortDur(nm.next.at - ms)}</b>` : 'Все этапы пройдены 🏆'}</p></div>`;
+}
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+const bump = (el) => !calm.matches && el.animate?.([{ transform: 'translateY(-35%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
+/** Обновить таймер на месте (без перерисовки — чтобы работали плавные переходы). */
+function paintTimer(el, h, ms) {
+  const big = el.classList.contains('big');
+  const v = timerParts(ms);
+  const tm = el.firstElementChild;
+  const tier = String(tierOf(ms));
+  if (!tm || tm.dataset.shape !== String(v.clock.length) || tm.dataset.tier !== tier) { el.innerHTML = timerHtml(h, ms, big); return; }
+  const nm = nextMilestone(ms);
+  const n = el.querySelector('.t-n');
+  if (n.textContent !== String(v.n)) { n.textContent = v.n; el.querySelector('.t-u').textContent = v.unit; bump(n); }
+  v.clock.forEach(([val], i) => { const b = el.querySelector(`[data-c="${i}"]`); if (b && b.textContent !== val) { b.textContent = val; bump(b); } });
+  el.querySelectorAll('.ticks line').forEach((l, i) => l.classList.toggle('on', i <= v.s));
+  el.querySelector('.arc').setAttribute('stroke-dasharray', `${(nm.pct * 100).toFixed(2)} 100`);
+  const [kx, ky] = knobAt(nm.pct);
+  const k = el.querySelector('.knob'); k.setAttribute('cx', kx); k.setAttribute('cy', ky);
+  const tot = el.querySelector('[data-total]');
+  if (tot) { const t = totalLine(ms); if (tot.textContent !== t) tot.textContent = t; }
 }
 function goalCard(total) {
   if (!S.goal) {
@@ -175,7 +239,7 @@ function habitView(h) {
         <div class="countdown big">До старта: <b data-countdown="${h.id}">${shortDur(h.start - Date.now())}</b></div>
         <button class="btn primary wide" data-act="start-now" data-id="${h.id}">Начать прямо сейчас</button>` : `
         <p class="muted">Свободен с ${fmtDate(h.start, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
-        <div class="timer big" data-timer="${h.id}">${timerHtml(ms)}</div>`}
+        <div class="timer big" data-timer="${h.id}">${timerHtml(h, ms, true)}</div>`}
     </section>
     ${planned ? `
     <section class="card">
@@ -404,7 +468,7 @@ function tick() {
     const h = findHabit(el.dataset.timer);
     if (!h) continue;
     const ms = elapsed(h);
-    el.innerHTML = timerHtml(ms);
+    paintTimer(el, h, ms);
     const nm = nextMilestone(ms);
     const bar = $(`[data-bar="${h.id}"]`);
     if (bar) bar.style.width = (nm.pct * 100).toFixed(2) + '%';
