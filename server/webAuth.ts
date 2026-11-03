@@ -26,7 +26,7 @@ export function checkSession(sign: Sign, token: unknown, now: number): { login: 
   if (!body || !sig || !same(sig, sign(`session:${body}`))) return null;
   try {
     const d = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { l?: unknown; n?: unknown; e?: unknown };
-    if (typeof d.l !== 'string' || !/^(tg|ya):\d{1,20}$/.test(d.l) || typeof d.e !== 'number' || d.e < now) return null;
+    if (typeof d.l !== 'string' || !/^(?:(tg|ya):\d{1,20}|nid:[0-9a-f]{8,40})$/.test(d.l) || typeof d.e !== 'number' || d.e < now) return null;
     return { login: d.l, name: typeof d.n === 'string' ? d.n : '' };
   } catch {
     return null;
