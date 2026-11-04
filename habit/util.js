@@ -1,3 +1,4 @@
+import { SET, calmMotion } from './settings.js';
 // Общие помощники: форматирование, тосты, листы, конфетти.
 
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -42,7 +43,7 @@ export const fmtTime = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2
 /** Значение для <input type="datetime-local"> в местном времени. */
 export const localInput = (t) => new Date(t - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 16);
 
-export function vibrate(p) { try { navigator.vibrate?.(p); } catch {} }
+export function vibrate(p) { if (!SET.haptics) return; try { navigator.vibrate?.(p); } catch {} }
 
 export function toast(text) {
   const t = $('#toast');
@@ -53,7 +54,7 @@ export function toast(text) {
 }
 
 export function confetti() {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (calmMotion()) return;
   const box = document.createElement('div');
   box.className = 'confetti';
   const colors = ['#5fe0a8', '#3cc4d6', '#ffd166', '#ff8fab', '#b69cff'];

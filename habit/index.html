@@ -11,11 +11,13 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Свобода">
+  <script>try{var s=JSON.parse(localStorage.getItem('habit-free-settings')||'{}'),r=document.documentElement;if(s.theme&&s.theme!=='auto')r.dataset.theme=s.theme;if(s.accent&&s.accent!=='mint')r.dataset.accent=s.accent;if(s.motion&&s.motion!=='auto')r.dataset.motion=s.motion;}catch(e){}</script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="top">
     <a href="#/" class="logo"><img src="icon.svg" alt="" width="28" height="28"> Свобода</a>
+    <button class="gear" data-act="settings" aria-label="Настройки">⚙️</button>
   </header>
   <main id="main"></main>
   <nav class="tabs">

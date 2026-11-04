@@ -3,6 +3,8 @@
 import * as E from './m3engine.js';
 import { S, save } from './store.js';
 import { vibrate, confetti, plural } from './util.js';
+import { calmMotion } from './settings.js';
+import { sfx, unlock } from './m3sound.js';
 
 const KINDS = ['heart', 'gold', 'wood', 'stone', 'sword'];
 const GEM = {
@@ -86,7 +88,7 @@ export function mount(body, { finish, alive }) {
   S.m3 = S.m3 || { level: 1, stars: {} };
   const P = S.m3;
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const calm = calmMotion();
   const T = (ms) => (calm ? Math.min(ms, 60) : ms);
 
   showMap();
@@ -153,7 +155,20 @@ export function mount(body, { finish, alive }) {
       else { const left = remaining(); g.innerHTML = `<span class="m3-chip ${left ? '' : 'ok'}">${d.type === 'ice' ? '🧊' : '📦'}<b>${left || '✓'}</b></span>`; }
       const pct = Math.min(1, (totalStart - remaining()) / Math.max(1, totalStart));
       el('.m3-score i').style.width = `${(pct * 100).toFixed(1)}%`;
-      el('.m3-score span').textContent = `${score} очков`;
+      rollScore();
+    }
+    let shown = 0, rollRaf = 0;
+    function rollScore() {
+      const span = el('.m3-score span');
+      cancelAnimationFrame(rollRaf);
+      const from = shown, to = score, t0 = performance.now();
+      const step = (t) => {
+        const k = Math.min(1, (t - t0) / 450);
+        shown = Math.round(from + (to - from) * (1 - (1 - k) ** 3));
+        span.textContent = `${shown} очков`;
+        if (k < 1) rollRaf = requestAnimationFrame(step);
+      };
+      if (calm || to < from) { shown = to; span.textContent = `${to} очков`; } else rollRaf = requestAnimationFrame(step);
     }
     function drawCells() {
       cellsEl.innerHTML = board.cells.map((c, i) => {
@@ -165,6 +180,7 @@ export function mount(body, { finish, alive }) {
     function gemEl(g) {
       const e = document.createElement('div');
       e.className = 'm3-gem';
+      e.style.setProperty('--d', `${(Math.random() * 6).toFixed(2)}s`);
       paint(e, g);
       gemsEl.appendChild(e);
       els.set(g.id, e);
@@ -212,44 +228,124 @@ export function mount(body, { finish, alive }) {
       setTimeout(() => f.remove(), 1100);
     }
     const PRAISE = ['', '', 'Хорошо!', 'Отлично!', 'Супер!', 'Невероятно!', 'Мастер!'];
+    const SPECIAL_NAME = { lineH: 'Луч!', lineV: 'Луч!', bomb: 'Бомба!', rainbow: 'Радуга!' };
+    const fxOn = () => !calm;
+    /** Искры: самоцвет разлетается частицами своего цвета. */
+    function sparks(x, y, kind, n = 6) {
+      if (!fxOn()) return;
+      const col = GEM[kind]?.c1 || '#fff';
+      const size = boardEl.clientWidth / 8;
+      for (let i = 0; i < n; i++) {
+        const p = document.createElement('i');
+        p.className = 'm3-p';
+        const sz = 4 + Math.random() * 7;
+        p.style.cssText = `left:${(x + 0.5) * 12.5}%;top:${(y + 0.5) * 12.5}%;width:${sz}px;height:${sz}px;background:${col};box-shadow:0 0 8px ${col}`;
+        fxEl.appendChild(p);
+        const a = Math.random() * Math.PI * 2, r = size * (0.5 + Math.random() * 0.9);
+        p.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${Math.cos(a) * r}px), calc(-50% + ${Math.sin(a) * r + size * 0.3}px)) scale(0)`, opacity: 0 }],
+          { duration: 450 + Math.random() * 300, easing: 'cubic-bezier(.2,.7,.4,1)' }).onfinish = () => p.remove();
+      }
+    }
+    function shake(power) {
+      if (!fxOn()) return;
+      const d = 2 + power * 3;
+      boardEl.animate([{ transform: 'none' }, { transform: `translate(${d}px, ${-d / 2}px) rotate(.4deg)` }, { transform: `translate(${-d}px, ${d / 2}px) rotate(-.4deg)` }, { transform: `translate(${d / 2}px, ${d}px)` }, { transform: 'none' }], { duration: 280 + power * 60 });
+    }
+    /** Молнии радуги: от радуги к каждому самоцвету этого вида. */
+    function bolts(from, targets, color) {
+      if (!fxOn() || !targets.length) return;
+      const jag = (a, b) => {
+        const pts = [[a.x + 0.5, a.y + 0.5]];
+        for (let i = 1; i < 4; i++) {
+          const t = i / 4;
+          pts.push([a.x + 0.5 + (b.x - a.x) * t + (Math.random() - 0.5) * 0.5, a.y + 0.5 + (b.y - a.y) * t + (Math.random() - 0.5) * 0.5]);
+        }
+        pts.push([b.x + 0.5, b.y + 0.5]);
+        return pts.map((p) => p.join(',')).join(' ');
+      };
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 8 8');
+      svg.setAttribute('class', 'm3-bolts');
+      svg.style.setProperty('--c', color);
+      svg.innerHTML = targets.map((t) => `<polyline points="${jag(from, t)}"/>`).join('');
+      fxEl.appendChild(svg);
+      setTimeout(() => svg.remove(), 650);
+    }
+    let heatT = null;
+    function heat(combo) {
+      boardEl.style.setProperty('--heat', Math.min(1, (combo - 1) / 4).toFixed(2));
+      clearTimeout(heatT);
+      heatT = setTimeout(() => boardEl.style.setProperty('--heat', '0'), 900);
+    }
     async function animate(res, points = 1) {
       for (const st of res.steps) {
         if (!alive()) return;
+        const big = st.blasts.some((b) => b.kind === 'bigbomb' || b.kind === 'all' || b.kind === 'rainbow');
         for (const bl of st.blasts) {
-          if (bl.kind === 'row') fx('beam row', 0, bl.y);
-          else if (bl.kind === 'col') fx('beam col', bl.x, 0);
-          else if (bl.kind === 'bomb' || bl.kind === 'bigbomb') fx(`ring ${bl.kind}`, bl.x, bl.y);
-          else fx('flash', bl.x, bl.y);
+          const here = st.cleared.find((c) => c.x === bl.x && c.y === bl.y);
+          const col = GEM[here?.kind]?.c1 || '#fff';
+          if (bl.kind === 'row') { fx('beam row', 0, bl.y, `--c:${col}`); sfx.beam(); }
+          else if (bl.kind === 'col') { fx('beam col', bl.x, 0, `--c:${col}`); sfx.beam(); }
+          else if (bl.kind === 'bomb' || bl.kind === 'bigbomb') { fx(`ring ${bl.kind}`, bl.x, bl.y); fx('flash', bl.x, bl.y); sfx.boom(); }
+          else {
+            fx('flash big', bl.x, bl.y);
+            const tg = st.cleared.filter((c) => (bl.kind === 'all' || c.kind === bl.target) && !(c.x === bl.x && c.y === bl.y));
+            bolts(bl, tg, bl.target ? GEM[bl.target].c1 : '#fff');
+            sfx.prism();
+          }
         }
-        if (st.blasts.length) vibrate(25);
-        for (const c of st.cleared) els.get(c.id)?.classList.add('pop');
+        if (st.blasts.length) { vibrate(big ? [30, 20, 40] : 25); shake(big ? 3 : 1); }
+        else if (st.combo >= 4) shake(1);
+        heat(st.combo + st.blasts.length);
+        sfx.pop(st.combo, st.cleared.length);
+        const per = st.cleared.length > 24 ? 2 : st.cleared.length > 12 ? 4 : 7;
+        for (const c of st.cleared) { els.get(c.id)?.classList.add('pop'); sparks(c.x, c.y, c.kind, per); }
         for (const h of st.iceHit) fx('shard', h.x, h.y);
         for (const h of st.blocksHit) fx('shard wood', h.x, h.y);
+        if (st.iceHit.length || st.blocksHit.length) sfx.shard();
         const gain = (st.cleared.length * 10 + st.blasts.length * 40) * st.combo * points;
         score += gain;
         for (const k of Object.keys(got)) got[k] += st.counts[k] || 0;
         if (st.cleared.length) {
           const cx = st.cleared.reduce((s, c) => s + c.x, 0) / st.cleared.length, cy = st.cleared.reduce((s, c) => s + c.y, 0) / st.cleared.length;
-          floatText(`+${gain}`, cx, cy);
+          floatText(`+${gain}`, cx, cy, gain >= 300 ? 'gold' : '');
         }
         if (st.combo >= 2) floatText(PRAISE[Math.min(6, st.combo)] || PRAISE[6], 3.5, 3.5, 'praise');
         await sleep(T(230));
         board = st.mid;
         sync(st.mid);
         drawCells();
+        // Новые особые самоцветы: вспышка и подпись.
+        for (const cr of st.created) {
+          const e = els.get(cr.gem.id);
+          if (!e || !cr.gem.special) continue;
+          e.classList.add('born');
+          setTimeout(() => e.classList.remove('born'), 700);
+          fx('born-ring', cr.x, cr.y);
+          sparks(cr.x, cr.y, cr.gem.kind, 10);
+          floatText(SPECIAL_NAME[cr.gem.special], cr.x, cr.y - 0.4, 'tag');
+          sfx.born();
+        }
         const drops = new Map(st.spawned.map((s) => [s.id, s.drop]));
         const maxDrop = Math.max(1, ...st.spawned.map((s) => s.drop), ...st.falls.map((f) => f.to - f.from));
         const dur = 120 + maxDrop * 55;
         board = st.after;
         sync(st.after, drops, T(dur));
         hud();
-        await sleep(T(dur + 40));
+        await sleep(T(dur));
+        // Приземление: самоцветы чуть приплющиваются.
+        if (fxOn()) for (const id of [...st.falls.map((f) => f.id), ...st.spawned.map((s) => s.id)]) {
+          const e = els.get(id);
+          if (!e) continue;
+          e.classList.remove('land'); void e.offsetWidth; e.classList.add('land');
+        }
+        await sleep(T(60));
       }
       board = res.board;
       sync(board);
       drawCells();
       hud();
-      if (res.reshuffled) floatText('Перемешали!', 3.5, 3.5, 'praise');
+      if (res.reshuffled) { floatText('Перемешали!', 3.5, 3.5, 'praise'); sfx.prism(); }
     }
 
     async function trySwap(a, c) {
@@ -260,11 +356,14 @@ export function mount(body, { finish, alive }) {
       const ga = E.gemAt(board, a.x, a.y), gc = E.gemAt(board, c.x, c.y);
       const ea = els.get(ga.id), ec = els.get(gc.id);
       put(ea, c.x, c.y); put(ec, a.x, a.y);
+      sfx.swap();
       await sleep(T(170));
       const res = E.trySwap(board, a, c);
       if (!res) {
         put(ea, a.x, a.y); put(ec, c.x, c.y);
         vibrate(8);
+        sfx.nope();
+        [ea, ec].forEach((e) => e?.animate?.([{ filter: 'none' }, { filter: 'brightness(1.6) saturate(.4)' }, { filter: 'none' }], { duration: 340 }));
         await sleep(T(170));
         busy = false;
         idleAt = Date.now();
@@ -303,7 +402,9 @@ export function mount(body, { finish, alive }) {
       if (!alive()) return;
       confetti();
       vibrate([40, 30, 60]);
-      overlay(`<div class="m3-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}" style="animation-delay:${i * 0.18}s">★</span>`).join('')}</div>
+      sfx.win();
+      for (let i = 0; i < stars; i++) setTimeout(() => sfx.star(i), 500 + i * 180);
+      overlay(`<div class="m3-rays"></div><div class="m3-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}" style="animation-delay:${i * 0.18}s">★</span>`).join('')}</div>
         <h2>Уровень ${n} пройден!</h2>
         <p class="muted">${score} очков${left ? ` · ${plural(left, 'остался', 'осталось', 'осталось')} ${left} ${plural(left, 'ход', 'хода', 'ходов')}` : ''}</p>
         <button class="btn primary wide big-btn" data-next>Дальше: уровень ${n + 1}</button>
@@ -312,6 +413,7 @@ export function mount(body, { finish, alive }) {
     }
     function lose() {
       busy = true;
+      sfx.lose();
       overlay(`<div class="big-emoji">🫧</div><h2>Ходы закончились</h2>
         <p class="muted">${remaining() ? `Осталось совсем чуть-чуть: ${remaining()}${d.type === 'score' ? ' очков' : ''}.` : ''}</p>
         ${extra ? '' : '<button class="btn primary wide big-btn" data-more>＋5 ходов</button>'}
@@ -360,6 +462,7 @@ export function mount(body, { finish, alive }) {
     };
     boardEl.addEventListener('pointerdown', (ev) => {
       if (busy) return;
+      unlock();
       const p = cellAt(ev);
       if (!E.gemAt(board, p.x, p.y)) return;
       start = p;

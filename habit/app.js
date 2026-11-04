@@ -3,6 +3,7 @@ import { PRESETS, EMOJIS, MILESTONES, HEALTH, TRIGGERS, TRIGGER_TIPS, ACTIVITIES
 import { $, $$, esc, pad, uid, DAY, money, num, dayKey, plural, parts, shortDur, atLabel, fmtDate, fmtTime, localInput, vibrate, toast, confetti, sheet, ask } from './util.js';
 import { S, save, replaceState, resetState, findHabit, elapsed, isPlanned, savedOf, savedTotal, checkStreak, logCraving, checkBadges, cravingStats, suggestActivities } from './store.js';
 import { openActivity } from './activities.js';
+import { SET, THEMES, ACCENTS, setSetting, calmMotion } from './settings.js';
 import { shareProgress } from './share.js';
 import { account, onAccount, loginFromHash, loginFromNid, loginWithNid, hasNidReturn, pull, push, logout, status as syncStatus, FAMILY_LOGIN, localBackups, serverHistory, restoreFrom } from './cloud.js';
 
@@ -181,8 +182,7 @@ function timerHtml(h, ms, big = false) {
     <p class="t-total" data-total>${totalLine(ms)}</p>
     <p class="t-next">${nm.next ? `До этапа «${nm.next.title}» — <b data-left="${h.id}">${shortDur(nm.next.at - ms)}</b>` : 'Все этапы пройдены 🏆'}</p></div>`;
 }
-const calm = matchMedia('(prefers-reduced-motion: reduce)');
-const bump = (el) => !calm.matches && el.animate?.([{ transform: 'translateY(-35%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
+const bump = (el) => !calmMotion() && el.animate?.([{ transform: 'translateY(-35%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
 /** Обновить таймер на месте (без перерисовки — чтобы работали плавные переходы). */
 function paintTimer(el, h, ms) {
   const big = el.classList.contains('big');
@@ -462,6 +462,36 @@ function accountCard() {
   </section>`;
 }
 const hoursOpts = (sel) => Array.from({ length: 24 }, (_, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${pad(i)}:00</option>`).join('');
+
+// ---------- Настройки ----------
+function settingsSheet() {
+  const body = () => `<h2>Настройки</h2>
+    <div class="set-sec"><h3>Тема</h3>
+      <div class="seg">${THEMES.map(([k, t, ico]) => `<button data-set="theme" data-v="${k}" class="${SET.theme === k ? 'on' : ''}"><span>${ico}</span>${t}</button>`).join('')}</div></div>
+    <div class="set-sec"><h3>Цвет</h3>
+      <div class="swatches">${ACCENTS.map(([k, t, c1, c2]) => `<button class="swatch ${SET.accent === k ? 'on' : ''}" data-set="accent" data-v="${k}" style="--c1:${c1};--c2:${c2}"><i></i>${t}</button>`).join('')}</div></div>
+    <div class="set-sec"><h3>Ощущения</h3>
+      ${toggle('haptics', '📳 Вибрация', 'Отклик на нажатия и победы')}
+      ${toggle('sound', '🔊 Звуки в играх', 'Самоцветы и другие занятия')}
+      <div class="toggle-row" data-set="motion" data-v="${calmMotion() ? 'on' : 'reduce'}"><div><b>✨ Анимации и эффекты</b><small>${SET.motion === 'reduce' ? 'Выключены — спокойный режим' : calmMotion() ? 'Система просит меньше движения' : 'Включены'}</small></div><span class="sw ${calmMotion() ? '' : 'on'}"></span></div>
+    </div>
+    <div class="set-sec"><h3>Данные</h3>
+      <a class="toggle-row" href="#/motivation" data-close><div><b>👤 Вход и копия прогресса</b><small>${account() ? `Вошёл: ${esc(account().name)}` : 'Не вошёл — прогресс только на этом устройстве'}</small></div><span class="chev">›</span></a>
+    </div>`;
+  const toggle = (k, t, sub) => `<div class="toggle-row" data-set="${k}" data-v="${SET[k] ? '0' : '1'}"><div><b>${t}</b><small>${sub}</small></div><span class="sw ${SET[k] ? 'on' : ''}"></span></div>`;
+  const sh = sheet(`<div class="settings">${body()}</div>`);
+  sh.el.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { sh.close(); return; }
+    const b = e.target.closest('[data-set]');
+    if (!b) return;
+    const k = b.dataset.set;
+    let v = b.dataset.v;
+    if (k === 'haptics' || k === 'sound') v = v === '1';
+    setSetting(k, v);
+    if (k === 'haptics' && v) vibrate(20);
+    $('.settings', sh.el).innerHTML = body();
+  });
+}
 
 // ---------- Прежние копии ----------
 async function restoreSheet() {
@@ -1181,6 +1211,7 @@ document.addEventListener('click', async (e) => {
   else if (a === 'install') installHelp();
   else if (a === 'nid-login') loginWithNid();
   else if (a === 'restore') restoreSheet();
+  else if (a === 'settings') settingsSheet();
   else if (a === 'sync') { await push(true); await pull(); toast(syncStatus.error ? 'Нет связи с сервером — попробую позже' : 'Прогресс синхронизирован'); render(); }
   else if (a === 'logout') {
     if (await ask('Выйти из профиля?', 'Прогресс останется на этом устройстве и на сервере — войдёшь снова, и он вернётся.', 'Выйти')) { logout(); render(); }
