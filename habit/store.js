@@ -49,10 +49,12 @@ function migrate(s) {
 const saveListeners = [];
 /** Подписка на сохранения (копия на сервере, cloud.js). */
 export const onSave = (fn) => saveListeners.push(fn);
-export function save({ silent = false } = {}) {
-  if (!silent) S.savedAt = Date.now();
+/** auto — служебное сохранение (этап, награда, отметка уведомления): только на устройстве.
+ *  Оно не делает копию «свежее», иначе старое устройство, просто открывшись, перетирает прогресс с других. */
+export function save({ silent = false, auto = false } = {}) {
+  if (!silent && !auto) S.savedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {}
-  if (!silent) saveListeners.forEach((fn) => fn());
+  if (!silent && !auto) saveListeners.forEach((fn) => fn());
 }
 /** Заменить всё состояние (загрузка копии). silent — без отправки обратно на сервер. */
 export function replaceState(data, { silent = false } = {}) {
@@ -113,7 +115,7 @@ export function checkBadges() {
       fresh.push(b);
     }
   }
-  if (fresh.length) save();
+  if (fresh.length) save({ auto: true });
   return fresh;
 }
 

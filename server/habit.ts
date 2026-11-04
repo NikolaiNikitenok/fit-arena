@@ -83,7 +83,12 @@ export interface HabitSave {
   state: Record<string, unknown>;
   savedAt: number;
   name: string;
+  /** Прежние копии, когда набор привычек менялся (последние HISTORY_MAX), — чтобы потерянное можно было вернуть. */
+  history?: { state: Record<string, unknown>; savedAt: number; replacedAt: number }[];
 }
+const HISTORY_MAX = 8;
+const habitIds = (st: Record<string, unknown> | undefined): string =>
+  (Array.isArray(st?.habits) ? (st.habits as { id?: unknown }[]).map((h) => String(h?.id ?? '')).sort().join(',') : '');
 
 /** Прогресс «Свободы» по людям Family. Сервер его не разбирает — хранит более свежую копию. */
 export class HabitStore {
@@ -103,7 +108,11 @@ export class HabitStore {
   put(pid: string, name: string, state: Record<string, unknown>, savedAt: number): HabitSave {
     const cur = this.data[pid];
     if (!cur || savedAt >= cur.savedAt) {
-      this.data[pid] = { state, savedAt, name: name || cur?.name || '' };
+      let history = cur?.history ?? [];
+      if (cur && habitIds(cur.state) !== habitIds(state)) {
+        history = [{ state: cur.state, savedAt: cur.savedAt, replacedAt: Date.now() }, ...history].slice(0, HISTORY_MAX);
+      }
+      this.data[pid] = { state, savedAt, name: name || cur?.name || '', ...(history.length ? { history } : {}) };
       this.flush();
     }
     return this.data[pid];
@@ -305,6 +314,10 @@ export async function habitApi(path: string, req: IncomingMessage, res: ServerRe
     const cur = store.put(who.pid, who.name, state as Record<string, unknown>, at);
     if (cur.savedAt === at) onSaved(summarize(who.pid, cur.state, now()));
     return send(200, { savedAt: cur.savedAt, newer: cur.savedAt > at ? cur.state : null });
+  }
+  if (path === '/api/habit/history') {
+    const saved = store.get(who.pid);
+    return send(200, { history: (saved?.history ?? []).map((x) => ({ savedAt: x.savedAt, replacedAt: x.replacedAt, state: x.state })) });
   }
   if (path === '/api/habit/delete') {
     store.remove(who.pid);

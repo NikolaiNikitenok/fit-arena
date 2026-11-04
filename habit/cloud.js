@@ -36,10 +36,67 @@ async function call(path, body) {
 
 const hasData = (st) => !!st && Array.isArray(st.habits) && st.habits.length > 0;
 
+const habitIds = (st) => (st?.habits || []).map((h) => h.id).sort().join(',');
+const BACKUP = 'habit-free-backups';
+/** Перед тем как заменить прогресс на устройстве другим набором привычек — кладём старый в запас (последние 5). */
+function backupLocal() {
+  if (!hasData(S)) return;
+  try {
+    const list = JSON.parse(localStorage.getItem(BACKUP) || '[]');
+    if (list[0] && habitIds(list[0].state) === habitIds(S) && list[0].state.savedAt === S.savedAt) return;
+    list.unshift({ at: Date.now(), state: JSON.parse(JSON.stringify(S)) });
+    localStorage.setItem(BACKUP, JSON.stringify(list.slice(0, 5)));
+  } catch {}
+}
+export function localBackups() {
+  try { return JSON.parse(localStorage.getItem(BACKUP) || '[]'); } catch { return []; }
+}
+
 /** Применить копию с сервера. */
 function apply(state, savedAt) {
+  if (habitIds(state) !== habitIds(S)) backupLocal();
   replaceState({ ...state, onboarded: true, savedAt }, { silent: true });
   changed();
+}
+
+/** Объединить два прогресса: ничего не теряем. За основу — более свежий, из второго добавляем
+ *  привычки, которых нет (по id и по названию), тяги, награды, причины, отметки и рекорды. */
+export function mergeStates(a, b) {
+  const [base, other] = (a.savedAt || 0) >= (b.savedAt || 0) ? [a, b] : [b, a];
+  const out = JSON.parse(JSON.stringify(base));
+  out.habits = out.habits || [];
+  const ids = new Set(out.habits.map((h) => h.id));
+  const names = new Set(out.habits.map((h) => String(h.name || '').trim().toLowerCase()));
+  for (const h of other.habits || []) {
+    const n = String(h.name || '').trim().toLowerCase();
+    if (ids.has(h.id) || names.has(n)) continue;
+    out.habits.push(h); ids.add(h.id); names.add(n);
+  }
+  const seen = new Set((out.cravings || []).map((c) => `${c.t}|${c.habitId}`));
+  out.cravings = [...(out.cravings || []), ...(other.cravings || []).filter((c) => !seen.has(`${c.t}|${c.habitId}`))].sort((x, y) => x.t - y.t);
+  out.reasons = [...new Set([...(out.reasons || []), ...(other.reasons || [])])];
+  out.checkins = { ...(other.checkins || {}), ...(out.checkins || {}) };
+  out.badges = { ...(other.badges || {}), ...(out.badges || {}) };
+  for (const k of ['best', 'played']) {
+    out[k] = { ...(other[k] || {}) };
+    for (const [key, v] of Object.entries(base[k] || {})) out[k][key] = Math.max(v || 0, out[k][key] || 0);
+  }
+  out.wins = Math.max(base.wins || 0, other.wins || 0);
+  for (const k of ['letter', 'goal', 'contact']) if (!out[k] && other[k]) out[k] = other[k];
+  return out;
+}
+
+/** Вернуть прежнюю копию: добавить её привычки к текущим (ничего не удаляя). */
+export function restoreFrom(state) {
+  backupLocal();
+  const merged = mergeStates({ ...S, savedAt: Date.now() }, { ...state, savedAt: 0 });
+  replaceState({ ...merged, onboarded: true });
+  changed();
+}
+/** Прежние копии с сервера (появляются, когда набор привычек на сервере сменился). */
+export async function serverHistory() {
+  if (!session) return [];
+  try { return (await call('/history')).history || []; } catch { return []; }
 }
 
 /** Вход по ссылке из Family. Возвращает true, если вошли. */
@@ -101,13 +158,16 @@ async function afterLogin(r, via) {
     try { localStorage.setItem(KEY, JSON.stringify(session)); } catch {}
     const local = hasData(S) ? S : null;
     const remote = hasData(r.state) ? r.state : null;
-    if (remote && local && !S.syncedPid) {
-      // На устройстве свой прогресс, в профиле — свой: спросим, какой оставить.
-      const takeRemote = await ask('Какой прогресс оставить?',
-        `В профиле уже есть прогресс (${remote.habits.length} привыч.). На этом устройстве — ещё один (${local.habits.length} привыч.).`,
-        'Из профиля', 'С этого устройства');
-      if (takeRemote) apply(r.state, r.savedAt); else await push(true);
-    } else if (remote && (!local || r.savedAt >= (S.savedAt || 0))) apply(r.state, r.savedAt);
+    if (remote && local) {
+      // И на устройстве, и в профиле есть прогресс: объединяем, чтобы ничего не пропало.
+      backupLocal();
+      const merged = mergeStates(S, { ...r.state, savedAt: r.savedAt });
+      const added = merged.habits.length - remote.habits.length;
+      replaceState({ ...merged, onboarded: true, savedAt: Date.now() }, { silent: true });
+      S.savedAt = Date.now();
+      await push(true);
+      if (added > 0) toast(`Объединили прогресс: добавлено привычек с этого устройства — ${added}`);
+    } else if (remote) apply(r.state, r.savedAt);
     else await push(true);
     S.syncedPid = true;
     try { localStorage.setItem('habit-free-v1', JSON.stringify(S)); } catch {}

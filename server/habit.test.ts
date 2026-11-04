@@ -47,3 +47,20 @@ describe('сводка для Family', () => {
     expect(habitUrl('https://nikitenok.ru/arena/api/activity/')).toBe('https://nikitenok.ru/arena/api/habit/');
   });
 });
+
+describe('история копий', () => {
+  it('запоминает прежнюю копию, когда меняется набор привычек', async () => {
+    const { HabitStore } = await import('./habit');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const st = new HabitStore(join(mkdtempSync(join(tmpdir(), 'hb-')), 'h.json'));
+    st.put('p', '', { habits: [{ id: 'a' }] }, 1);
+    st.put('p', '', { habits: [{ id: 'a' }], wins: 2 }, 2);
+    expect(st.get('p')!.history).toBeUndefined();
+    st.put('p', '', { habits: [{ id: 'b' }] }, 3);
+    expect(st.get('p')!.history!.map((h) => h.savedAt)).toEqual([2]);
+    st.put('p', '', { habits: [] }, 1);
+    expect(st.get('p')!.savedAt).toBe(3);
+  });
+});

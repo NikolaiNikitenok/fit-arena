@@ -4,7 +4,7 @@ import { $, $$, esc, pad, uid, DAY, money, num, dayKey, plural, parts, shortDur,
 import { S, save, replaceState, resetState, findHabit, elapsed, isPlanned, savedOf, savedTotal, checkStreak, logCraving, checkBadges, cravingStats, suggestActivities } from './store.js';
 import { openActivity } from './activities.js';
 import { shareProgress } from './share.js';
-import { account, onAccount, loginFromHash, loginFromNid, loginWithNid, hasNidReturn, pull, push, logout, status as syncStatus, FAMILY_LOGIN } from './cloud.js';
+import { account, onAccount, loginFromHash, loginFromNid, loginWithNid, hasNidReturn, pull, push, logout, status as syncStatus, FAMILY_LOGIN, localBackups, serverHistory, restoreFrom } from './cloud.js';
 
 const trig = (k) => TRIGGERS.find((t) => t.key === k);
 const act = (k) => ACTIVITIES.find((a) => a.key === k);
@@ -451,15 +451,44 @@ function accountCard() {
       ${nid ? '' : `<p class="muted tiny">Новое: один вход для всех приложений Nikitenok. Перейди на Nikitenok ID — прогресс и серия в Family останутся.</p>
       <button class="btn primary wide small" data-act="nid-login">🔑 Перейти на Nikitenok ID</button>`}
       <div class="row">${nid ? `<a class="btn ghost small" href="https://id.nikitenok.ru/account" target="_blank" rel="noopener">Аккаунт</a>` : ''}<button class="btn ghost small" data-act="sync">Синхронизировать</button><button class="btn ghost small" data-act="logout">Выйти</button></div>
+      <button class="btn muted-btn small" data-act="restore">↩︎ Пропала привычка? Прежние копии</button>
     </section>`;
   }
   return `<section class="card account">
     <div class="acc-head"><span class="acc-ico">🔑</span><div><b>Войти через Nikitenok ID</b><small class="muted">Telegram или Яндекс. Прогресс не потеряется и будет на всех устройствах</small></div></div>
     <button class="btn primary wide" data-act="nid-login">Войти через Nikitenok ID</button>
     <a class="btn ghost wide small" href="${FAMILY_LOGIN}">👨‍👩‍👧 Войти через Family</a>
+    ${localBackups().length ? '<button class="btn muted-btn small" data-act="restore">↩︎ Пропала привычка? Прежние копии</button>' : ''}
   </section>`;
 }
 const hoursOpts = (sel) => Array.from({ length: 24 }, (_, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${pad(i)}:00</option>`).join('');
+
+// ---------- Прежние копии ----------
+async function restoreSheet() {
+  const cur = new Set(S.habits.map((h) => h.id));
+  const curNames = new Set(S.habits.map((h) => h.name.trim().toLowerCase()));
+  const list = [
+    ...(await serverHistory()).map((x) => ({ at: x.replacedAt, state: x.state, where: 'в профиле' })),
+    ...localBackups().map((x) => ({ at: x.at, state: x.state, where: 'на этом устройстве' })),
+  ].map((x) => ({ ...x, missing: (x.state.habits || []).filter((h) => !cur.has(h.id) && !curNames.has(String(h.name).trim().toLowerCase())) }))
+    .sort((a, b) => b.at - a.at);
+  const rows = list.map((x, i) => `<li class="card restore-row">
+      <div><b>${fmtDate(x.at, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</b> <small class="muted">· ${x.where}</small>
+        <p class="muted tiny">${(x.state.habits || []).map((h) => `${esc(h.emoji)} ${esc(h.name)} — с ${fmtDate(h.start, { day: 'numeric', month: 'short' })}`).join('<br>') || 'без привычек'}</p></div>
+      ${x.missing.length ? `<button class="btn primary small" data-i="${i}">Вернуть: ${x.missing.map((h) => esc(h.name)).join(', ')}</button>` : '<small class="muted">Всё это уже есть</small>'}
+    </li>`).join('');
+  const sh = sheet(`<h2>Прежние копии</h2>
+    <p class="muted">Если привычка пропала после входа на другом устройстве, верни её отсюда. Текущие привычки останутся — пропавшие добавятся к ним вместе с таймером.</p>
+    ${list.length ? `<ul class="restore-list">${rows}</ul>` : '<p class="muted">Прежних копий пока нет.</p>'}`);
+  sh.el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-i]');
+    if (!b) return;
+    restoreFrom(list[+b.dataset.i].state);
+    sh.close?.();
+    toast('Привычки возвращены 💚');
+    render();
+  });
+}
 
 // ---------- Таймер на весь экран ----------
 // Смотреть на свой срок: большое кольцо, живые секунды и то, что уже завоёвано, — чтобы не хотелось это терять.
@@ -559,10 +588,10 @@ function tick() {
     if (isPlanned(h)) continue;
     const nm = nextMilestone(elapsed(h));
     const reached = nm.prev?.title || null;
-    if (h.lastMilestone === undefined) { h.lastMilestone = reached; save(); }
+    if (h.lastMilestone === undefined) { h.lastMilestone = reached; save({ auto: true }); }
     else if (reached && h.lastMilestone !== reached) {
       h.lastMilestone = reached;
-      save();
+      save({ auto: true });
       celebrateMilestone(h, nm.prev);
     }
   }
@@ -611,7 +640,7 @@ async function checkNotify() {
   if (!inRange || S.lastNotified === key) return;
   const firstToday = !S.lastNotified.startsWith(dayKey(d));
   S.lastNotified = key;
-  save();
+  save({ auto: true });
   let title = firstToday ? 'Фраза дня' : 'Фраза часа';
   let body = firstToday ? phraseOfDay(d) : phraseOfHour(d);
   const ci = S.checkins[dayKey(d)];
@@ -1151,6 +1180,7 @@ document.addEventListener('click', async (e) => {
   else if (a === 'letter-edit') { S.letter = ''; save(); startActivity('letter', null); }
   else if (a === 'install') installHelp();
   else if (a === 'nid-login') loginWithNid();
+  else if (a === 'restore') restoreSheet();
   else if (a === 'sync') { await push(true); await pull(); toast(syncStatus.error ? 'Нет связи с сервером — попробую позже' : 'Прогресс синхронизирован'); render(); }
   else if (a === 'logout') {
     if (await ask('Выйти из профиля?', 'Прогресс останется на этом устройстве и на сервере — войдёшь снова, и он вернётся.', 'Выйти')) { logout(); render(); }

@@ -552,3 +552,8 @@ body.no-scroll { overflow: hidden; }
 @keyframes focus-out { to { opacity: 0; transform: scale(1.03); } }
 @keyframes fact-in { from { opacity: 0; transform: translateY(10px); } }
 @keyframes twinkle { 0%, 100% { opacity: 0; } 50% { opacity: .7; } }
+
+/* Прежние копии */
+.restore-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.restore-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.restore-row p { margin: 4px 0 0; line-height: 1.5; }
