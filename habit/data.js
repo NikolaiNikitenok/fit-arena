@@ -163,6 +163,7 @@ export const ACTIVITIES = [
   { key: 'breathe', emoji: '🫁', title: 'Квадратное дыхание', text: '4-4-4-4, 2 минуты', group: 'calm', tags: ['stress', 'tired', 'friends'] },
   { key: 'breathe478', emoji: '🌬️', title: 'Дыхание 4-7-8', text: 'Успокаивает за минуту', group: 'calm', tags: ['stress', 'evening', 'sad'] },
   { key: 'ground', emoji: '🧭', title: '5-4-3-2-1', text: 'Вернуться в «здесь и сейчас»', group: 'calm', tags: ['stress', 'sad'] },
+  { key: 'match3', emoji: '💎', title: 'Самоцветы', text: 'Три в ряд: уровней — бесконечно', group: 'play', tags: ['bored', 'phone', 'evening', 'coffee', 'tired', 'other'] },
   { key: 'bubbles', emoji: '🫧', title: 'Лопай пузыри', text: 'Игра на 45 секунд', group: 'play', tags: ['bored', 'phone', 'coffee'] },
   { key: 'memory', emoji: '🃏', title: 'Найди пары', text: 'Тренировка памяти', group: 'play', tags: ['bored', 'evening'] },
   { key: 'reaction', emoji: '⚡', title: 'Реакция', text: 'Жми, когда станет зелёным', group: 'play', tags: ['bored', 'tired', 'coffee'] },

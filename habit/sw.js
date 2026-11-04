@@ -1,6 +1,6 @@
 // Кэш для работы без сети и показ уведомлений.
-const CACHE = 'svoboda-v8';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'arena.png'];
+const CACHE = 'svoboda-v9';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'arena.png', 'match3.js', 'm3engine.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
