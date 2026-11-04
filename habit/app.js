@@ -122,7 +122,7 @@ function habitCard(h) {
         <div class="habit-name">${esc(h.name)}<small>свободен уже</small></div>
         ${h.cravings ? `<span class="wins-pill">💪 ${h.cravings}</span>` : ''}
       </div>
-      <div class="timer" data-timer="${h.id}">${timerHtml(h, ms)}</div>
+      <div class="timer" data-timer="${h.id}" data-focus="${h.id}" title="Открыть на весь экран">${timerHtml(h, ms)}</div>
       <div class="habit-foot">
         <span>${next ? `До «${next.title}»: <b data-left="${h.id}">${shortDur(next.at - ms)}</b>` : 'Все этапы пройдены 🏆'}</span>
         ${h.costPerDay ? `<span class="saved" data-saved="${h.id}">+${money(savedOf(h))}</span>` : ''}
@@ -239,7 +239,8 @@ function habitView(h) {
         <div class="countdown big">До старта: <b data-countdown="${h.id}">${shortDur(h.start - Date.now())}</b></div>
         <button class="btn primary wide" data-act="start-now" data-id="${h.id}">Начать прямо сейчас</button>` : `
         <p class="muted">Свободен с ${fmtDate(h.start, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
-        <div class="timer big" data-timer="${h.id}">${timerHtml(h, ms, true)}</div>`}
+        <div class="timer big" data-timer="${h.id}" data-focus="${h.id}" title="Открыть на весь экран">${timerHtml(h, ms, true)}</div>
+        <p class="focus-hint">Нажми на кольцо — откроется на весь экран</p>`}
     </section>
     ${planned ? `
     <section class="card">
@@ -460,6 +461,72 @@ function accountCard() {
 }
 const hoursOpts = (sel) => Array.from({ length: 24 }, (_, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${pad(i)}:00</option>`).join('');
 
+// ---------- Таймер на весь экран ----------
+// Смотреть на свой срок: большое кольцо, живые секунды и то, что уже завоёвано, — чтобы не хотелось это терять.
+function focusFacts(h) {
+  const ms = elapsed(h);
+  const hrs = Math.floor(ms / 36e5), min = Math.floor(ms / 6e4), sec = Math.floor(ms / 1000);
+  const nm = nextMilestone(ms);
+  const f = [];
+  if (hrs >= 1) f.push(['⏳', `${num(hrs)} ${plural(hrs, 'час', 'часа', 'часов')} без привычки`, 'Каждый из них ты выбрал сам']);
+  f.push(['⚡', `${num(sec)} ${plural(sec, 'секунда', 'секунды', 'секунд')} свободы`, `или ${num(min)} ${plural(min, 'минута', 'минуты', 'минут')} — и счёт идёт`]);
+  if (h.costPerDay) f.push(['💰', `${money(savedOf(h))} не потрачено`, 'Эти деньги остались у тебя']);
+  if (h.perDay) { const n = Math.floor((h.perDay * ms) / DAY); if (n) f.push(['🚫', `${num(n)} ${esc(h.unit || 'раз')} не случилось`, 'Тело уже благодарит тебя']); }
+  if (h.cravings) f.push(['💪', `${h.cravings} ${plural(h.cravings, 'раз', 'раза', 'раз')} ты победил тягу`, 'Ты уже знаешь, что справишься']);
+  if (nm.prev) f.push(['🏅', `Этап «${nm.prev.title}» пройден`, nm.prev.text]);
+  if (nm.next) f.push(['🎯', `До «${nm.next.title}» — ${shortDur(nm.next.at - ms)}`, 'Не останавливайся, ты уже близко']);
+  const health = (HEALTH[h.preset] || []).filter((x) => x.at <= ms);
+  if (health.length) f.push(['🫀', health[health.length - 1].text, 'Это уже происходит с тобой']);
+  for (const r of S.reasons.slice(0, 3)) f.push(['❤️', esc(r), 'Вот зачем ты это делаешь']);
+  if (ms >= DAY) f.push(['🔒', 'Сорваться — значит начать с нуля', `А у тебя уже ${shortDur(ms)}. Оно того не стоит.`]);
+  return f;
+}
+function openFocus(h) {
+  const wrap = document.createElement('div');
+  wrap.className = 'focus';
+  const stars = Array.from({ length: 44 }, () => `<i style="left:${(Math.random() * 100).toFixed(1)}%;top:${(Math.random() * 100).toFixed(1)}%;animation-delay:${(Math.random() * 6).toFixed(1)}s;--s:${(1 + Math.random() * 2).toFixed(1)}px"></i>`).join('');
+  wrap.innerHTML = `
+    <div class="focus-sky" aria-hidden="true">${stars}</div>
+    <button class="close" aria-label="Закрыть">×</button>
+    <div class="focus-in">
+      <div class="focus-name"><span>${esc(h.emoji)}</span> ${esc(h.name)} · свободен уже</div>
+      <div class="timer big" data-timer="${h.id}">${timerHtml(h, elapsed(h), true)}</div>
+      <button class="focus-fact" aria-live="polite"></button>
+      <button class="btn sos-mini" data-act="sos" data-id="${h.id}">Хочется сорваться? Помоги</button>
+    </div>`;
+  document.body.appendChild(wrap);
+  document.body.classList.add('no-scroll');
+  let i = 0, lock = null;
+  const fact = $('.focus-fact', wrap);
+  const show = () => {
+    const list = focusFacts(h);
+    const [ico, title, sub] = list[i % list.length];
+    i++;
+    fact.classList.remove('in'); void fact.offsetWidth;
+    fact.innerHTML = `<span class="ff-ico">${ico}</span><b>${title}</b><small>${esc(sub)}</small>`;
+    fact.classList.add('in');
+  };
+  show();
+  const timer = setInterval(show, 7000);
+  fact.onclick = () => { show(); vibrate(10); };
+  navigator.wakeLock?.request('screen').then((l) => { lock = l; }).catch(() => {});
+  try { wrap.requestFullscreen?.({ navigationUI: 'hide' })?.catch(() => {}); } catch {}
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  function close() {
+    clearInterval(timer);
+    try { lock?.release(); } catch {}
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    document.body.classList.remove('no-scroll');
+    removeEventListener('keydown', onKey);
+    wrap.classList.add('out');
+    setTimeout(() => wrap.remove(), 220);
+  }
+  addEventListener('keydown', onKey);
+  $('.close', wrap).onclick = close;
+  $('.sos-mini', wrap).addEventListener('click', close);
+  tick();
+}
+
 // ---------- Тикер ----------
 let lastBadgeCheck = 0;
 function tick() {
@@ -472,8 +539,7 @@ function tick() {
     const nm = nextMilestone(ms);
     const bar = $(`[data-bar="${h.id}"]`);
     if (bar) bar.style.width = (nm.pct * 100).toFixed(2) + '%';
-    const left = $(`[data-left="${h.id}"]`);
-    if (left && nm.next) left.textContent = shortDur(nm.next.at - ms);
+    if (nm.next) $$(`[data-left="${h.id}"]`).forEach((x) => (x.textContent = shortDur(nm.next.at - ms)));
     const saved = $(`[data-saved="${h.id}"]`);
     if (saved) saved.textContent = (r.name === 'home' ? '+' : '') + money(savedOf(h));
     const av = $(`[data-avoided="${h.id}"]`);
@@ -1028,6 +1094,8 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); defe
 
 // ---------- События ----------
 document.addEventListener('click', async (e) => {
+  const f = e.target.closest('[data-focus]');
+  if (f && !f.closest('.focus')) { e.preventDefault(); const fh = findHabit(f.dataset.focus); if (fh && !isPlanned(fh)) openFocus(fh); return; }
   const t = e.target.closest('[data-act]');
   if (!t) return;
   const a = t.dataset.act;

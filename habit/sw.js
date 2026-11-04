@@ -1,5 +1,5 @@
 // Кэш для работы без сети и показ уведомлений.
-const CACHE = 'svoboda-v6';
+const CACHE = 'svoboda-v7';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'phrases.js', 'util.js', 'store.js', 'activities.js', 'share.js', 'cloud.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'arena.png'];
 
 self.addEventListener('install', (e) => {
