@@ -176,7 +176,7 @@ async function nidKeys(cfg: NidConfig, nowMs: number, force = false): Promise<{ 
 }
 
 /** Код из Nikitenok ID → кто вошёл. Подпись id_token проверяем, хотя он и пришёл напрямую от ID. */
-export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: string, nowMs: number): Promise<{ nid: string; name: string } | null> {
+export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: string, nowMs: number): Promise<{ nid: string; name: string; logins: string[] } | null> {
   const r = await (cfg.fetch ?? fetch)(`${cfg.internal}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -188,7 +188,9 @@ export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: st
   let c = verifyJwt(await nidKeys(cfg, nowMs), t.id_token, nowMs / 1000);
   if (!c) c = verifyJwt(await nidKeys(cfg, nowMs, true), t.id_token, nowMs / 1000);
   if (!c || c.iss !== cfg.issuer || c.aud !== cfg.clientId || typeof c.sub !== 'string' || !/^nid_[0-9a-f]{8,40}$/.test(c.sub)) return null;
-  return { nid: c.sub, name: cleanName(c.name) };
+  // Привязанные к ID входы (tg:/ya:/max:): по ним приложение узнаёт уже знакомого человека.
+  const logins = Array.isArray(c.logins) ? c.logins.filter((l): l is string => typeof l === 'string' && l.length < 40).slice(0, 20) : [];
+  return { nid: c.sub, name: cleanName(c.name), logins };
 }
 
 function readBody(req: IncomingMessage, max: number): Promise<Record<string, unknown>> {

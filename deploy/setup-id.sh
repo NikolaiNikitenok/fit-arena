@@ -3,7 +3,7 @@
 #   sudo bash deploy/setup-id.sh
 # Что делает (повторный запуск ничего не ломает):
 #   1. /opt/nikitenok-id (код, его выкладывает автодеплой) и /opt/nikitenok-id/data (база, ключ подписи, копии) — владелец deploy.
-#   2. clients.json с приложением «Свобода» (habit) и его секрет в /opt/arena-server/.nid-habit-secret.
+#   2. clients.json с приложениями «Свобода» (habit) и Арена (arena), их секреты — в /opt/arena-server/.nid-habit-secret и .nid-arena-secret.
 #   3. Сервис systemd nikitenok-id на 127.0.0.1:8096 и право deploy его перезапускать.
 #   4. Блок Caddy для id.nikitenok.ru (остальные сайты не трогает).
 #   5. Ночные резервные копии данных Арены и Nikitenok ID в /var/backups/nikitenok (14 дней).
@@ -54,6 +54,25 @@ JSON
   chown "$DEPLOY_USER:$DEPLOY_USER" "$DATA/clients.json"
   chmod 600 "$DATA/clients.json"
   echo "Создан клиент habit, секрет записан в $ARENA/.nid-habit-secret"
+fi
+
+# Арена (arena.nikitenok.ru): вход в браузере через ID. Добавляется и в уже готовый clients.json; секрет — в /opt/arena-server/.nid-arena-secret.
+if ! grep -q '"id": *"arena"' "$DATA/clients.json"; then
+  cp "$DATA/clients.json" "$DATA/clients.json.bak-$(date +%Y%m%d%H%M%S)"
+  ARENA_SECRET=$(openssl rand -hex 32)
+  ARENA_HASH=$(printf '%s' "$ARENA_SECRET" | sha256sum | cut -d' ' -f1)
+  install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$ARENA/.nid-arena-secret"
+  printf '%s' "$ARENA_SECRET" > "$ARENA/.nid-arena-secret"
+  ARENA_HASH="$ARENA_HASH" node -e '
+    const fs = require("fs"), f = process.argv[1];
+    const list = JSON.parse(fs.readFileSync(f, "utf8"));
+    list.push({ id: "arena", name: "NikitenokArena", secret_sha256: process.env.ARENA_HASH,
+      redirect_uris: ["https://arena.nikitenok.ru/api/auth/nid/callback"], url: "https://arena.nikitenok.ru/", resolve: true });
+    fs.writeFileSync(f, JSON.stringify(list, null, 2) + "\n");
+  ' "$DATA/clients.json"
+  chown "$DEPLOY_USER:$DEPLOY_USER" "$DATA/clients.json"
+  chmod 600 "$DATA/clients.json"
+  echo "Добавлен клиент arena, секрет записан в $ARENA/.nid-arena-secret"
 fi
 
 cat > /etc/systemd/system/nikitenok-id.service <<UNIT

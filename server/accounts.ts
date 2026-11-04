@@ -12,10 +12,10 @@ export const ARCHIVE_DAYS = 30;
 // Без похожих букв и цифр (0/O, 1/I/L), чтобы код легко переписать с другого экрана.
 const CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-// ya — вход в браузере через Яндекс ID: писать туда боту некуда.
-export type Platform = 'tg' | 'max' | 'ya';
+// ya — вход в браузере через Яндекс ID, nid — через Nikitenok ID (id.nikitenok.ru): писать туда боту некуда.
+export type Platform = 'tg' | 'max' | 'ya' | 'nid';
 export type Messenger = 'tg' | 'max';
-export const LOGIN_RE = /^(tg|max|ya):\d{1,20}$/;
+export const LOGIN_RE = /^(?:(tg|max|ya):\d{1,20}|nid:[0-9a-f]{8,40})$/;
 export const platformOf = (login: string): Platform | null => (LOGIN_RE.test(login) ? (login.slice(0, login.indexOf(':')) as Platform) : null);
 const isMessenger = (p: Platform | null): p is Messenger => p === 'tg' || p === 'max';
 
@@ -64,6 +64,13 @@ export class AccountStore {
   /** Аккаунт входа (без отметки «заходил»). */
   resolve(login: string): string {
     return this.links.get(login) ?? login;
+  }
+
+  /** Новый вход сразу ведёт в уже существующий аккаунт (вход через Nikitenok ID, у которого есть Telegram героя). */
+  attach(login: string, account: string): void {
+    if (this.links.has(login) || login === account) return;
+    this.links.set(login, account);
+    this.save();
   }
 
   /** Игрок вошёл: аккаунт входа, вход запоминается последним. */

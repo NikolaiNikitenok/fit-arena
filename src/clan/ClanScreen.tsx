@@ -193,7 +193,7 @@ export function ClanScreen({ progress, setProgress, onPlaying, landNow, onSpendM
             <div className="claim-title">{platform === 'web' ? t('Клан — для тех, кто вошёл') : t('Кланы живут в Telegram')}</div>
             <div className="muted">
               {platform === 'web'
-                ? t('Войди через Яндекс или Telegram, чтобы играть в клане под своим именем. Или открой NikitenokArena в Telegram.')
+                ? t('Войди через Nikitenok ID, чтобы играть в клане под своим именем. Или открой NikitenokArena в Telegram.')
                 : t('Открой NikitenokArena в Telegram: там ты войдёшь под своим именем, а приглашение сработает само.')}
             </div>
           </div>

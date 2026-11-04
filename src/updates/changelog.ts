@@ -13,6 +13,16 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    n: 39,
+    date: '2026-11-03',
+    title: t('Вход через Nikitenok ID'),
+    items: [
+      t('В браузере можно войти через Nikitenok ID — один вход во все приложения Nikitenok.'),
+      t('Если к Nikitenok ID привязан твой Telegram, откроется тот же герой, что и в боте.'),
+      t('Яндекс и Telegram никуда не делись — они ниже, под кнопкой Nikitenok ID.'),
+    ],
+  },
+  {
     n: 38,
     date: '2026-11-02',
     title: t('Карта мышц, прогрессия и импорт в «Зале»'),

@@ -15,7 +15,7 @@ interface HeroCard {
 interface Status {
   id: string;
   login: string;
-  logins: { login: string; platform: 'tg' | 'max' | 'ya' | null }[];
+  logins: { login: string; platform: 'tg' | 'max' | 'ya' | 'nid' | null }[];
   notify: 'tg' | 'max' | null;
   archived?: { at: number; card: HeroCard }[];
 }
@@ -28,8 +28,9 @@ const localCard = () => {
 /** Сначала отдаём серверу свою копию героя, чтобы он сравнивал настоящих героев. */
 const pushLocal = () => syncNow(loadProgress()).catch(() => {});
 
-const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: t('Яндекс') };
-const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? t('Вход')} · ${l.login.slice(l.login.indexOf(':') + 1)}`;
+const PLATFORM: Record<string, string> = { tg: 'Telegram', max: 'Max', ya: t('Яндекс'), nid: 'Nikitenok ID' };
+// У Nikitenok ID номер длинный: хватит начала.
+const loginText = (l: { login: string; platform: string | null }) => `${PLATFORM[l.platform ?? ''] ?? t('Вход')} · ${l.login.slice(l.login.indexOf(':') + 1, l.platform === 'nid' ? l.login.indexOf(':') + 7 : undefined)}`;
 const errText = (e: { body?: { error?: string } }) => e.body?.error ?? t('Не получилось связаться с сервером. Попробуй ещё раз.');
 
 /** Можно ли привязывать: вошёл через мессенджер (ответ сервера). Гостям из браузера — нет. */

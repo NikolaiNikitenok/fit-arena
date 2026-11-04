@@ -31,4 +31,5 @@
 .ic-chips button.primary { color: #0f1115; background: linear-gradient(135deg, #4ade80, #22d3ee); border-color: transparent; }
 .ic-chips button:active { transform: scale(.96); }
 .ic-login { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ic-login .web-login { align-self: stretch; }
 .ic-privacy { align-self: center; font-size: 12px; opacity: .6; }

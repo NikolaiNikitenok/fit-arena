@@ -395,6 +395,34 @@ h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -.2px; }
 .account-notify select { padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; }
 .web-login { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
 .web-login-ya { display: block; text-align: center; }
+/* Nikitenok ID — главный вход: тёмно-синяя карточка с золотой рамкой, бликом и отметкой «Рекомендуем» (как на id.nikitenok.ru). */
+.nid-btn { position: relative; display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 13px 14px 13px 12px; border-radius: 18px; text-decoration: none; color: #F3F5FB; text-align: left; isolation: isolate; overflow: visible;
+  border: 1.5px solid transparent;
+  background:
+    radial-gradient(120% 140% at 100% 0, rgba(110,147,255,.42), transparent 55%) padding-box,
+    radial-gradient(90% 120% at 0 100%, rgba(217,174,85,.22), transparent 60%) padding-box,
+    linear-gradient(140deg, #18236A, #0B1240 55%, #060A24) padding-box,
+    linear-gradient(135deg, #FCEFC2, #D9AE55 35%, #7A5A1E 60%, #E9C878) border-box;
+  box-shadow: 0 12px 30px -10px rgba(217,174,85,.55), 0 4px 18px -6px rgba(47,79,216,.6), inset 0 1px 0 rgba(255,255,255,.12);
+  transition: transform .15s, box-shadow .2s; -webkit-tap-highlight-color: transparent; }
+.nid-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background: linear-gradient(105deg, transparent 35%, rgba(251,235,181,.22) 48%, transparent 60%) no-repeat; background-size: 250% 100%; background-position: 130% 0; animation: nid-shine 4.5s ease-in-out infinite; }
+.nid-btn:active { transform: scale(.98); }
+@media (hover: hover) { .nid-btn:hover { box-shadow: 0 16px 36px -10px rgba(217,174,85,.7), 0 6px 22px -6px rgba(47,79,216,.75), inset 0 1px 0 rgba(255,255,255,.14); } }
+.nid-logo { flex: none; width: 42px; height: 42px; border-radius: 12px; box-shadow: 0 6px 14px -4px rgba(47,79,216,.8); }
+.nid-logo svg { display: block; width: 100%; height: 100%; }
+.nid-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.nid-text b { font-size: 16px; font-weight: 800; letter-spacing: .1px; line-height: 1.2;
+  background: linear-gradient(100deg, #FFFFFF 0, #FFFFFF 55%, #FBEBB5 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.nid-text small { font-size: 12.5px; color: #AAB3CC; line-height: 1.3; }
+.nid-go { flex: none; width: 20px; height: 20px; color: #E2B860; }
+.nid-badge { position: absolute; top: -10px; right: 14px; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; color: #1A1405;
+  background: linear-gradient(135deg, #FCEFC2, #E2B860 50%, #C9973C); box-shadow: 0 4px 10px -2px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.6); }
+@keyframes nid-shine { 0%, 55% { background-position: 130% 0; } 100% { background-position: -30% 0; } }
+@media (prefers-reduced-motion: reduce) { .nid-btn::after { animation: none; } }
+.nid-btn ~ .web-login-ya { padding-top: 10px; padding-bottom: 10px; font-size: 14.5px; }
+.web-login-or { display: flex; align-items: center; gap: 10px; color: var(--hint); font-size: 12px; }
+.web-login-or::before, .web-login-or::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.1); }
 .web-login-tg { display: flex; justify-content: center; min-height: 40px; }
 .account-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .account-choice { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }

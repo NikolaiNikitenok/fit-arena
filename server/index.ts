@@ -59,7 +59,7 @@ import { deletePlayer } from './deleteMe';
 import { alertText, FEEDBACK_THANKS, feedbackLimit, feedbackText } from './adminBot';
 import { ModerationStore } from './moderation';
 import { ReportStore } from './reports';
-import { habitApi, HabitLinks, HabitStore } from './habit';
+import { exchangeNidCode, habitApi, HabitLinks, HabitStore } from './habit';
 import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
@@ -71,6 +71,7 @@ import { Threads } from './threads';
 import { CHANNEL_MEDIA, mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
+import { attachNid, NID_COOKIE, NID_REDIRECT_PATH, nidAuthorizeUrl, nidLogin, pkcePair } from './nidLogin';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
 import { Reels } from './reels';
@@ -532,6 +533,19 @@ const APP_URL = process.env.APP_URL ?? 'https://arena.nikitenok.ru';
 const YANDEX_ID = process.env.YANDEX_CLIENT_ID || readToken(join(__dirname, '.yandex-id'));
 const YANDEX_SECRET = process.env.YANDEX_CLIENT_SECRET || readToken(join(__dirname, '.yandex-secret'));
 const YANDEX_REDIRECT = `${APP_URL.replace(/\/$/, '')}/api/auth/yandex/callback`;
+// Nikitenok ID: секрет клиента 'arena' кладёт deploy/setup-id.sh; файл читаем при каждом входе — перезапуск не нужен.
+const NID_ISSUER = process.env.NID_ISSUER ?? 'https://id.nikitenok.ru';
+const nidArena = () => {
+  const secret = process.env.NID_ARENA_SECRET || readToken(join(__dirname, '.nid-arena-secret'));
+  return secret
+    ? { internal: process.env.NID_INTERNAL ?? 'http://127.0.0.1:8096', issuer: NID_ISSUER, clientId: 'arena', secret, redirectUri: `${APP_URL.replace(/\/$/, '')}${NID_REDIRECT_PATH}` }
+    : null;
+};
+const cookieOf = (req: IncomingMessage, name: string) =>
+  String(req.headers.cookie ?? '')
+    .split(';')
+    .map((x) => x.trim().split('='))
+    .find(([k]) => k === name)?.[1] ?? '';
 
 /** Вход в браузере: GET /api/auth/yandex/start → Яндекс → /callback; POST /api/auth/telegram (данные виджета). Сессия уходит в адрес после #. */
 async function onAuthApi(path: string, req: IncomingMessage, res: ServerResponse) {
@@ -540,7 +554,40 @@ async function onAuthApi(path: string, req: IncomingMessage, res: ServerResponse
   const back = (hash: string) => res.writeHead(302, { Location: `/#${hash}`, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }).end();
   // Какие входы включены: браузер-гость без подписи узнаёт это до входа.
   if (path === '/api/auth/options' && req.method === 'GET')
-    return res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ yandex: !!(YANDEX_ID && YANDEX_SECRET), telegram: BOT_TOKEN ? botUsername : null }));
+    return res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ nid: !!nidArena(), yandex: !!(YANDEX_ID && YANDEX_SECRET), telegram: BOT_TOKEN ? botUsername : null }));
+  // Nikitenok ID: verifier PKCE живёт в cookie этого браузера, поэтому чужой код к нему не подойдёт.
+  if (path === '/api/auth/nid/start' && req.method === 'GET') {
+    const cfg = nidArena();
+    if (!cfg) return back('login-error=nid-off');
+    const { verifier, challenge } = pkcePair();
+    return res
+      .writeHead(302, {
+        Location: nidAuthorizeUrl(cfg.issuer, cfg.clientId, cfg.redirectUri, oauthState(sign, now), challenge),
+        'Cache-Control': 'no-store',
+        'Set-Cookie': `${NID_COOKIE}=${verifier}; Path=/api/auth/nid; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,
+      })
+      .end();
+  }
+  if (path === NID_REDIRECT_PATH && req.method === 'GET') {
+    const q = new URL(req.url ?? '/', 'http://x').searchParams;
+    const cfg = nidArena();
+    const verifier = cookieOf(req, NID_COOKIE);
+    const code = q.get('code');
+    const done = (hash: string) =>
+      res.writeHead(302, { Location: `/#${hash}`, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'Set-Cookie': `${NID_COOKIE}=; Path=/api/auth/nid; HttpOnly; Secure; SameSite=Lax; Max-Age=0` }).end();
+    if (q.get('error')) return done('login-error=nid-cancel');
+    if (!cfg || !code || !verifier || !checkState(sign, q.get('state'), now)) return done('login-error=nid');
+    try {
+      const u = await exchangeNidCode(cfg, code, verifier, now);
+      const login = u && nidLogin(u.nid);
+      if (!u || !login) return done('login-error=nid');
+      attachNid(accounts, login, u.logins, (id) => accountDeps.card(id) !== null);
+      return done(`session=${sessionToken(sign, login, u.name, now)}`);
+    } catch (e) {
+      console.log(`nid login: ${e instanceof Error ? e.message : e}`);
+      return done('login-error=nid');
+    }
+  }
   if (path === '/api/auth/yandex/start' && req.method === 'GET') {
     if (!YANDEX_ID || !YANDEX_SECRET) return back('login-error=yandex-off');
     return res.writeHead(302, { Location: yandexAuthorizeUrl(YANDEX_ID, YANDEX_REDIRECT, oauthState(sign, now)), 'Cache-Control': 'no-store' }).end();
