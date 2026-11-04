@@ -5,6 +5,7 @@ import { S, save } from './store.js';
 import { vibrate, confetti, plural } from './util.js';
 import { calmMotion } from './settings.js';
 import { sfx, unlock } from './m3sound.js';
+import { m3, earn, streakBonus, checkAch, achSheet, balance } from './garden.js';
 
 const KINDS = ['heart', 'gold', 'wood', 'stone', 'sword'];
 const GEM = {
@@ -84,9 +85,8 @@ const goalText = (d) =>
   d.type === 'score' ? `Набери ${d.target} очков` : d.type === 'collect' ? 'Собери самоцветы' : d.type === 'ice' ? 'Разбей весь лёд' : 'Разбей все ящики';
 
 // ---------- Игра ----------
-export function mount(body, { finish, alive }) {
-  S.m3 = S.m3 || { level: 1, stars: {} };
-  const P = S.m3;
+export function mount(body, { finish, alive, close }) {
+  const P = m3();
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
   const calm = calmMotion();
   const T = (ms) => (calm ? Math.min(ms, 60) : ms);
@@ -107,12 +107,15 @@ export function mount(body, { finish, alive }) {
         ${n % 5 === 0 ? '<span class="m3-tag">передышка</span>' : ''}</button>`);
     }
     body.innerHTML = `<div class="m3-map">
-      <div class="m3-title"><span class="m3-logo">${gemSvg('sword')}</span><div><h2>Самоцветы</h2><small>Уровней — бесконечно · ★ ${totalStars()}</small></div></div>
+      <div class="m3-title"><span class="m3-logo">${gemSvg('sword')}</span><div><h2>Самоцветы</h2><small>Уровней — бесконечно · ★ ${totalStars()} · ✨ ${balance()}</small></div></div>
       <div class="m3-path">${nodes.join('')}</div>
       <button class="btn primary wide big-btn" data-play="${L}">▶ Играть: уровень ${L}</button>
+      <div class="row"><button class="btn ghost" data-garden>🌳 Сад свободы</button><button class="btn ghost" data-ach>🏅 Достижения</button></div>
       <button class="btn ghost small" data-done>Я отвлёкся ✓</button>
     </div>`;
     body.querySelector('[data-play]').onclick = () => play(L);
+    body.querySelector('[data-garden]').onclick = () => { close?.(); location.hash = '#/garden'; };
+    body.querySelector('[data-ach]').onclick = () => achSheet();
     body.querySelector('[data-done]').onclick = () => finish('Отличная игра 💎', L > 1 ? `Пройдено ${L - 1} ${plural(L - 1, 'уровень', 'уровня', 'уровней')}. Тяга тем временем отступила.` : 'Тяга тем временем отступила.');
     body.querySelectorAll('.m3-node:not(.lock)').forEach((b) => (b.onclick = () => play(+b.dataset.lvl)));
     body.querySelector('.m3-node.cur')?.scrollIntoView({ block: 'center' });
@@ -121,7 +124,7 @@ export function mount(body, { finish, alive }) {
   function play(n) {
     const d = levelDef(n);
     let board = E.createBoard({ seed: d.seed, kinds: d.kinds, ice: d.ice, blocks: d.blocks });
-    let moves = d.moves, score = 0, busy = false, extra = false, idleAt = Date.now();
+    let moves = d.moves, score = 0, busy = false, extra = false, idleAt = Date.now(), made = 0;
     const got = Object.fromEntries(Object.keys(d.collect).map((k) => [k, 0]));
     body.innerHTML = `<div class="m3-play">
       <div class="m3-hud">
@@ -317,6 +320,7 @@ export function mount(body, { finish, alive }) {
         drawCells();
         // Новые особые самоцветы: вспышка и подпись.
         for (const cr of st.created) {
+          if (cr.gem.special) { made++; if (cr.gem.special === 'rainbow') P.stat.rainbows++; if (cr.gem.special === 'bomb') P.stat.bombs++; }
           const e = els.get(cr.gem.id);
           if (!e || !cr.gem.special) continue;
           e.classList.add('born');
@@ -371,6 +375,7 @@ export function mount(body, { finish, alive }) {
       }
       moves--;
       hud();
+      P.stat.maxCombo = Math.max(P.stat.maxCombo, res.combo);
       await animate(res);
       idleAt = Date.now();
       busy = false;
@@ -395,10 +400,17 @@ export function mount(body, { finish, alive }) {
         await animate(f.result, 0.5);
       }
       score += left * 60;
+      // Искры: за прохождение и звёзды, за особые самоцветы; повтор — половина; множитель серии.
+      const first = n >= P.level;
+      const { mult, days } = streakBonus();
+      const base = (10 + stars * 5) * (first ? 1 : 0.5) + Math.min(30, made * 2);
+      const gain = Math.max(1, Math.round(base * mult));
       P.stars[n] = Math.max(P.stars[n] || 0, stars);
       if (n >= P.level) P.level = n + 1;
+      earn(gain);
       P.best = Math.max(P.best || 0, score);
       save();
+      setTimeout(() => checkAch(), 1200);
       if (!alive()) return;
       confetti();
       vibrate([40, 30, 60]);
@@ -406,9 +418,10 @@ export function mount(body, { finish, alive }) {
       for (let i = 0; i < stars; i++) setTimeout(() => sfx.star(i), 500 + i * 180);
       overlay(`<div class="m3-rays"></div><div class="m3-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}" style="animation-delay:${i * 0.18}s">★</span>`).join('')}</div>
         <h2>Уровень ${n} пройден!</h2>
+        <div class="m3-earn">+${gain} ✨${mult > 1 ? `<small>×${mult.toFixed(1)} за ${days} ${plural(days, 'день', 'дня', 'дней')} без привычки</small>` : ''}</div>
         <p class="muted">${score} очков${left ? ` · ${plural(left, 'остался', 'осталось', 'осталось')} ${left} ${plural(left, 'ход', 'хода', 'ходов')}` : ''}</p>
         <button class="btn primary wide big-btn" data-next>Дальше: уровень ${n + 1}</button>
-        <button class="btn ghost wide" data-map>К уровням</button>
+        <div class="row"><button class="btn ghost" data-map>К уровням</button><button class="btn ghost" data-garden>🌳 В сад</button></div>
         <button class="btn muted-btn" data-done>Я отвлёкся ✓</button>`);
     }
     function lose() {
@@ -431,6 +444,7 @@ export function mount(body, { finish, alive }) {
         if (!b) return;
         if (b.dataset.next !== undefined) play(n + 1);
         else if (b.dataset.map !== undefined) showMap();
+        else if (b.dataset.garden !== undefined) { close?.(); location.hash = '#/garden'; }
         else if (b.dataset.again !== undefined) play(n);
         else if (b.dataset.more !== undefined) { extra = true; moves += 5; busy = false; o.remove(); hud(); }
         else if (b.dataset.done !== undefined) finish('Отличная игра 💎', 'Пока ты собирал самоцветы, тяга отступила. Так и работает отвлечение.');

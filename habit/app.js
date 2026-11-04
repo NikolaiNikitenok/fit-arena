@@ -4,6 +4,7 @@ import { $, $$, esc, pad, uid, DAY, money, num, dayKey, plural, parts, shortDur,
 import { S, save, replaceState, resetState, findHabit, elapsed, isPlanned, savedOf, savedTotal, checkStreak, logCraving, checkBadges, cravingStats, suggestActivities } from './store.js';
 import { openActivity } from './activities.js';
 import { SET, THEMES, ACCENTS, setSetting, calmMotion } from './settings.js';
+import { gardenView, bindGarden, balance as sparksBalance, gardenLevel, claimSprouts } from './garden.js';
 import { shareProgress } from './share.js';
 import { account, onAccount, loginFromHash, loginFromNid, loginWithNid, hasNidReturn, pull, push, logout, status as syncStatus, FAMILY_LOGIN, localBackups, serverHistory, restoreFrom } from './cloud.js';
 
@@ -30,7 +31,7 @@ function greeting() {
 function route() {
   const h = location.hash.replace(/^#\/?/, '');
   if (h.startsWith('h/')) return { name: 'habit', id: h.slice(2) };
-  if (['distract', 'progress', 'motivation'].includes(h)) return { name: h };
+  if (['distract', 'progress', 'motivation', 'garden'].includes(h)) return { name: h };
   return { name: 'home' };
 }
 window.addEventListener('hashchange', () => render(true));
@@ -39,11 +40,13 @@ function render(scrollTop = false) {
   if (!S.onboarded) { $('#main').innerHTML = ''; if (!$('.onboard')) onboarding(); return; }
   const r = route();
   const main = $('#main');
-  const views = { home: homeView, distract: distractView, progress: progressView, motivation: motivationView };
+  const views = { home: homeView, distract: distractView, progress: progressView, motivation: motivationView, garden: gardenView };
   if (r.name === 'habit') {
     const h = findHabit(r.id);
     main.innerHTML = h ? habitView(h) : homeView();
   } else main.innerHTML = views[r.name]();
+  if (r.name === 'garden') bindGarden(main, () => { const y = scrollY; main.innerHTML = gardenView(); scrollTo(0, y); });
+  else main.onclick = null;
   $$('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === (r.name === 'habit' ? 'home' : r.name)));
   main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter');
   tick();
@@ -98,6 +101,8 @@ function homeView() {
         <p class="muted">Добавь привычку, от которой отказываешься, — таймер начнёт считать твоё время свободы.</p>
       </section>`}
     <button class="btn ghost wide dashed" data-act="add">＋ Добавить привычку</button>
+
+    ${gardenCard()}
 
     ${total >= 1 || S.goal ? goalCard(total) : ''}
 
@@ -200,6 +205,14 @@ function paintTimer(el, h, ms) {
   const k = el.querySelector('.knob'); k.setAttribute('cx', kx); k.setAttribute('cy', ky);
   const tot = el.querySelector('[data-total]');
   if (tot) { const t = totalLine(ms); if (tot.textContent !== t) tot.textContent = t; }
+}
+function gardenCard() {
+  const lv = gardenLevel();
+  const sprouts = S.garden?.inv?.sprout || 0;
+  return `<a class="card garden-card" href="#/garden">
+    <span class="gc-art">🌳<i>🌷</i><i>🦋</i></span>
+    <div><b>Сад свободы</b><small class="muted">${lv.name} · ✨ ${sparksBalance()}${sprouts ? ` · 🌱 ${sprouts} ждут посадки` : ''}</small></div>
+    <span class="chev">›</span></a>`;
 }
 function goalCard(total) {
   if (!S.goal) {

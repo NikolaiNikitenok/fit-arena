@@ -60,7 +60,7 @@ export function openActivity(key, { onFinish, onClose } = {}) {
     breathe: () => breathe('Квадратное дыхание', [['Вдох', 4, 'grow'], ['Задержка', 4, 'hold'], ['Выдох', 4, 'shrink'], ['Пауза', 4, 'rest']], 8),
     breathe478: () => breathe('Дыхание 4-7-8', [['Вдох носом', 4, 'grow'], ['Задержка', 7, 'hold'], ['Выдох ртом', 8, 'shrink']], 4),
     ground, bubbles, memory, reaction, math, workout, task, reasons, letter, arena,
-    match3: () => import('./match3.js').then((m) => m.mount(body, { finish, alive: () => !closed })),
+    match3: () => import('./match3.js').then((m) => m.mount(body, { finish, alive: () => !closed, close })),
   };
   (A[key] || A.wave)();
 
