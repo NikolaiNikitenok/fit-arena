@@ -41,10 +41,16 @@ const WRIST = [15, 16];
 const HIP = [23, 24];
 const KNEE = [25, 26];
 const ANKLE = [27, 28];
+const EAR = [7, 8];
 
 interface Check {
-  ok: (lm: Landmark[], side: number) => boolean;
+  // true — поза верная, false — неверная, null — модель сейчас не видит нужных точек, судить не по чему.
+  // «Не видно» не то же, что «неверно»: на кадр-другой таз или колено пропадают, и повтор из-за этого
+  // не должен сгорать.
+  ok: (lm: Landmark[], side: number) => boolean | null;
   hint: string;
+  // Подсказка, когда точек не видно.
+  unknownHint?: string;
 }
 
 interface Rule {
@@ -83,11 +89,18 @@ export const RULES: Record<RepExercise, Rule> = {
     // Лёжа кисти часто у края кадра и видны хуже.
     minVisibility: 0.35,
     posture: [
-      { ok: (lm, s) => seen(lm[HIP[s]]), hint: t('Камера должна видеть тебя целиком, хотя бы до пояса') },
-      { ok: (lm, s) => tilt(lm[SHOULDER[s]], bodyEnd(lm, s)) < 45, hint: t('Прими упор лёжа') },
+      {
+        // Тело лежит: линия плечо — стопа (или таз) почти горизонтальна. Когда телефон близко и таз
+        // за кадром, хватает головы: в упоре ухо на уровне плеча, а стоя — заметно выше.
+        ok: (lm, s) =>
+          seen(lm[HIP[s]]) ? tilt(lm[SHOULDER[s]], bodyEnd(lm, s)) < 45 : seen(lm[EAR[s]]) ? tilt(lm[EAR[s]], lm[SHOULDER[s]]) < 50 : null,
+        hint: t('Прими упор лёжа'),
+        unknownHint: t('Камера должна видеть тебя целиком, хотя бы до пояса'),
+      },
       // Ладони на полу, то есть не выше плеч (ось y в кадре направлена вниз).
       { ok: (lm, s) => lm[WRIST[s]].y > lm[SHOULDER[s]].y - 0.06, hint: t('Упрись руками в пол') },
-      { ok: (lm, s) => !legsSeen(lm, s) || angle(lm[SHOULDER[s]], lm[HIP[s]], lowest(lm, s)) > 130, hint: t('Держи корпус прямым') },
+      // Прогиб в пояснице модель сбоку видит с запасом в 10–15°.
+      { ok: (lm, s) => !seen(lm[HIP[s]]) || !legsSeen(lm, s) || angle(lm[SHOULDER[s]], lm[HIP[s]], lowest(lm, s)) > 125, hint: t('Держи корпус прямым') },
     ],
   },
   squat: {
@@ -96,8 +109,11 @@ export const RULES: Record<RepExercise, Rule> = {
     up: 160,
     posture: [
       // Стоя плечи выше таза, корпус может наклоняться, но не ложиться.
-      { ok: (lm, s) => seen(lm[SHOULDER[s]]), hint: t('Камера должна видеть тебя целиком') },
-      { ok: (lm, s) => lm[SHOULDER[s]].y < lm[HIP[s]].y && tilt(lm[SHOULDER[s]], lm[HIP[s]]) > 30, hint: t('Встань прямо') },
+      {
+        ok: (lm, s) => (seen(lm[SHOULDER[s]]) ? lm[SHOULDER[s]].y < lm[HIP[s]].y && tilt(lm[SHOULDER[s]], lm[HIP[s]]) > 30 : null),
+        hint: t('Встань прямо'),
+        unknownHint: t('Камера должна видеть тебя целиком'),
+      },
     ],
   },
   situp: {
@@ -108,9 +124,12 @@ export const RULES: Record<RepExercise, Rule> = {
     // Лёжа сбоку плечо и колено модель видит хуже, чем стоя.
     minVisibility: 0.35,
     posture: [
-      { ok: (lm, s) => legsSeen(lm, s), hint: t('Камера должна видеть тебя целиком, до колен') },
       // Таз и стопы на полу на одной высоте; если стопы не видно, бедро не стоит вертикально, как стоя.
-      { ok: (lm, s) => (seen(lm[ANKLE[s]]) ? tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45 : tilt(lm[HIP[s]], lm[KNEE[s]]) < 70), hint: t('Ляг на пол, стопы на полу') },
+      {
+        ok: (lm, s) => (seen(lm[ANKLE[s]]) ? tilt(lm[HIP[s]], lm[ANKLE[s]]) < 45 : seen(lm[KNEE[s]]) ? tilt(lm[HIP[s]], lm[KNEE[s]]) < 70 : null),
+        hint: t('Ляг на пол, стопы на полу'),
+        unknownHint: t('Камера должна видеть тебя целиком, до колен'),
+      },
     ],
   },
 };
@@ -148,9 +167,16 @@ function rotate(lm: Landmark[], deg: number, aspect: number): Landmark[] {
   });
 }
 
-/** Сторона тела, лучше видимая камере (0 — левая, 1 — правая). */
-function bestSide(lm: Landmark[], ids: number[]): number {
-  const vis = (s: number) => ids.reduce((sum, i) => sum + (lm[i]?.visibility ?? 1), 0);
+// Насколько дальняя сторона должна быть виднее, чтобы на неё переключиться (сумма по трём суставам).
+// Без запаса угол прыгал между левой и правой рукой, а дальнюю рука модель угадывает плохо:
+// отсюда редкие лишние повторы.
+const SIDE_SWITCH = 0.3;
+
+/** Сторона тела, лучше видимая камере (0 — левая, 1 — правая); prev — прошлая, её держим, пока она не сильно хуже.
+ *  joints — пары [левая, правая] суставов угла. */
+function bestSide(lm: Landmark[], joints: number[][], prev: number | null = null): number {
+  const vis = (s: number) => joints.reduce((sum, pair) => sum + (lm[pair[s]]?.visibility ?? 1), 0);
+  if (prev !== null) return vis(1 - prev) > vis(prev) + SIDE_SWITCH ? 1 - prev : prev;
   return vis(0) >= vis(1) ? 0 : 1;
 }
 
@@ -175,6 +201,8 @@ const SMOOTH_MAX_MS = 1000;
 // а при 10 к/с одиночный сбой прощается, но двух кадров (0.1 с) уже хватает.
 const POSTURE_GRACE = 3;
 const POSTURE_GRACE_MS = 100;
+// Пока точки позы не видны, верим последней проверке, если она была не раньше этого.
+const UNKNOWN_TRUST_MS = 2500;
 
 /**
  * Вес прошлого значения при сглаживании за dt мс. Не больше половины: при частых кадрах всё как
@@ -210,6 +238,9 @@ export class RepCounter {
   private lastT: number | null = null;
   // Поворот кадра, при котором поза в прошлый раз совпала.
   private rotation = 0;
+  private side: number | null = null;
+  // Когда поза в последний раз точно была верной.
+  private knownOkAt = -Infinity;
 
   // Пороги угла: личные после калибровки или общие из RULES.
   readonly down: number;
@@ -235,6 +266,8 @@ export class RepCounter {
     this.failHint = null;
     this.grace.reset();
     this.lastT = null;
+    this.side = null;
+    this.knownOkAt = -Infinity;
   }
 
   /**
@@ -248,8 +281,7 @@ export class RepCounter {
     }
     const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
 
-    const ids = rule.joint.flat();
-    const side = bestSide(scaled, ids);
+    const side = (this.side = bestSide(scaled, rule.joint, this.side));
     const [a, b, c] = rule.joint.map((pair) => scaled[pair[side]]);
     if ([a, b, c].some((p) => (p.visibility ?? 1) < (rule.minVisibility ?? MIN_VISIBILITY))) {
       return (this.state = { ...this.state, hint: t('Камера не видит суставы') });
@@ -259,7 +291,7 @@ export class RepCounter {
     let lm = rotate(scaled, order[0], aspect);
     for (const r of order) {
       const candidate = rotate(scaled, r, aspect);
-      if (rule.posture.every((check) => check.ok(candidate, side))) {
+      if (rule.posture.every((check) => check.ok(candidate, side) === true)) {
         lm = candidate;
         this.rotation = r;
         break;
@@ -273,11 +305,16 @@ export class RepCounter {
     const value = this.smoothed;
 
     let { reps, phase } = this.state;
-    const failed = rule.posture.find((check) => !check.ok(lm, side));
-    let hint: string | null = failed?.hint ?? null;
+    const verdicts = rule.posture.map((check) => check.ok(lm, side));
+    const failed = rule.posture.find((_, i) => verdicts[i] === false);
+    const unknown = rule.posture.find((_, i) => verdicts[i] === null);
+    if (!failed && !unknown) this.knownOkAt = timestampMs;
+    // Не видно, но только что всё было верно — считаем дальше. Долго не видно — новых повторов нет.
+    const trusted = !unknown || timestampMs - this.knownOkAt <= UNKNOWN_TRUST_MS;
+    let hint: string | null = failed?.hint ?? (unknown && !trusted ? (unknown.unknownHint ?? unknown.hint) : null);
     const postureBad = this.grace.update(!!failed, timestampMs);
 
-    if (phase === 'up' && value < this.down && !postureBad) {
+    if (phase === 'up' && value < this.down && !postureBad && trusted) {
       phase = 'down';
       this.formOk = true;
     }
@@ -287,7 +324,7 @@ export class RepCounter {
     }
     if (phase === 'down' && value > this.up) {
       phase = 'up';
-      if (this.formOk && !postureBad && timestampMs - this.lastRepAt >= MIN_REP_MS) {
+      if (this.formOk && !postureBad && trusted && timestampMs - this.lastRepAt >= MIN_REP_MS) {
         reps += 1;
         this.lastRepAt = timestampMs;
       } else if (!this.formOk) {

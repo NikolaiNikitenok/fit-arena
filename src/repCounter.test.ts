@@ -23,9 +23,10 @@ function skeleton(fixed: Record<number, Point>, joint: [number, number, number],
 }
 
 // Упор лёжа боком к камере: плечо, таз и стопы на одной линии, руки под плечами.
-const pushup = (t: number) => skeleton({ 23: [0.55, 0.6], 25: [0.7, 0.605], 27: [0.85, 0.61] }, [11, 13, 15], [0.3, 0.7], [0, -1], -t);
+// Голова впереди плеча на той же высоте.
+const pushup = (t: number) => skeleton({ 7: [0.22, 0.59], 23: [0.55, 0.6], 25: [0.7, 0.605], 27: [0.85, 0.61] }, [11, 13, 15], [0.3, 0.7], [0, -1], -t);
 // Стоя, сгибаем руки: тело вертикально.
-const standingCurl = (t: number) => skeleton({ 23: [0.5, 0.55], 27: [0.5, 0.9] }, [11, 13, 15], [0.5, 0.4], [0, -1], -t);
+const standingCurl = (t: number) => skeleton({ 7: [0.5, 0.22], 23: [0.5, 0.55], 27: [0.5, 0.9] }, [11, 13, 15], [0.5, 0.4], [0, -1], -t);
 // Приседание: плечи над тазом, угол в колене меняется.
 const squat = (t: number) => skeleton({ 11: [0.5, 0.15] }, [23, 25, 27], [0.5, 0.5], [0, -1], -t);
 // Приседание лёжа на спине: таз ниже плеч не будет.
@@ -89,13 +90,69 @@ describe('RepCounter', () => {
     expect(run(new RepCounter('pushup'), noLegs, FULL)).toBe(2);
   });
 
-  it('не считает отжимания, если не видно и таза', () => {
-    const hidden = (t: number) => {
-      const lm = pushup(t);
-      for (const i of [23, 24, 25, 26, 27, 28]) lm[i].visibility = 0.1;
+  const hide = (make: (t: number) => Landmark[], ids: number[]) => (t: number) => {
+    const lm = make(t);
+    for (const i of ids) lm[i].visibility = 0.1;
+    return lm;
+  };
+  const BODY = [23, 24, 25, 26, 27, 28];
+
+  it('не считает отжимания, если не видно ни таза, ни головы', () => {
+    const c = new RepCounter('pushup');
+    expect(run(c, hide(pushup, [7, 8, ...BODY]), FULL)).toBe(0);
+    expect(c.current.hint).toBe('Камера должна видеть тебя целиком, хотя бы до пояса');
+  });
+
+  it('телефон близко, таз за кадром: хватает головы на уровне плеч', () => {
+    expect(run(new RepCounter('pushup'), hide(pushup, BODY), FULL)).toBe(2);
+  });
+
+  it('и так не считает сгибание рук стоя: голова выше плеч', () => {
+    expect(run(new RepCounter('pushup'), hide(standingCurl, BODY), FULL)).toBe(0);
+  });
+
+  it('таз пропал на дне отжимания — повтор не сгорает', () => {
+    // Внизу модель теряет и таз, и голову: так бывает, когда человек опускается к полу.
+    const flicker = (t: number) => (t < 100 ? hide(pushup, [7, 8, ...BODY])(t) : pushup(t));
+    expect(run(new RepCounter('pushup'), flicker, FULL)).toBe(2);
+  });
+
+  it('долго не видно позы — повторы не идут', () => {
+    const c = new RepCounter('pushup');
+    let time = 0;
+    for (let i = 0; i < 4; i++) c.update(pushup(170), (time += 50));
+    time += 3000;
+    for (const theta of FULL) for (let i = 0; i < 4; i++) c.update(hide(pushup, [7, 8, ...BODY])(theta), (time += 50));
+    expect(c.current.reps).toBe(0);
+  });
+
+  it('считает по той руке, что ближе к камере, даже если это правая', () => {
+    // Левая рука за телом: видна плохо, и модель угадывает её прямой.
+    const rightSide = (theta: number) => {
+      const lm = pushup(theta);
+      const straight = pushup(170);
+      for (const k of [11, 13, 15]) lm[k] = { ...straight[k], visibility: 0.2 };
       return lm;
     };
-    expect(run(new RepCounter('pushup'), hidden, FULL)).toBe(0);
+    expect(run(new RepCounter('pushup'), rightSide, FULL)).toBe(2);
+  });
+
+  it('не скачет на дальнюю руку, которую модель видит чуть хуже', () => {
+    // Дальняя рука — мусорный угол 60°↔170°, видна почти так же: счёт идёт по ближней. 10 к/с — слабый телефон.
+    const c = new RepCounter('pushup');
+    let time = 0;
+    let n = 0;
+    for (const theta of [170, 170, 170, 170, 170, 170]) {
+      for (let i = 0; i < 4; i++) {
+        const odd = n++ % 2 === 1;
+        const lm = pushup(theta);
+        const junk = pushup(odd ? 60 : 170);
+        for (const k of [12, 14, 16]) lm[k] = { ...junk[k], visibility: odd ? 0.95 : 0.85 };
+        for (const k of [11, 13, 15]) lm[k] = { ...lm[k], visibility: 0.9 };
+        c.update(lm, (time += 100));
+      }
+    }
+    expect(c.current.reps).toBe(0);
   });
 
   it('не считает неполные отжимания', () => {
