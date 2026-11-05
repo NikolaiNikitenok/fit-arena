@@ -6,7 +6,7 @@ import { Gear, GEAR, gearById, gearIcon, gearText, ITEMS, itemById, PotionId, PO
 import { BASE_DAMAGE, heroPower } from './power';
 import { LevelDef } from './levels';
 import type { DailyTask } from './daily';
-import { AchBadge } from './Achievements';
+import { AchBadge } from './AchievementsSheet';
 import { achDone, ACHIEVEMENTS, heroBadge, visibleAchievements } from './achievements';
 import { Portrait } from './Dialog';
 import { NPCS, portraitUrl } from './npcs';

@@ -10,7 +10,7 @@ import { fmtNum } from './state';
 import { animateTo, type BattleView, type Ctl, type ViewBld } from './Village3D';
 import { useHostedView } from './Viewport';
 import { DEFAULT_HERO, type HeroLook } from './troops3d';
-import { HeroThumb, TroopThumb } from './TroopInfo';
+import { HeroThumb, TroopThumb } from './TroopInfoSheet';
 import { ResultCard } from './ResultCard';
 import { t } from '../i18n';
 

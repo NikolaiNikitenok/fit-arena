@@ -42,6 +42,7 @@ export class IdStore {
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS accounts (nid TEXT PRIMARY KEY, name TEXT NOT NULL, created INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS revocations (nid TEXT PRIMARY KEY, version INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS identities (
         login TEXT PRIMARY KEY, nid TEXT NOT NULL REFERENCES accounts(nid) ON DELETE CASCADE,
         name TEXT NOT NULL, linked INTEGER NOT NULL);
@@ -115,6 +116,7 @@ export class IdStore {
   /** Удалить аккаунт со всеми привязками и сессиями. */
   remove(nid: string): void {
     this.tx(() => {
+      this.revoke(nid);
       this.db.prepare('DELETE FROM accounts WHERE nid = ?').run(nid);
       this.logEvent(nid, 'deleted', '');
     });
@@ -140,7 +142,18 @@ export class IdStore {
 
   /** Выйти на всех устройствах. */
   endAllSessions(nid: string): number {
+    this.revoke(nid);
     return Number(this.db.prepare('DELETE FROM sessions WHERE nid = ?').run(nid).changes);
+  }
+
+  version(nid: string): number {
+    return Number((this.db.prepare('SELECT version FROM revocations WHERE nid = ?').get(nid) as { version: number } | undefined)?.version ?? 0);
+  }
+  revocations(): Record<string, number> {
+    return Object.fromEntries((this.db.prepare('SELECT nid, version FROM revocations').all() as { nid: string; version: number }[]).map((r) => [r.nid, r.version]));
+  }
+  private revoke(nid: string): void {
+    this.db.prepare('INSERT INTO revocations VALUES (?, 1) ON CONFLICT(nid) DO UPDATE SET version = version + 1').run(nid);
   }
 
   sessionCount(nid: string): number {

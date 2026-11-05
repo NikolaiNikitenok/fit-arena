@@ -15,7 +15,7 @@ import { useSettings } from './settings';
 import { GroupJoin } from './group/GroupChallenge';
 import { House } from './village/icons';
 import { UpdateBanner } from './updates/UpdateBanner';
-import { WarmupHost } from './warmup/Warmup';
+import { WarmupHost } from './warmup/WarmupHost';
 import { useBusy } from './updates/busy';
 import { clanInviteCode, friendInviteCode, inviteCode, startTab } from './telegram';
 import { t } from './i18n';

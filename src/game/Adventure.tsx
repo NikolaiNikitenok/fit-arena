@@ -6,7 +6,7 @@ import { GearFace, HomeScreen, ShopTab } from './HeroHome';
 import { GEAR, gearById, gearText, ITEMS, itemById, POTIONS, Rarity, RARITY_COLORS, RARITY_NAMES, RARITY_ORDER, RARITY_SHORT } from './items';
 import { heroLook, outfitSkin } from './outfitSkin';
 import { OutfitPreview } from './OutfitPreview';
-import { HeroThumb } from '../village/TroopInfo';
+import { HeroThumb } from '../village/TroopInfoSheet';
 import { LANDS, WORLD_NAMES, WORLDS } from './lands';
 import { LEVEL_COUNT, LEVELS, LevelDef, targetReps, WORLD_SIZE } from './levels';
 import { Stars } from './Stars';
@@ -18,11 +18,11 @@ import { recordEventHit } from './event';
 import { Calendar, RepsChart } from './Stats';
 import { weekKey } from '../../shared/weekly';
 import { MONTHS, recapMonths } from './recap';
-import { AchievementsSheet } from './Achievements';
+import { AchievementsSheet } from './AchievementsSheet';
 import { newAchievements } from './achievements';
 import { canHatch, hatchEgg, petLevel, petLook, petName, petXp } from './pets';
 import { plankDailyWorkout } from './ProgramsEntry';
-import type { QuickWorkout } from './Programs';
+import type { QuickWorkout } from './ProgramsScreen';
 import {
   buy,
   buyGear,
@@ -86,7 +86,7 @@ import { markMorning, morningDue, morningWorkout } from '../warmup/morning';
 // Тяжёлые экраны (3D, камера, клан) грузятся, только когда их открыли: первый экран появляется быстрее.
 const MissionPlay = lazy(() => import('./MissionPlay').then((m) => ({ default: m.MissionPlay })));
 const EventScreen = lazy(() => import('./EventScreen').then((m) => ({ default: m.EventScreen })));
-const ProgramsScreen = lazy(() => import('./Programs').then((m) => ({ default: m.ProgramsScreen })));
+const ProgramsScreen = lazy(() => import('./ProgramsScreen').then((m) => ({ default: m.ProgramsScreen })));
 const FeedScreen = lazy(() => import('../social/FeedScreen').then((m) => ({ default: m.FeedScreen })));
 const GymScreen = lazy(() => import('../gym/GymScreen').then((m) => ({ default: m.GymScreen })));
 const ClanScreen = lazy(() => import('../clan/ClanScreen').then((m) => ({ default: m.ClanScreen })));
@@ -94,7 +94,7 @@ const PassScreen = lazy(() => import('./PassScreen').then((m) => ({ default: m.P
 const HolidayScreen = lazy(() => import('./HolidayScreen').then((m) => ({ default: m.HolidayScreen })));
 const CollectionsSheet = lazy(() => import('./CollectionsSheet').then((m) => ({ default: m.CollectionsSheet })));
 const CitySheet = lazy(() => import('../city/CitySheet').then((m) => ({ default: m.CitySheet })));
-const RecapScreen = lazy(() => import('./Recap').then((m) => ({ default: m.RecapScreen })));
+const RecapScreen = lazy(() => import('./RecapScreen').then((m) => ({ default: m.RecapScreen })));
 const TitanScreen = lazy(() => import('./TitanScreen').then((m) => ({ default: m.TitanScreen })));
 const PetScreen = lazy(() => import('./PetScreen').then((m) => ({ default: m.PetScreen })));
 const DungeonScreen = lazy(() => import('./match3/DungeonScreen').then((m) => ({ default: m.DungeonScreen })));

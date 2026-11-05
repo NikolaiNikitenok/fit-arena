@@ -11,7 +11,7 @@
     "test": "vitest run",
     "dev:server": "ALLOW_GUESTS=1 tsx watch server/index.ts",
     "build:id": "esbuild id/server/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-id/id.cjs",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node20 --format=cjs --external:bufferutil --external:utf-8-validate --outfile=dist-server/server.cjs && cp public/bot/welcome.jpg dist-server/welcome.jpg && mkdir -p dist-server/media && cp -r server/media/channel dist-server/media/ && cp -r public/emoji dist-server/media/"
+    "build:server": "node scripts/build-server.mjs"
   },
   "license": "ISC",
   "dependencies": {

@@ -27,7 +27,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { ClientMessage, ProfileView, ServerMessage } from '../shared/protocol';
 import { leagueOf } from '../shared/rating';
 import { EXERCISE_LABELS, goalText, isRepExercise, type Exercise } from '../src/repCounter';
-import { Family, FamilyHabits, parseClientItem, parseGymItem, RateLimit, telegramId } from './family';
+import { Family, parseClientItem, parseGymItem, RateLimit, telegramId } from './family';
 import { makeCode, type MatchEnd, Room, type Player } from './rooms';
 import { type Profile, Store } from './store';
 import { type Clan, ClanStore, type Who } from './clans';
@@ -59,7 +59,7 @@ import { deletePlayer } from './deleteMe';
 import { alertText, FEEDBACK_THANKS, feedbackLimit, feedbackText } from './adminBot';
 import { ModerationStore } from './moderation';
 import { ReportStore } from './reports';
-import { exchangeNidCode, habitApi, HabitLinks, HabitStore } from './habit';
+import { exchangeNidCode } from './habit';
 import { adminCommand, type ModerationDeps, moderationApi } from './moderationApi';
 import { badName } from '../shared/profanity';
 import { VillageStore } from './villages';
@@ -71,6 +71,7 @@ import { Threads } from './threads';
 import { CHANNEL_MEDIA, mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
 import { AccountStore } from './accounts';
+import { NidRevocations } from './nidRevocations';
 import { attachNid, NID_COOKIE, NID_REDIRECT_PATH, nidAuthorizeUrl, nidLogin, pkcePair } from './nidLogin';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
@@ -109,16 +110,7 @@ const ALLOW_GUESTS = process.env.ALLOW_GUESTS === '1' || !BOT_TOKEN;
 const family = new Family();
 const activityLimit = new RateLimit();
 const store = new Store(process.env.DATA_FILE ?? 'data/profiles.json');
-const familyHabits = new FamilyHabits();
-const habits = new HabitStore(process.env.HABIT_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'habit.json'));
-// Вход в «Свободу» через Nikitenok ID (id/): секрет клиента habit кладёт deploy/setup-id.sh в .nid-habit-secret.
-const NID_HABIT_SECRET = (process.env.NID_HABIT_SECRET ?? (() => { try { return readFileSync(join(__dirname, '.nid-habit-secret'), 'utf8'); } catch { return ''; } })()).trim();
-const habitNid = NID_HABIT_SECRET
-  ? {
-      cfg: { internal: process.env.NID_INTERNAL ?? 'http://127.0.0.1:8096', issuer: process.env.NID_ISSUER ?? 'https://id.nikitenok.ru', clientId: 'habit', secret: NID_HABIT_SECRET, redirectUri: 'https://habit.nikitenok.ru/' },
-      links: new HabitLinks(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'habit-nid.json')),
-    }
-  : null;
+let nidStatus: NidRevocations | null = null;
 const saves = new SaveStore(process.env.SAVES_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'saves.json'));
 const clans = new ClanStore(process.env.CLANS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'clans.json'));
 const friends = new FriendStore(process.env.FRIENDS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'friends.json'));
@@ -420,6 +412,7 @@ function loginOf(body: { initData?: unknown }): { login: string; name: string } 
   // Браузер после входа через Яндекс или Telegram присылает сессию (server/webAuth.ts).
   if (body.initData.startsWith('session:')) {
     const s = checkSession((t) => telemetry.sign(t), body.initData.slice(8), Date.now());
+    if (s?.login.startsWith('nid:') && !nidStatus?.accepts('nid_' + s.login.slice(4), s.version ?? 0)) return null;
     return s && { login: s.login, name: cleanName(s.name) };
   }
   const tgUser = BOT_TOKEN ? verifyInitData(body.initData, BOT_TOKEN) : null;
@@ -582,7 +575,7 @@ async function onAuthApi(path: string, req: IncomingMessage, res: ServerResponse
       const login = u && nidLogin(u.nid);
       if (!u || !login) return done('login-error=nid');
       attachNid(accounts, login, u.logins, (id) => accountDeps.card(id) !== null);
-      return done(`session=${sessionToken(sign, login, u.name, now)}`);
+      return done(`session=${sessionToken(sign, login, u.name, now, u.version)}`);
     } catch (e) {
       console.log(`nid login: ${e instanceof Error ? e.message : e}`);
       return done('login-error=nid');
@@ -1580,12 +1573,6 @@ const http = createServer((req, res) => {
       .catch(() => res.writeHead(400).end());
     return;
   }
-  // «Свобода» (habit.nikitenok.ru): вход через Family и копия прогресса (server/habit.ts).
-  if (path.startsWith('/api/habit/')) {
-    // Сводку в Family шлём только для людей Family; вошедшие лишь через ID (pid 'nid:…') Family неизвестны.
-    habitApi(path, req, res, habits, process.env.FAMILY_WEBHOOK_SECRET ?? '', (sum) => { if (!sum.pid.startsWith('nid:')) familyHabits.push(sum); }, Date.now, habitNid).catch(() => res.writeHead(500).end());
-    return;
-  }
   if (path.startsWith('/api/pro/')) {
     onProApi(path, req, res).catch(() => res.writeHead(500).end());
     return;
@@ -2012,7 +1999,9 @@ setInterval(() => {
   }
 }, 30_000);
 
-http.listen(PORT, () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
+const nidConfig = nidArena();
+if (nidConfig) nidStatus = new NidRevocations(nidConfig);
+http.listen(PORT, process.env.HOST ?? '127.0.0.1', () => console.log(`fit-arena server on :${PORT}, guests ${ALLOW_GUESTS ? 'allowed' : 'off'}`));
 // Напоминания: раз в несколько минут ищем тех, у кого наступил их час, а тренировки сегодня ещё не было.
 // Пишет игрокам хотя бы один бот: Telegram или Max.
 const ANY_BOT = !!(BOT_TOKEN || MAX_TOKEN);

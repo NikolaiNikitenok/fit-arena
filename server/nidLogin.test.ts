@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AccountStore, platformOf } from './accounts';
 import { attachNid, nidAuthorizeUrl, nidLogin, pkcePair } from './nidLogin';
 import { checkSession, sessionToken } from './webAuth';
+import { testTelegramLogin } from '../id/server/testLogin';
 
 const sign = (t: string) => createHmac('sha256', 'k').update(t).digest('hex').slice(0, 32);
 const NID = 'nid:0123456789abcdef';
@@ -81,7 +82,7 @@ describe('Арена ↔ настоящий сервер Nikitenok ID', () => {
     await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
     const base = `http://127.0.0.1:${(srv.address() as import('node:net').AddressInfo).port}`;
     try {
-      const cookie = (await fetch(`${base}/auth/telegram?${new URLSearchParams({ ...d, return: '/account' })}`, { redirect: 'manual' })).headers.get('set-cookie')!.split(';')[0];
+      const cookie = (await testTelegramLogin(base, new URLSearchParams({ ...d, return: '/account' }))).headers.get('set-cookie')!.split(';')[0];
       const codeOf = async (challenge: string) => {
         const r = await fetch(nidAuthorizeUrl(base, 'arena', REDIRECT, 'st', challenge), { redirect: 'manual', headers: { cookie } });
         const u = new URL(r.headers.get('location')!);

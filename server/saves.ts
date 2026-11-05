@@ -104,11 +104,14 @@ export class SaveStore {
   put(id: string, progress: unknown, now = Date.now()): Save {
     const s = this.touch(id);
     const p = progress as { savedAt?: unknown } | null;
-    const at = Number(p?.savedAt) || 0;
+    const requestedAt = Number(p?.savedAt);
+    const at = Number.isFinite(requestedAt) && requestedAt > 0 ? Math.min(requestedAt, now) : 0;
+    // Repair a legacy save stamped in the future so a corrected device can sync again.
+    if (s.savedAt > now) s.savedAt = now - 1;
     // Пустая копия поверх героя — почти всегда ошибка устройства (сброс без отметки resetAt): не принимаем.
     const wipe = hasHero(s.progress) && !hasHero(p) && !(Number((p as { resetAt?: unknown } | null)?.resetAt) > s.savedAt);
     if (p && typeof p === 'object' && at > s.savedAt && !wipe && JSON.stringify(p).length <= SAVE_MAX_BYTES) {
-      s.progress = p as Record<string, unknown>;
+      s.progress = { ...p, savedAt: at } as Record<string, unknown>;
       s.savedAt = at;
       // Подарок за возвращение игра уже забрала: на сервере он больше не нужен.
       if (s.gift && Array.isArray((p as { gifts?: unknown }).gifts) && ((p as { gifts: unknown[] }).gifts).includes(s.gift.id)) delete s.gift;

@@ -527,6 +527,7 @@ export interface LoginOpts {
   telegramBot?: string;
   /** Числовой id бота (первая часть токена): нужен для своей кнопки Telegram. */
   telegramBotId?: string;
+  telegramState?: string;
   yandex: boolean;
   error?: string;
 }
@@ -536,7 +537,7 @@ const serviceFor = (name: string) => SERVICES.find((s) => s.short === name || s.
 export function loginPage(o: LoginOpts): string {
   const tgReady = Boolean(o.telegramBot && o.telegramBotId);
   const tg = tgReady
-    ? `<button class="btn tg" type="button" id="tg-login" data-bot="${esc(o.telegramBotId)}" data-ret="${esc(o.ret)}" data-link="${o.link ? '1' : ''}" disabled>${I.telegram}<span>Войти через Telegram</span></button>`
+    ? `<button class="btn tg" type="button" id="tg-login" data-bot="${esc(o.telegramBotId)}" data-ret="${esc(o.ret)}" data-link="${o.link ? '1' : ''}" data-state="${esc(o.telegramState || '')}" disabled>${I.telegram}<span>Войти через Telegram</span></button>`
     : '';
   const q = `return=${encodeURIComponent(o.ret)}${o.link ? '&link=1' : ''}`;
   const ya = o.yandex ? `<a class="btn ya" href="/auth/yandex/start?${esc(q)}">${I.yandex}<span>Войти с Яндекс ID</span></a>` : '';
@@ -571,7 +572,7 @@ ${o.link ? '<a class="btn" href="/account" style="margin-top:12px">Отмена<
     ? `<script async src="https://telegram.org/js/telegram-widget.js?22" nonce="{{nonce}}"></script>
 <script nonce="{{nonce}}">(function(){var b=document.getElementById('tg-login');function ready(){return window.Telegram&&Telegram.Login&&Telegram.Login.auth}
 var n=0,t=setInterval(function(){if(ready()||++n>100){clearInterval(t);if(ready())b.disabled=false;else b.querySelector('span').textContent='Telegram недоступен';}},100);
-b.addEventListener('click',function(){Telegram.Login.auth({bot_id:b.dataset.bot,request_access:'write',lang:'ru'},function(d){if(!d)return;var q=new URLSearchParams();for(var k in d)q.set(k,d[k]);q.set('return',b.dataset.ret);if(b.dataset.link)q.set('link','1');location.href='/auth/telegram?'+q.toString();});});})();</script>`
+b.addEventListener('click',function(){Telegram.Login.auth({bot_id:b.dataset.bot,request_access:'write',lang:'ru'},function(d){if(!d)return;var q=new URLSearchParams();for(var k in d)q.set(k,d[k]);q.set('state',b.dataset.state);q.set('return',b.dataset.ret);if(b.dataset.link)q.set('link','1');location.href='/auth/telegram?'+q.toString();});});})();</script>`
     : '';
   return doc(o.link ? 'Новый способ входа — Nikitenok ID' : 'Вход — Nikitenok ID', body, script);
 }

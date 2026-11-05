@@ -65,7 +65,7 @@ import { focusOn, type Ctl, type ViewBld } from './Village3D';
 import { adviceCount, builderAdvice, upgradeNow } from './advice';
 import { Curtain, type CurtainPhase } from './Curtain';
 import { useViewSlot, ViewHost } from './Viewport';
-import { TroopSheet, TroopThumb } from './TroopInfo';
+import { TroopSheet, TroopThumb } from './TroopInfoSheet';
 import { LabSheet } from './LabSheet';
 import { canPlaceDecor, claimTheme, DECOR, DECOR_ERRORS, DECOR_GROUPS, DECOR_KINDS, decorAt, decorCtx, decorLock, decorOf, type DecorKind, freeDecorSpot, inSeason, moveDecor, occupied, ownedThemes, placeDecor, removeDecor, setTheme, THEME_IDS, THEMES, type ThemeId } from './decor';
 import { cancelResearch, finishResearchNow, labLevel, RESEARCH_ERRORS, startResearch, troopLevel, troopLevels } from '../../shared/villageLab';

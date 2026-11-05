@@ -44,6 +44,7 @@ const ACCESS_SEC = 3600;
 const STATE_TTL = 10 * 60_000;
 const COOKIE = 'nid_s';
 const STATE_COOKIE = 'nid_st';
+const TG_COOKIE = 'nid_tg';
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -101,6 +102,7 @@ export function createIdApp(cfg: IdConfig) {
   const now = cfg.now ?? Date.now;
   const f = cfg.fetch ?? fetch;
   const codes = new Map<string, Code>();
+  const telegramFlows = new Map<string, { sid: string | null; exp: number }>();
   const clients = new Map(cfg.clients.map((c) => [c.id, c]));
   const sign = (t: string) => createHmac('sha256', cfg.secret).update(t).digest('base64url');
   const secure = cfg.issuer.startsWith('https:') ? '; Secure' : '';
@@ -158,7 +160,7 @@ export function createIdApp(cfg: IdConfig) {
 
   function claimsFor(nid: string) {
     const acc = cfg.store.account(nid)!;
-    return { name: acc.name, logins: cfg.store.identities(nid).map((i) => i.login) };
+    return { name: acc.name, auth_version: cfg.store.version(nid), logins: cfg.store.identities(nid).map((i) => i.login) };
   }
 
   // ——— Вход: после проверки у провайдера ———
@@ -242,14 +244,14 @@ export function createIdApp(cfg: IdConfig) {
     const key = cfg.keys[0];
     const extra = claimsFor(c.nid);
     const idToken = signJwt(key, { iss: cfg.issuer, sub: c.nid, aud: c.client, iat, exp: iat + ID_TOKEN_SEC, ...(c.nonce ? { nonce: c.nonce } : {}), ...extra });
-    const access = signJwt(key, { iss: cfg.issuer, sub: c.nid, aud: c.client, iat, exp: iat + ACCESS_SEC, scope: c.scope, typ: 'at' });
+    const access = signJwt(key, { iss: cfg.issuer, sub: c.nid, aud: c.client, iat, exp: iat + ACCESS_SEC, scope: c.scope, typ: 'at', ver: cfg.store.version(c.nid) });
     json(res, 200, { access_token: access, token_type: 'Bearer', expires_in: ACCESS_SEC, id_token: idToken, scope: c.scope }, { Pragma: 'no-cache' });
   }
 
   function userinfo(req: IncomingMessage, res: ServerResponse): void {
     const t = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const c = verifyJwt(cfg.keys, t, Math.floor(now() / 1000));
-    if (!c || c.typ !== 'at' || c.iss !== cfg.issuer || typeof c.sub !== 'string' || !cfg.store.account(c.sub)) {
+    if (!c || c.typ !== 'at' || c.iss !== cfg.issuer || typeof c.sub !== 'string' || !cfg.store.account(c.sub) || Number(c.ver ?? 0) !== cfg.store.version(c.sub)) {
       return json(res, 401, { error: 'invalid_token' }, { 'WWW-Authenticate': 'Bearer error="invalid_token"' });
     }
     json(res, 200, { sub: c.sub, ...claimsFor(c.sub) });
@@ -271,14 +273,28 @@ export function createIdApp(cfg: IdConfig) {
     const link = url.searchParams.get('link') === '1';
     if (link && !current(req)) return redirect(res, `/login?return=${encodeURIComponent(ret)}`);
     const app = clients.get(url.searchParams.get('app') ?? '');
-    send(res, error ? 400 : 200, loginPage({ issuer: cfg.issuer, ret, link, appName: app?.name, telegramBot: cfg.telegram?.bot, telegramBotId: cfg.telegram?.token.split(':')[0], yandex: Boolean(cfg.yandex), error }));
+    const bind = randomBytes(24).toString('base64url');
+    for (const [key, flow] of telegramFlows) if (flow.exp < now()) telegramFlows.delete(key);
+    if (telegramFlows.size >= 10_000) telegramFlows.delete(telegramFlows.keys().next().value!);
+    telegramFlows.set(bind, { sid: link ? current(req)!.sid : null, exp: now() + STATE_TTL });
+    const telegramState = makeState(ret, link, bind);
+    send(res, error ? 400 : 200, loginPage({ issuer: cfg.issuer, ret, link, appName: app?.name, telegramBot: cfg.telegram?.bot, telegramBotId: cfg.telegram?.token.split(':')[0], telegramState, yandex: Boolean(cfg.yandex), error }), undefined, {
+      'Set-Cookie': `${TG_COOKIE}=${bind}; Path=/auth/telegram; HttpOnly; SameSite=Lax; Max-Age=600${secure}`,
+    });
   }
 
   function telegramRoute(req: IncomingMessage, res: ServerResponse, url: URL): void {
     const data = Object.fromEntries(url.searchParams);
+    const bind = cookies(req)[TG_COOKIE] ?? '';
+    const flow = telegramFlows.get(bind);
+    const st = readState(data.state, bind);
+    if (!flow || flow.exp < now() || !st || (st.l && (!flow.sid || current(req)?.sid !== flow.sid))) {
+      return send(res, 403, errorPage('Начни вход заново', 'Подтверди вход или привязку Telegram на странице Nikitenok ID.'));
+    }
+    telegramFlows.delete(bind);
     const u = cfg.telegram ? verifyTelegram(data, cfg.telegram.token, Math.floor(now() / 1000)) : null;
     if (!u) return loginRoute(req, res, url, 'Telegram не подтвердил вход. Попробуй ещё раз.');
-    finishLogin(req, res, `tg:${u.id}`, u.name, data.return ?? '/account', data.link === '1');
+    finishLogin(req, res, `tg:${u.id}`, u.name, st.r, st.l);
   }
 
   function yandexStart(_req: IncomingMessage, res: ServerResponse, url: URL): void {
@@ -394,6 +410,11 @@ export function createIdApp(cfg: IdConfig) {
       if (get && path === '/authorize') return authorize(req, res, url);
       if (req.method === 'POST' && path === '/token') return await token(req, res);
       if (path === '/userinfo' && (get || req.method === 'POST')) return userinfo(req, res);
+      if (req.method === 'POST' && path === '/api/revocations') {
+        const auth = clientAuth(req, await readBody(req));
+        if (!auth?.authed) return json(res, 401, { error: 'invalid_client' });
+        return json(res, 200, { versions: cfg.store.revocations() });
+      }
       if (req.method === 'POST' && path === '/api/resolve') return await resolveApi(req, res);
       if (get && path === '/login') return loginRoute(req, res, url);
       if (get && path === '/auth/telegram') return telegramRoute(req, res, url);

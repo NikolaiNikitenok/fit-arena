@@ -12,6 +12,20 @@ describe('копии прогресса', () => {
     expect(s.get('tg:1')!.progress).toMatchObject({ coins: 99 });
   });
 
+  it('future clocks cannot block later saves and legacy future dates recover', () => {
+    const s = new SaveStore(null); const now = 1_800_000_000_000;
+    s.put('tg:1', { coins: 10, savedAt: now + 86_400_000 }, now);
+    expect(s.get('tg:1')!.savedAt).toBe(now);
+    expect(s.get('tg:1')!.progress?.savedAt).toBe(now);
+    s.put('tg:1', { coins: 11, savedAt: now + 1 }, now + 1);
+    expect(s.get('tg:1')!.progress?.coins).toBe(11);
+    s.get('tg:1')!.savedAt = now + 365 * 86_400_000;
+    s.put('tg:1', { coins: 12, savedAt: now + 2 }, now + 2);
+    expect(s.get('tg:1')!.progress?.coins).toBe(12);
+    s.put('tg:1', { coins: 0, savedAt: Infinity }, now + 3);
+    expect(s.get('tg:1')!.progress?.coins).toBe(12);
+  });
+
   it('напоминание: в свой час, раз в день и только если не тренировался', () => {
     const s = new SaveStore(null);
     // Москва: UTC+3, напомнить в 19:00 — это 16:00 UTC.

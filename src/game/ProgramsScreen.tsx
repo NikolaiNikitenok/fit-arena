@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { amountText, EXERCISE_LABELS, repsEquivalent } from '../repCounter';
 import { Check, Coin, Moon, Pause, Play, Timer } from '../icons';
 import { sfx } from '../audio';
-import { AchBadge } from './Achievements';
+import { AchBadge } from './AchievementsSheet';
 import { ACHIEVEMENTS } from './achievements';
 import { Remark } from './Dialog';
 import { OutfitFace } from './EventScreen';

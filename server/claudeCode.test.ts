@@ -44,7 +44,7 @@ describe('Claude Code для канала', () => {
     socks.close();
   });
 
-  it('запускает claude -p без инструментов и отдаёт текст ответа', async () => {
+  it.skipIf(process.platform === 'win32')('запускает claude -p без инструментов и отдаёт текст ответа', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-'));
     const bin = join(dir, 'claude');
     // Поддельный claude: печатает аргументы, токен и запрос из stdin в поле result.
@@ -56,7 +56,7 @@ describe('Claude Code для канала', () => {
     expect(out).toContain('--system-prompt SYS|tok|тема');
   });
 
-  it('ошибка Claude Code приходит текстом, токен вырезан', async () => {
+  it.skipIf(process.platform === 'win32')('ошибка Claude Code приходит текстом, токен вырезан', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-'));
     const bin = join(dir, 'claude');
     writeFileSync(bin, `#!/bin/sh\ncat >/dev/null\nprintf '{"type":"result","is_error":true,"result":"401 bad token secret-tok"}'\nexit 1\n`);
