@@ -243,7 +243,7 @@ export type Written = { topic?: string; text?: string; mentions_app?: boolean; i
 export function parseJson(text: string): Written {
   const a = text.indexOf('{');
   const b = text.lastIndexOf('}');
-  if (a < 0 || b < a) throw new Error('Claude ответил не JSON');
+  if (a < 0 || b < a) throw new Error('Генератор ответил не JSON');
   return JSON.parse(text.slice(a, b + 1));
 }
 
@@ -281,6 +281,7 @@ export function agentFetch(agent: () => https.Agent): typeof fetch {
 }
 
 export interface ChannelDeps {
+  generateText?: (system: string, prompt: string) => Promise<string>;
   apiKey: () => string;
   // Токен подписки из `claude setup-token`: если есть, пишем через Claude Code, ключ API — запасной путь.
   claudeToken?: () => string;
@@ -303,6 +304,7 @@ export interface ChannelDeps {
 
 /** Подписка через Claude Code, если есть токен; не вышло — API-ключ, если он есть. */
 export async function writePost(d: ChannelDeps, system: string, prompt: string): Promise<Written> {
+  if (d.generateText) return parseJson(await d.generateText(system, prompt));
   const errors: string[] = [];
   if (d.claudeToken?.() && d.claudeCode) {
     try {
@@ -384,7 +386,7 @@ export class Channel {
   status(): string {
     const last = this.state.posts.at(-1);
     return [
-      `Канал: ${this.d.channel}, подписка Claude: ${this.d.claudeToken?.() ? 'есть' : 'нет'}, ключ API: ${this.d.apiKey() ? 'есть' : 'нет'}`,
+      this.d.generateText ? `Канал: ${this.d.channel}, генерация: Codex на компьютере` : `Канал: ${this.d.channel}, подписка Claude: ${this.d.claudeToken?.() ? 'есть' : 'нет'}, ключ API: ${this.d.apiKey() ? 'есть' : 'нет'}`,
       `Постов: ${this.state.posts.length}${last ? `, последний ${new Date(last.at + MSK).toISOString().slice(0, 16).replace('T', ' ')} МСК — ${last.rubric}: ${last.topic}` : ''}`,
       this.lastError ? `Последняя ошибка: ${this.lastError}` : 'Ошибок нет',
       'Команды: /channel_draft — черновик тебе, /channel_post — опубликовать сейчас',
@@ -393,7 +395,7 @@ export class Channel {
 
   /** Раз в минуту из index.ts: публикуем, если наступил слот. До трёх попыток с паузой 10 минут. */
   tick(now = Date.now()): void {
-    if (this.busy || now < this.nextTry || !(this.d.apiKey() || this.d.claudeToken?.())) return;
+    if (this.busy || now < this.nextTry || !(this.d.generateText || this.d.apiKey() || this.d.claudeToken?.())) return;
     const slot = dueSlot(now, this.state);
     if (!slot || (this.tries.get(slot) ?? 0) >= 3) return;
     this.tries.set(slot, (this.tries.get(slot) ?? 0) + 1);
@@ -410,7 +412,7 @@ export class Channel {
     const fresh = freshCommits(commits, this.state);
     const prompt = userPrompt({ now, ...plan, recent: this.state.posts.slice(-60), commits: fresh });
     const out = await writePost(this.d, SYSTEM_PROMPT, prompt);
-    if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
+    if (!out.text || !out.topic) throw new Error('пустой ответ генератора');
     const aboutApp = plan.rubric === 'app' || plan.rubric === 'news' || (plan.mentionsApp && !!out.mentions_app);
     return {
       rubric: plan.rubric,

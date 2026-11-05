@@ -41,13 +41,15 @@ function run(command, argv, { input = '', cwd = root, timeout = 300_000 } = {}) 
 
 async function bridge(command, value = {}) {
   const raw = await run(settings.ssh || 'ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
-    '-o', 'StrictHostKeyChecking=yes', settings.host, 'python3', '/usr/local/sbin/arena-content-queue.py', command], {
+    '-o', 'StrictHostKeyChecking=yes', settings.host, 'python3', '/usr/local/sbin/arena-content-queue.py', command,
+    ...(value.post ? ['--dir', '/opt/arena-server/data/post-jobs'] : [])], {
     input: JSON.stringify({ worker: settings.worker || 'windows-codex', ...value }), timeout: 25_000,
   });
   return JSON.parse(raw);
 }
 
 async function processJob(job) {
+  if (job.workflow === 'post.json') return processPost(job);
   const dir = join(state, 'jobs', job.id); mkdirSync(dir, { recursive: true });
   const kind = job.inputs.kind || '';
   // The loop validator needs to know whether the real render job will fetch an uploaded clip.
@@ -79,19 +81,46 @@ async function processJob(job) {
   await bridge('fail', { id: job.id, lease: job.lease, error: 'Три попытки генерации не прошли. Проверь вход ChatGPT и доступные лимиты Codex на компьютере' });
 }
 
+async function processPost(job) {
+  const dir = join(state, 'jobs', job.id); mkdirSync(dir, { recursive: true });
+  const schema = join(dir, 'schema.json');
+  writeFileSync(schema, JSON.stringify({ type: 'object', properties: {
+    topic: { type: 'string' }, text: { type: 'string' }, mentions_app: { type: 'boolean' }, images: { type: 'array', items: { type: 'string' } },
+  }, required: ['topic', 'text', 'mentions_app', 'images'], additionalProperties: false }));
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      if (Date.now() >= job.expiresAt) break;
+      const answer = join(dir, `post-${attempt}.json`);
+      await run(settings.codex || 'codex', ['exec', '--ephemeral', '--ignore-user-config', '--sandbox', 'read-only',
+        '--skip-git-repo-check', '--color', 'never', '--output-schema', schema, '-o', answer, '-'], {
+        input: `Не вызывай инструменты и не выполняй команды: все данные ниже.\n${job.system}\n\n${job.prompt}\n\nВерни только JSON по заданной схеме.`, cwd: dir, timeout: 240_000,
+      });
+      const script = JSON.parse(readFileSync(answer, 'utf8'));
+      if (typeof script.text !== 'string' || !script.text.trim() || typeof script.topic !== 'string' || !script.topic.trim()
+        || typeof script.mentions_app !== 'boolean' || !Array.isArray(script.images) || !script.images.every(v => typeof v === 'string')) throw new Error('Invalid post');
+      await bridge('complete', { post: true, id: job.id, lease: job.lease, script });
+      log(`completed ${job.id.slice(0, 8)} (post.json)`);
+      return;
+    } catch { log(`post attempt ${attempt} failed for ${job.id.slice(0, 8)}`); }
+  }
+  await bridge('fail', { post: true, id: job.id, lease: job.lease, error: 'Codex не подготовил пост. Проверь вход ChatGPT и лимиты на компьютере' });
+}
+
 const heartbeat = setInterval(() => bridge('heartbeat').catch(() => {}), 30_000);
 heartbeat.unref();
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { stopping = true; });
 log('content worker started; ChatGPT auth stays local');
 while (!stopping) {
   try {
-    const { job } = await bridge('claim');
-    if (job) {
+    const { job } = (await bridge('claim', { post: true }));
+    const next = job || (await bridge('claim')).job;
+    if (next) {
+      const job = next;
       log(`claimed ${job.id.slice(0, 8)} (${job.workflow})`);
       try { await processJob(job); }
       catch {
         log(`job setup or delivery failed for ${job.id.slice(0, 8)}`);
-        await bridge('fail', { id: job.id, lease: job.lease, error: 'Не удалось подготовить задание на компьютере. Проверь настройки обработчика' });
+        await bridge('fail', { post: job.workflow === 'post.json', id: job.id, lease: job.lease, error: 'Не удалось подготовить задание на компьютере. Проверь настройки обработчика' });
       }
       if (args.includes('--once')) break;
       continue;
