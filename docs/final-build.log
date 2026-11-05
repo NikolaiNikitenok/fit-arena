@@ -129,7 +129,7 @@ dist/assets/Canvas3D-xAS1Z_3n.js                           926.20 kB │ gzip: 2
 
 [INEFFECTIVE_DYNAMIC_IMPORT] src/game/EventScreen.tsx is dynamically imported by src/game/Adventure.tsx but also statically imported by src/friends/InviteOffer.tsx, src/game/CollectionsSheet.tsx, src/game/HeroHome.tsx, src/game/HolidayScreen.tsx, src/game/ProgramsScreen.tsx, ..., dynamic import will not move module into another chunk.
 
-[plugin builtin:vite-reporter] 
+[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting

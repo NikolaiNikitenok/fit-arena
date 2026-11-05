@@ -21,4 +21,3 @@ Replace `const THREE = require("three")` with `import * as THREE from "three"`.
 
     Isolate  106 workers spawned · ~432ms startup each (spawn + environment, per file)
              at least ~6.11s faster with isolate: false — reuses workers across files instead of one per file
-
