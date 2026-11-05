@@ -1,0 +1,8 @@
+
+> fit-arena@1.0.0 build:id
+> esbuild id/server/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-id/id.cjs
+
+
+  dist-id\id.cjs  113.8kb
+
+Done in 91ms

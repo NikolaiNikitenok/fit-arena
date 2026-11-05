@@ -150,7 +150,7 @@ function rotate(lm: Landmark[], deg: number, aspect: number): Landmark[] {
 
 /** Сторона тела, лучше видимая камере (0 — левая, 1 — правая). */
 function bestSide(lm: Landmark[], ids: number[]): number {
-  const vis = (s: number) => ids.reduce((sum, i) => sum + (lm[i]?.visibility ?? 1), 0);
+  const vis = (s: number) => ids.reduce((sum, i) => sum + (lm[i + s]?.visibility ?? 1), 0);
   return vis(0) >= vis(1) ? 0 : 1;
 }
 
@@ -210,6 +210,8 @@ export class RepCounter {
   private lastT: number | null = null;
   // Поворот кадра, при котором поза в прошлый раз совпала.
   private rotation = 0;
+  // После потери обязательных точек сначала снова увидеть исходное положение.
+  private reacquiring = false;
 
   // Пороги угла: личные после калибровки или общие из RULES.
   readonly down: number;
@@ -235,6 +237,18 @@ export class RepCounter {
     this.failHint = null;
     this.grace.reset();
     this.lastT = null;
+    this.reacquiring = false;
+  }
+
+  /** Не соединяем две видимые части движения через пропущенное наблюдение. */
+  private trackingLost(hint: string): RepState {
+    this.smoothed = null;
+    this.lastT = null;
+    this.grace.reset();
+    this.formOk = true;
+    this.failHint = null;
+    this.reacquiring = true;
+    return (this.state = { ...this.state, phase: 'up', angle: null, hint });
   }
 
   /**
@@ -244,15 +258,15 @@ export class RepCounter {
   update(raw: Landmark[] | undefined, timestampMs: number, aspect = 1, rotations: number[] = [0]): RepState {
     const rule = RULES[this.exercise];
     if (!raw || raw.length < 33) {
-      return (this.state = { ...this.state, hint: t('Встань в кадр целиком') });
+      return this.trackingLost(t('Встань в кадр целиком'));
     }
     const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
 
-    const ids = rule.joint.flat();
+    const ids = rule.joint.map((pair) => pair[0]);
     const side = bestSide(scaled, ids);
     const [a, b, c] = rule.joint.map((pair) => scaled[pair[side]]);
     if ([a, b, c].some((p) => (p.visibility ?? 1) < (rule.minVisibility ?? MIN_VISIBILITY))) {
-      return (this.state = { ...this.state, hint: t('Камера не видит суставы') });
+      return this.trackingLost(t('Камера не видит суставы'));
     }
     // Телефон положен боком: ищем поворот кадра, при котором «низ» совпадает с полом. Прошлый удачный — первым.
     const order = [this.rotation, ...rotations.filter((r) => r !== this.rotation)].filter((r) => rotations.includes(r));
@@ -276,6 +290,11 @@ export class RepCounter {
     const failed = rule.posture.find((check) => !check.ok(lm, side));
     let hint: string | null = failed?.hint ?? null;
     const postureBad = this.grace.update(!!failed, timestampMs);
+
+    if (this.reacquiring) {
+      if (value > this.up && !failed) this.reacquiring = false;
+      return (this.state = { reps, phase: 'up', angle: Math.round(value), hint });
+    }
 
     if (phase === 'up' && value < this.down && !postureBad) {
       phase = 'down';
@@ -327,7 +346,7 @@ export function plankFault(lm: Landmark[], s: number): string | null {
   if (tilt(sh, end) > PLANK_TILT) return PLANK_HINTS.pose;
   // Опора: локоть, а если его не видно — кисть. Ниже плеча и под ним, а не вытянута вперёд или вдоль тела.
   const support = seen(lm[ELBOW[s]]) ? lm[ELBOW[s]] : seen(lm[WRIST[s]]) ? lm[WRIST[s]] : null;
-  if (support && (support.y <= sh.y || tilt(sh, support) < PLANK_ARM_TILT)) return PLANK_HINTS.arms;
+  if (!support || support.y <= sh.y || tilt(sh, support) < PLANK_ARM_TILT) return PLANK_HINTS.arms;
   if (angle(sh, hip, end) < PLANK_STRAIGHT) {
     // Где таз относительно линии плечо — стопа: ниже (y больше) — провис, выше — «домик».
     const tm = (hip.x - sh.x) / (end.x - sh.x || 1e-6);

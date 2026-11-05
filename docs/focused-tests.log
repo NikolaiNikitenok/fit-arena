@@ -1,0 +1,17 @@
+
+> fit-arena@1.0.0 test
+> vitest run src/i18n/i18n.test.ts src/cameraError.test.ts src/game/WorkoutSession.test.tsx src/useRepCamera.test.ts
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/updates/changelog" without a file extension (vite.config.ts:6:27). Add the file extension
+  - import "../i18n" resolves to a directory index (src/updates/changelog.ts:5:19). Import the index file directly
+  - import "./en" without a file extension (src/i18n/index.ts:5:20). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 C:/Users/k8909/OneDrive/Документы/ChatGPT/NIKITENOK ECOSYSTEM/arena-modernization
+
+
+ Test Files  4 passed (4)
+      Tests  26 passed (26)
+   Start at  20:20:10
+   Duration  1.19s (transform 45%, tests 33%, import 20%, worker 2%)

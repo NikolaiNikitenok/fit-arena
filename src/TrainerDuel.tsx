@@ -282,7 +282,7 @@ export function TrainerDuel({ exercise, onExit }: { exercise: RepExercise; onExi
             title={t('Дуэль с тренером: {0} · {1}', { 0: npc.name, 1: EXERCISE_LABELS[exercise] })}
             hint={camera.hint}
             onGo={() => {
-              camera.go();
+              if (!camera.go()) return;
               launch(GATE_COUNTDOWN_MS);
             }}
           />

@@ -1,6 +1,7 @@
 // Отчёты об ошибках и анонимная статистика на наш сервер (server/telemetry.ts).
 // Уходит: версия сборки, платформа Telegram, браузер, размер экрана, «экономия батареи»,
 // откуда открыли (метка ссылки), анонимный id (хеш, shared/anon.ts) и короткие события. Ни id в Telegram, ни имени, ни видео.
+import { TELEMETRY_EVENT_BATCH, trainingReporter, type TrainingEvent, type TrainingMetadata } from '../shared/trainingTelemetry';
 import { anonId } from '../shared/anon';
 import { getSettings } from './settings';
 import { appSource, guestId, tg } from './telegram';
@@ -9,7 +10,7 @@ declare const __APP_VERSION__: string;
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
 
 /** События — тот же список, что на сервере (EVENTS в server/telemetry.ts). */
-export type TrackEvent = 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance' | 'group_join' | 'group_create' | 'invite_card' | 'offer_seen' | 'buy_tap' | 'buy_result' | 'offer_popup' | 'warmup' | 'post_share' | 'morning' | 'auto_post' | 'channel_offer' | 'style_pick' | 'intro';
+export type TrackEvent = TrainingEvent | 'app_open' | 'onb_step' | 'onb_done' | 'mission_start' | 'mission_win' | 'mission_lose' | 'camera_granted' | 'camera_denied' | 'duel_start' | 'raid_start' | 'program_start' | 'event_start' | 'dungeon_start' | 'dungeon_win' | 'dungeon_lose' | 'recap_open' | 'recap_share' | 'home_shortcut' | 'share_chat' | 'emoji_status' | 'manual_start' | 'first_rep' | 'unlock' | 'letter_open' | 'gift_claim' | 'weekly_card' | 'ghost_fight' | 'village_th2' | 'balance' | 'group_join' | 'group_create' | 'invite_card' | 'offer_seen' | 'buy_tap' | 'buy_result' | 'offer_popup' | 'warmup' | 'post_share' | 'morning' | 'auto_post' | 'channel_offer' | 'style_pick' | 'intro';
 
 export type ErrorKind = 'error' | 'promise' | 'react' | 'camera' | 'model' | 'webgl';
 
@@ -24,7 +25,18 @@ const ENDPOINT = '/api/telemetry';
 // За сессию отправляем не больше 60 разных ошибок: зациклившийся рендер не зальёт сервер.
 const MAX_ERRORS_PER_SESSION = 60;
 
-let events: { n: TrackEvent; p?: number | string }[] = [];
+interface QueuedEvent { n: TrackEvent; p?: number | string; sid: string; at: number; v: string; id: string; m?: TrainingMetadata }
+let events: QueuedEvent[] = [];
+// A new opaque token per app process, never derived from the account or stored.
+let telemetrySession: string | null = null;
+let eventSequence = 0;
+const sessionId = () => telemetrySession ??= (globalThis.crypto?.randomUUID?.().replace(/-/g, '') ?? `local_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`);
+function queueEvent(n: TrackEvent, p?: number | string, m?: TrainingMetadata): void {
+  events.push({ n, ...(p == null ? {} : { p }), sid: sessionId(), at: Date.now(), v: APP_VERSION, id: String(++eventSequence), ...(m ? { m } : {}) });
+  if (events.length > 100) events = events.slice(-100);
+  schedule();
+}
+export const createTrainingTelemetry = () => trainingReporter((n, m) => queueEvent(n, undefined, m));
 const errors = new Map<string, QueuedError>();
 let errorsSent = 0;
 let anon: Promise<string> | null = null;
@@ -47,9 +59,7 @@ const schedule = (ms = 8000) => {
 
 /** Событие для статистики. p — номер уровня, шаг знакомства и т. п. */
 export function track(n: TrackEvent, p?: number | string): void {
-  events.push(p == null ? { n } : { n, p });
-  if (events.length > 100) events = events.slice(-100);
-  schedule();
+  queueEvent(n, p);
 }
 
 // Время до первого засчитанного повтора у новичка: от первого открытия знакомства до повтора.
@@ -142,8 +152,9 @@ export function reportCameraFailure(e: unknown, stage: 'camera' | 'model'): void
 /** Отправить накопленное. sendBeacon доходит, даже если мини-приложение закрывают. */
 export async function flush(): Promise<void> {
   if (!events.length && !errors.size) return;
-  const batch = { events, errors: [...errors.values()] };
-  events = [];
+  // Match the server's event limit. Remaining events stay queued for a separate batch.
+  const batch = { events: events.splice(0, TELEMETRY_EVENT_BATCH), errors: [...errors.values()] };
+  if (events.length) schedule(100);
   errorsSent += errors.size;
   errors.clear();
   let id = '';
