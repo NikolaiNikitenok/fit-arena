@@ -55,7 +55,7 @@ def action(directory, command, request):
         job.pop('lease', None)
         if command == 'complete':
             script = request.get('script')
-            if not isinstance(script, dict) or len(json.dumps(script).encode()) > 35_000: raise ValueError('Invalid or oversized draft')
+            if not isinstance(script, dict) or len(json.dumps(script, ensure_ascii=False).encode('utf-8')) > 35_000: raise ValueError('Invalid or oversized draft')
             job['script'] = script; state = 'ready'
         else:
             job['error'] = str(request.get('error', 'generation failed'))[:500]; state = 'error'
