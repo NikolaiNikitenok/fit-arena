@@ -71,7 +71,8 @@ async function processJob(job) {
       return;
     } catch (e) { error = String(e.message).slice(-800); log(`attempt ${attempt} failed for ${job.id.slice(0, 8)}`); }
   }
-  await bridge('fail', { id: job.id, lease: job.lease, error: error.replace(/(?:sk-|gh[pousr]_)[A-Za-z0-9_-]+/g, '[redacted]') });
+  // Provider stderr can contain local paths or account details; never send it to Telegram.
+  await bridge('fail', { id: job.id, lease: job.lease, error: 'Три попытки генерации не прошли. Проверь вход ChatGPT и доступные лимиты Codex на компьютере' });
 }
 
 const heartbeat = setInterval(() => bridge('heartbeat').catch(() => {}), 30_000);
@@ -83,7 +84,11 @@ while (!stopping) {
     const { job } = await bridge('claim');
     if (job) {
       log(`claimed ${job.id.slice(0, 8)} (${job.workflow})`);
-      await processJob(job);
+      try { await processJob(job); }
+      catch {
+        log(`job setup or delivery failed for ${job.id.slice(0, 8)}`);
+        await bridge('fail', { id: job.id, lease: job.lease, error: 'Не удалось подготовить задание на компьютере. Проверь настройки обработчика' });
+      }
       if (args.includes('--once')) break;
       continue;
     }

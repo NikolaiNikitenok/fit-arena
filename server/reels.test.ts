@@ -4,6 +4,14 @@ import { REEL_COOLDOWN, Reels } from "./reels";
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("рилсы", () => {
+  it('подтверждает очередь без обещания срока при выключенном компьютере', async () => {
+    const out: string[] = [];
+    const reels = new Reels(null, { token: () => 'gh', dispatch: async () => ({ ok: true, queued: 'abcd1234' }) });
+    reels.command(42, '/reel босс', (text) => out.push(text)); await flush();
+    expect(out[0]).toContain('abcd1234');
+    expect(out[0]).toContain('дождётся его включения');
+    expect(out[0]).not.toContain('минут');
+  });
   it("запускает сборку с номером и темой, второй раз сразу не даёт", async () => {
     let now = 1_000_000;
     const runs: Record<string, string>[] = [];
