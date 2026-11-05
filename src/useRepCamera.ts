@@ -106,14 +106,16 @@ export function useRepCamera(preload = true) {
   /** onFrame вызывается каждый кадр; вернёт false — камера остановится.
    *  persist: false — итог калибровки не сохраняется сам (повторная калибровка из настроек).
    *  gate: true — после включения камеры ждём go() (кнопка «Начать»): игрок видит себя и ставит телефон.
+   *  autoGo: true — у одиночной managed-тренировки готовая поза открывает gate без кнопки.
    *  onCalibrated — сколько повторов сделано на калибровке (и при пропуске): их можно засчитать в бой. */
-  const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean; persist?: boolean; gate?: boolean; prepare?: boolean; onError?: (error: unknown) => void; onCalibrated?: (reps: number) => void } = {}) => {
+  const start = async (exercise: Exercise, onRep: () => void, onFrame?: () => boolean, opts: { calibrate?: boolean; persist?: boolean; gate?: boolean; prepare?: boolean; autoGo?: boolean; onError?: (error: unknown) => void; onCalibrated?: (reps: number) => void } = {}) => {
     if (starting.current || streamRef.current) throw new Error('Камера уже запущена');
     starting.current = true;
     const run = ++generation.current;
     const current = () => generation.current === run;
     let ownFailure = false;
     const managed = POSITIONING_ENABLED && opts.prepare === true;
+    const autoGo = managed && opts.gate === true && opts.autoGo === true;
     const report: ReturnType<typeof createTrainingTelemetry> = managed ? createTrainingTelemetry() : () => {};
     exerciseStarted.current = false;
     attemptReport.current = report;
@@ -122,7 +124,7 @@ export function useRepCamera(preload = true) {
     let failedAttempts = 0;
     let previousValid = false;
     let previousStage = 'POSITIONING';
-    const preparation = new TrainingLifecycle(STABLE_MS);
+    let preparation = new TrainingLifecycle(STABLE_MS);
     preparation.load();
     setTrainingState('CAMERA_LOADING');
     setPreparing(managed);
@@ -177,9 +179,9 @@ export function useRepCamera(preload = true) {
       calibRef.current = null;
       setCalib(null);
       gateRef.current = beginCalib;
-      setWaiting(true);
+      setWaiting(!autoGo);
     } else beginCalib();
-    lifecycle.current = new TrainingLifecycle(STABLE_MS, 0);
+    lifecycle.current = new TrainingLifecycle(STABLE_MS, autoGo ? 3000 : 0);
     lifecycle.current.cameraReady();
     preparation.cameraReady(true);
     let spokenSecond = -1;
@@ -246,8 +248,13 @@ export function useRepCamera(preload = true) {
           setTrainingState(readiness);
           setHint(!POSITIONING_ENABLED ? null : valid ? (readyRef.current ? null : t('Удерживай положение')) : observed.hint ?? t('Встань в кадр'));
           setAngle(getSettings().skeleton ? state.angle : null);
-          frameRef.current = requestAnimationFrame(loop);
-          return;
+          if (!autoGo || !readyRef.current || !go()) {
+            frameRef.current = requestAnimationFrame(loop);
+            return;
+          }
+          // Keep the ready pose: proceed straight into one countdown, without
+          // requiring a second stability window after the invisible gate opens.
+          preparation = lifecycle.current;
         }
         drawReadiness(valid && (released || preparation.state === 'COUNTDOWN'));
         const c = calibRef.current;

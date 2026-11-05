@@ -52,6 +52,7 @@ describe('WorkoutSession retry callbacks (mock React scheduler/camera)', () => {
     const render = () => { h.cursor = 0; h.effects.length = 0; return WorkoutSession(props); };
     findButton(render()).props.onClick();
     await Promise.resolve(); await Promise.resolve();
+    expect(h.start).toHaveBeenLastCalledWith('squat', expect.any(Function), undefined, expect.objectContaining({ autoGo: true, calibrate: false, gate: true, prepare: true }));
     render();
     const cleanupFirst = h.effects[1]() as () => void;
     vi.advanceTimersByTime(5200);

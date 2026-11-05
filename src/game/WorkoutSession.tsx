@@ -5,7 +5,6 @@ import { track } from '../telemetry';
 import { amountText, EXERCISE_LABELS, goalText, isTimed, type RepExercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
 import { CalibrationOverlay } from '../CalibrationOverlay';
-import { needsCalibration } from '../calibration';
 import { POSITIONING_ENABLED, useRepCamera } from '../useRepCamera';
 import { say, unlockVoice, useVoiceCoach } from '../voice';
 import { useSettings } from '../settings';
@@ -175,7 +174,8 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     try {
       credit.current = 0;
       await camera.start(sets[0].exercise, onRep, undefined, {
-        calibrate: needsCalibration(sets[0].exercise),
+        calibrate: false,
+        autoGo: true,
         gate: true,
         prepare: true,
         onError: () => { setError(t('Ошибка распознавания. Повтори запуск камеры')); setPhase('error'); },
@@ -194,7 +194,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
         return;
       }
     }
-    st.until = performance.now() + PREP_S * 1000;
+    st.until = performance.now() + (POSITIONING_ENABLED ? 0 : PREP_S * 1000);
     setNow(performance.now());
     setPhase('prep');
   };

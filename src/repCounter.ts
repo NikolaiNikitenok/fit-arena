@@ -274,7 +274,7 @@ export class RepCounter {
     ) ?? preferred;
     const [a, b, c] = rule.joint.map((pair) => scaled[pair[side]]);
     if ([a, b, c].some((p) => (p.visibility ?? 1) < (rule.minVisibility ?? MIN_VISIBILITY))) {
-      return this.trackingLost(t('Камера не видит суставы'));
+      return this.trackingLost(this.exercise === 'pushup' ? t('Для подсчёта покажи руку целиком: плечо, локоть и кисть. Поставь телефон сбоку') : t('Камера не видит суставы'));
     }
     // Телефон положен боком: ищем поворот кадра, при котором «низ» совпадает с полом. Прошлый удачный — первым.
     const order = [this.rotation, ...rotations.filter((r) => r !== this.rotation)].filter((r) => rotations.includes(r));
@@ -444,16 +444,19 @@ export function exerciseReadiness(exercise: Exercise, raw: Landmark[] | undefine
   const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
   const finite = (p: Landmark) => Number.isFinite(p.x) && Number.isFinite(p.y);
   const order = rotations.length ? rotations : [0];
-  let fallback = { angle: null as number | null, hint: t('Камера не видит суставы') as string | null };
+  let fallback = { angle: null as number | null, hint: (exercise === 'pushup' ? t('Для старта покажи плечо, кисть и таз хотя бы с одной стороны. Поставь телефон сбоку') : t('Камера не видит суставы')) as string | null };
   const preferred = bestSide(scaled, exercise === 'plank' ? [11, 13, 23, 25, 27] : RULES[exercise].joint.map((pair) => pair[0]));
   for (const side of [preferred, 1 - preferred]) {
-    const ids = exercise === 'plank' ? [SHOULDER[side], HIP[side]] : RULES[exercise].joint.map((pair) => pair[side]);
+    // In the straight-arm starting pose the elbow can be occluded. It is
+    // required by RepCounter during reps, but is not needed to locate the support.
+    const ids = exercise === 'pushup' ? [SHOULDER[side], WRIST[side], HIP[side]] : exercise === 'plank' ? [SHOULDER[side], HIP[side]] : RULES[exercise].joint.map((pair) => pair[side]);
     const minimum = exercise === 'plank' ? 0.5 : RULES[exercise].minVisibility ?? MIN_VISIBILITY;
     if (ids.some((id) => !finite(scaled[id]) || (scaled[id].visibility ?? 1) < minimum)) continue;
     for (const rotation of order) {
       const lm = rotate(scaled, rotation, aspect);
       const hint = exercise === 'plank' ? plankFault(lm, side) : RULES[exercise].posture.find((check) => !check.ok(lm, side))?.hint ?? null;
-      const value = exercise === 'plank' ? angle(lm[SHOULDER[side]], lm[HIP[side]], lowest(lm, side)) : angle(...(ids.map((id) => lm[id]) as [Landmark, Landmark, Landmark]));
+      // This angle describes initial body alignment, not a counted repetition.
+      const value = exercise === 'pushup' ? angle(lm[SHOULDER[side]], lm[HIP[side]], bodyEnd(lm, side)) : exercise === 'plank' ? angle(lm[SHOULDER[side]], lm[HIP[side]], lowest(lm, side)) : angle(...(ids.map((id) => lm[id]) as [Landmark, Landmark, Landmark]));
       if (hint === null) return { angle: Math.round(value), hint: null };
       fallback = { angle: Math.round(value), hint };
     }
