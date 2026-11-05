@@ -29,6 +29,8 @@ const sigOf = (key: string, payload: string) => createHmac('sha256', key).update
 export interface Who {
   pid: string;
   name: string;
+  nid?: string;
+  version?: number;
 }
 
 function check(key: string, token: unknown): Record<string, unknown> | null {
@@ -67,16 +69,16 @@ export function makeSso(key: string, who: Who, nowMs: number): string {
 }
 
 export function makeSession(key: string, who: Who, nowMs: number): string {
-  const payload = b64(JSON.stringify({ s: 1, pid: who.pid, name: who.name, exp: Math.floor(nowMs / 1000) + SESSION_SEC }));
+  const payload = b64(JSON.stringify({ s: 2, pid: who.pid, name: who.name, ...(who.nid ? { nid: who.nid, version: who.version ?? 0 } : {}), exp: Math.floor(nowMs / 1000) + SESSION_SEC }));
   return `${payload}.${sigOf(key, payload)}`;
 }
 
 export function verifySession(key: string, token: unknown, nowMs: number): Who | null {
   const d = check(key, token);
-  if (!d || d.s !== 1) return null;
+  if (!d || d.s !== 2) return null;
   const pid = cleanPid(d.pid);
   if (!pid || !(Number(d.exp) > nowMs / 1000)) return null;
-  return { pid, name: cleanName(d.name) };
+  return { pid, name: cleanName(d.name), ...(typeof d.nid === 'string' ? { nid: d.nid, version: Number(d.version) || 0 } : {}) };
 }
 
 export interface HabitSave {
@@ -113,25 +115,26 @@ export class HabitStore {
         history = [{ state: cur.state, savedAt: cur.savedAt, replacedAt: Date.now() }, ...history].slice(0, HISTORY_MAX);
       }
       this.data[pid] = { state, savedAt, name: name || cur?.name || '', ...(history.length ? { history } : {}) };
-      this.flush();
+      this.schedule();
     }
     return this.data[pid];
   }
   remove(pid: string): void {
     delete this.data[pid];
-    this.flush();
+    this.schedule();
   }
-  private flush(): void {
+  flush(): void {
+    if (!this.timer) return;
+    clearTimeout(this.timer);
+    this.timer = null;
+    mkdirSync(dirname(this.file), { recursive: true });
+    writeFileSync(this.file + '.tmp', JSON.stringify(this.data));
+    renameSync(this.file + '.tmp', this.file);
+  }
+  private schedule(): void {
     if (this.timer) return;
     this.timer = setTimeout(() => {
-      this.timer = null;
-      try {
-        mkdirSync(dirname(this.file), { recursive: true });
-        writeFileSync(this.file + '.tmp', JSON.stringify(this.data));
-        renameSync(this.file + '.tmp', this.file);
-      } catch (e) {
-        console.error('habit store', e);
-      }
+      try { this.flush(); } catch (e) { console.error('habit store', e); }
     }, 500);
   }
 }
@@ -172,6 +175,7 @@ export interface NidConfig {
   secret: string;
   redirectUri: string;
   fetch?: typeof fetch;
+  sessionValid?: (nid: string, version: number) => boolean;
 }
 
 let jwksCache: { at: number; keys: { kid: string; publicKey: KeyObject }[] } | null = null;
@@ -185,7 +189,7 @@ async function nidKeys(cfg: NidConfig, nowMs: number, force = false): Promise<{ 
 }
 
 /** Код из Nikitenok ID → кто вошёл. Подпись id_token проверяем, хотя он и пришёл напрямую от ID. */
-export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: string, nowMs: number): Promise<{ nid: string; name: string; logins: string[] } | null> {
+export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: string, nowMs: number): Promise<{ nid: string; name: string; logins: string[]; version: number } | null> {
   const r = await (cfg.fetch ?? fetch)(`${cfg.internal}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -199,7 +203,7 @@ export async function exchangeNidCode(cfg: NidConfig, code: string, verifier: st
   if (!c || c.iss !== cfg.issuer || c.aud !== cfg.clientId || typeof c.sub !== 'string' || !/^nid_[0-9a-f]{8,40}$/.test(c.sub)) return null;
   // Привязанные к ID входы (tg:/ya:/max:): по ним приложение узнаёт уже знакомого человека.
   const logins = Array.isArray(c.logins) ? c.logins.filter((l): l is string => typeof l === 'string' && l.length < 40).slice(0, 20) : [];
-  return { nid: c.sub, name: cleanName(c.name), logins };
+  return { nid: c.sub, name: cleanName(c.name), logins, version: Number(c.auth_version) || 0 };
 }
 
 function readBody(req: IncomingMessage, max: number): Promise<Record<string, unknown>> {
@@ -271,7 +275,7 @@ export async function habitApi(path: string, req: IncomingMessage, res: ServerRe
   if (path === '/api/habit/nid') {
     if (!nid) return send(503, { error: 'off' });
     if (typeof body.code !== 'string' || body.code.length > 200) return send(400);
-    let got: { nid: string; name: string } | null = null;
+    let got: { nid: string; name: string; version: number } | null = null;
     try {
       got = await exchangeNidCode(nid.cfg, body.code, typeof body.verifier === 'string' ? body.verifier.slice(0, 200) : '', now());
     } catch (e) {
@@ -286,7 +290,7 @@ export async function habitApi(path: string, req: IncomingMessage, res: ServerRe
       pid = before.pid;
       nid.links.set(got.nid, pid);
     }
-    const who: Who = { pid: pid ?? `nid:${got.nid}`, name: got.name || before?.name || '' };
+    const who: Who = { pid: pid ?? `nid:${got.nid}`, name: got.name || before?.name || '', nid: got.nid, version: got.version };
     const saved = store.get(who.pid);
     return send(200, { session: makeSession(key, who, now()), name: who.name || saved?.name || '', state: saved?.state ?? null, savedAt: saved?.savedAt ?? 0, via: 'nid', family: !who.pid.startsWith('nid:') });
   }
@@ -299,7 +303,7 @@ export async function habitApi(path: string, req: IncomingMessage, res: ServerRe
   }
   const auth = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
   const who = verifySession(key, auth, now());
-  if (!who) return send(401, { error: 'no session' });
+  if (!who || (who.nid && nid?.cfg.sessionValid && !nid.cfg.sessionValid(who.nid, who.version ?? 0))) return send(401, { error: 'no session' });
   if (path === '/api/habit/load') {
     const saved = store.get(who.pid);
     return send(200, { name: who.name, state: saved?.state ?? null, savedAt: saved?.savedAt ?? 0 });

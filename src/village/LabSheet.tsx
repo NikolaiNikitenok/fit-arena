@@ -5,7 +5,7 @@ import { Lock, Timer } from '../icons';
 import { ResRow } from './BattleScreen';
 import { Bolt } from './icons';
 import { fmtTime } from './state';
-import { TroopThumb } from './TroopInfo';
+import { TroopThumb } from './TroopInfoSheet';
 import { Sheet } from '../Sheet';
 import { t } from '../i18n';
 

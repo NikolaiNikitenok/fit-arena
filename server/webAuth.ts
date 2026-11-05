@@ -15,19 +15,19 @@ type Sign = (text: string) => string;
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 /** Сессия браузера: base64url({l: вход, n: имя, e: срок}).подпись. */
-export function sessionToken(sign: Sign, login: string, name: string, now: number): string {
-  const body = Buffer.from(JSON.stringify({ l: login, n: name.slice(0, 40), e: now + SESSION_DAYS * 86_400_000 })).toString('base64url');
+export function sessionToken(sign: Sign, login: string, name: string, now: number, version = 0): string {
+  const body = Buffer.from(JSON.stringify({ l: login, n: name.slice(0, 40), ...(version ? { v: version } : {}), e: now + SESSION_DAYS * 86_400_000 })).toString('base64url');
   return `${body}.${sign(`session:${body}`)}`;
 }
 
-export function checkSession(sign: Sign, token: unknown, now: number): { login: string; name: string } | null {
+export function checkSession(sign: Sign, token: unknown, now: number): { login: string; name: string; version?: number } | null {
   if (typeof token !== 'string' || token.length > 600) return null;
   const [body, sig] = token.split('.');
   if (!body || !sig || !same(sig, sign(`session:${body}`))) return null;
   try {
-    const d = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { l?: unknown; n?: unknown; e?: unknown };
+    const d = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { l?: unknown; n?: unknown; e?: unknown; v?: unknown };
     if (typeof d.l !== 'string' || !/^(?:(tg|ya):\d{1,20}|nid:[0-9a-f]{8,40})$/.test(d.l) || typeof d.e !== 'number' || d.e < now) return null;
-    return { login: d.l, name: typeof d.n === 'string' ? d.n : '' };
+    return { login: d.l, name: typeof d.n === 'string' ? d.n : '', ...(Number(d.v) ? { version: Number(d.v) } : {}) };
   } catch {
     return null;
   }

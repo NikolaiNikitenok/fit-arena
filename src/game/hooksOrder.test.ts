@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('порядок хуков в Adventure', () => {
   it('нет хуков после ранних return', () => {
-    const src = readFileSync(join(__dirname, 'Adventure.tsx'), 'utf8');
+    const src = readFileSync(join(__dirname, 'Adventure.tsx'), 'utf8').replace(/\r\n/g, '\n');
     const start = src.indexOf('export function Adventure(');
     const end = src.indexOf('\n}\n', start);
     const body = src.slice(start, end);

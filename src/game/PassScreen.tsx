@@ -4,7 +4,7 @@ import { gearById, gearIcon, gearText, itemById, potionById, RARITY_COLORS, RARI
 import { heroHands } from './power';
 import { OutfitPreview } from './OutfitPreview';
 import { Sheet } from '../Sheet';
-import { HeroThumb } from '../village/TroopInfo';
+import { HeroThumb } from '../village/TroopInfoSheet';
 import { heroLook } from './outfitSkin';
 import { claimPassTier, claimQuest, PASS_TIERS, questXp, passEndsAt, passQuests, passWeekEndsAt, passRewards, passTier, type PassReward, type Quest, questValue, rewardLabel, type Track } from './pass';
 import { passOf, Progress } from './progress';

@@ -9,6 +9,7 @@ import { createIdApp, safeReturn } from './app';
 import { jwks, loadKeys, newKey, signJwt, verifyJwt } from './jwt';
 import { verifyTelegram } from './providers';
 import { IdStore } from './store';
+import { beginTelegram, testTelegramLogin } from './testLogin';
 
 const BOT = '123456:TEST-token';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -47,6 +48,7 @@ describe('IdStore', () => {
     s.remove(a);
     expect(s.session(sid)).toBeNull();
     expect(s.resolve('tg:1')).toBeNull();
+    expect(s.version(a)).toBe(1);
   });
   it('делает резервную копию базы', () => {
     const dir = mkdtempSync(join(tmpdir(), 'nid-'));
@@ -136,7 +138,7 @@ describe('OIDC: полный вход', () => {
     expect(page).toContain('Вход для продолжения в');
 
     const q = new URLSearchParams({ ...tgParams('42', 'Коля'), return: auth });
-    const r2 = await get('/auth/telegram?' + q);
+    const r2 = await testTelegramLogin(base, q);
     expect(r2.status).toBe(302);
     expect(r2.headers.get('location')).toBe(auth);
     const cookie = r2.headers.get('set-cookie')!.split(';')[0];
@@ -168,6 +170,41 @@ describe('OIDC: полный вход', () => {
     expect((await fetch(base + '/userinfo', { headers: { Authorization: 'Bearer ' + t.id_token } })).status).toBe(401);
   });
 
+  it('Telegram callback requires one-use browser state and the original linking session', async () => {
+    const victim = store.signIn('ya:9001', 'Victim').nid;
+    const cookie = `nid_s=${store.newSession(victim)}`;
+    const params = new URLSearchParams({ ...tgParams('9002', 'Other'), link: '1', return: '/account' });
+    expect((await get('/auth/telegram?' + params, cookie)).status).toBe(403);
+    expect(store.resolve('tg:9002')).toBeNull();
+    const flow = await beginTelegram(base, params, cookie);
+    expect((await fetch(flow.url, { redirect: 'manual', headers: { cookie } })).status).toBe(403);
+    const otherSid = `nid_s=${store.newSession(victim)}`;
+    expect((await fetch(flow.url, { redirect: 'manual', headers: { cookie: flow.cookie.replace(cookie, otherSid) } })).status).toBe(403);
+    expect((await fetch(flow.url, { redirect: 'manual', headers: { cookie: flow.cookie } })).headers.get('location')).toBe('/account?msg=linked');
+    expect(store.resolve('tg:9002')).toBe(victim);
+    expect((await fetch(flow.url, { redirect: 'manual', headers: { cookie: flow.cookie } })).status).toBe(403);
+    const ordinary = await beginTelegram(base, new URLSearchParams({ ...tgParams('9003', 'New') }));
+    const changed = new URL(ordinary.url); changed.searchParams.set('link', '1');
+    await fetch(changed, { redirect: 'manual', headers: { cookie: `${cookie}; ${ordinary.cookie}` } });
+    expect(store.resolve('tg:9003')).not.toBe(victim);
+  });
+
+  it('logout on all devices revokes existing app tokens and the feed requires client auth', async () => {
+    const params = new URLSearchParams({ ...tgParams('9100', 'Session'), return: '/account' });
+    const cookie = (await testTelegramLogin(base, params)).headers.get('set-cookie')!.split(';')[0];
+    const nid = store.resolve('tg:9100')!;
+    const page = await (await get('/account', cookie)).text();
+    const csrf = /name="csrf" value="([^"]+)"/.exec(page)![1];
+    const oldToken = signJwt(keys[0], { iss: base, sub: nid, aud: 'habit', typ: 'at', ver: 0, exp: Math.floor(Date.now() / 1000) + 60 });
+    const userinfo = () => fetch(base + '/userinfo', { headers: { Authorization: 'Bearer ' + oldToken } });
+    expect((await userinfo()).status).toBe(200);
+    await fetch(base + '/account', { method: 'POST', redirect: 'manual', headers: { cookie }, body: new URLSearchParams({ action: 'logout_all', csrf }) });
+    expect((await userinfo()).status).toBe(401);
+    expect((await fetch(base + '/api/revocations', { method: 'POST', body: '{}' })).status).toBe(401);
+    const feed = await fetch(base + '/api/revocations', { method: 'POST', body: new URLSearchParams({ client_id: 'habit', client_secret: 'habit-secret' }) });
+    expect(((await feed.json()) as { versions: Record<string, number> }).versions[nid]).toBe(1);
+  });
+
   it('главная: карточки всех сервисов, у подключённых отметка входа', async () => {
     const r = await get('/');
     expect(r.status).toBe(200);
@@ -187,7 +224,7 @@ describe('OIDC: полный вход', () => {
 
   it('PKCE для публичного клиента', async () => {
     const q = new URLSearchParams({ ...tgParams('43', 'Аня'), return: '/account' });
-    const cookie = (await get('/auth/telegram?' + q)).headers.get('set-cookie')!.split(';')[0];
+    const cookie = (await testTelegramLogin(base, q)).headers.get('set-cookie')!.split(';')[0];
     const verifier = 'v'.repeat(50);
     const challenge = createHash('sha256').update(verifier).digest('base64url');
     const r = await get(`/authorize?client_id=pub&redirect_uri=${encodeURIComponent('https://app.example/cb')}&response_type=code&scope=openid&code_challenge=${challenge}&code_challenge_method=S256`, cookie);
@@ -208,13 +245,13 @@ describe('OIDC: полный вход', () => {
 
   it('страница аккаунта: привязка, csrf, удаление', async () => {
     const q = new URLSearchParams({ ...tgParams('44', 'Петя'), return: '/account' });
-    const cookie = (await get('/auth/telegram?' + q)).headers.get('set-cookie')!.split(';')[0];
+    const cookie = (await testTelegramLogin(base, q)).headers.get('set-cookie')!.split(';')[0];
     const page = await (await get('/account', cookie)).text();
     expect(page).toContain('Петя');
     const csrf = /name="csrf" value="([^"]+)"/.exec(page)![1];
     // Привязка чужого Telegram (tg:42 уже занят) — отказ.
     const link = new URLSearchParams({ ...tgParams('42', 'Коля'), return: '/account', link: '1' });
-    expect((await get('/auth/telegram?' + link, cookie)).headers.get('location')).toBe('/account?msg=taken');
+    expect((await testTelegramLogin(base, link, cookie)).headers.get('location')).toBe('/account?msg=taken');
     const post = (body: Record<string, string>) => fetch(base + '/account', { method: 'POST', redirect: 'manual', headers: { cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
     expect((await post({ action: 'delete', sure: '1', csrf: 'bad' })).status).toBe(403);
     expect(store.resolve('tg:44')).toBeTruthy();

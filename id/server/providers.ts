@@ -9,7 +9,7 @@ export function verifyTelegram(data: Record<string, string>, botToken: string, n
   const hash = data.hash;
   if (!botToken || typeof hash !== 'string' || !/^\d{1,20}$/.test(data.id ?? '')) return null;
   const check = Object.keys(data)
-    .filter((k) => k !== 'hash' && k !== 'return' && k !== 'link')
+    .filter((k) => k !== 'hash' && k !== 'return' && k !== 'link' && k !== 'state')
     .sort()
     .map((k) => `${k}=${data[k]}`)
     .join('\n');
@@ -17,7 +17,7 @@ export function verifyTelegram(data: Record<string, string>, botToken: string, n
   const want = createHmac('sha256', secret).update(check).digest('hex');
   if (!same(hash, want)) return null;
   const at = Number(data.auth_date);
-  if (!Number.isFinite(at) || nowS - at > LOGIN_MAX_AGE_S) return null;
+  if (!Number.isFinite(at) || at <= 0 || nowS - at > LOGIN_MAX_AGE_S || at - nowS > 300) return null;
   const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || (data.username ? '@' + data.username : 'Telegram');
   return { id: data.id, name };
 }

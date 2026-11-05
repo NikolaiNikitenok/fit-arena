@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createIdApp } from '../id/server/app';
 import { newKey } from '../id/server/jwt';
 import { IdStore } from '../id/server/store';
+import { testTelegramLogin } from '../id/server/testLogin';
 import { HabitLinks, HabitStore, habitApi, habitKey, makeSession } from './habit';
 
 const BOT = '1:T';
@@ -52,7 +53,7 @@ describe('вход в «Свободу» через Nikitenok ID', () => {
 
   /** Входит в ID через Telegram и проходит /authorize — возвращает код для «Свободы». */
   async function codeFor(tgId: string): Promise<string> {
-    const cookie = (await fetch(`${idBase}/auth/telegram?${new URLSearchParams({ ...tg(tgId), return: '/account' })}`, { redirect: 'manual' })).headers.get('set-cookie')!.split(';')[0];
+    const cookie = (await testTelegramLogin(idBase, new URLSearchParams({ ...tg(tgId), return: '/account' }))).headers.get('set-cookie')!.split(';')[0];
     const r = await fetch(`${idBase}/authorize?client_id=habit&redirect_uri=${encodeURIComponent('https://habit.nikitenok.ru/')}&response_type=code&scope=openid&state=s1`, { redirect: 'manual', headers: { cookie } });
     return new URL(r.headers.get('location')!).searchParams.get('code')!;
   }

@@ -64,3 +64,22 @@ describe('история копий', () => {
     expect(st.get('p')!.savedAt).toBe(3);
   });
 });
+
+
+describe('durable habit shutdown', () => {
+  it('flush persists pending changes before its timer and deletion survives reopening', async () => {
+    const { HabitStore } = await import('./habit');
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'habit-flush-'));
+    const file = join(dir, 'habit.json');
+    const store = new HabitStore(file);
+    store.put('f1:p1', 'Test', { habits: [{ id: 'a' }] }, 1);
+    store.flush();
+    expect(new HabitStore(file).get('f1:p1')?.savedAt).toBe(1);
+    store.remove('f1:p1'); store.flush();
+    expect(new HabitStore(file).get('f1:p1')).toBeNull();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

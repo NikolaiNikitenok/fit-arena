@@ -2,7 +2,7 @@ import { type Exercise } from '../repCounter';
 import { Plan } from '../icons';
 import { availability, programById, programsOf, type SetPlan } from './programs';
 import type { Progress } from './progress';
-import type { QuickWorkout } from './Programs';
+import type { QuickWorkout } from './ProgramsScreen';
 import './Programs.css';
 import { t } from '../i18n';
 

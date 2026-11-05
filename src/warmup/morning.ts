@@ -3,7 +3,7 @@
 // Без камеры — герой просто показывает движения по таймеру, в счёт ничего не идёт.
 import { dayKey, type Progress } from '../game/progress';
 import type { Baseline } from '../game/levels';
-import type { QuickWorkout } from '../game/Programs';
+import type { QuickWorkout } from '../game/ProgramsScreen';
 import { t } from '../i18n';
 import type { RoutineStep } from './RoutineRun';
 
