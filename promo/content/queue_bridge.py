@@ -39,6 +39,9 @@ def action(directory, command, request):
             try: os.rename(source, target)
             except FileNotFoundError: continue
             job = json.loads(target.read_text(encoding='utf-8'))
+            if job.get('expiresAt', now + 1) <= now:
+                os.replace(target, directory / (job['id'] + '.cancelled.json'))
+                continue
             job.update(lease=secrets.token_hex(24), startedAt=now)
             write(directory, target.name, job)
             return {'job': job}
@@ -48,7 +51,7 @@ def action(directory, command, request):
         if not re.fullmatch(r'[0-9a-f]{24}', job_id): raise ValueError('Invalid job id')
         source = directory / (job_id + '.working.json')
         if not source.exists():
-            if any((directory / (job_id + '.' + state + '.json')).exists() for state in ['ready', 'submitted', 'failed', 'dispatching']): return {'ok': True}
+            if any((directory / (job_id + '.' + state + '.json')).exists() for state in ['ready', 'submitted', 'failed', 'dispatching', 'cancelled', 'consumed']): return {'ok': True}
             raise ValueError('Job is no longer claimed')
         job = json.loads(source.read_text(encoding='utf-8'))
         if not hmac.compare_digest(str(job.get('lease', '')), str(request.get('lease', ''))): raise ValueError('Worker lease changed')

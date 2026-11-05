@@ -10,6 +10,15 @@ bridge = importlib.util.module_from_spec(spec); spec.loader.exec_module(bridge)
 
 
 class QueueLeaseTests(unittest.TestCase):
+    def test_expired_post_is_not_generated_and_cancelled_result_is_ignored(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder); job_id = 'c' * 24
+            bridge.write(directory, job_id + '.queued.json', {'id': job_id, 'expiresAt': 1})
+            self.assertIsNone(bridge.action(directory, 'claim', {})['job'])
+            self.assertTrue((directory / (job_id + '.cancelled.json')).is_file())
+            self.assertTrue(bridge.action(directory, 'complete', dict(id=job_id, lease='old', script={}))['ok'])
+            self.assertFalse((directory / (job_id + '.ready.json')).exists())
+
     def test_expired_worker_cannot_complete_reclaimed_job(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)

@@ -70,6 +70,7 @@ import { PersonalChannel } from './personalChannel';
 import { Threads } from './threads';
 import { CHANNEL_MEDIA, mediaDir } from './channelMedia';
 import { runClaudeCode } from './claudeCode';
+import { PostQueue } from './postQueue';
 import { AccountStore } from './accounts';
 import { NidRevocations } from './nidRevocations';
 import { attachNid, NID_COOKIE, NID_REDIRECT_PATH, nidAuthorizeUrl, nidLogin, pkcePair } from './nidLogin';
@@ -651,11 +652,13 @@ const npcFeed = new NpcFeed(join(dirname(process.env.DATA_FILE ?? 'data/profiles
   write: (system, prompt) => writePost(channelDeps, system, prompt),
   log: (m) => console.log(m),
 });
-const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), channelDeps);
+const postQueue = new PostQueue(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'post-jobs'));
+const postDeps = { ...channelDeps, ...(process.env.POST_PROVIDER === 'codex-local' ? { generateText: (system: string, prompt: string) => postQueue.generate(system, prompt) } : {}) };
+const channel = new Channel(process.env.CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'channel.json'), postDeps);
 // Личный канал автора: черновик раз в день, публикация только по кнопке админа.
 const PERSONAL_CHANNEL = process.env.PERSONAL_CHANNEL ?? '@nikitenokN';
 const personal = new PersonalChannel(process.env.PERSONAL_CHANNEL_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'personal-channel.json'), {
-  ...channelDeps,
+  ...postDeps,
   channel: PERSONAL_CHANNEL,
   approvers: () => admins.ids().map(Number),
   stats: () => telemetry.summaryText(),

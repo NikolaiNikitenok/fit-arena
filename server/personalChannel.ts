@@ -1,5 +1,5 @@
 // Личный канал автора (@nikitenokN): один пост в день, но только после подтверждения.
-// В 20:00 по Москве бот спрашивает админа, о чём пост: по его фразе пишет черновик (или тему выбирает Claude, если попросили
+// В 20:00 по Москве бот спрашивает админа, о чём пост: по его фразе пишет черновик (или тему выбирает генератор, если попросили
 // кнопкой или за 3 часа ответа не было) и присылает его с кнопками «Опубликовать», «Другой вариант», «Пропустить».
 // Ответом на черновик можно прислать свой скриншот (заменит картинки) или свой текст (заменит текст).
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -119,20 +119,21 @@ export class PersonalChannel {
     const last = [...this.state.posts].reverse().find((p) => !p.skipped);
     return [
       `Личный канал: ${this.d.channel}, черновик в ${PERSONAL_HOURS.map((h) => `${h}:00`).join(', ')} МСК, публикация после «Опубликовать»`,
+      ...(this.d.generateText ? ['Генерация: Codex на компьютере'] : []),
       `Постов: ${this.state.posts.filter((p) => !p.skipped).length}${last ? `, последний — ${last.topic}` : ''}${this.state.pending ? '. Черновик ждёт решения' : this.state.asking ? '. Жду тему поста' : ''}`,
       this.lastError ? `Последняя ошибка: ${this.lastError}` : 'Ошибок нет',
       'Команды: /channel_me — спросить тему сейчас, /channel_me фраза — сразу черновик по фразе',
     ].join('\n');
   }
 
-  /** Раз в минуту: в 20:00 спрашиваем тему, если сегодня поста ещё не было. Без ответа за 3 часа тему выбирает Claude. Неотвеченный черновик живёт сутки. */
+  /** Раз в минуту: в 20:00 спрашиваем тему, если сегодня поста ещё не было. Без ответа за 3 часа тему выбирает генератор. Неотвеченный черновик живёт сутки. */
   tick(now = Date.now()): void {
     const p = this.state.pending;
     if (p && now - p.at > DAY) {
       this.state.pending = null;
       this.save();
     }
-    if (this.busy || this.state.pending || !(this.d.apiKey() || this.d.claudeToken?.()) || !this.d.approvers().length) return;
+    if (this.busy || this.state.pending || !(this.d.generateText || this.d.apiKey() || this.d.claudeToken?.()) || !this.d.approvers().length) return;
     const a = this.state.asking;
     if (a) {
       if (now - a.at > ASK_WAIT) this.start(a, undefined, 'Темы не дождался — пишу пост сам, черновик пришлю сюда.');
@@ -150,7 +151,7 @@ export class PersonalChannel {
     });
   }
 
-  /** Спрашиваем админов, о чём пост: ответ фразой — тема, кнопки — «пусть Claude выберет» или «без поста». */
+  /** Спрашиваем админов, о чём пост: ответ фразой — тема, кнопки — «выбрать тему автоматически» или «без поста». */
   async ask(slot: string, now = Date.now()): Promise<void> {
     await this.clearAsk('Вопрос заменён новым.');
     const a: Asking = { id: now.toString(36), slot, at: now, controls: [] };
@@ -159,7 +160,7 @@ export class PersonalChannel {
         chat_id: chatId,
         text: `✍️ О чём написать пост в ${this.d.channel} сегодня?\n\nНапиши фразу — например «как нейросеть узнаёт позу по камере» или «сегодня доделал деревню», и я напишу черновик по ней. Опубликую только после «Опубликовать».`,
         reply_markup: {
-          inline_keyboard: [[{ text: '🎲 Пусть Claude выберет', callback_data: `pc:auto:${a.id}` }], [{ text: '✖️ Сегодня без поста', callback_data: `pc:none:${a.id}` }]],
+          inline_keyboard: [[{ text: '🎲 Выбрать тему автоматически', callback_data: `pc:auto:${a.id}` }], [{ text: '✖️ Сегодня без поста', callback_data: `pc:none:${a.id}` }]],
         },
       });
       const id = (r.result as { message_id?: number } | undefined)?.message_id;
@@ -174,7 +175,7 @@ export class PersonalChannel {
     for (const c of this.state.asking?.controls ?? []) await this.d.bot('editMessageText', { chat_id: c.chatId, message_id: c.messageId, text: note }).catch(() => null);
   }
 
-  /** Тема есть (или её выбирает Claude): убираем вопрос и пишем черновик. */
+  /** Тема есть (или её выбирает генератор): убираем вопрос и пишем черновик. */
   private start(a: Asking, idea: string | undefined, note: string): void {
     this.busy = true;
     this.state.asking = null;
@@ -194,7 +195,7 @@ export class PersonalChannel {
     const rubric: PersonalRubric = idea ? 'idea' : planPersonal(now, this.state, commits);
     const prompt = personalPrompt({ now, rubric, recent: this.state.posts.filter((p) => !p.skipped).slice(-60), commits, stats: rubric === 'status' || rubric === 'idea' ? this.d.stats() : '', idea });
     const out = await writePost(this.d, PERSONAL_SYSTEM, prompt);
-    if (!out.text || !out.topic) throw new Error('пустой ответ Claude');
+    if (!out.text || !out.topic) throw new Error('пустой ответ генератора');
     const media: MediaRef[] = rubric !== 'fact' && this.d.upload && this.d.mediaDir ? pickMedia(out.images).slice(0, 2).map((file) => ({ file })) : [];
     return { rubric, topic: out.topic.slice(0, 120), text: telegramHtml(out.text), mentionsApp: false, media };
   }
@@ -272,7 +273,7 @@ export class PersonalChannel {
         const a = this.state.asking;
         if (!a || a.id !== id) return answer(cb.id, 'Этот вопрос уже неактуален'), true;
         if (this.busy) return answer(cb.id, 'Подожди, я ещё пишу'), true;
-        if (action === 'auto') return answer(cb.id, 'Выбираю тему сам…'), this.start(a, undefined, '🎲 Тему выбирает Claude — черновик пришлю сюда.'), true;
+        if (action === 'auto') return answer(cb.id, 'Выбираю тему сам…'), this.start(a, undefined, '🎲 Выбираю тему автоматически — черновик пришлю сюда.'), true;
         answer(cb.id, 'Сегодня без поста');
         this.state.posts.push({ at: Date.now(), slot: a.slot, rubric: 'idea', topic: 'без поста', mentionsApp: false, skipped: true });
         this.state.asking = null;
