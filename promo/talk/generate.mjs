@@ -1,3 +1,4 @@
+import { isMain, preparedDraft, QUALITY_BRIEF } from '../content/protocol.mjs';
 // Сценарий рилса «от персонажа»: герои игры по очереди рассказывают про NikitenokArena, крупно как во влоге
 // или в углу поверх геймплея. Ведущий и тон меняются по кругу от номера рилса.
 // Запуск: node generate.mjs <номер> [тема] → script.json. Нужен CLAUDE_CODE_OAUTH_TOKEN или ANTHROPIC_API_KEY.
@@ -7,7 +8,8 @@ import { askApi, askClaude, FACTS } from '../reels/generate.mjs';
 const catalog = JSON.parse(readFileSync(new URL('../reels/catalog.json', import.meta.url), 'utf8'));
 const music = JSON.parse(readFileSync(new URL('../reels/music/library.json', import.meta.url), 'utf8'));
 const n = Number(process.argv[2] ?? 0) || 0;
-const topic = (process.argv[3] ?? '').trim().slice(0, 300);
+const prepared = preparedDraft(process.argv[3]);
+const topic = (prepared?.topic ?? process.argv[3] ?? '').trim().slice(0, 300);
 
 // Мужские персонажи игры (src/game/npcs.ts): модель, окраска, голос (сдвиг тона и темпа edge-tts; запасной —
 // локальный Piper: голос и сдвиг тона) и характер.
@@ -51,7 +53,7 @@ export function pick(n) {
   return { host, tone, guest };
 }
 
-function prompt({ host, tone, guest }) {
+export function prompt({ host, tone, guest }) {
   const clips = Object.entries(catalog).map(([id, c]) => `- ${id} (${(c.to - c.from).toFixed(1)} с): ${c.about}`).join('\n');
   const who = (id) => `${id} — ${CAST[id].name} (${CAST[id].role}): ${CAST[id].about}`;
   return `Напиши сценарий вертикального рилса для Instagram (20–28 секунд) про фитнес-игру NikitenokArena. Рассказывают персонажи самой игры, человека в кадре нет. Цель — чтобы рилс досматривали и шли в приложение.
@@ -111,18 +113,18 @@ export function problems(s, { host, guest }) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const p = pick(n);
   let last = '';
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const text = prompt(p) + (last ? `\n\nПрошлый вариант не прошёл проверку: ${last}. Исправь.` : '');
-      const raw = process.env.CLAUDE_CODE_OAUTH_TOKEN ? askClaude(text) : await askApi(text);
+      const raw = prepared ? JSON.stringify(prepared.script) : process.env.CLAUDE_CODE_OAUTH_TOKEN ? askClaude(text + QUALITY_BRIEF) : await askApi(text + QUALITY_BRIEF);
       const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
       const bad = problems(json, p);
       if (bad.length) throw new Error(bad.join('; '));
       for (const l of json.lines) l.say = l.say.replace(/Никитенок/g, 'Никитёнок');
-      writeFileSync('script.json', JSON.stringify({ n, ...p, topic, cast: { [p.host]: CAST[p.host], [p.guest]: CAST[p.guest] }, ...json }, null, 2));
+      writeFileSync('script.json', JSON.stringify({ n, ...p, topic, cast: { [p.host]: CAST[p.host], [p.guest]: CAST[p.guest] }, ...json, provider: prepared ? 'codex-local' : 'claude' }, null, 2));
       console.log(JSON.stringify(json, null, 2));
       process.exit(0);
     } catch (e) {

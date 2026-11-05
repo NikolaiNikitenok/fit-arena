@@ -22,7 +22,7 @@ export interface ReelsDeps {
     token: string,
     inputs: Record<string, string>,
     workflow: string,
-  ) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<{ ok: boolean; error?: string; queued?: string }>;
   now?: () => number;
 }
 
@@ -35,7 +35,7 @@ export async function dispatchReel(
   token: string,
   inputs: Record<string, string>,
   workflow = "reel.yml",
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; queued?: string }> {
   try {
     const r = await fetch(
       `https://api.github.com/repos/${REEL_REPO}/actions/workflows/${workflow}/dispatches`,
@@ -240,6 +240,8 @@ export class Reels {
         // Своя метка у каждого ролика и карусели: ссылку с ней ставь в стикер сторис, закреп или профиль —
         // статистика («Контент по цифрам») покажет, сколько пришло и вернулось именно с него.
         const tagLine = `\n🔗 Ссылка с меткой для этой публикации: ${contentLink(job, n)}`;
+        if (r.ok && r.queued)
+          return reply(`📝 Задание ${r.queued}: ${J.what} №${n}${about} в очереди Codex. Сценарий подготовится на компьютере, затем пришлю готовые файлы сюда. Если компьютер выключен, задание дождётся его включения. Статус: /content` + tagLine);
         if (r.ok)
           return reply(
             (            job === "carousel"

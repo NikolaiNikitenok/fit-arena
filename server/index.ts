@@ -75,7 +75,8 @@ import { NidRevocations } from './nidRevocations';
 import { attachNid, NID_COOKIE, NID_REDIRECT_PATH, nidAuthorizeUrl, nidLogin, pkcePair } from './nidLogin';
 import { checkSession, checkState, oauthState, sessionToken, verifyTelegramLogin, yandexAuthorizeUrl, yandexUser } from './webAuth';
 import { type AccountDeps, accountApi } from './accountApi';
-import { Reels } from './reels';
+import { Reels, dispatchReel } from './reels';
+import { ContentQueue } from './contentQueue';
 import { StartNotices } from './startNotices';
 import { cameraDays, CityStore } from './cities';
 import { balanceCommand, BalanceFile } from './balance';
@@ -673,8 +674,16 @@ const threads = new Threads(process.env.THREADS_FILE ?? join(dirname(process.env
   ignoreText: (t) => t.trim() in ADMIN_BUTTONS,
 });
 // Рилсы для Instagram: кнопка запускает сборку в GitHub Actions (server/reels.ts), токен — секрет GH_ACTIONS_TOKEN → .gh-token.
+const contentToken = () => process.env.GH_ACTIONS_TOKEN || readToken(join(__dirname, '.gh-token'));
+const contentQueue = new ContentQueue(join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'content-jobs'), {
+  dispatch: (inputs, workflow) => dispatchReel(contentToken(), inputs, workflow),
+  notify: (chat, text) => botApi(BOT_TOKEN)('sendMessage', { chat_id: chat, text }, 15_000),
+}, process.env.CONTENT_PROVIDER === 'codex-local' ? 'codex-local' : 'claude');
+setInterval(() => void contentQueue.pump().catch(() => console.log('content queue: pump failed')), 2_000).unref();
 const reels = new Reels(process.env.REELS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'reels.json'), {
-  token: () => process.env.GH_ACTIONS_TOKEN || readToken(join(__dirname, '.gh-token')),
+  token: contentToken,
+  dispatch: async (token, inputs, workflow) => contentQueue.provider === 'codex-local'
+    ? contentQueue.enqueue(workflow, inputs) : dispatchReel(token, inputs, workflow),
 });
 // Вызовы в групповых чатах (server/groupChallenges.ts): бот ведёт таблицу «кто больше за неделю» прямо в чате.
 const groups = new GroupChallenges(process.env.GROUPS_FILE ?? join(dirname(process.env.DATA_FILE ?? 'data/profiles.json'), 'group-challenges.json'));
@@ -847,6 +856,7 @@ const channelUpdate = (u: Update): boolean => {
 // Клавиатура админа внизу чата: кнопка шлёт свой текст, его переводим в команду.
 const ADMIN_BUTTONS: Record<string, string> = {
   '📊 Статус каналов': '/channel',
+  '🎛 Статус контента': '/content',
   '📝 Черновик Арены': '/channel_draft',
   '📣 Пост в Арену сейчас': '/channel_post',
   '✍️ Личный канал': '/channel_me',
@@ -871,12 +881,17 @@ const ADMIN_KEYBOARD = {
 const adminText = (chatId: number, text: string): string => (admins.has(`tg:${chatId}`) && ADMIN_BUTTONS[text.trim()]) || text;
 const channelCommand = (chatId: number, raw: string): boolean => {
   const text = adminText(chatId, raw);
-  if (!/^\/(channel|admin|reel\b|carousel\b|story\b|talk\b|loop\b|newusers\b|threads|npc\b)/.test(text.trim())) return false;
+  if (!/^\/(channel|admin|content\b|reel\b|carousel\b|story\b|talk\b|loop\b|newusers\b|threads|npc\b)/.test(text.trim())) return false;
   const isAdmin = admins.has(`tg:${chatId}`);
   const reply = (t: string) => void botApi(BOT_TOKEN)('sendMessage', { chat_id: chatId, text: t, reply_markup: isAdmin ? ADMIN_KEYBOARD : undefined }, 15_000).catch((e: Error) => console.log(`channel reply: ${e.message}`));
   if (/^\/admin\b/.test(text.trim()) && isAdmin) return reply('Админ-меню внизу чата: статус каналов, черновики, пост сейчас, жалобы, новый рилс, рилс от персонажа, рилс-петля (8–10 с; пришли боту видео, как отжимаешься, и петля начнётся с тебя), карусели и сторис для Instagram, пост в Threads. «✍️ Личный канал» спросит тему поста — ответь фразой.'), true;
   // Не админу отвечаем, а не молчим: так сразу видно, чей id добавить в .admin-ids.
   if (!admins.has(`tg:${chatId}`)) return reply(`Команды канала только для админов. Твой Telegram ID: ${chatId}. Его нужно добавить в /opt/arena-server/.admin-ids.`), true;
+  if (/^\/content\b/.test(text.trim())) {
+    const mode = /^\/content\s+(codex|claude)\s*$/.exec(text.trim())?.[1];
+    if (mode) contentQueue.setProvider(mode === 'codex' ? 'codex-local' : 'claude');
+    return reply(contentQueue.status() + '\n\n/content codex — сценарии на компьютере; /content claude — прежняя генерация через Claude. Уже принятые задания сохраняются.'), true;
+  }
   const nu = startNotices.command(text);
   if (nu) return reply(nu), true;
   // /npc daily|tip|task — пост персонажа в ленту прямо сейчас (проверить, как выглядит).
