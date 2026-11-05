@@ -2,11 +2,15 @@
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, appendFileSync, statSync, renameSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { acquireWorkerLock } from './worker-lock.mjs';
 
 const args = process.argv.slice(2);
 const settings = JSON.parse(readFileSync(args[0], 'utf8'));
 const root = resolve(settings.repository);
 const state = dirname(resolve(args[0]));
+const releaseLock = acquireWorkerLock(join(state, 'worker.lock'));
+if (!releaseLock) process.exit(0);
+process.on('exit', releaseLock);
 const context = join(root, 'promo/content/context.mjs');
 let stopping = false;
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
