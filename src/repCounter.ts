@@ -263,7 +263,15 @@ export class RepCounter {
     const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
 
     const ids = rule.joint.map((pair) => pair[0]);
-    const side = bestSide(scaled, ids);
+    const preferred = bestSide(scaled, ids);
+    // Prefer a complete, usable side over a higher sum with a hidden wrist/hip.
+    const side = [preferred, 1 - preferred].find((candidate) =>
+      ids.every((id) => (scaled[id + candidate].visibility ?? 1) >= (rule.minVisibility ?? MIN_VISIBILITY)) &&
+      (rotations.length ? rotations : [0]).some((r) => {
+        const pose = rotate(scaled, r, aspect);
+        return rule.posture.every((check) => check.ok(pose, candidate));
+      }),
+    ) ?? preferred;
     const [a, b, c] = rule.joint.map((pair) => scaled[pair[side]]);
     if ([a, b, c].some((p) => (p.visibility ?? 1) < (rule.minVisibility ?? MIN_VISIBILITY))) {
       return this.trackingLost(t('Камера не видит суставы'));
@@ -428,3 +436,27 @@ export class PlankTimer {
 
 /** Счётчик под упражнение: повторы или таймер планки. */
 export type Counter = RepCounter | PlankTimer;
+
+/** Readiness examines complete sides independently; never combine joints across sides.
+ * It does not count reps or alter the scoring counter's thresholds/phases. */
+export function exerciseReadiness(exercise: Exercise, raw: Landmark[] | undefined, aspect = 1, rotations: number[] = [0]): { angle: number | null; hint: string | null } {
+  if (!raw || raw.length < 33) return { angle: null, hint: t('Встань в кадр целиком') };
+  const scaled = raw.map((p) => ({ ...p, x: p.x * aspect }));
+  const finite = (p: Landmark) => Number.isFinite(p.x) && Number.isFinite(p.y);
+  const order = rotations.length ? rotations : [0];
+  let fallback = { angle: null as number | null, hint: t('Камера не видит суставы') as string | null };
+  const preferred = bestSide(scaled, exercise === 'plank' ? [11, 13, 23, 25, 27] : RULES[exercise].joint.map((pair) => pair[0]));
+  for (const side of [preferred, 1 - preferred]) {
+    const ids = exercise === 'plank' ? [SHOULDER[side], HIP[side]] : RULES[exercise].joint.map((pair) => pair[side]);
+    const minimum = exercise === 'plank' ? 0.5 : RULES[exercise].minVisibility ?? MIN_VISIBILITY;
+    if (ids.some((id) => !finite(scaled[id]) || (scaled[id].visibility ?? 1) < minimum)) continue;
+    for (const rotation of order) {
+      const lm = rotate(scaled, rotation, aspect);
+      const hint = exercise === 'plank' ? plankFault(lm, side) : RULES[exercise].posture.find((check) => !check.ok(lm, side))?.hint ?? null;
+      const value = exercise === 'plank' ? angle(lm[SHOULDER[side]], lm[HIP[side]], lowest(lm, side)) : angle(...(ids.map((id) => lm[id]) as [Landmark, Landmark, Landmark]));
+      if (hint === null) return { angle: Math.round(value), hint: null };
+      fallback = { angle: Math.round(value), hint };
+    }
+  }
+  return fallback;
+}

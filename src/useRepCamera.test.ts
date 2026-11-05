@@ -320,4 +320,42 @@ describe('useRepCamera async lifecycle (mock browser, real counters/FSM)', () =>
     expect(h.events).toEqual([]);
   });
 
+
+  it('реальный pushup readiness с шумом включает go и ACTIVE, не начисляя подготовительные движения', async () => {
+    const pushup = (theta: number) => {
+      const lm = Array.from({ length: 33 }, () => ({ x: .5, y: .5, visibility: .9 }));
+      const radians = theta * Math.PI / 180;
+      for (const [i, x, y] of [[11, .3, .6], [13, .3, .7], [15, .3 - .1 * Math.sin(radians), .7 - .1 * Math.cos(radians)], [23, .55, .6], [25, .7, .605], [27, .85, .61]]) {
+        lm[i] = { x, y, visibility: .9 }; lm[i + 1] = { x, y, visibility: .9 };
+      }
+      // Одиночный плохой кадр таза раз в секунду; человек остаётся обнаруженным.
+      if (clock % 1000 === 900) lm[23].visibility = lm[24].visibility = .1;
+      return lm;
+    };
+    h.detect.mockImplementation(() => ({ landmarks: [pushup(Math.floor(clock / 400) % 2 ? 70 : 170)] }));
+    const camera = mount(); const onFrame = vi.fn(() => true); const onRep = vi.fn();
+    await camera.start('pushup', onRep, onFrame, { gate: true, prepare: true });
+    for (let at = 100; at <= 1900; at += 100) tick(at);
+    expect(camera.go()).toBeFalsy(); // На плохом кадре кнопка остаётся закрытой.
+    tick(2000);
+    expect(camera.go()).toBe(true);
+    for (let at = 2100; at <= 6000; at += 100) tick(at);
+    expect(onFrame).not.toHaveBeenCalled();
+    expect(onRep).not.toHaveBeenCalled();
+    for (let at = 6100; at <= 8500; at += 100) tick(at);
+    expect(onFrame).toHaveBeenCalled();
+    expect(h.events.filter((e) => e.n === 'exercise_started')).toHaveLength(1);
+    camera.stop();
+  });
+
+  it('не разрешает pushup go, если человек отсутствует всё время подготовки', async () => {
+    h.detect.mockReturnValue({ landmarks: [] });
+    const camera = mount(); const onFrame = vi.fn(() => true); const onRep = vi.fn();
+    await camera.start('pushup', onRep, onFrame, { gate: true, prepare: true });
+    for (let at = 100; at <= 10000; at += 100) { tick(at); expect(camera.go()).toBeFalsy(); }
+    expect(onFrame).not.toHaveBeenCalled();
+    expect(onRep).not.toHaveBeenCalled();
+    camera.stop();
+  });
+
 });

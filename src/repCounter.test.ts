@@ -275,3 +275,35 @@ describe('выбор видимой стороны и подтверждение
     expect(c.current.hint).toBe('Поставь локти под плечи');
   });
 });
+
+
+describe('coherent pushup side: counting and calibration agree with readiness', () => {
+  for (const fault of ['hidden-hip', 'mixed-wrist'] as const) {
+    it(`считает полные повторы и завершает калибровку при ${fault} слева`, () => {
+      const c = new RepCounter('pushup');
+      const calibration = new Calibrator('pushup');
+      const sweep: number[] = [];
+      for (let a = 170; a >= 70; a -= 5) sweep.push(a);
+      for (let a = 75; a <= 170; a += 5) sweep.push(a);
+      const angles = [...sweep, ...sweep, ...sweep, ...Array(20).fill(170)];
+      let at = 0;
+      for (const a of angles) for (let frame = 0; frame < 4; frame++) {
+        const lm = pushup(a);
+        if (fault === 'hidden-hip') {
+          for (const i of [11, 13, 15]) lm[i].visibility = .95;
+          lm[23].visibility = .1;
+          for (const i of [12, 14, 16]) lm[i].visibility = .8;
+        } else {
+          lm[11].visibility = lm[13].visibility = .99;
+          lm[15].visibility = .1;
+          for (const i of [12, 14, 16]) lm[i].visibility = .6;
+        }
+        const state = c.update(lm, at += 50);
+        expect(state.hint).toBeNull();
+        calibration.update(state.angle, state.hint === null, at);
+      }
+      expect(c.current.reps).toBe(3);
+      expect(calibration.view.result).not.toBeNull();
+    });
+  }
+});

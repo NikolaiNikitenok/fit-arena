@@ -4,7 +4,7 @@ import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker, loadVision } from './pose';
 import { useBusy } from './updates/busy';
 import { frameRotations, enableOrientation } from './orientation';
-import { Counter, Exercise, PlankTimer, RepCounter } from './repCounter';
+import { Counter, Exercise, PlankTimer, RepCounter, exerciseReadiness } from './repCounter';
 import { getSettings } from './settings';
 import { Calibrator, CalibrationView, calibrationSink, personalThresholds } from './calibration';
 import { repSound } from './audio';
@@ -73,7 +73,6 @@ export function useRepCamera(preload = true) {
   const lifecycle = useRef(new TrainingLifecycle());
   const readyRef = useRef(false);
   const observedAt = useRef(-Infinity);
-  const probeRef = useRef<Counter | null>(null);
   const [trainingState, setTrainingState] = useState(lifecycle.current.state);
   const [preparing, setPreparing] = useState(false);
   const [prepareSeconds, setPrepareSeconds] = useState(0);
@@ -167,7 +166,6 @@ export function useRepCamera(preload = true) {
     report('positioning_started', { exercise });
     exitStage.current = 'positioning';
     counterRef.current = counterFor(exercise);
-    probeRef.current = counterFor(exercise);
     setLimits({ down: counterRef.current.down, up: counterRef.current.up });
     calibDoneRef.current = opts.onCalibrated;
     // Планке калибровка не нужна: у неё нет амплитуды.
@@ -184,7 +182,6 @@ export function useRepCamera(preload = true) {
     lifecycle.current = new TrainingLifecycle(STABLE_MS, 0);
     lifecycle.current.cameraReady();
     preparation.cameraReady(true);
-    probeRef.current = counterFor(exercise);
     let spokenSecond = -1;
     let released = !managed;
     const canvas = canvasRef.current!;
@@ -230,21 +227,21 @@ export function useRepCamera(preload = true) {
         }
         flames.step(ctx, lm, flameRef.current, now, getSettings().lowPower);
         const state = counterRef.current!.update(lm, now, video.videoWidth / video.videoHeight, frameRotations());
-        const probe = probeRef.current!;
-        probe.reset();
-        const observed = probe.update(lm, now, video.videoWidth / video.videoHeight, frameRotations());
+        const observed = exerciseReadiness(counterRef.current!.exercise, lm, video.videoWidth / video.videoHeight, frameRotations());
         observedAt.current = now;
         const valid = !!lm && observed.angle !== null && observed.hint === null;
-        const color = !lm ? '#e5484d' : valid && (released && !gateRef.current || readyRef.current) ? '#30a46c' : '#f5a524';
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 6;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+        const drawReadiness = (ready: boolean) => {
+          ctx.strokeStyle = !lm ? '#e5484d' : valid && ready ? '#30a46c' : '#f5a524';
+          ctx.lineWidth = 6;
+          ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+        };
         if (!valid && previousValid) failedAttempts++;
         previousValid = valid;
         // До «Начать» только показываем позу и подсказку: повторы не идут.
         if (gateRef.current) {
-          const readiness = lifecycle.current.frame(valid, now);
-          readyRef.current = readiness === 'READY';
+          const readiness = lifecycle.current.frame(valid, now, !!lm);
+          readyRef.current = readiness === 'READY' && valid;
+          drawReadiness(readyRef.current);
           if (readyRef.current) report('positioning_completed', { exercise, failedAttempts });
           setTrainingState(readiness);
           setHint(!POSITIONING_ENABLED ? null : valid ? (readyRef.current ? null : t('Удерживай положение')) : observed.hint ?? t('Встань в кадр'));
@@ -252,6 +249,7 @@ export function useRepCamera(preload = true) {
           frameRef.current = requestAnimationFrame(loop);
           return;
         }
+        drawReadiness(valid && (released || preparation.state === 'COUNTDOWN'));
         const c = calibRef.current;
         if (c && !c.doneAt) {
           const v = c.c.update(lm ? state.angle : null, state.hint == null, now);
@@ -272,7 +270,7 @@ export function useRepCamera(preload = true) {
           return;
         }
         if (managed && !released) {
-          const stage = preparation.frame(valid, now);
+          const stage = preparation.frame(valid, now, !!lm);
           setTrainingState(stage);
           if (stage === 'COUNTDOWN') {
             exitStage.current = 'countdown';
@@ -299,7 +297,7 @@ export function useRepCamera(preload = true) {
           return;
         }
         if (managed) {
-          const stage = preparation.frame(valid, now);
+          const stage = preparation.frame(valid, now, !!lm);
           setTrainingState(stage);
           if (stage === 'TRACKING_LOST' && previousStage !== stage) report('tracking_lost', { exercise });
           previousStage = stage;
@@ -342,7 +340,6 @@ export function useRepCamera(preload = true) {
   const switchExercise = (exercise: Exercise) => {
     if (!counterRef.current) return;
     counterRef.current = counterFor(exercise);
-    probeRef.current = counterFor(exercise);
     setLimits({ down: counterRef.current.down, up: counterRef.current.up });
     lastRepsReset.current = true;
   };
