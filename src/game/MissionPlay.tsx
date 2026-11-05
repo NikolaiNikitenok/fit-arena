@@ -1,10 +1,11 @@
+import { cameraErrorMessage } from '../cameraError';
 import { useEffect, useRef, useState } from 'react';
 import { track, trackFirstRep } from '../telemetry';
 import { EXERCISE_LABELS, Exercise, RepExercise } from '../repCounter';
 import { CameraGuide } from '../CameraGuide';
 import { Heart, Swords } from '../icons';
 import { getSettings, useSettings } from '../settings';
-import { useRepCamera } from '../useRepCamera';
+import { POSITIONING_ENABLED, useRepCamera } from '../useRepCamera';
 import { reportAdventure } from '../family';
 import { useMissionSounds } from '../gameSounds';
 import { needsCalibration } from '../calibration';
@@ -168,7 +169,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
   useVoiceCoach(status === 'running' && countdown <= 0 && !calibrating && !waiting && !rest, view.reps, Math.ceil(view.leftMs / 1000), camera.hint, level.seconds, level.type === 'trial' ? undefined : mission.current.target);
 
   const finish = (m: Mission, now: number) => {
-    camera.stop();
+    camera.stop('COMPLETED');
     stopManual();
     const v = m.view(now);
     setView(v);
@@ -363,7 +364,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           const now = performance.now();
           // Несколько секунд на то, чтобы встать в позицию: время и повторы ещё не идут.
           firstFrame ||= now;
-          return frame(m, now, firstFrame + (calibrated ? CALIB_PREP_S : PREP_S) * 1000, paint);
+          return frame(m, now, firstFrame + (POSITIONING_ENABLED ? 0 : (calibrated ? CALIB_PREP_S : PREP_S) * 1000), paint);
         },
         // Перед первым подходом упражнения подстраиваем счёт под амплитуду игрока.
         // С первого экрана — без калибровки: первый повтор должен засчитаться как можно скорее.
@@ -371,6 +372,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
         {
           calibrate: needsCalibration(level.exercises[0]) && !autoStart,
           gate: !autoStart,
+          prepare: true,
+          onError: () => { setError(t('Ошибка распознавания. Повтори запуск камеры')); setStatus('error'); },
           onCalibrated: (n) => {
             calibrated = true;
             credit.current = n;
@@ -380,9 +383,10 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
       if (manualRef.current) return camera.stop();
       setStatus('running');
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       camera.stop();
       if (manualRef.current) return;
-      setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
+      setError(cameraErrorMessage(e));
       setStatus('error');
     }
   };
@@ -517,7 +521,8 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           />
         )}
         {calibrating && <CalibrationOverlay exercise={level.exercises[0]} view={camera.calib!} onSkip={camera.skipCalib} />}
-        {status === 'running' && countdown > 0 && !calibrating && !waiting && !(rest && !rest.going) && (
+        {status === 'running' && camera.preparing && !waiting && !calibrating && <div className="countdown"><div className="countdown-num">{camera.prepareSeconds || '…'}</div><div>{camera.hint}</div></div>}
+        {status === 'running' && !camera.preparing && countdown > 0 && !calibrating && !waiting && !(rest && !rest.going) && (
           <div className="countdown">
             <div className="countdown-num">{countdown}</div>
             <div>{rest ? t('Дальше: {0}', { 0: EXERCISE_LABELS[level.exercises[rest.step]] }) : t('Займи позицию')}</div>

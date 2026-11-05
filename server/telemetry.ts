@@ -7,10 +7,11 @@ import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { TRAINING_EVENTS, TELEMETRY_EVENT_BATCH, readTrainingEnvelope } from '../shared/trainingTelemetry';
 import { anonSource } from '../shared/anon';
 
 /** События клиента. Новое событие — сначала сюда, иначе сервер его не примет. */
-export const EVENTS = ['app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status', 'manual_start', 'first_rep', 'unlock', 'letter_open', 'gift_claim', 'weekly_card', 'ghost_fight', 'village_th2', 'balance', 'group_join', 'group_create', 'invite_card', 'offer_seen', 'buy_tap', 'buy_result', 'offer_popup', 'warmup', 'post_share', 'morning', 'auto_post', 'channel_offer', 'style_pick', 'intro'] as const;
+export const EVENTS = [...TRAINING_EVENTS, 'app_open', 'onb_step', 'onb_done', 'mission_start', 'mission_win', 'mission_lose', 'camera_granted', 'camera_denied', 'duel_start', 'raid_start', 'program_start', 'event_start', 'dungeon_start', 'dungeon_win', 'dungeon_lose', 'recap_open', 'recap_share', 'home_shortcut', 'share_chat', 'emoji_status', 'manual_start', 'first_rep', 'unlock', 'letter_open', 'gift_claim', 'weekly_card', 'ghost_fight', 'village_th2', 'balance', 'group_join', 'group_create', 'invite_card', 'offer_seen', 'buy_tap', 'buy_result', 'offer_popup', 'warmup', 'post_share', 'morning', 'auto_post', 'channel_offer', 'style_pick', 'intro'] as const;
 export type EventName = (typeof EVENTS)[number];
 
 /** Шаги воронки: бит в карточке игрока. */
@@ -186,6 +187,7 @@ export const clientAnon = (playerId: string) => createHash('sha256').update(anon
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, max) : '');
 
 export class Telemetry {
+  private trainingSeen = new Map<string, number>();
   private data: Data = { days: [], users: {}, errors: [], levels: {} };
   private active = new Map<number, Set<string>>();
   private sources = new Set<string>();
@@ -310,11 +312,33 @@ export class Telemetry {
     if (!anon) return 400;
     const d = this.dayRec(mskDay(now));
     const u = this.touch(this.uid(anon), d, cleanSource(b.src));
-    const events = Array.isArray(b.events) ? b.events.slice(0, 50) : [];
+    const events = Array.isArray(b.events) ? b.events.slice(0, TELEMETRY_EVENT_BATCH) : [];
     for (const e of events) {
       if (!e || typeof e !== 'object') continue;
       const { n, p } = e as { n?: unknown; p?: unknown };
       if (typeof n !== 'string' || !(EVENTS as readonly string[]).includes(n)) continue;
+      if ((TRAINING_EVENTS as readonly string[]).includes(n)) {
+        const entry = readTrainingEnvelope(e, now);
+        if (!entry) continue;
+        // Bounded, short-lived replay cache. No raw session identifiers are persisted.
+        for (const [key, expiry] of this.trainingSeen) if (expiry <= now) this.trainingSeen.delete(key);
+        const replayKey = this.uid(`${anon}:${entry.sid}:${entry.id}`);
+        if (this.trainingSeen.has(replayKey)) continue;
+        if (this.trainingSeen.size >= 5000) this.trainingSeen.delete(this.trainingSeen.keys().next().value!);
+        this.trainingSeen.set(replayKey, now + 3_600_000);
+        this.count(d, n);
+        if (entry.m.reason) this.count(d, `${n}:${entry.m.reason}`);
+        if (n === 'exercise_abandoned' && entry.m.exitStage) this.count(d, `exercise_abandoned:stage_${entry.m.exitStage}`);
+        if (n === 'positioning_completed' && entry.m.failedAttempts != null) {
+          this.count(d, 'positioning_completed:failed_attempts', entry.m.failedAttempts);
+          this.count(d, 'positioning_completed:attempt_samples');
+        }
+        if (n === 'camera_ready' && entry.m.cameraMs != null) {
+          this.count(d, 'camera_ready:duration_ms', entry.m.cameraMs);
+          this.count(d, 'camera_ready:duration_samples');
+        }
+        continue;
+      }
       const param = typeof p === 'number' && Number.isInteger(p) && p >= 0 && p < 100_000 ? String(p) : typeof p === 'string' && /^[\w-]{1,20}$/.test(p) ? p : null;
       this.event(d, u, n as EventName, param);
     }

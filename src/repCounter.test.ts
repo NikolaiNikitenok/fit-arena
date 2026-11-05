@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { angle, Landmark, RepCounter } from './repCounter';
+import { angle, Landmark, PlankTimer, RepCounter } from './repCounter';
 import { Calibrator, deriveThresholds } from './calibration';
 
 type Point = [number, number];
@@ -209,5 +209,69 @@ describe('личные пороги после калибровки', () => {
     expect(run(new RepCounter('situp', deriveThresholds('situp', 95, 125)), situp, jitter)).toBe(0);
     // Даже откалибровавшись на крошечной амплитуде, зазор между порогами не меньше 15°.
     expect(run(new RepCounter('situp', deriveThresholds('situp', 105, 112)), situp, jitter)).toBe(0);
+  });
+});
+
+
+describe('потеря обязательных ориентиров внутри повтора', () => {
+  const feed = (c: RepCounter, angles: number[], from: number) => {
+    let at = from;
+    for (const a of angles) for (let i = 0; i < 4; i++) c.update(squat(a), at += 50);
+    return at;
+  };
+
+  for (const missing of ['person', 'joint'] as const) {
+    it(`не завершает скрытый повтор после потери ${missing}`, () => {
+      const c = new RepCounter('squat');
+      let at = feed(c, [170, 80], 0);
+      expect(c.current.phase).toBe('down');
+      const hidden = squat(80);
+      for (const i of [25, 26]) hidden[i].visibility = 0.1;
+      c.update(missing === 'person' ? undefined : hidden, at += 50);
+      expect(c.current.angle).toBeNull();
+      at = feed(c, [170], at + 1000);
+      expect(c.current.reps).toBe(0);
+      feed(c, [80, 170], at);
+      expect(c.current.reps).toBe(1);
+    });
+  }
+
+  it('после потери ждёт исходное положение, сохраняя уже засчитанные повторы', () => {
+    const c = new RepCounter('squat');
+    let at = feed(c, [170, 80, 170, 80], 0);
+    expect(c.current.reps).toBe(1);
+    c.update(undefined, at += 50);
+    at = feed(c, [80, 170], at + 1000);
+    expect(c.current.reps).toBe(1);
+    feed(c, [80, 170], at);
+    expect(c.current.reps).toBe(2);
+  });
+});
+
+
+describe('выбор видимой стороны и подтверждение опоры', () => {
+  for (const [exercise, make, angles] of [
+    ['squat', squat, [170, 80, 170]],
+    ['pushup', pushup, [170, 70, 170]],
+    ['situp', situp, [150, 50, 150]],
+  ] as const) {
+    it(`считает ${exercise}, если видна только правая сторона`, () => {
+      const rightOnly = (a: number) => {
+        const lm = make(a);
+        for (const i of [11, 13, 15, 23, 25, 27]) lm[i].visibility = 0.1;
+        return lm;
+      };
+      expect(run(new RepCounter(exercise), rightOnly, [...angles])).toBe(1);
+    });
+  }
+
+  it('не засчитывает планку без видимой опоры рук', () => {
+    const lm = pushup(170);
+    for (const i of [13, 14, 15, 16]) lm[i].visibility = 0.1;
+    const c = new PlankTimer();
+    for (let at = 0; at <= 3000; at += 50) c.update(lm, at);
+    expect(c.current.holding).toBe(false);
+    expect(c.current.reps).toBe(0);
+    expect(c.current.hint).toBe('Поставь локти под плечи');
   });
 });

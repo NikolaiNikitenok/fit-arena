@@ -17,7 +17,7 @@ interface Props {
 }
 
 /** Камера включена, игрок видит себя в большом окне и сам решает, когда начать: бой не стартует внезапно. */
-export function StartGate({ title, sub = t('Поставь телефон так, чтобы в кадре было видно всё тело'), hint, label = t('Начать'), onGo }: Props) {
+export function StartGate({ title, sub = t('Покажи камере положение для выбранного упражнения'), hint, label = t('Начать'), onGo }: Props) {
   const sport = useSport();
   useEffect(() => say(t('Камера готова. Нажми «Начать», когда встанешь')), []);
   return (
@@ -25,9 +25,10 @@ export function StartGate({ title, sub = t('Поставь телефон так
       <div className="gate-card">
         <div className="gate-title">{title}</div>
         <div className="gate-sub">{sub}</div>
-        <div className={`gate-hint ${hint ? 'warn' : 'ok'}`}>{hint ?? t('Вижу тебя — можно начинать')}</div>
+        <div role="status" className={`gate-hint ${hint ? 'warn' : 'ok'}`}>{hint ?? t('Вижу тебя — можно начинать')}</div>
         <button
           className="gate-go"
+          disabled={!!hint}
           onClick={() => {
             sfx('go');
             onGo();
@@ -38,7 +39,7 @@ export function StartGate({ title, sub = t('Поставь телефон так
           <Play size={30} />
           <b>{label}</b>
         </button>
-        <div className="gate-note">{t('После нажатия будет отсчёт — успеешь встать в позицию')}</div>
+        <div className="gate-note">{t('Дождись устойчивого положения. Во время подготовки таймер упражнения не идёт')}</div>
       </div>
     </div>
   );

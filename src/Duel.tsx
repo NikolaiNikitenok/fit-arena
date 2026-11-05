@@ -256,7 +256,7 @@ function LiveDuel({ exercise, onTrainer, onFriends, join, note }: { exercise: Re
             sub={room.players.length < 2 ? t('Соперник ещё не пришёл. Встань так, чтобы в кадре было всё тело') : undefined}
             hint={camera.hint}
             onGo={() => {
-              camera.go();
+              if (!camera.go()) return;
               send({ type: 'ready' });
               track('duel_start', 'live');
             }}

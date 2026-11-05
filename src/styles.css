@@ -960,6 +960,8 @@ html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; }
 .gate-go { position: relative; margin: 8px 0 2px; width: 132px; height: 132px; border-radius: 50%; border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 0 0 6px rgba(255,138,92,.22), 0 14px 34px rgba(255,122,89,.45); animation: gate-pulse 1.6s ease-in-out infinite; }
 .gate-go b { font-size: 19px; font-weight: 900; letter-spacing: .02em; }
+.gate-go:disabled { opacity: .55; cursor: wait; animation: none; }
+.gate-go:disabled .gate-ring { animation: none; }
 .gate-go:active { transform: scale(.94); }
 .gate-ring { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; animation: gate-ring 1.8s ease-out infinite; pointer-events: none; }
 .gate-ring.two { animation-delay: .9s; }
