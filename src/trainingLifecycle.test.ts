@@ -98,4 +98,47 @@ describe('TrainingLifecycle', () => {
     expect(s.state).toBe('POSITIONING');
   });
 
+
+  it('краткие сбои 33 мс раз в секунду не блокируют READY', () => {
+    const s = new TrainingLifecycle(); s.cameraReady();
+    let reached = false;
+    for (let i = 0; i <= 180; i++) {
+      if (s.frame(i % 30 !== 29, i * 1000 / 30, true) === 'READY') reached = true;
+    }
+    expect(reached).toBe(true);
+  });
+
+  it('краткие сбои не перезапускают COUNTDOWN, долгие сбои сбрасывают', () => {
+    const s = new TrainingLifecycle(); s.cameraReady(true);
+    for (let i = 0; i <= 150; i++) s.frame(i % 30 !== 29, i * 1000 / 30, true);
+    expect(s.state).toBe('ACTIVE');
+    const interrupted = new TrainingLifecycle(); interrupted.cameraReady(true);
+    for (let at = 0; at <= 2000; at += 100) interrupted.frame(true, at, true);
+    expect(interrupted.state).toBe('COUNTDOWN');
+    for (let at = 2100; at <= 2500; at += 100) interrupted.frame(false, at, true);
+    expect(interrupted.state).toBe('POSITIONING');
+    for (let at = 2600; at <= 3900; at += 100) interrupted.frame(true, at, true);
+    expect(interrupted.state).toBe('POSITIONING');
+  });
+
+  it('явное отсутствие человека сбрасывает готовность без допуска краткого сбоя', () => {
+    const s = new TrainingLifecycle(); s.cameraReady(true);
+    for (let at = 0; at <= 2000; at += 100) s.frame(true, at, true);
+    expect(s.state).toBe('COUNTDOWN');
+    expect(s.frame(false, 2033)).toBe('POSITIONING');
+  });
+
+
+  it('единственный плохой кадр с восстановлением через 500 мс не маскируется допуском 200 мс', () => {
+    const s = new TrainingLifecycle(); s.cameraReady(true);
+    for (let at = 0; at <= 2000; at += 100) s.frame(true, at, true);
+    expect(s.state).toBe('COUNTDOWN');
+    s.frame(false, 2033, true);
+    expect(s.frame(true, 2533, true)).toBe('POSITIONING');
+    for (let at = 2633; at <= 3933; at += 100) s.frame(true, at, true);
+    expect(s.state).toBe('POSITIONING');
+    expect(s.frame(true, 4033, true)).toBe('COUNTDOWN');
+    expect(s.seconds(4033)).toBe(3);
+  });
+
 });

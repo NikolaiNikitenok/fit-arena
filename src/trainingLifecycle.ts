@@ -7,6 +7,8 @@ export class TrainingLifecycle {
   private lastFrame: number | null = null;
   private countdownAt = 0;
   private requested = false;
+  private lastGood: number | null = null;
+  private dropoutSince: number | null = null;
   constructor(readonly stableMs = 1500, readonly countdownMs = 3000, readonly maxFrameGapMs = 750) {}
   load(): void { this.state = 'CAMERA_LOADING'; }
   cameraReady(auto = false): void { this.state = 'POSITIONING'; this.requested = auto; }
@@ -15,7 +17,7 @@ export class TrainingLifecycle {
     this.requested = true;
     return true;
   }
-  frame(ok: boolean, now: number): TrainingState {
+  frame(ok: boolean, now: number, allowBriefDropout = false): TrainingState {
     if (['IDLE', 'CAMERA_LOADING', 'COMPLETED', 'CANCELLED', 'ERROR'].includes(this.state)) return this.state;
     // A suspended tab or stalled inference is not evidence of a stable pose.
     const continuous = this.lastFrame === null || now - this.lastFrame <= this.maxFrameGapMs;
@@ -25,10 +27,31 @@ export class TrainingLifecycle {
       return this.state;
     }
     if (!ok || !continuous) {
+      // A single noisy pose must not make a stable user wait forever. Missing
+      // people and stalled inference still reset immediately. Bad frames never
+      // advance preparation or make the Start button available.
+      if (!ok && continuous && allowBriefDropout && this.lastGood !== null && now - this.lastGood <= 200) {
+        this.dropoutSince ??= now;
+        return this.state;
+      }
       this.stableSince = null;
+      this.lastGood = null;
+      this.dropoutSince = null;
       this.state = 'POSITIONING';
       return this.state;
     }
+    if (this.dropoutSince !== null) {
+      const pausedMs = now - this.dropoutSince;
+      if (this.lastGood === null || now - this.lastGood > 200) {
+        this.stableSince = null;
+        this.state = 'POSITIONING';
+      } else {
+        if (this.stableSince !== null) this.stableSince += pausedMs;
+        if (this.state === 'COUNTDOWN') this.countdownAt += pausedMs;
+      }
+      this.dropoutSince = null;
+    }
+    this.lastGood = now;
     this.stableSince ??= now;
     if (this.state === 'COUNTDOWN') {
       if (now - this.countdownAt >= this.countdownMs) this.state = 'ACTIVE';
