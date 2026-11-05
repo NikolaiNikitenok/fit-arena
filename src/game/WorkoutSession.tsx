@@ -1,3 +1,4 @@
+import { cameraErrorMessage } from '../cameraError';
 import { useEffect, useRef, useState } from 'react';
 import { StartGate } from '../StartGate';
 import { track } from '../telemetry';
@@ -5,7 +6,7 @@ import { amountText, EXERCISE_LABELS, goalText, isTimed, type RepExercise } from
 import { CameraGuide } from '../CameraGuide';
 import { CalibrationOverlay } from '../CalibrationOverlay';
 import { needsCalibration } from '../calibration';
-import { useRepCamera } from '../useRepCamera';
+import { POSITIONING_ENABLED, useRepCamera } from '../useRepCamera';
 import { say, unlockVoice, useVoiceCoach } from '../voice';
 import { useSettings } from '../settings';
 import { sfx } from '../audio';
@@ -58,7 +59,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
   const calibrating = camera.calib != null;
   const calibRef = useRef(false);
   // До кнопки «Начать» и во время калибровки время не идёт.
-  calibRef.current = calibrating || camera.waiting;
+  calibRef.current = calibrating || camera.waiting || camera.preparing;
   // Повторы калибровки засчитываются в первый подход.
   const credit = useRef(0);
 
@@ -87,7 +88,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     const i = st.idx;
     onSet(sets[i], st.done[i]);
     if (i + 1 >= sets.length) {
-      camera.stop();
+      camera.stop('COMPLETED');
       sfx('win');
       onFinish([...st.done]);
       return;
@@ -132,7 +133,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
       setNow(at);
       // Пока идёт калибровка, время не идёт.
       if (calibRef.current) {
-        st.until = Math.max(st.until, at + PREP_S * 1000);
+        st.until = Math.max(st.until, at + (POSITIONING_ENABLED ? 0 : PREP_S) * 1000);
         return;
       }
       if (st.phase === 'prep' && at >= st.until) startSet(st.idx, at);
@@ -162,22 +163,33 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
     setError(null);
     setPhase('loading');
     const st = s.current;
+    // Retry is a new attempt: completed sets are already credited by onSet.
+    // Never feed their old totals back into onSet after a camera error.
     st.idx = 0;
+    st.done = sets.map(() => 0);
+    st.lastRepAt = 0;
+    st.setStart = 0;
+    st.warned = false;
+    setIdx(0);
+    setDone([...st.done]);
     try {
       credit.current = 0;
       await camera.start(sets[0].exercise, onRep, undefined, {
         calibrate: needsCalibration(sets[0].exercise),
         gate: true,
+        prepare: true,
+        onError: () => { setError('Ошибка распознавания. Повтори запуск камеры'); setPhase('error'); },
         onCalibrated: (n) => {
           credit.current = n;
         },
       });
       track('program_start');
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       // В DEV можно тренироваться и без камеры: повторы приходят из __workoutRep.
       if (!import.meta.env.DEV) {
         camera.stop();
-        setError(e instanceof Error ? e.message : t('не загрузилась модель распознавания'));
+        setError(cameraErrorMessage(e));
         setPhase('error');
         return;
       }
@@ -247,7 +259,8 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
           </div>
         )}
         {camera.waiting && <StartGate title={title} hint={camera.hint} onGo={camera.go} />}
-        {phase === 'prep' && !calibrating && !camera.waiting && (
+        {phase === 'prep' && camera.preparing && !calibrating && !camera.waiting && <div className="countdown"><div className="countdown-num">{camera.prepareSeconds || '…'}</div><div>{camera.hint}</div></div>}
+        {phase === 'prep' && !camera.preparing && !calibrating && !camera.waiting && (
           <div className="countdown">
             <div className="countdown-num">{restLeft}</div>
             <div>{t('Займи позицию')}</div>
