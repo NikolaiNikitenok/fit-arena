@@ -373,7 +373,7 @@ export function MissionPlay({ level: original, progress, onExit, onWin, onLose, 
           calibrate: needsCalibration(level.exercises[0]) && !autoStart,
           gate: !autoStart,
           prepare: true,
-          onError: () => { setError('Ошибка распознавания. Повтори запуск камеры'); setStatus('error'); },
+          onError: () => { setError(t('Ошибка распознавания. Повтори запуск камеры')); setStatus('error'); },
           onCalibrated: (n) => {
             calibrated = true;
             credit.current = n;

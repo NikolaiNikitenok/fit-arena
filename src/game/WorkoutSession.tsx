@@ -178,7 +178,7 @@ export function WorkoutSession({ tag, title, sets, model, onSet, onFinish, onExi
         calibrate: needsCalibration(sets[0].exercise),
         gate: true,
         prepare: true,
-        onError: () => { setError('Ошибка распознавания. Повтори запуск камеры'); setPhase('error'); },
+        onError: () => { setError(t('Ошибка распознавания. Повтори запуск камеры')); setPhase('error'); },
         onCalibrated: (n) => {
           credit.current = n;
         },

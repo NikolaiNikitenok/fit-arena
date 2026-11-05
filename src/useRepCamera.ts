@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { useEffect, useRef, useState } from 'react';
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker, loadVision } from './pose';
@@ -127,7 +128,7 @@ export function useRepCamera(preload = true) {
     setTrainingState('CAMERA_LOADING');
     setPreparing(managed);
     readyRef.current = false;
-    setHint('Встань в кадр: камера проверяет положение');
+    setHint(t('Встань в кадр: камера проверяет положение'));
     try {
     // До первого await: на iPhone разрешение на датчик можно спросить только прямо из нажатия.
     enableOrientation();
@@ -202,7 +203,7 @@ export function useRepCamera(preload = true) {
       lastDetect = now;
       return true;
     };
-    setHint('Встань в кадр: камера проверяет положение');
+    setHint(t('Встань в кадр: камера проверяет положение'));
     setActive(true);
 
     let initialFrame = true;
@@ -246,7 +247,7 @@ export function useRepCamera(preload = true) {
           readyRef.current = readiness === 'READY';
           if (readyRef.current) report('positioning_completed', { exercise, failedAttempts });
           setTrainingState(readiness);
-          setHint(!POSITIONING_ENABLED ? null : valid ? (readyRef.current ? null : 'Удерживай положение') : observed.hint ?? 'Встань в кадр');
+          setHint(!POSITIONING_ENABLED ? null : valid ? (readyRef.current ? null : t('Удерживай положение')) : observed.hint ?? t('Встань в кадр'));
           setAngle(getSettings().skeleton ? state.angle : null);
           frameRef.current = requestAnimationFrame(loop);
           return;
@@ -281,7 +282,7 @@ export function useRepCamera(preload = true) {
           const seconds = preparation.seconds(now);
           setPrepareSeconds(seconds);
           if (seconds > 0 && seconds !== spokenSecond) { spokenSecond = seconds; say(String(seconds)); }
-          setHint(valid ? 'Удерживай положение' : observed.hint);
+          setHint(valid ? t('Удерживай положение') : observed.hint);
           if (stage !== 'ACTIVE') {
             frameRef.current = requestAnimationFrame(loop);
             return;
@@ -323,7 +324,7 @@ export function useRepCamera(preload = true) {
       }
       frameRef.current = requestAnimationFrame(loop);
       } catch (e) {
-        if (current()) { ownFailure = true; report('recognition_error', { exercise, reason: 'inference' }); stop('ERROR'); reportCameraFailure(e, 'model'); setHint('Ошибка распознавания. Вернись назад и повтори запуск'); opts.onError?.(e); }
+        if (current()) { ownFailure = true; report('recognition_error', { exercise, reason: 'inference' }); stop('ERROR'); reportCameraFailure(e, 'model'); setHint(t('Ошибка распознавания. Вернись назад и повтори запуск')); opts.onError?.(e); }
         if (initialFrame) throw e;
       }
     };
