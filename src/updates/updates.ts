@@ -5,6 +5,7 @@ import { syncNow } from '../cloud';
 import { hasHero, loadProgress } from '../game/progress';
 import { APP_VERSION } from '../telemetry';
 import { ChangeEntry, CHANGELOG, LATEST_CHANGE } from './changelog';
+import { isBusy } from './busy';
 
 export interface Remote {
   version: string;
@@ -16,6 +17,7 @@ const TRIED_KEY = 'fit-arena-update-tried';
 const CHECK_EVERY = 3 * 60_000;
 
 let remote: Remote | null = null;
+let deferredVersion: string | null = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((fn) => fn());
 const subscribe = (fn: () => void) => {
@@ -24,7 +26,13 @@ const subscribe = (fn: () => void) => {
 };
 
 /** Вышедшая версия новее этой или null. */
-export const useRemoteUpdate = (): Remote | null => useSyncExternalStore(subscribe, () => remote);
+export const useRemoteUpdate = (): Remote | null => useSyncExternalStore(subscribe, () => remote?.version === deferredVersion ? null : remote);
+
+/** Defer only this release until this app process restarts; a newer release can notify again. */
+export function deferUpdate(version: string): void {
+  deferredVersion = version;
+  emit();
+}
 
 const session = {
   get: (k: string) => {
@@ -48,7 +56,11 @@ export async function checkUpdate(): Promise<void> {
     const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return;
     const v = (await r.json()) as Remote;
-    if (!v?.version || v.version === APP_VERSION) return;
+    if (!v?.version) return;
+    if (v.version === APP_VERSION) {
+      if (remote) { remote = null; emit(); }
+      return;
+    }
     // Уже перезагружались на эту версию, а пришла старая (телефон отдал страницу из кеша): не зацикливаемся.
     if (session.get(TRIED_KEY) === v.version) return;
     if (remote?.version === v.version) return;
@@ -59,20 +71,25 @@ export async function checkUpdate(): Promise<void> {
   }
 }
 
-/** Пункты для плашки: записи новее тех, что знает эта сборка. Пусто — значит, мелкие исправления. */
-export const newEntries = (r: Remote): ChangeEntry[] => r.changelog.filter((e) => e.n > LATEST_CHANGE);
+/** Show new release notes, or the latest published entry for a maintenance deployment. */
+export const newEntries = (r: Remote): ChangeEntry[] => {
+  const newer = r.changelog.filter((e) => e.n > LATEST_CHANGE);
+  return newer.length ? newer : r.changelog.slice(0, 1);
+};
 
 let reloading = false;
 /** Сохранить прогресс и открыть новую сборку. Адрес с меткой версии: так телефон не возьмёт старую страницу из кеша. */
-export async function applyUpdate(version = remote?.version ?? String(Date.now())): Promise<void> {
-  if (reloading) return;
+export async function applyUpdate(version = remote?.version ?? String(Date.now())): Promise<boolean> {
+  if (reloading || isBusy()) return false;
   reloading = true;
-  session.set(TRIED_KEY, version);
   // Прогресс уже в телефоне (сохраняется сразу). На сервер отправляем то, что ещё не ушло, но долго не ждём.
   await Promise.race([syncNow().catch(() => null), new Promise((r) => setTimeout(r, 3000))]);
+  if (isBusy()) { reloading = false; return false; }
+  session.set(TRIED_KEY, version);
   const q = new URLSearchParams(location.search);
   q.set('v', version.replace(/[^\w-]/g, ''));
   location.replace(`${location.pathname}?${q}${location.hash}`);
+  return true;
 }
 
 /** Какие записи «Что нового» игрок ещё не видел в этой сборке (обновился, просто перезапустив игру). */
@@ -111,7 +128,8 @@ export function initUpdates(): void {
     const last = Number(session.get('fit-arena-preload-reload') ?? 0);
     if (Date.now() - last < 60_000) return;
     session.set('fit-arena-preload-reload', String(Date.now()));
-    void applyUpdate(remote?.version);
+    if (isBusy() || remote?.version === deferredVersion) void checkUpdate();
+    else void applyUpdate(remote?.version);
   });
   if (!import.meta.env.PROD) return;
   setTimeout(checkUpdate, 15_000);

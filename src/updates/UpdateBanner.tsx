@@ -3,22 +3,19 @@ import { sfx } from '../audio';
 import { Check, Cross } from '../icons';
 import { useIsBusy } from './busy';
 import { ChangeEntry } from './changelog';
-import { applyUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate, setBannerOpen } from './updates';
+import { applyUpdate, deferUpdate, initUpdates, markSeen, newEntries, unseenEntries, useRemoteUpdate, setBannerOpen } from './updates';
 import './updates.css';
 import { t, locale } from '../i18n';
-
-const SNOOZE = 10 * 60_000;
+import { APP_VERSION } from '../telemetry';
 
 /**
- * Плашка сверху: «Вышло обновление» с тем, что нового, и кнопкой «Обновить».
- * Во время боя и тренировки не показывается. «Позже» прячет её до конца следующего боя или на 10 минут.
+ * Плашка с описанием обновления. Во время боя и тренировки не показывается.
+ * «После перезапуска» откладывает эту версию до следующего запуска приложения.
  * После обновления (или если игру просто перезапустили на новой версии) показывает, что изменилось.
  */
 export function UpdateBanner() {
   const remote = useRemoteUpdate();
   const busy = useIsBusy();
-  const [snoozed, setSnoozed] = useState(false);
-  const [wasBusy, setWasBusy] = useState(false);
   const [fresh, setFresh] = useState<ChangeEntry[]>([]);
   const [leaving, setLeaving] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -30,21 +27,7 @@ export function UpdateBanner() {
     return () => clearTimeout(tm);
   }, []);
 
-  // Закончил бой — снова можно предложить обновление.
-  useEffect(() => {
-    if (busy) setWasBusy(true);
-    else if (wasBusy) {
-      setWasBusy(false);
-      setSnoozed(false);
-    }
-  }, [busy, wasBusy]);
-  useEffect(() => {
-    if (!snoozed) return;
-    const tm = setTimeout(() => setSnoozed(false), SNOOZE);
-    return () => clearTimeout(tm);
-  }, [snoozed]);
-
-  const mode = busy ? null : remote && !snoozed ? 'update' : fresh.length ? 'fresh' : null;
+  const mode = busy ? null : remote ? 'update' : fresh.length ? 'fresh' : null;
   const entries = mode === 'update' ? newEntries(remote!) : fresh;
 
   useEffect(() => {
@@ -57,7 +40,7 @@ export function UpdateBanner() {
     setLeaving(false);
     sfx('whoosh');
     // Увиденное в плашке не показываем второй раз после перезагрузки.
-    markSeen(Math.max(0, ...entries.map((e) => e.n)));
+    if (mode === 'fresh') markSeen(Math.max(0, ...entries.map((e) => e.n)));
   }, [mode, remote?.version]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!mode) return null;
@@ -76,6 +59,7 @@ export function UpdateBanner() {
           </div>
           <div className="upd-titles">
             <div className="upd-kicker">{mode === 'update' ? t('Вышло обновление') : t('Игра обновилась')}</div>
+            <div className="upd-version">{t('Обновление {0}', { 0: mode === 'update' ? remote!.version : APP_VERSION })}</div>
             <div className="upd-title">{entries.length === 1 ? t(entries[0].title) : entries.length ? t('Что нового') : t('Улучшения и исправления')}</div>
           </div>
           {mode === 'fresh' && (
@@ -101,20 +85,21 @@ export function UpdateBanner() {
         ) : (
           <div className="upd-plain">{t('Игра стала стабильнее и быстрее. Обновление займёт пару секунд, прогресс сохранится.')}</div>
         )}
+        {mode === 'update' && <div className="upd-plain">{t('Можно обновить сейчас или продолжить игру. После перезапуска откроется новая версия.')}</div>}
         {mode === 'update' ? (
           <div className="upd-actions">
-            <button className="upd-later" onClick={() => close(() => setSnoozed(true))}>
-              {t('Позже')}
+            <button className="upd-later" disabled={updating || leaving} onClick={() => close(() => { setFresh([]); deferUpdate(remote!.version); })}>
+              {t('После перезапуска')}
             </button>
             <button
               className="upd-go"
-              disabled={updating}
+              disabled={updating || leaving}
               onClick={() => {
                 setUpdating(true);
-                void applyUpdate(remote!.version);
+                void applyUpdate(remote!.version).then((started) => { if (!started) setUpdating(false); });
               }}
             >
-              {updating ? t('Сохраняем…') : t('Обновить')}
+              {updating ? t('Сохраняем…') : t('Обновить сейчас')}
             </button>
           </div>
         ) : (
@@ -145,7 +130,7 @@ export function ChangesList({ entries }: { entries: ChangeEntry[] }) {
       {entries.map((e) => (
         <div key={e.n} className="upd-history-entry">
           <div className="upd-history-date">{new Date(e.date + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-          <div className="upd-history-title">{t(e.title)}</div>
+          <div className="upd-history-title">{t('Обновление №{0}', { 0: e.n })} · {t(e.title)}</div>
           {e.items.map((it, i) => (
             <div key={i} className="upd-item">
               <Check size={14} />

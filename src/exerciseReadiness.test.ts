@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exerciseReadiness, type Landmark } from './repCounter';
+import { exerciseReadiness, RepCounter, type Landmark } from './repCounter';
 
 function pushup(): Landmark[] {
   const lm: Landmark[] = Array.from({ length: 33 }, () => ({ x: .5, y: .5, visibility: .9 }));
@@ -58,11 +58,69 @@ describe('exerciseReadiness: coherent, visible exercise-specific side', () => {
 
   it('не комбинирует невидимые обязательные суставы разных сторон', () => {
     const lm = pushup();
-    lm[13].visibility = .1;
-    lm[16].visibility = .1;
+    lm[15].visibility = .1; // left wrist absent
+    lm[12].visibility = .1; // right shoulder absent
     const observed = exerciseReadiness('pushup', lm);
     expect(observed.hint).not.toBeNull();
     expect(observed.angle).toBeNull();
+  });
+
+  it('скрытые локти не блокируют подготовку, но без них повтор не подтверждается', () => {
+    const counter = new RepCounter('pushup');
+    let at = 0;
+    const hold = (down: boolean, elbowsVisible: boolean) => {
+      const lm = pushup();
+      if (down) {
+        for (const i of [13, 14]) { lm[i].x = .4; lm[i].y = .6; }
+      }
+      if (!elbowsVisible) for (const i of [13, 14]) lm[i].visibility = .1;
+      for (let frame = 0; frame < 10; frame++) {
+        ready(lm);
+        counter.update(lm, at);
+        at += 100;
+      }
+    };
+    hold(false, false);
+    hold(true, false);
+    hold(false, false);
+    expect(counter.current.reps).toBe(0);
+    expect(counter.current.angle).toBeNull();
+    expect(counter.current.hint).not.toBeNull();
+
+    // Restoring the real elbow landmarks permits a new, fully observed repetition.
+    hold(false, true);
+    expect(counter.current.hint).toBeNull();
+    expect(counter.current.reps).toBe(0);
+    hold(true, true);
+    hold(false, true);
+    expect(counter.current.reps).toBe(1);
+  });
+
+  it('по-прежнему требует хотя бы одну видимую кисть', () => {
+    const lm = pushup();
+    for (const i of [15, 16]) lm[i].visibility = .1;
+    const observed = exerciseReadiness('pushup', lm);
+    expect(observed.hint).not.toBeNull();
+    expect(observed.angle).toBeNull();
+  });
+
+  it('по-прежнему требует видимый таз с выбранной стороны', () => {
+    const lm = pushup();
+    for (const i of [23, 24]) lm[i].visibility = .1;
+    expect(exerciseReadiness('pushup', lm).hint).not.toBeNull();
+  });
+
+  it('не ослабляет пределы видимости кистей и таза при подготовке', () => {
+    const lm = pushup();
+    for (const i of [11, 12, 15, 16]) lm[i].visibility = .35;
+    for (const i of [23, 24]) lm[i].visibility = .5;
+    for (const i of [13, 14]) lm[i].visibility = .1;
+    ready(lm);
+    for (const i of [15, 16]) lm[i].visibility = .349;
+    expect(exerciseReadiness('pushup', lm).hint).not.toBeNull();
+    for (const i of [15, 16]) lm[i].visibility = .35;
+    for (const i of [23, 24]) lm[i].visibility = .499;
+    expect(exerciseReadiness('pushup', lm).hint).not.toBeNull();
   });
 
   it('учитывает aspect вертикального кадра и поворот телефона', () => {

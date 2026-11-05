@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Landmark } from './repCounter';
 
 const h = vi.hoisted(() => ({
-  refs: [] as { current: any }[], effects: [] as (() => unknown)[], cursor: 0, events: [] as { n: string; m: unknown }[],
+  refs: [] as { current: any }[], effects: [] as (() => unknown)[], cursor: 0, events: [] as { n: string; m: unknown; at: number }[],
   create: vi.fn(), getMedia: vi.fn(), detect: vi.fn(),
 }));
 vi.mock('react', () => ({
@@ -20,7 +20,7 @@ vi.mock('./audio', () => ({ repSound: vi.fn() }));
 vi.mock('./telegram', () => ({ hapticRep: vi.fn() }));
 vi.mock('./telemetry', async () => {
   const { trainingReporter } = await import('../shared/trainingTelemetry');
-  return { reportCameraFailure: vi.fn(), trackOnce: vi.fn(), createTrainingTelemetry: () => trainingReporter((n, m) => h.events.push({ n, m })) };
+  return { reportCameraFailure: vi.fn(), trackOnce: vi.fn(), createTrainingTelemetry: () => trainingReporter((n, m) => h.events.push({ n, m, at: performance.now() })) };
 });
 vi.mock('./flames', () => ({ Flames: class { step() {} } }));
 
@@ -355,6 +355,58 @@ describe('useRepCamera async lifecycle (mock browser, real counters/FSM)', () =>
     for (let at = 100; at <= 10000; at += 100) { tick(at); expect(camera.go()).toBeFalsy(); }
     expect(onFrame).not.toHaveBeenCalled();
     expect(onRep).not.toHaveBeenCalled();
+    camera.stop();
+  });
+
+
+  it('autoGo начинает pushup по позе с одним отсчётом 3 с без повторного окна готовности', async () => {
+    const pushup = (theta: number) => {
+      const lm = Array.from({ length: 33 }, () => ({ x: .5, y: .5, visibility: .9 }));
+      const radians = theta * Math.PI / 180;
+      for (const [i, x, y] of [[11, .3, .6], [13, .3, .7], [15, .3 - .1 * Math.sin(radians), .7 - .1 * Math.cos(radians)], [23, .55, .6], [25, .7, .605], [27, .85, .61]]) {
+        lm[i] = { x, y, visibility: .9 }; lm[i + 1] = { x, y, visibility: .9 };
+      }
+      return lm;
+    };
+    h.detect.mockImplementation(() => ({ landmarks: [pushup(Math.floor(clock / 400) % 2 ? 70 : 170)] }));
+    const camera = mount(); const onFrame = vi.fn(() => true); const onRep = vi.fn();
+    await camera.start('pushup', onRep, onFrame, { gate: true, prepare: true, autoGo: true, calibrate: false });
+    // Нет camera.go(): распознанная поза сама открывает внутренний gate.
+    for (let at = 100; at <= 4500; at += 100) tick(at);
+    expect(h.events.filter((e) => e.n === 'countdown_started').map((e) => e.at)).toEqual([1500]);
+    expect(h.events.filter((e) => e.n === 'exercise_started').map((e) => e.at)).toEqual([4500]);
+    expect(onFrame).not.toHaveBeenCalled(); expect(onRep).not.toHaveBeenCalled();
+    tick(4600);
+    expect(onFrame).toHaveBeenCalledOnce();
+    expect(camera.go()).toBe(false);
+    camera.stop();
+  });
+
+  it('autoGo не запускает тренировку без человека и корректно отменяется во время подготовки', async () => {
+    h.detect.mockReturnValue({ landmarks: [] });
+    const camera = mount(); const onFrame = vi.fn(() => true); const onRep = vi.fn();
+    await camera.start('pushup', onRep, onFrame, { gate: true, prepare: true, autoGo: true, calibrate: false });
+    for (let at = 100; at <= 10000; at += 100) tick(at);
+    expect(onFrame).not.toHaveBeenCalled(); expect(onRep).not.toHaveBeenCalled();
+    expect(h.events.filter((e) => e.n === 'countdown_started' || e.n === 'exercise_started')).toHaveLength(0);
+    camera.stop(); tick(11000);
+    expect(frames.size).toBe(0); expect(track.stop).toHaveBeenCalledOnce();
+    expect(onFrame).not.toHaveBeenCalled();
+  });
+
+  it('autoGo после длительной потери позы заново ждёт устойчивость и полный countdown', async () => {
+    const camera = mount(); const onFrame = vi.fn(() => true);
+    await camera.start('squat', vi.fn(), onFrame, { gate: true, prepare: true, autoGo: true });
+    for (let at = 100; at <= 2000; at += 100) tick(at);
+    h.detect.mockReturnValue({ landmarks: [] });
+    for (let at = 2100; at <= 2500; at += 100) tick(at);
+    h.detect.mockReturnValue({ landmarks: [squat()] });
+    for (let at = 2600; at <= 7000; at += 100) tick(at);
+    expect(onFrame).not.toHaveBeenCalled();
+    expect(h.events.filter((e) => e.n === 'exercise_started')).toHaveLength(0);
+    tick(7100);
+    expect(h.events.filter((e) => e.n === 'exercise_started').map((e) => e.at)).toEqual([7100]);
+    tick(7200); expect(onFrame).toHaveBeenCalledOnce();
     camera.stop();
   });
 

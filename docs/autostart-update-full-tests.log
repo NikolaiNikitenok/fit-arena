@@ -1,0 +1,23 @@
+
+> fit-arena@1.0.0 test
+> vitest run
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/updates/changelog" without a file extension (vite.config.ts:6:27). Add the file extension
+  - import "../i18n" resolves to a directory index (src/updates/changelog.ts:5:19). Import the index file directly
+  - import "./en" without a file extension (src/i18n/index.ts:5:20). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 C:/Users/k8909/OneDrive/Документы/ChatGPT/NIKITENOK ECOSYSTEM/arena-modernization
+
+(node:28880) [THREE_CJS_DEPRECATED] DeprecationWarning: `require("three")` is deprecated and will be removed.
+Replace `const THREE = require("three")` with `import * as THREE from "three"`.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ Test Files  119 passed (119)
+      Tests  1007 passed | 2 skipped (1009)
+   Start at  01:30:52
+   Duration  18.95s (tests 41%, import 37%, transform 19%, worker 3%)
+
+    Isolate  119 workers spawned · ~592ms startup each (spawn + environment, per file)
+             at least ~9.47s faster with isolate: false — reuses workers across files instead of one per file
