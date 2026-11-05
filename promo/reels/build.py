@@ -144,10 +144,12 @@ fc += ''.join(fx) + f'amix=inputs={len(fx)}:normalize=0,apad,atrim=0:{END:.3f}[s
 fc += ''.join(vo) + f'amix=inputs={n}:normalize=0,apad,atrim=0:{END:.3f},highpass=f=80,acompressor=threshold=-20dB:ratio=3,asplit=3[voice][sc][vonly];'
 fc += f'[{mi}:a]atrim=0:{END:.3f},volume=0.5[mus];[mus][sc]sidechaincompress=threshold=0.03:ratio=5:attack=15:release=220[duck];'
 fc += '[voice][duck][sfx]amix=inputs=3:normalize=0,loudnorm=I=-14:TP=-1.5[a];[vonly]loudnorm=I=-14:TP=-1.5,aresample=48000[av]'
-subprocess.run(['ffmpeg', '-y', '-v', 'error', *ins, '-filter_complex', fc, '-map', f'[{prev}]', '-map', '[a]', '-t', f'{END:.3f}',
-                '-c:v', 'libx264', '-crf', '15', '-preset', os.environ.get('PRESET', 'slow'), '-profile:v', 'high', '-level', '4.2', '-maxrate', '25M', '-bufsize', '50M',
+# Bound parallelism and execution time on hosted runners. Keep quality at CRF 15
+# with a faster encoder preset; emit progress so slow renders can be diagnosed.
+subprocess.run(['ffmpeg', '-y', '-v', 'warning', '-stats', '-stats_period', '10', '-filter_complex_threads', '2', *ins, '-filter_complex', fc, '-map', f'[{prev}]', '-map', '[a]', '-t', f'{END:.3f}',
+                '-c:v', 'libx264', '-threads', '2', '-crf', '15', '-preset', os.environ.get('PRESET', 'fast'), '-profile:v', 'high', '-level', '4.2', '-maxrate', '25M', '-bufsize', '50M',
                 '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-movflags', '+faststart', 'reel.mp4',
-                '-map', '[av]', '-t', f'{END:.3f}', '-c:a', 'pcm_s16le', 'voice.wav'], check=True)
+                '-map', '[av]', '-t', f'{END:.3f}', '-c:a', 'pcm_s16le', 'voice.wav'], check=True, timeout=360)
 # Вторая версия: тот же видеоряд, только голос — под трендовый трек из библиотеки Instagram.
 subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', 'reel.mp4', '-i', 'voice.wav', '-map', '0:v', '-map', '1:a', '-c:v', 'copy',
                 '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart', 'reel-voice.mp4'], check=True)
