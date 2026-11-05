@@ -1,0 +1,137 @@
+
+> fit-arena@1.0.0 prebuild
+> node scripts/copy-wasm.mjs
+
+
+> fit-arena@1.0.0 build
+> tsc && vite build
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/updates/changelog" without a file extension (vite.config.ts:6:27). Add the file extension
+  - import "../i18n" resolves to a directory index (src/updates/changelog.ts:5:19). Import the index file directly
+  - import "./en" without a file extension (src/i18n/index.ts:5:20). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 307 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/nunito-vietnamese-700-normal-Ch8EUCfz.woff2      5.96 kB
+dist/version.json                                            6.10 kB │ gzip:   2.30 kB
+dist/assets/nunito-vietnamese-600-normal-BY8O6Cug.woff2      6.19 kB
+dist/assets/nunito-vietnamese-800-normal-D_CZYdm9.woff2      6.22 kB
+dist/assets/nunito-vietnamese-900-normal-D6LWQAy_.woff2      6.32 kB
+dist/assets/nunito-vietnamese-700-normal-C9SQsXvj.woff       8.07 kB
+dist/assets/nunito-vietnamese-600-normal-DO1RqFw5.woff       8.27 kB
+dist/assets/nunito-vietnamese-800-normal-Dz0hZPb5.woff       8.30 kB
+dist/assets/nunito-vietnamese-900-normal-WV2-fBew.woff       8.34 kB
+dist/assets/nunito-cyrillic-800-normal-D3igD7Kl.woff2        8.49 kB
+dist/assets/nunito-cyrillic-700-normal-DP36NgGt.woff2        8.51 kB
+dist/assets/nunito-cyrillic-600-normal-DJGQ2h05.woff2        8.53 kB
+dist/assets/nunito-cyrillic-900-normal-CWPcV0_V.woff2        8.59 kB
+dist/assets/nunito-cyrillic-700-normal-DfHRUDv-.woff        10.40 kB
+dist/assets/nunito-cyrillic-800-normal-DymMgApb.woff        10.46 kB
+dist/assets/nunito-cyrillic-900-normal-Dr1fjxoU.woff        10.47 kB
+dist/assets/nunito-cyrillic-600-normal-BUjmtIuu.woff        10.54 kB
+dist/assets/nunito-cyrillic-ext-700-normal-BuR0mlCG.woff2   10.98 kB
+dist/assets/nunito-cyrillic-ext-600-normal-CWPPjBOD.woff2   11.20 kB
+dist/assets/nunito-cyrillic-ext-900-normal-BLeVovcl.woff2   11.25 kB
+dist/assets/nunito-cyrillic-ext-800-normal-B-cvGohL.woff2   11.26 kB
+dist/assets/nunito-cyrillic-ext-700-normal-DfoqN4Gs.woff    13.87 kB
+dist/assets/nunito-cyrillic-ext-900-normal-DKFql_-q.woff    13.98 kB
+dist/assets/nunito-cyrillic-ext-800-normal-pjRatrRO.woff    14.06 kB
+dist/assets/nunito-cyrillic-ext-600-normal-vnfu4DTE.woff    14.09 kB
+dist/assets/nunito-latin-ext-700-normal-BWeMsAzO.woff2      15.82 kB
+dist/assets/nunito-latin-ext-600-normal-Dd9Zuxh1.woff2      16.08 kB
+dist/assets/nunito-latin-700-normal-Dort48En.woff2          16.22 kB
+dist/assets/nunito-latin-ext-900-normal-Dllsvgjo.woff2      16.26 kB
+dist/assets/nunito-latin-ext-800-normal-CtU8tJOV.woff2      16.28 kB
+dist/assets/nunito-latin-800-normal-Dz8SOQK_.woff2          16.52 kB
+dist/assets/nunito-latin-600-normal-Br8yIETf.woff2          16.55 kB
+dist/assets/nunito-latin-900-normal-BVB1fGs6.woff2          16.67 kB
+dist/assets/nunito-latin-700-normal-OcDqTBcA.woff           19.98 kB
+dist/assets/nunito-latin-800-normal-D-J0wlBY.woff           20.36 kB
+dist/assets/nunito-latin-900-normal-CVn49sIn.woff           20.46 kB
+dist/assets/nunito-latin-600-normal-Cd0eNu1l.woff           20.49 kB
+dist/assets/nunito-latin-ext-700-normal-D4woHhbd.woff       21.00 kB
+dist/assets/nunito-latin-ext-600-normal-BKUpuB78.woff       21.30 kB
+dist/assets/nunito-latin-ext-900-normal-CTBZd6bf.woff       21.41 kB
+dist/assets/nunito-latin-ext-800-normal-CDcxIxx8.woff       21.42 kB
+dist/index.html                                             24.42 kB │ gzip:   8.30 kB
+dist/assets/ShareCard-f_QnJ9qX.css                           0.52 kB │ gzip:   0.31 kB
+dist/assets/TitanScreen-oPp3Cke4.css                         2.39 kB │ gzip:   0.88 kB
+dist/assets/IntroChat-BfE4TOY_.css                           3.01 kB │ gzip:   1.13 kB
+dist/assets/ClanScreen-jy4HE2fN.css                          4.23 kB │ gzip:   1.36 kB
+dist/assets/RecapScreen--WLguGDh.css                         4.77 kB │ gzip:   1.63 kB
+dist/assets/CitySheet-Duv5yei9.css                           6.28 kB │ gzip:   1.88 kB
+dist/assets/social-DJYj-ZQO.css                             10.53 kB │ gzip:   2.42 kB
+dist/assets/GymScreen-NFFxsLVk.css                          13.35 kB │ gzip:   2.87 kB
+dist/assets/VillageScreen-DshzNyVs.css                      33.19 kB │ gzip:   7.57 kB
+dist/assets/DungeonScreen-3mnnwfUT.css                      42.42 kB │ gzip:   9.86 kB
+dist/assets/index-BoK0VlOY.css                             152.75 kB │ gzip:  29.71 kB
+dist/assets/busy-BodIElOB.js                                 0.30 kB │ gzip:   0.23 kB
+dist/assets/api-CpTQEcx_.js                                  0.53 kB │ gzip:   0.39 kB
+dist/assets/family-7M2TGY-K.js                               0.68 kB │ gzip:   0.40 kB
+dist/assets/referral-CsFjC-Fg.js                             0.71 kB │ gzip:   0.39 kB
+dist/assets/cameraError-CfbTPStj.js                          0.82 kB │ gzip:   0.49 kB
+dist/assets/power-DabIgZJK.js                                0.90 kB │ gzip:   0.53 kB
+dist/assets/HomeShortcut-Dp0DiZlv.js                         1.27 kB │ gzip:   0.71 kB
+dist/assets/preload-helper-BLdHbfdN.js                       1.51 kB │ gzip:   0.79 kB
+dist/assets/Sky-D9myRa8w.js                                  1.67 kB │ gzip:   0.87 kB
+dist/assets/Actor-quBlOF0t.js                                2.05 kB │ gzip:   1.11 kB
+dist/assets/Onboarding-DGINslW9.js                           2.50 kB │ gzip:   1.34 kB
+dist/assets/ChannelOffer-BJg9GdA-.js                         2.52 kB │ gzip:   1.20 kB
+dist/assets/CalibrationOverlay-2DUCJ4jG.js                   2.80 kB │ gzip:   1.26 kB
+dist/assets/PlayerMenu-s7Rb14gB.js                           2.87 kB │ gzip:   1.36 kB
+dist/assets/profanity-Db-sPJya.js                            2.96 kB │ gzip:   1.62 kB
+dist/assets/CollectionsSheet-tZSW_KDb.js                     3.24 kB │ gzip:   1.48 kB
+dist/assets/react-dom-Ds72NycD.js                            3.86 kB │ gzip:   1.40 kB
+dist/assets/WebLogin-0n1b3HHk.js                             4.39 kB │ gzip:   1.86 kB
+dist/assets/WarmupFigure-DmoBiTPc.js                         4.60 kB │ gzip:   2.09 kB
+dist/assets/telemetry-b9oeZ0HA.js                            4.82 kB │ gzip:   2.37 kB
+dist/assets/HolidayScreen-B1spYm4j.js                        5.80 kB │ gzip:   2.41 kB
+dist/assets/WorldMap3D-BqyGyFSV.js                           6.12 kB │ gzip:   2.71 kB
+dist/assets/TitanScreen-Cr_eS1Ap.js                          6.36 kB │ gzip:   2.65 kB
+dist/assets/decor-CLu2HNYx.js                                6.63 kB │ gzip:   2.89 kB
+dist/assets/FeedScreen-Bq5fjWzm.js                           7.02 kB │ gzip:   2.97 kB
+dist/assets/IntroChat-BSH5QA71.js                            7.02 kB │ gzip:   3.05 kB
+dist/assets/HeroStage-D6C6Ucbq.js                            7.19 kB │ gzip:   2.61 kB
+dist/assets/Account-BWJBfaXw.js                              7.83 kB │ gzip:   2.86 kB
+dist/assets/CameraGuide-D72uLc8Q.js                          8.69 kB │ gzip:   3.39 kB
+dist/assets/ProfileSheet-Dzus9bMz.js                         9.14 kB │ gzip:   3.21 kB
+dist/assets/PostCard-Jjd6V_28.js                            11.70 kB │ gzip:   5.04 kB
+dist/assets/worldgen-DxfpZNLi.js                            12.18 kB │ gzip:   4.86 kB
+dist/assets/ShareCard-BzokRX3z.js                           12.45 kB │ gzip:   5.53 kB
+dist/assets/PassScreen-DPtd8Xyl.js                          12.65 kB │ gzip:   4.66 kB
+dist/assets/PetScreen-DuOD-wIC.js                           13.31 kB │ gzip:   4.96 kB
+dist/assets/CitySheet-Ygag8go4.js                           13.88 kB │ gzip:   4.52 kB
+dist/assets/Pet-T7BocllC.js                                 14.60 kB │ gzip:   4.07 kB
+dist/assets/RecapScreen-C3kULld3.js                         14.70 kB │ gzip:   5.53 kB
+dist/assets/icons-BrdQJhO6.js                               14.84 kB │ gzip:   4.50 kB
+dist/assets/useRepCamera-ZpvRrh_8.js                        16.56 kB │ gzip:   7.06 kB
+dist/assets/ProgramsScreen-1Y9hxDbl.js                      20.67 kB │ gzip:   7.22 kB
+dist/assets/SettingsSheet-C-TWNfRP.js                       24.19 kB │ gzip:   7.71 kB
+dist/assets/MissionPlay-huhzxzN4.js                         33.20 kB │ gzip:  12.16 kB
+dist/assets/levels-CLOpspte.js                              35.83 kB │ gzip:  13.55 kB
+dist/assets/DungeonScreen-DpVTFy4p.js                       40.51 kB │ gzip:  13.89 kB
+dist/assets/ClanScreen-DjWnzp5c.js                          44.97 kB │ gzip:  13.61 kB
+dist/assets/Duel-D13u_TS_.js                                46.77 kB │ gzip:  15.99 kB
+dist/assets/VillageScreen-tJ70uFu-.js                       63.43 kB │ gzip:  21.32 kB
+dist/assets/progress-CN_lDkDK.js                            70.83 kB │ gzip:  25.78 kB
+dist/assets/kit-DAkrIj48.js                                 78.05 kB │ gzip:  22.81 kB
+dist/assets/GymScreen-Oj2clc87.js                           83.25 kB │ gzip:  34.34 kB
+dist/assets/vision_bundle-DQU2cgH6.js                      154.28 kB │ gzip:  45.60 kB
+dist/assets/cityName-fwd-y_HU.js                           154.80 kB │ gzip:  67.17 kB
+dist/assets/Globe-ogDxDLps.js                              203.07 kB │ gzip:  72.38 kB
+dist/assets/jsx-runtime-CsUG28iE.js                        391.14 kB │ gzip: 136.51 kB
+dist/assets/index-B3enwag1.js                              681.93 kB │ gzip: 230.19 kB
+dist/assets/Canvas3D-xAS1Z_3n.js                           926.20 kB │ gzip: 247.46 kB
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/game/EventScreen.tsx is dynamically imported by src/game/Adventure.tsx but also statically imported by src/friends/InviteOffer.tsx, src/game/CollectionsSheet.tsx, src/game/HeroHome.tsx, src/game/HolidayScreen.tsx, src/game/ProgramsScreen.tsx, ..., dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.93s

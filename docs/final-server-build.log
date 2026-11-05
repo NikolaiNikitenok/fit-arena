@@ -1,0 +1,4 @@
+
+> fit-arena@1.0.0 build:server
+> node scripts/build-server.mjs
+
