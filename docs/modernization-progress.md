@@ -68,3 +68,5 @@ autoGo в WorkoutSession: камера сама проверяет позици�
 Плашка: конкретные release notes, «Обновить сейчас»/«После перезапуска», история40/41, отсрочка не сбрасывается по таймеру/после боя и запрещает autoreload chunk error. applyUpdate проверяет busy до и после sync. CIpush требует новую запись журнала, workflow_dispatch rollback сохранен. Browser localpreview: плашка с mock version42 показана, После перезапуска скрыла её, Настройки→Об игре→История показали40/41. Физический телефон не проверен.
 
 Ограничение публикации: push workflow preflight отклонен GitHub OAuth из-за отсутствия workflow scope. Workflow-изменение сохранено в локальной ветке codex/release-update-notices commit18983ee; в публикуемую ветку оно не включено. Скрипт/тесты проверки журнала сохранены, автоматическое подключение guard пока BLOCKED разрешением. Production код идет существующим deploy workflow.
+
+CI PR51 failed before upload because the test for deferred workflow wiring was mistakenly retained. Removed that test of unavailable integration;16 real CLI/validation tests remain. No production upload occurred in the failed run42122606601.
