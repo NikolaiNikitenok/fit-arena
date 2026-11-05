@@ -1,3 +1,4 @@
+import { isMain, preparedDraft, QUALITY_BRIEF } from '../content/protocol.mjs';
 // Текст карусели для Instagram: Claude пишет слайды (обложка, пункты, финал) и подпись; проверяем и сохраняем в carousel.json.
 // Запуск: node generate.mjs <номер> <tips|app|story> [тема]. Виды: полезные советы (приложение только в финале), про приложение
 // и story — три сторис 1080×1920 на выбор (story.mjs).
@@ -9,7 +10,8 @@ const n = Number(process.argv[2] ?? 0) || 0;
 const kind = ["app", "story"].includes(process.argv[3])
   ? process.argv[3]
   : "tips";
-const topic = (process.argv[4] ?? "").trim().slice(0, 300);
+const prepared = preparedDraft(process.argv[4]);
+const topic = (prepared?.topic ?? process.argv[4] ?? '').trim().slice(0, 300);
 
 // Скриншоты: свежие кадры текущей игры 1080×1920 (shots/, вырезаны из видео рилсов) и из библиотеки постов
 // канала (server/channelMedia.ts) — только те, которых нет среди свежих и которые не устарели после редизайна.
@@ -125,7 +127,7 @@ const avoid = () =>
         .slice(-6000)}`
     : "";
 
-function prompt() {
+export function prompt() {
   if (kind === "story")
     return storyPrompt({ n, topic, facts: FACTS, npcs: STORY_NPCS, shots: SHOTS }) + avoid();
   const theme =
@@ -205,7 +207,7 @@ export function problems(c, k = kind) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   let last = "";
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -214,9 +216,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         (last
           ? `\n\nПрошлый вариант не прошёл проверку: ${last}. Исправь.`
           : "");
-      const raw = process.env.CLAUDE_CODE_OAUTH_TOKEN
-        ? askClaude(text)
-        : await askApi(text);
+      const raw = prepared ? JSON.stringify(prepared.script) : process.env.CLAUDE_CODE_OAUTH_TOKEN
+        ? askClaude(text + QUALITY_BRIEF)
+        : await askApi(text + QUALITY_BRIEF);
       const json = JSON.parse(
         raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1),
       );
@@ -224,7 +226,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       if (bad.length) throw new Error(bad.join("; "));
       writeFileSync(
         "carousel.json",
-        JSON.stringify({ n, kind, topic, ...json }, null, 2),
+        JSON.stringify({ n, kind, topic, ...json, provider: prepared ? 'codex-local' : 'claude' }, null, 2),
       );
       history.push({ kind, n, at: new Date().toISOString(), lines: lines(json) });
       writeFileSync(HISTORY, JSON.stringify(history.slice(-200)));

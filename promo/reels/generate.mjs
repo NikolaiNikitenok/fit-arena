@@ -1,3 +1,4 @@
+import { isMain, preparedDraft, QUALITY_BRIEF } from '../content/protocol.mjs';
 // Сценарий рилса: Claude пишет хук, реплики озвучки, титры и подпись; проверяем и сохраняем в script.json.
 // Запуск: node generate.mjs <номер> [тема]. Нужен CLAUDE_CODE_OAUTH_TOKEN (подписка, через `claude -p`) или ANTHROPIC_API_KEY.
 import { spawnSync } from 'node:child_process';
@@ -6,7 +7,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const catalog = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.url), 'utf8'));
 const music = JSON.parse(readFileSync(new URL('./music/library.json', import.meta.url), 'utf8'));
 const n = Number(process.argv[2] ?? 0) || 0;
-const topic = (process.argv[3] ?? '').trim().slice(0, 300);
+const prepared = preparedDraft(process.argv[3]);
+const topic = (prepared?.topic ?? process.argv[3] ?? '').trim().slice(0, 300);
 
 // Формулы хука по кругу, чтобы рилсы подряд не были похожи. Это форматы, которые сейчас залетают в Reels.
 export const ANGLES = [
@@ -46,7 +48,7 @@ export const FACTS = `Факты о приложении (только это, �
 - Челлендж в групповом чате Telegram: бот ведёт таблицу «кто больше за неделю». Результат тренировки можно отправить в чат.
 - Новичку разделы открываются постепенно: закрытые видны с замком и уровнем карты, на котором откроются.`;
 
-function prompt() {
+export function prompt() {
   const clips = Object.entries(catalog).filter(([id]) => id !== 'cta').map(([id, c]) => `- ${id}${c.hook ? ' [хук]' : ''} (${(c.to - c.from).toFixed(1)} с): ${c.about}`).join('\n');
   return `Напиши сценарий вертикального рилса для Instagram (14–18 секунд) про фитнес-игру NikitenokArena. Цель одна — чтобы рилс залетел: зритель не пролистал в первые 2 секунды, досмотрел до конца, пересмотрел, сохранил или переслал другу.
 
@@ -56,13 +58,13 @@ ${FACTS}
 ${topic ? `Тема от автора: ${topic}\n` : ''}
 Правила вирусного рилса:
 - Хук — первая реплика: до 7 слов, звучит не дольше 1,5 секунды. Без приветствий и названия приложения. Сразу боль, вызов, спор или интрига.
-- Дальше 3–5 коротких реплик (до 8 слов), каждая добавляет новое: проблема → решение → самая эффектная фича → выгода. Никакой воды, «вау»-момент в середине.
-- Последняя реплика — призыв: «Никитёнок Арена», бесплатно в Телеграме, «ссылка в профиле».
+- Дальше 2–4 коротких реплики (до 8 слов), раскрывающие одну идею: действие → понятная механика → результат. Не добавляй меню и другие функции ради количества реплик.
+- Последняя реплика называет «Никитёнок Арена» в Телеграме и содержит один призыв. Выбери одно действие: попробовать игру, переслать другу или ответить на вопрос. Тот же призыв используй в end; не проси сразу три действия.
 - Разговорный русский, на «ты», дерзко и живо, как блогер, а не как реклама. Без выдуманной статистики. Без эмодзи в репликах и титрах.
 
 Видеоряд — клипы из списка (id и длительность). Первый клип первой реплики — один из помеченных [хук]: самый яркий кадр, никаких меню.
 ${clips}
-Каждой реплике дай 1–2 клипа по смыслу (2 клипа — быстрая склейка, так динамичнее; у хука 1 клип). Клип не больше одного раза за рилс. Последней реплике клипы не нужны: под ней финальный экран.
+Каждой реплике дай 1–2 клипа по смыслу (2 клипа — быстрая склейка, так динамичнее; у хука 1 клип). Кадр должен подтверждать реплику: не показывай домашний экран под рассказ об ударе или движении тела. Клип не больше одного раза за рилс. Последней реплике клипы не нужны: под ней финальный экран.
 
 Поле say — озвучка: числа словами; название только «Никитёнок Арена» (с ё — это ударение), Telegram — «Телеграм».
 Поле text — субтитры той же реплики слово в слово, но цифрами где удобно; название пиши NikitenokArena, Telegram латиницей. Слов в text столько же по смыслу, сколько в say.
@@ -76,7 +78,7 @@ ${Object.entries(music).map(([id, about]) => `- ${id}: ${about}`).join('\n')}
 
 Ответь только JSON без пояснений и без markdown:
 {"hook":{"top":"...","accent":"..."},"lines":[{"say":"...","text":"...","clips":["..."]}],"end":"...","caption":"...","hashtags":["#..."],"music":"id трека"}
-Всего 5–7 реплик, 28–45 слов в say суммарно.`;
+Всего 4–6 реплик, 28–40 слов в say суммарно. Лучше четыре содержательные реплики, чем пять с водой.`;
 }
 
 export function askClaude(text) {
@@ -104,7 +106,7 @@ export function problems(s) {
   const out = [];
   if (!s?.hook?.top || !s.hook.accent) out.push('нет hook.top/accent');
   const L = s?.lines;
-  if (!Array.isArray(L) || L.length < 5 || L.length > 8) return [...out, 'реплик должно быть 5–7'];
+  if (!Array.isArray(L) || L.length < 4 || L.length > 7) return [...out, 'реплик должно быть 4–6'];
   const count = (t) => String(t ?? '').split(/\s+/).filter(Boolean).length;
   const words = L.reduce((a, l) => a + count(l.say), 0);
   if (words < 24 || words > 50) out.push(`слов ${words}, нужно 28–45`);
@@ -128,19 +130,19 @@ export function problems(s) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   let last = '';
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const text = prompt() + (last ? `\n\nПрошлый вариант не прошёл проверку: ${last}. Исправь.` : '');
-      const raw = process.env.CLAUDE_CODE_OAUTH_TOKEN ? askClaude(text) : await askApi(text);
+      const raw = prepared ? JSON.stringify(prepared.script) : process.env.CLAUDE_CODE_OAUTH_TOKEN ? askClaude(text + QUALITY_BRIEF) : await askApi(text + QUALITY_BRIEF);
       const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
       const bad = problems(json);
       if (bad.length) throw new Error(bad.join('; '));
       // Подстраховка ударения: «Никитенок» в озвучке всегда через ё.
       for (const l of json.lines) l.say = l.say.replace(/Никитенок/g, 'Никитёнок');
       json.lines.at(-1).clips = ['cta'];
-      writeFileSync('script.json', JSON.stringify({ n, angle: ANGLES[n % ANGLES.length], topic, ...json }, null, 2));
+      writeFileSync('script.json', JSON.stringify({ n, angle: ANGLES[n % ANGLES.length], topic, ...json, provider: prepared ? 'codex-local' : 'claude' }, null, 2));
       console.log(JSON.stringify(json, null, 2));
       process.exit(0);
     } catch (e) {

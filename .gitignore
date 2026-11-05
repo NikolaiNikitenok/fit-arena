@@ -7,3 +7,4 @@ data/
 .claude/worktrees/
 *.tsbuildinfo
 dist-id
+__pycache__/

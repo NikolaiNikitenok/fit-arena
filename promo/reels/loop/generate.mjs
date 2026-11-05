@@ -1,3 +1,4 @@
+import { isMain, preparedDraft, QUALITY_BRIEF } from '../../content/protocol.mjs';
 // Сценарий рилса-петли (8–10 с, без озвучки): крупный вопрос-хук на весь ролик, якорный клип открывает и закрывает
 // ролик (конец переходит в начало), между ними 2 кадра игры, внизу плашка «пиши в комменты».
 // Запуск: node generate.mjs <номер> [тема]. Если рядом есть user.mp4 (свой клип админа), якорь — он.
@@ -7,7 +8,8 @@ import { askApi, askClaude, FACTS } from '../generate.mjs';
 const catalog = JSON.parse(readFileSync(new URL('../catalog.json', import.meta.url), 'utf8'));
 const music = JSON.parse(readFileSync(new URL('../music/library.json', import.meta.url), 'utf8'));
 const n = Number(process.argv[2] ?? 0) || 0;
-const topic = (process.argv[3] ?? '').trim().slice(0, 300);
+const prepared = preparedDraft(process.argv[3]);
+const topic = (prepared?.topic ?? process.argv[3] ?? '').trim().slice(0, 300);
 const user = existsSync('user.mp4');
 
 /** Клипы, которые годятся в якорь: яркие и не короче 3 с (якорь делится на начало и конец ролика). */
@@ -25,7 +27,7 @@ export const ANGLES = [
   'Слабо: «Слабо 20 отжиманий без перерыва?»',
 ];
 
-function prompt() {
+export function prompt() {
   const list = (ids) => ids.map((id) => `- ${id} (${(catalog[id].to - catalog[id].from).toFixed(1)} с): ${catalog[id].about}`).join('\n');
   return `Сценарий короткого закольцованного рилса (8–10 секунд, без голоса, только музыка и крупный текст) для Instagram про фитнес-игру NikitenokArena. Ролик зациклен: конец незаметно переходит в начало, поэтому его пересматривают 2–3 раза. Задача — чтобы зритель понял суть без звука за 1 секунду и написал ответ в комментариях.
 
@@ -46,7 +48,7 @@ ${list(middles)}
 Фоновая музыка — один трек по настроению:
 ${Object.entries(music).map(([id, about]) => `- ${id}: ${about}`).join('\n')}
 
-Подпись (caption): первая строка — тот же вопрос с ключевыми словами (тренировки дома, отжимания, фитнес-игра), 1–2 строки о том, что это игра в Telegram, где камера считает повторы, затем «Напиши в комментах свой результат — а кто напишет «ХОЧУ», пришлю ссылку». Хэштегов 3–5, по-русски и один английский.
+Подпись (caption): первая строка — тот же вопрос с ключевыми словами (тренировки дома, отжимания, фитнес-игра), 1–2 строки о том, что это игра в Telegram, где камера считает повторы, затем один вопрос о результате или предложение переслать другу. Ссылка на игру — в профиле; не обещай личную рассылку комментаторам. Хэштегов 3–5, по-русски и один английский.
 
 Ответь только JSON без пояснений и без markdown:
 {"hook":{"top":"...","accent":"..."},"ask":"...",${user ? '' : '"anchor":"id",'}"middle":["id","id"],"music":"id","caption":"...","hashtags":["#..."]}`;
@@ -68,17 +70,17 @@ export function problems(s, withUser = user) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   let last = '';
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const text = prompt() + (last ? `\n\nПрошлый вариант не прошёл проверку: ${last}. Исправь.` : '');
-      const raw = process.env.CLAUDE_CODE_OAUTH_TOKEN ? askClaude(text) : await askApi(text);
+      const raw = prepared ? JSON.stringify(prepared.script) : process.env.CLAUDE_CODE_OAUTH_TOKEN ? askClaude(text + QUALITY_BRIEF) : await askApi(text + QUALITY_BRIEF);
       const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
       const bad = problems(json);
       if (bad.length) throw new Error(bad.join('; '));
       if (user) json.anchor = 'user';
-      writeFileSync('script.json', JSON.stringify({ n, loop: true, angle: ANGLES[n % ANGLES.length], topic, ...json }, null, 2));
+      writeFileSync('script.json', JSON.stringify({ n, loop: true, angle: ANGLES[n % ANGLES.length], topic, ...json, provider: prepared ? 'codex-local' : 'claude' }, null, 2));
       console.log(JSON.stringify(json, null, 2));
       process.exit(0);
     } catch (e) {
