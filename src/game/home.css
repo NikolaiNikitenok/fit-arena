@@ -225,3 +225,107 @@
 .hv-feed-text b { font-size: 12px; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Совсем узкий экран: костюм-награда праздника уступает место тексту. */
 @media (max-width: 359px) { .hv-event .hb-holiday .inv-face { display: none; } }
+
+/* Illustrated adventure lobby. Scoped to the stage home; list and Sport stay unchanged. */
+.arena-home {
+  --lobby-ink: #f9f3ff;
+  color: var(--lobby-ink);
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 62px;
+  grid-template-rows: auto minmax(217px, 1fr) auto auto minmax(65px, .4fr);
+  grid-template-areas: 'top top top' 'left slogan right' 'features features features' 'bottom bottom bottom' '. . .';
+  column-gap: 4px; row-gap: 10px;
+  padding: calc(var(--safe-top) + 6px) 8px 8px;
+  background: #2674bd url('/home/kingdom.webp') center / cover no-repeat;
+  overflow-y: auto;
+}
+.arena-home::before { height: 120px; background: linear-gradient(#18204bd9, transparent); }
+.arena-home::after { height: 36%; background: linear-gradient(transparent, #26205c33); }
+.arena-home--space, .arena-home--zombie, .arena-home--castle { background-image: none; background-color: #1b2248; }
+.arena-home .hv-stage { top: calc(var(--safe-top) + 57px); bottom: auto; height: clamp(200px, 36dvh, 360px); }
+.arena-home .hv-stage .world-backdrop { display: none; }
+.arena-home:not(.arena-home--fantasy) .hv-stage .world-backdrop { display: block; }
+.arena-home .hv-top { padding: 0; gap: 5px; }
+.arena-header { display: grid; grid-template-columns: minmax(0, 1fr) auto 32px; gap: 8px; align-items: center; }
+.arena-profile { min-width: 0; display: flex; align-items: center; gap: 5px; background: none; border: 0; color: white; padding: 0; text-align: left; min-height: 44px; }
+.arena-profile > span:last-child { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.arena-profile b { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-profile small { font-size: 9px; color: #d9eaff; }
+.arena-profile .inv-face { flex: none; border: 2px solid #ffd677; border-radius: 50%; }
+.arena-xp { display: block; height: 5px; border-radius: 5px; background: #102b50; border: 1px solid #82b4e5; overflow: hidden; width: 90px; }
+.arena-xp i { display: block; height: 100%; background: linear-gradient(90deg, #2984ef, #5bdfff); }
+.arena-brand { text-align: center; line-height: 1; text-shadow: 0 2px 4px #201746; padding-right: 6px; }
+.arena-brand > span { display: block; color: #ffe187; font-size: 18px; height: 15px; }
+.arena-brand b { font-size: 16px; font-style: italic; font-weight: 900; }
+.arena-brand em { color: #ffd571; font-style: inherit; }
+.arena-settings { display: grid; place-items: center; width: 32px; min-height: 44px; border: 0; background: transparent; color: #e5dcff; }
+.arena-resources { display: flex; gap: 5px; align-items: center; justify-content: flex-end; }
+.arena-resources > button, .arena-resources > .pill { display: inline-flex; justify-content: center; align-items: center; gap: 4px; height: 26px; padding: 2px 7px; border: 1px solid #a4a4ee66; background: #1c205fdb; border-radius: 9px; color: #fff; font: 900 11px var(--font); }
+.arena-resources > button:last-child svg { color: #ffd065; }
+.arena-resources > button > span { color: #cfffd6; background: #329b50; border-radius: 3px; padding: 0 3px; }
+.arena-home .hv-row { --ev-h: 42px; }
+.arena-home .hv-row:not(:has(.hv-event)) { position: absolute; top: 78px; left: 66px; right: 66px; height: 0; overflow: visible; }
+.arena-home .hv-feed { width: 44px; height: 40px; border-radius: 10px; padding: 3px; }
+.arena-home .hv-feed-ico { width: 20px; height: 20px; border-radius: 5px; }
+.arena-home .hv-feed-text b { font-size: 9px; }
+.arena-home .hv-event .hb-recap-text small, .arena-home .hv-event .hb-titan-text small { font-size: 9px; }
+.arena-home .hv-event .hb-recap-text b, .arena-home .hv-event .hb-titan-text b { font-size: 11px; }
+.arena-home .hv-col { align-self: start; gap: 7px; }
+.arena-home .hv-btn { width: 62px; min-height: 49px; gap: 2px; }
+.arena-home .hv-ico { width: 42px; height: 36px; border-radius: 11px; background: linear-gradient(145deg, #7158a9ed, #292558ed); border: 1px solid #e4c98188; box-shadow: inset 0 1px 2px #ffffff66, 0 3px 7px #11194266; }
+.arena-home .hv-btn b { font-size: 9px; color: white; text-shadow: 0 1px 3px #1e174b; }
+.arena-home .hv-btn small { display: none; }
+.arena-home .hv-btn.locked .hv-ico { background: linear-gradient(145deg, #56507b, #2e2b52); }
+.arena-slogan { grid-area: slogan; position: relative; z-index: 3; align-self: end; text-align: center; padding: 8px 3px; margin: 0 -4px -4px; transform: rotate(-3deg); border: 2px solid #f8cb71; border-radius: 18px 5px 18px 5px; color: #fff; background: linear-gradient(135deg, #8a60bd, #483b88); box-shadow: 0 4px 0 #33275188, 0 0 20px #ffd46355; text-shadow: 0 2px 2px #33204e; }
+.arena-slogan b { font-size: clamp(15px, 4.4vw, 21px); font-weight: 900; font-style: italic; line-height: 1.05; display: block; }
+.arena-slogan em { color: #fff1a6; font-style: inherit; }
+.arena-features { grid-area: features; z-index: 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.arena-features .hb-feat { flex-direction: column; justify-content: flex-start; text-align: center; min-height: 100px; gap: 3px; padding: 8px 3px 7px; border-radius: 14px; border: 1px solid #dfc193; background: radial-gradient(ellipse at 50% 20%, #ab85d65c, transparent 65%), linear-gradient(160deg, #59438fe8, #27255bea 65%, #9a6b577d); box-shadow: inset 0 1px 1px #ffffff55, 0 4px 8px #20204b88; }
+.arena-features .hb-feat-icon { height: 43px; width: 50px; border: 0; background: transparent; box-shadow: none; color: var(--fc); filter: drop-shadow(0 3px 2px #181344); }
+.arena-features .hb-feat b { font-size: clamp(10px, 3vw, 14px); white-space: normal; }
+.arena-features .hb-feat small { font-size: 9px; line-height: 1.05; white-space: normal; color: #e0d5f3; }
+.arena-features .hb-feat-text { gap: 3px; flex: none; }
+.arena-home .hv-bottom { padding: 0; gap: 8px; }
+.arena-meters { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 8px; align-items: stretch; }
+.arena-energy, .arena-daily-locked { min-width: 0; min-height: 58px; padding: 6px 9px; border: 1px solid #cfbaf4; border-radius: 12px; background: linear-gradient(145deg, #7956afec, #342d73ed); color: white; display: flex; flex-direction: column; justify-content: center; gap: 4px; text-align: left; }
+.arena-energy > b { display: flex; gap: 3px; align-items: center; font-size: 13px; font-style: italic; }
+.arena-energy > b svg { color: #ffdf4e; }
+.arena-energy-track { position: relative; background: #20365b; height: 16px; border: 1px solid #89dc9a; border-radius: 5px; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+.arena-energy-track i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#a1ed67, #3ca53d); }
+.arena-energy-track strong { position: relative; font-size: 10px; text-shadow: 0 1px 2px #173d27; }
+.arena-energy-track > span { position: absolute; right: 0; padding: 0 3px; background: #64c773; font-weight: 900; }
+.arena-home .hb-daily { min-height: 58px; gap: 4px; padding: 6px; border: 1px solid #cfbaf4; border-radius: 12px; background: linear-gradient(145deg, #7155acED, #342d73ed); color: white; }
+.arena-home .hb-daily .portrait { display: none; }
+.arena-home .hb-daily-who { font-size: 9px; color: #eee0ff; }
+.arena-home .hb-daily-who > span, .arena-home .hb-daily-gift { display: none; }
+.arena-home .hb-daily-goal { font-size: 9px; gap: 2px; flex-wrap: wrap; white-space: normal; }
+.arena-home .hb-daily-act { min-width: 0; font-size: 9px; padding: 0 5px; height: 28px; color: #3e2465; background: #ffdc74; border-radius: 6px; }
+.arena-home .hb-daily.claimed .hb-daily-act { color: #adf7c8; }
+.arena-daily-locked { flex-direction: row; align-items: center; font-size: 11px; }
+.arena-daily-locked small { display: block; font-size: 9px; }
+.arena-play { position: relative; align-self: center; width: min(245px, 80%); min-height: 55px; display: flex; gap: 12px; justify-content: center; align-items: center; border: 3px solid #ffe1a0; border-radius: 15px; color: #61370d; background: linear-gradient(#fff09a 0%, #ffcf3f 45%, #ffb51f 46%, #ffd958 100%); font: 900 32px var(--font); text-shadow: 0 1px #fff3a4; box-shadow: inset 0 0 0 3px #f5a71d, 0 5px 0 #99551d, 0 8px 18px #57376b88, 0 0 25px #ffdf6666; }
+.arena-play > span { font-size: 24px; }
+.arena-play:active { transform: translateY(3px); box-shadow: inset 0 0 0 3px #f5a71d, 0 2px 0 #99551d; }
+.arena-play-caption { display: flex; align-items: center; flex-direction: column; gap: 1px; color: white; text-align: center; font-size: 10px; text-shadow: 0 1px 3px #23173e, 0 1px 6px #23173e; }
+.arena-play-caption b { font-size: 12px; }
+.arena-play-caption > span { max-width: 95%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-home button:focus-visible, .arena-home [role='button']:focus-visible { outline: 3px solid #ffeb94; outline-offset: 3px; }
+/* Landscape, small phones, or a large Telegram safe area: keep controls reachable by scrolling. */
+@media (max-height: 690px) {
+  .arena-home { grid-template-rows: auto minmax(198px, 1fr) auto auto 30px; row-gap: 7px; }
+  .arena-home .hv-col { gap: 4px; }
+  .arena-home .hv-btn { min-height: 44px; }
+  .arena-home .hv-ico { height: 31px; width: 37px; }
+  .arena-home .hv-ico > svg { max-height: 26px; }
+  .arena-features .hb-feat { min-height: 87px; padding-top: 5px; }
+  .arena-features .hb-feat-icon { height: 34px; }
+  .arena-features .hb-feat-icon svg { max-height: 33px; }
+  .arena-home .hv-bottom { gap: 6px; }
+  .arena-play { min-height: 48px; font-size: 29px; }
+}
+/* Match the reference dock only on the adventure home; other screens keep their navigation. */
+.app:has(.arena-home) .bottom-nav { max-width: 480px; margin-inline: auto; gap: 2px; padding-inline: 6px; border-top: 1px solid #ccb2fa; background: linear-gradient(#624a99ee, #292255fa); box-shadow: 0 -4px 20px #47297577; }
+.app:has(.arena-home) .bottom-nav button { color: #d9c7ff; border-radius: 10px; }
+.app:has(.arena-home) .bottom-nav button.active { color: #ffe4a0; background: linear-gradient(#b789d255, #70428d99); box-shadow: inset 0 1px 0 #ffd9a955; }
+.app:has(.arena-home) .bottom-nav button.active .icon { filter: drop-shadow(0 0 5px #ffcc59); }
+@media (prefers-reduced-motion: reduce) { .arena-home *, .app:has(.arena-home) .bottom-nav * { scroll-behavior: auto; transition: none; } }

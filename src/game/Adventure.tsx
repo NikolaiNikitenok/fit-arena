@@ -685,6 +685,8 @@ export function Adventure({ tab, onTab, onPlaying, onFriends, onDuel, onLocks }:
           livesLeft={lives.lives}
           lockLeft={lockLeft}
           onClan={() => onTab('clan')}
+          onMap={() => onTab('map')}
+          onVillage={() => onTab('village')}
           onLocked={(f) => showToast(lockedText(f, lockLeft(f)), 3500)}
         />
         {sheets}
